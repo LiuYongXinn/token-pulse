@@ -9,6 +9,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -110,6 +111,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -252,6 +254,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -1998,6 +2001,75 @@
       ],
       "title": "DimensionSelection"
     },
+    "DisplayPreferences": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_timezone": {
+          "description": "None means not initialized, never an implicit UTC/system fallback.",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "display_timezone"
+      ],
+      "title": "DisplayPreferences",
+      "type": "object"
+    },
+    "DisplaySettingsSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DisplayPreferences": {
+          "additionalProperties": false,
+          "properties": {
+            "display_timezone": {
+              "description": "None means not initialized, never an implicit UTC/system fallback.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "display_timezone"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "preferences": {
+          "$ref": "#/$defs/DisplayPreferences"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "settings_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "settings_version",
+        "settings_revision",
+        "preferences"
+      ],
+      "title": "DisplaySettingsSnapshot",
+      "type": "object"
+    },
     "EpochMs": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "maximum": 8640000000000000,
@@ -2012,6 +2084,7 @@
         "UNSUPPORTED_API",
         "SOURCE_UNREADABLE",
         "UNSUPPORTED_FORMAT",
+        "UNSUPPORTED_SETTINGS_VERSION",
         "AMBIGUOUS_USAGE",
         "CHECKPOINT_CONFLICT",
         "CANDIDATE_OBSOLETE",
@@ -3369,6 +3442,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -8668,6 +8742,27 @@
       "title": "SessionsRequest",
       "type": "object"
     },
+    "SettingsChanged": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "settings_revision"
+      ],
+      "title": "SettingsChanged",
+      "type": "object"
+    },
     "SnapshotMeta": {
       "$defs": {
         "DecimalInt": {
@@ -8886,6 +8981,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -9059,6 +9155,7 @@
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
             "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
             "CHECKPOINT_CONFLICT",
             "CANDIDATE_OBSOLETE",
@@ -9224,6 +9321,57 @@
       ],
       "title": "SourcesSnapshot",
       "type": "object"
+    },
+    "TimezoneMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "initialize",
+              "type": "string"
+            },
+            "system_timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "system_timezone"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "display_timezone": {
+              "type": "string"
+            },
+            "expected_settings_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "kind": {
+              "const": "set",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "display_timezone",
+            "expected_settings_revision"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "TimezoneMutation"
     },
     "TokenMeasure": {
       "$defs": {

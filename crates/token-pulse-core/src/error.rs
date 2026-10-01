@@ -10,6 +10,7 @@ pub enum ErrorCode {
     UnsupportedApi,
     SourceUnreadable,
     UnsupportedFormat,
+    UnsupportedSettingsVersion,
     AmbiguousUsage,
     CheckpointConflict,
     CandidateObsolete,

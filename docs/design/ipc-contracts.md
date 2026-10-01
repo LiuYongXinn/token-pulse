@@ -398,3 +398,11 @@ TurnsPage 的 summary / pricing / coverage 覆盖指定会话全部所选消费�
 resolve_calendar_selection（仅主窗口）接收 CalendarSelectionRequest：timezone 为受限长度的合法 IANA 时区；selection 为 today / last7 / last30 / custom。custom 必填严格 YYYY-MM-DD 的 start_date 与 end_date_inclusive，用户结束日包含在选择内，后台转成下一当地日期边界作为排他 UTC 截止。CalendarSelectionResult 返回 range、独立的近 182 当地日 heatmap_range、后台当前时刻在该时区的 local_today。固定自定义日期不随午夜改变，热力图仍为当前时刻的独立近 26 周。
 
 所有边界复用 Rust / chrono-tz：重复当地午夜选择更早的 UTC 边界，午夜缺口采用其后的首个有效时刻；整日跳过导致空 UTC 区间则 INVALID_QUERY，不能凭空补 24 小时。反向区间、无效闰日、不规范日期、未知时区和未知字段拒绝。该命令只解析日历，不代表数据快照或价格修订，也不自行改变主窗口 / mini_scope；UI 应成功取得 range 后整体发起正式查询。
+
+### 2.11 显示时区持久设置
+
+get_display_settings / set_display_timezone 仅允许主窗口。DisplaySettingsSnapshot 返回 settings_version、精确 settings_revision 和 preferences.display_timezone；未初始化时保留 null，不当作 UTC 或系统值。TimezoneMutation.Initialize 只在没有有效已保存时区时记录经 Rust 验证的 system_timezone，重复初始化不覆盖用户选择；Set 必填经校验的 display_timezone 与 expected_settings_revision。配置采用独立版本 1 和全局 settings_revision，来源配置变化也可能引起 REVISION_CONFLICT；不能忽略冲突强写。
+
+修改在 Writer 的同一事务中保存 payload_json / updated_at_ms 与 revision；相同值不递增，不触发通知。成功实际变更提交后发送 settings_changed，仅携带 settings_revision；失败 / 无变化 / 重复初始化不发送。读取旧真实 SQLite 事务仍看到旧配置，但该历史配置不得用于覆盖后续的最新隐私策略。
+
+设置表已经包含主题、旧 privacy、小窗范围、任务栏和启动偏好。时区修改保留这些已识别版本 1 字段，只改 display_timezone，不用公开的 DisplayPreferences DTO 覆盖整个 payload。字段类型 / 时区损坏返回 DB_CORRUPT；不支持的 settings_version 返回 UNSUPPORTED_SETTINGS_VERSION，保留原配置，不写默认值。主题 / 隐私 / 小窗的实际应用仍由后续相应模块实现，此接口不会自行开启这些功能。

@@ -17,6 +17,7 @@ pub mod reader;
 pub mod scheduling;
 pub mod selections;
 pub mod sequence;
+pub mod settings;
 pub mod sources;
 
 #[derive(

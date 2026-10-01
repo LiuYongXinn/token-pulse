@@ -627,3 +627,11 @@ query_turns / TurnsQuery / TurnsRequest / TurnsPage / TurnRow 与 close_query_sn
 新增 CalendarSelection / Request / Result 与主窗口独占 resolve_calendar_selection。今日 / 近 7 日 / 近 30 日 / 自定义包含结束日的日期选择，按请求 IANA 时区转换半开 UTC 范围；热力图独立近 182 当地日；后台时钟决定该时区当前日。重用现有本地边界转换，明确处理午夜重复 / 缺口，整日跳过导致无区间返回 INVALID_QUERY；不使用固定 24 小时或浏览器系统时区猜测非系统时区。尚未接日期控件和持久时区设置，不将此接口提交计为完整筛选 UI。
 
 2026-10-02 02:41 新增 4 项日历多场景、所有 12 项日历测试通过；workspace Clippy / fmt、契约差异、17 项 Vitest、TS 类型通过。独立预期验证纽约秋季 04:00Z → 次日 05:00Z / 春季 23 小时、7 日起点、同 UTC 时刻夏威夷与 UTC 的不同当地日、闰日包含结束日、Sao Paulo 午夜缺口首个有效时刻、Apia 整日跳过拒绝、182 当地日热图、反向 / 无效 / 不规范日期 / 未知时区 / 未知字段拒绝。Windows 10 实际 WebView 调用自定义纽约日期得到上述 25 小时 UTC 范围，非法 2026-02-29 得到 INVALID_QUERY；既有原生检查通过退出 0，仍有 class unregister 1412 提示。此前完整 238 项 Rust / 22 项浏览器交互已通过，本模块另做 12 项日历针对性检查；没有把合成数据当作真实日志验收，未执行性能测试。
+
+## M15a：持久显示时区与配置并发控制
+
+独立 DisplayPreferences / DisplaySettingsSnapshot / TimezoneMutation / SettingsChanged 契约和主窗口权限的 get_display_settings / set_display_timezone 已实现。首次有效系统 IANA 时区初始化幂等；用户改动走全局 settings revision 乐观并发；相同值无写入 / 无通知。Writer 同事务提交设置 payload / 时间 / revision，提交后才发送 settings_changed，公开响应只含必要显示字段。保留已有主题、旧隐私、小窗范围、任务栏 / 启动偏好，不用只有时区的 DTO 重写整份配置。不支持的新配置版本保留并明确报 UNSUPPORTED_SETTINGS_VERSION，损坏配置不回退默认。
+
+2026-10-02 02:56 新增 6 项 SQLite 设置测试通过，workspace Clippy / fmt / 契约差异、18 项 Vitest 与 TS 类型通过。验证首次 null / 初始化一次 / 重复初始化不覆盖 / 重启保存、两个并发首次请求只发生一次变更且结果一致、来源增加引起配置冲突而时区不变、旧只读事务固定原设置、强制 Writer revision 更新失败同时回滚 payload、未来版本 / 无效时区不覆盖 / 数据和价格 revision 不变 / i64 revision 溢出无写入，以及已有 light theme / privacy true / 固定会话 scope / 启动和任务栏偏好逐字段保真。初次检查未发现初始化迁移已有完整设置 payload，新增读取最初误判为损坏；改为校验并保留既有字段后通过，没有改迁移清空旧字段来绕开失败。
+
+Win10 独立 WebView 实际读取未初始化显示配置，初始化 New York / 改为 UTC / 重复初始化保持 UTC / 同值保存不增加 revision / 旧 revision 拒绝。Rust 侧实际监听恰好两条 settings_changed，revision 1、2；冲突和无变化没有通知。全部既有原生检查通过退出 0，仍有 class unregister 1412 提示。时区设置 UI 和主日期控件尚未接入；mini / 最新隐私策略的应用仍待完成。没有执行性能测试。

@@ -66,6 +66,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let price_listener = app.listen("price_rules_changed", move |event| {
         let _ = price_sender.try_send(event.payload().to_owned());
     });
+    let (settings_sender, settings_receiver) = std::sync::mpsc::sync_channel(4);
+    let settings_listener = app.listen("settings_changed", move |event| {
+        let _ = settings_sender.try_send(event.payload().to_owned());
+    });
     window
         .eval(
             r#"
@@ -141,6 +145,20 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let invalidDate=false;
                 try {await invoke('resolve_calendar_selection',{requestId:'native-smoke-calendar-invalid',request:{timezone:'UTC',selection:{kind:'custom',start_date:'2026-02-29',end_date_inclusive:'2026-03-01'}}});} catch(error) {invalidDate=error.code==='INVALID_QUERY';}
                 ok=ok && invalidDate;
+                const initialDisplay=await invoke('get_display_settings',{requestId:'native-smoke-display'});
+                ok=ok && initialDisplay.api_version===1 && initialDisplay.request_id==='native-smoke-display'
+                    && initialDisplay.data.preferences.display_timezone===null && initialDisplay.data.settings_revision==='0';
+                const initializedDisplay=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-init',request:{kind:'initialize',system_timezone:'America/New_York'}});
+                ok=ok && initializedDisplay.data.preferences.display_timezone==='America/New_York' && initializedDisplay.data.settings_revision==='1';
+                const changedDisplay=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-set',request:{kind:'set',display_timezone:'UTC',expected_settings_revision:'1'}});
+                ok=ok && changedDisplay.data.preferences.display_timezone==='UTC' && changedDisplay.data.settings_revision==='2';
+                for (const [suffix,change] of [['init',{kind:'initialize',system_timezone:'Asia/Shanghai'}],['noop',{kind:'set',display_timezone:'UTC',expected_settings_revision:'2'}]]) {
+                    const kept=await invoke('set_display_timezone',{requestId:`native-smoke-timezone-${suffix}`,request:change});
+                    ok=ok && kept.data.preferences.display_timezone==='UTC' && kept.data.settings_revision==='2';
+                }
+                let timezoneConflict=false;
+                try {await invoke('set_display_timezone',{requestId:'native-smoke-timezone-stale',request:{kind:'set',display_timezone:'Asia/Shanghai',expected_settings_revision:'1'}});} catch(error) {timezoneConflict=error.code==='REVISION_CONFLICT';}
+                ok=ok && timezoneConflict;
                 const sessions=await invoke('query_sessions',{requestId:'native-smoke-sessions',request:sessionsRequest});
                 ok=ok && sessions.api_version===1 && sessions.request_id==='native-smoke-sessions'
                     && sessions.data.meta.snapshot_id.startsWith('query-') && sessions.data.meta.price_revision==='3'
@@ -249,8 +267,20 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let ipc = receiver.recv_timeout(Duration::from_secs(10));
     app.unlisten(listener);
     app.unlisten(price_listener);
+    app.unlisten(settings_listener);
     if ipc.as_deref() != Ok("true") {
         return Err("WebView get_app_status IPC failed".into());
+    }
+    let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
+    if settings_events.len() != 2 {
+        return Err("timezone changes did not emit exactly two settings notifications".into());
+    }
+    for (payload, revision) in settings_events.iter().zip(["1", "2"]) {
+        let event: token_pulse_core::settings::SettingsChanged =
+            serde_json::from_str(payload).map_err(|e| e.to_string())?;
+        if event.settings_revision.as_str() != revision {
+            return Err("settings notification revision is incorrect".into());
+        }
     }
     let price_events = price_receiver.try_iter().collect::<Vec<_>>();
     if price_events.len() != 3 {

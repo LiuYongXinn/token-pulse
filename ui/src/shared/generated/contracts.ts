@@ -8,7 +8,19 @@ export type EpochMs = number;
 
 export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
-export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
+export type DisplayPreferences = {
+/**
+ * None means not initialized, never an implicit UTC/system fallback.
+ */
+display_timezone: string | null, };
+
+export type DisplaySettingsSnapshot = { settings_version: number, settings_revision: DecimalInt, preferences: DisplayPreferences, };
+
+export type TimezoneMutation = { "kind": "initialize", system_timezone: string, } | { "kind": "set", display_timezone: string, expected_settings_revision: DecimalInt, };
+
+export type SettingsChanged = { settings_revision: DecimalInt, };
+
+export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
 
 export type ErrorDetail = string | number | boolean | null;
 

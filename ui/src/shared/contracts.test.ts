@@ -5,6 +5,20 @@ import type { TokenMeasure, MiniScope, DecimalInt, DashboardBundle } from './gen
 
 const ajv = new Ajv({ strict: false });
 
+test('display settings preserve uninitialized null, exact revision and strict timezone mutations', () => {
+  const validate = ajv.compile(protocol.schemas.DisplaySettingsSnapshot);
+  const snapshot = { settings_version: 1, settings_revision: '9007199254740993', preferences: { display_timezone: null } };
+  expect(validate(snapshot)).toBe(true);
+  expect(validate({ ...snapshot, preferences: { display_timezone: 'Asia/Shanghai' } })).toBe(true);
+  expect(validate({ ...snapshot, settings_revision: 1 })).toBe(false);
+  expect(validate({ ...snapshot, preferences: { display_timezone: null, auth: 'private' } })).toBe(false);
+  const validateMutation = ajv.compile(protocol.schemas.TimezoneMutation);
+  expect(validateMutation({ kind: 'initialize', system_timezone: 'UTC' })).toBe(true);
+  expect(validateMutation({ kind: 'set', display_timezone: 'UTC', expected_settings_revision: '1' })).toBe(true);
+  expect(validateMutation({ kind: 'set', display_timezone: 'UTC' })).toBe(false);
+  expect(validateMutation({ kind: 'set', display_timezone: 'UTC', expected_settings_revision: '1', privacy: true })).toBe(false);
+});
+
 test('calendar selection contracts bound dates and require independent UTC ranges', () => {
   const validate = ajv.compile(protocol.schemas.CalendarSelectionRequest);
   const selection = { timezone: 'America/New_York', selection: { kind: 'custom', start_date: '2026-11-01', end_date_inclusive: '2026-11-01' } };

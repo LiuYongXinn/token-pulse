@@ -20,6 +20,7 @@ use token_pulse_core::query::{
     SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest, UsageSeriesBucket,
 };
 use token_pulse_core::query::{TurnRow, TurnsPage, TurnsQuery, TurnsRequest};
+use token_pulse_core::settings::*;
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
@@ -51,6 +52,10 @@ fn main() {
         DecimalMoney,
         EpochMs,
         ServiceState,
+        DisplayPreferences,
+        DisplaySettingsSnapshot,
+        TimezoneMutation,
+        SettingsChanged,
         ErrorCode,
         ErrorDetail,
         AppError,
