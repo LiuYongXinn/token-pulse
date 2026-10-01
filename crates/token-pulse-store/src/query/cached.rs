@@ -51,6 +51,7 @@ enum Partition {
     Total,
     Models,
     Projects,
+    Series,
 }
 
 struct Plan {
@@ -81,7 +82,7 @@ fn plan(
     if !any {
         return Ok(None);
     }
-    let cached = cached_predicate(filter, start, end)?;
+    let mut cached = cached_predicate(filter, start, end)?;
     let mut raw = predicate(filter)?;
     let mut values = vec![Value::Integer(CACHE_VERSION)];
     values.extend(cached.values);
@@ -89,7 +90,12 @@ fn plan(
     // In an aligned range, reject ready sessions before their fact index scan.
     // Boundary fragments use the original half-open range and exact predicates.
     let aligned = start == filter.range.start_ms.value() && end == filter.range.end_ms.value();
-    if aligned {
+    if matches!(partition, Partition::Series) {
+        cached
+            .sql
+            .push_str(" AND current_usage_cache_bucket(h.hour_start_ms) IS NOT NULL");
+        raw.sql.push_str(" AND (e.session_key IN(SELECT session_key FROM sessions WHERE active_ledger_id NOT IN(SELECT ledger_id FROM ready)) OR current_usage_cache_bucket(e.occurred_at_ms) IS NULL)");
+    } else if aligned {
         raw.sql.push_str(" AND e.session_key IN(SELECT session_key FROM sessions WHERE active_ledger_id NOT IN(SELECT ledger_id FROM ready))");
     } else {
         raw.sql.push_str(" AND (e.session_key IN(SELECT session_key FROM sessions WHERE active_ledger_id NOT IN(SELECT ledger_id FROM ready)) OR e.occurred_at_ms<? OR e.occurred_at_ms>=?)");
@@ -107,6 +113,14 @@ fn plan(
     // SQLite owns this fixed transaction materialization, never the renderer.
     let (cache_key, raw_key, cache_label, raw_label, cache_join, raw_join) = match partition {
         Partition::Total => ("1", "1", "''", "''", "", ""),
+        Partition::Series => (
+            "current_usage_cache_bucket(h.hour_start_ms)",
+            "current_usage_bucket(e.occurred_at_ms)",
+            "''",
+            "''",
+            "",
+            "",
+        ),
         Partition::Models => (
             "usage_model_key(h.model_provider,h.model)",
             super::MODEL_KEY,
@@ -187,6 +201,40 @@ pub(super) fn try_grouped(
             display_name: row.get(1)?,
             totals: read_totals(row, 3)?,
         });
+    }
+    Ok(Some(result))
+}
+
+/// A cached UTC hour is usable only when it fits entirely in one local bucket.
+/// Fractional offsets, DST transitions and clipped bounds retain exact facts.
+pub(super) fn try_series(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    bins: &[token_pulse_core::calendar::CalendarBucket],
+) -> StoreResult<Option<Vec<super::BucketTotals>>> {
+    let Some(plan) = plan(tx, filter, Partition::Series)? else {
+        return Ok(None);
+    };
+    let mut result = bins
+        .iter()
+        .cloned()
+        .map(|bucket| super::BucketTotals {
+            bucket,
+            totals: super::empty_totals(),
+        })
+        .collect::<Vec<_>>();
+    let mut statement = tx.prepare(&format!(
+        "{} {RESULT} ORDER BY summary.partition_key",
+        plan.ctes
+    ))?;
+    let mut rows = statement.query(params_from_iter(plan.values))?;
+    while let Some(row) = rows.next()? {
+        let index =
+            usize::try_from(row.get::<_, i64>(0)?).map_err(|_| crate::ErrorCode::DbCorrupt)?;
+        result
+            .get_mut(index)
+            .ok_or(crate::ErrorCode::DbCorrupt)?
+            .totals = read_totals(row, 3)?;
     }
     Ok(Some(result))
 }

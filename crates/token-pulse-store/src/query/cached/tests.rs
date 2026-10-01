@@ -9,6 +9,30 @@ use crate::{
 };
 use token_pulse_core::{numeric::EpochMs, query::model_key};
 
+fn fixture_ms(s: &str) -> i64 {
+    // Independently converted with Windows DateTimeOffset, never with the
+    // application's calendar implementation or another production helper.
+    match s {
+        "2024-01-01T00:00:00+05:45" => 1_704_046_500_000,
+        "2024-01-01T00:30:00+05:45" => 1_704_048_300_000,
+        "2024-01-01T01:30:00+05:45" => 1_704_051_900_000,
+        "2024-01-01T04:00:00+05:45" => 1_704_060_900_000,
+        "2024-01-01T12:00:00+05:45" => 1_704_089_700_000,
+        "2024-01-01T13:00:00+05:45" => 1_704_093_300_000,
+        "2024-02-01T12:00:00+05:45" => 1_706_768_100_000,
+        "2024-02-02T00:00:00+05:45" => 1_706_811_300_000,
+        "2024-04-07T00:00:00+11:00" => 1_712_408_400_000,
+        "2024-04-07T01:45:00+10:30" => 1_712_416_500_000,
+        "2024-04-07T01:45:00+11:00" => 1_712_414_700_000,
+        "2024-04-07T04:00:00+10:30" => 1_712_424_600_000,
+        "2024-11-03T00:00:00-04:00" => 1_730_606_400_000,
+        "2024-11-03T01:15:00-04:00" => 1_730_610_900_000,
+        "2024-11-03T01:15:00-05:00" => 1_730_614_500_000,
+        "2024-11-03T03:00:00-05:00" => 1_730_620_800_000,
+        _ => panic!("unexpected fixture timestamp"),
+    }
+}
+
 fn assert_same(tx: &Transaction<'_>, f: &UsageFilter) -> StoreResult<()> {
     let cached = try_totals(tx, f)?.expect("cache selected");
     assert_eq!(
@@ -26,6 +50,159 @@ fn assert_same(tx: &Transaction<'_>, f: &UsageFilter) -> StoreResult<()> {
         }
     }
     Ok(())
+}
+
+fn assert_series_same(
+    tx: &Transaction<'_>,
+    f: &UsageFilter,
+    grain: token_pulse_core::calendar::Grain,
+) -> StoreResult<Vec<super::super::BucketTotals>> {
+    let actual = crate::query::series(tx, f, grain)?;
+    let expected = crate::query::raw_series(tx, f, grain)?;
+    let json = |s: &[crate::query::BucketTotals]| {
+        serde_json::to_value(s.iter().map(|b| (&b.bucket, &b.totals)).collect::<Vec<_>>())
+    };
+    assert_eq!(json(&actual)?, json(&expected)?);
+    assert!(tx.prepare("SELECT current_usage_bucket(0)").is_err());
+    assert!(tx.prepare("SELECT current_usage_cache_bucket(0)").is_err());
+    Ok(actual)
+}
+
+#[test]
+fn series_cache_preserves_dst_repeated_hours_fractional_offsets_and_exact_edges() {
+    use token_pulse_core::calendar::Grain;
+    // Explicit RFC3339 fixture instants; the production bucket code does not
+    // generate event timestamps or expected consumption.
+    let ms = fixture_ms;
+    for (zone, start, end, a, b, expected_bins) in [
+        (
+            "America/New_York",
+            "2024-11-03T00:00:00-04:00",
+            "2024-11-03T03:00:00-05:00",
+            "2024-11-03T01:15:00-04:00",
+            "2024-11-03T01:15:00-05:00",
+            Some(vec!["0", "17", "23", "0"]),
+        ),
+        (
+            "Australia/Lord_Howe",
+            "2024-04-07T00:00:00+11:00",
+            "2024-04-07T04:00:00+10:30",
+            "2024-04-07T01:45:00+11:00",
+            "2024-04-07T01:45:00+10:30",
+            None,
+        ),
+        (
+            "Asia/Kathmandu",
+            "2024-01-01T00:00:00+05:45",
+            "2024-01-01T04:00:00+05:45",
+            "2024-01-01T00:30:00+05:45",
+            "2024-01-01T01:30:00+05:45",
+            Some(vec!["17", "23", "0", "0"]),
+        ),
+    ] {
+        let (_dir, db) = setup();
+        db.commit(fixture()).unwrap();
+        extra(&db, "a", ms(a), 17, (None, None), Some("common"), None);
+        extra(&db, "b", ms(b), 23, (None, None), Some("common"), None);
+        extra(
+            &db,
+            "at-end",
+            ms(end),
+            31,
+            (None, None),
+            Some("excluded"),
+            None,
+        );
+        db.build_hourly_rollup("ledger", 10).unwrap();
+        let mut f = filter();
+        f.range.start_ms = EpochMs::new(ms(start)).unwrap();
+        f.range.end_ms = EpochMs::new(ms(end)).unwrap();
+        f.range.timezone = zone.into();
+        db.snapshot(|tx,_| {
+            let s=assert_series_same(tx,&f,Grain::Hour)?;
+            if let Some(expected)=expected_bins { assert_eq!(s.iter().map(|b|b.totals.total_tokens.as_str()).collect::<Vec<_>>(),expected); }
+            assert_eq!(s.iter().map(|b|b.totals.total_tokens.value()).sum::<i128>(),40);
+            assert_eq!(totals(tx,&f)?.reliable_turn_count.unwrap().as_str(),"1");
+            let bins=token_pulse_core::calendar::buckets(&f.range,Grain::Hour)?;
+            let _guard=crate::query::bucket_function(tx,&bins)?;
+            let usable:i64=tx.query_row("SELECT COUNT(*) FROM utc_hour_usage_rollups WHERE current_usage_cache_bucket(hour_start_ms) IS NOT NULL",[],|r|r.get(0))?;
+            if zone=="Asia/Kathmandu" { assert_eq!(usable,0); }
+            if zone=="America/New_York" { assert_eq!(usable,2); }
+            Ok(())
+        }).unwrap();
+    }
+}
+
+#[test]
+fn series_cache_merges_calendar_days_months_sources_and_old_snapshot() {
+    use token_pulse_core::calendar::Grain;
+    let ms = fixture_ms;
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    extra(
+        &db,
+        "edge",
+        ms("2024-01-01T00:00:00+05:45"),
+        7,
+        (None, None),
+        Some("same"),
+        None,
+    );
+    extra(
+        &db,
+        "inside",
+        ms("2024-01-01T12:00:00+05:45"),
+        17,
+        (Some("m"), Some("p")),
+        Some("same"),
+        None,
+    );
+    extra(
+        &db,
+        "february",
+        ms("2024-02-01T12:00:00+05:45"),
+        23,
+        (None, None),
+        Some("other"),
+        None,
+    );
+    let mut f = filter();
+    f.range.start_ms = EpochMs::new(ms("2024-01-01T00:00:00+05:45")).unwrap();
+    f.range.end_ms = EpochMs::new(ms("2024-02-02T00:00:00+05:45")).unwrap();
+    f.range.timezone = "Asia/Kathmandu".into();
+    db.build_hourly_rollup("ledger", 10).unwrap();
+    db.snapshot(|tx, _| {
+        let writer = db.clone();
+        let late = ms("2024-01-01T13:00:00+05:45");
+        std::thread::spawn(move || extra(&writer, "late", late, 5, (None, None), None, None))
+            .join()
+            .unwrap();
+        let s = assert_series_same(tx, &f, Grain::Month)?;
+        assert_eq!(
+            s.iter()
+                .map(|b| b.totals.total_tokens.as_str())
+                .collect::<Vec<_>>(),
+            vec!["24", "23"]
+        );
+        let day = assert_series_same(tx, &f, Grain::Day)?;
+        assert_eq!(day.len(), 32);
+        assert_eq!(day[0].totals.total_tokens.as_str(), "24");
+        assert_eq!(day[31].totals.total_tokens.as_str(), "23");
+        f.sources = ids(&["source"], false);
+        assert_series_same(tx, &f, Grain::Day)?;
+        f.models = ids(&[], true);
+        let s = assert_series_same(tx, &f, Grain::Month)?;
+        assert_eq!(s[0].totals.total_tokens.as_str(), "7");
+        Ok(())
+    })
+    .unwrap();
+    f.models = DimensionSelection::All {};
+    db.snapshot(|tx, _| {
+        let s = assert_series_same(tx, &f, Grain::Month)?;
+        assert_eq!(s[0].totals.total_tokens.as_str(), "29");
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]

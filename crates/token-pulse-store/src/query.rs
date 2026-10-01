@@ -145,6 +145,7 @@ struct BucketFunction<'a>(&'a Connection);
 impl Drop for BucketFunction<'_> {
     fn drop(&mut self) {
         let _ = self.0.remove_function("current_usage_bucket", 1);
+        let _ = self.0.remove_function("current_usage_cache_bucket", 1);
     }
 }
 
@@ -158,6 +159,28 @@ fn bucket_function<'a>(
         .ok_or(ErrorCode::InvalidQuery)?
         .start_ms
         .value();
+    let cached_ends = ends.clone();
+    conn.create_scalar_function(
+        "current_usage_cache_bucket",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        move |ctx| {
+            let time: i64 = ctx.get(0)?;
+            let hour = time.div_euclid(3_600_000) * 3_600_000;
+            let index = cached_ends.partition_point(|end| *end <= hour);
+            Ok(
+                if hour >= start
+                    && index < cached_ends.len()
+                    && hour + 3_600_000 <= cached_ends[index]
+                {
+                    Some(index as i64)
+                } else {
+                    None
+                },
+            )
+        },
+    )?;
+    let guard = BucketFunction(conn);
     conn.create_scalar_function(
         "current_usage_bucket",
         1,
@@ -173,7 +196,7 @@ fn bucket_function<'a>(
             Ok(index as i64)
         },
     )?;
-    Ok(BucketFunction(conn))
+    Ok(guard)
 }
 
 /// One controlled range query, never all raw events in the renderer or 2000
@@ -187,6 +210,28 @@ pub fn series(
     // This connection belongs exclusively to the current read transaction.
     // Function capture is immutable and removed after all statements drop.
     let _function = bucket_function(tx, &bins)?;
+    if let Some(series) = cached::try_series(tx, filter, &bins)? {
+        return Ok(series);
+    }
+    raw_series_bins(tx, filter, bins)
+}
+
+#[cfg(test)]
+pub(crate) fn raw_series(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    grain: Grain,
+) -> StoreResult<Vec<BucketTotals>> {
+    let bins = calendar::buckets(&filter.range, grain)?;
+    let _function = bucket_function(tx, &bins)?;
+    raw_series_bins(tx, filter, bins)
+}
+
+fn raw_series_bins(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    bins: Vec<CalendarBucket>,
+) -> StoreResult<Vec<BucketTotals>> {
     let (sql, values) = series_sql(filter)?;
     let mut result = bins
         .into_iter()
