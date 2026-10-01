@@ -69,6 +69,7 @@ pub struct ReplayRecord {
 pub struct ReplayPath {
     pub path: String,
     pub source_root: String,
+    pub source_enabled: bool,
 }
 fn json<T: serde::de::DeserializeOwned>(s: &str) -> StoreResult<T> {
     serde_json::from_str(s).map_err(|_| ErrorCode::DbCorrupt.into())
@@ -78,7 +79,10 @@ fn ids(tx: &Transaction<'_>, sql: &str, value: &str) -> StoreResult<Vec<String>>
     Ok(s.query_map([value], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?)
 }
-fn dependency_closure(tx: &Transaction<'_>, scope: &JobScope) -> StoreResult<BTreeSet<String>> {
+pub(crate) fn dependency_closure(
+    tx: &Transaction<'_>,
+    scope: &JobScope,
+) -> StoreResult<BTreeSet<String>> {
     let mut selected = BTreeSet::new();
     match scope {
         JobScope::All {} => {
@@ -207,7 +211,7 @@ impl Database {
         self.snapshot(|tx, _| Ok(!dependency_closure(tx, scope)?.is_empty()))
     }
     pub fn rebuild_file_path(&self, file_id: &str) -> StoreResult<ReplayPath> {
-        self.snapshot(|tx,_|Ok(tx.query_row("SELECT f.canonical_path,s.root_path FROM source_files f JOIN sources s ON s.source_id=f.source_id WHERE f.file_id=?1",[file_id],|r|Ok(ReplayPath{path:r.get(0)?,source_root:r.get(1)?}))?))
+        self.snapshot(|tx,_|Ok(tx.query_row("SELECT f.canonical_path,s.root_path,s.enabled FROM source_files f JOIN sources s ON s.source_id=f.source_id WHERE f.file_id=?1",[file_id],|r|Ok(ReplayPath{path:r.get(0)?,source_root:r.get(1)?,source_enabled:r.get(2)?}))?))
     }
     pub fn replay_records(
         &self,

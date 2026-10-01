@@ -412,6 +412,7 @@ fn incomplete_candidate_and_changed_input_never_replace_old_results() {
     append.expected_offset = 100;
     append.next_offset = 100;
     append.expected_checkpoint_revision = 1;
+    append.observed_size = 101; // A newly observed partial tail changes the frozen input upper bound.
     append.observations.clear();
     append.events.clear();
     append.streams.clear();

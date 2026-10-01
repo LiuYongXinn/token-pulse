@@ -262,6 +262,33 @@ fn commit_batch(
             return Err(ErrorCode::CheckpointConflict.into());
         }
     }
+    if batch.observations.is_empty()
+        && batch.events.is_empty()
+        && batch.streams.is_empty()
+        && batch.provenance.is_empty()
+        && batch.pending.is_empty()
+        && batch.contexts.is_empty()
+        && batch.diagnostics.is_empty()
+        && batch.canonical.is_empty()
+        && batch.next_offset == batch.expected_offset
+    {
+        let (size,anchors,context):(i64,String,String)=tx.query_row("SELECT observed_size,anchor_json,reader_context_json FROM file_generations WHERE file_generation_id=?1",[&batch.file_generation_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
+        let anchors: Vec<ContentAnchor> = serde_json::from_str(&anchors)?;
+        let context: ReaderContext = serde_json::from_str(&context)?;
+        if size == batch.observed_size
+            && anchors == batch.anchors
+            && context == batch.reader_context
+        {
+            let data_revision: i64 =
+                tx.query_row("SELECT data_revision FROM app_state", [], |r| r.get(0))?;
+            tx.commit()?;
+            return Ok(CommitReceipt {
+                data_revision,
+                checkpoint_revision: batch.expected_checkpoint_revision,
+                usage_changed: false,
+            });
+        }
+    }
     let allowed: std::collections::HashSet<&str> =
         batch.ledgers.iter().map(|l| l.ledger_id.as_str()).collect();
     for ledger in batch

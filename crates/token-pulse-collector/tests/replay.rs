@@ -226,6 +226,31 @@ fn rebuild_replays_real_observations_and_source_absence_does_not_erase_history()
     );
 }
 #[test]
+fn rebuilding_paused_sources_uses_saved_observations_without_opening_changed_source_files() {
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, logs.path());
+    let path = logs.path().join("sessions/source.jsonl");
+    fs::write(
+        &path,
+        header("session", None) + &usage(1, [100, 60, 10, 2, 110], [100, 60, 10, 2, 110]),
+    )
+    .unwrap();
+    collect_file(&db, "local", &path, 5000).unwrap();
+    db.mutate_sources(
+        token_pulse_store::source_management::SourceMutation::Pause("local".into()),
+        db.sources_snapshot().unwrap().settings_revision.value() as i64,
+        6000,
+    )
+    .unwrap();
+    fs::write(&path, b"{}\n").unwrap();
+    job(&db, "paused");
+    execute_rebuild(&db, "paused", || false, || 7000).unwrap();
+    assert_eq!(total(&db), "110");
+    assert_eq!(fs::read(&path).unwrap(), b"{}\n");
+}
+#[test]
 fn child_arriving_before_parent_converges_to_parent_135_and_child_only_13() {
     let data = tempfile::tempdir().unwrap();
     let logs = tempfile::tempdir().unwrap();

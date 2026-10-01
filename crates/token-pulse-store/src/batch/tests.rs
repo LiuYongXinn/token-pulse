@@ -251,6 +251,51 @@ fn live_canonical_progress_and_consumption_rollback_with_the_physical_checkpoint
     })
     .unwrap();
 }
+#[test]
+fn unchanged_poll_keeps_checkpoint_revision_but_size_context_and_stale_inputs_are_checked() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    let mut empty = fixture();
+    empty.expected_offset = 100;
+    empty.expected_checkpoint_revision = 1;
+    empty.observations.clear();
+    empty.events.clear();
+    empty.streams.clear();
+    for _ in 0..4 {
+        let receipt = db.commit(empty.clone()).unwrap();
+        assert_eq!(receipt.checkpoint_revision, 1);
+        assert_eq!(receipt.data_revision, 1);
+        assert!(!receipt.usage_changed);
+    }
+    empty.reader_context.metadata.model = Some("synthetic-reader-state-change".into());
+    assert_eq!(db.commit(empty.clone()).unwrap().checkpoint_revision, 2);
+    empty.expected_checkpoint_revision = 2;
+    empty.observed_size = 150;
+    assert_eq!(db.commit(empty.clone()).unwrap().checkpoint_revision, 3);
+    assert_eq!(
+        db.commit(empty.clone()).unwrap_err().code,
+        ErrorCode::CheckpointConflict
+    );
+    empty.expected_checkpoint_revision = 3;
+    assert_eq!(db.commit(empty).unwrap().checkpoint_revision, 3);
+    db.snapshot(|tx, r| {
+        assert_eq!(r.data, 1);
+        assert_eq!(
+            tx.query_row("SELECT committed_offset FROM file_generations", [], |r| r
+                .get::<_, i64>(
+                0
+            ))?,
+            100
+        );
+        assert_eq!(
+            tx.query_row("SELECT observed_size FROM file_generations", [], |r| r
+                .get::<_, i64>(0))?,
+            150
+        );
+        Ok(())
+    })
+    .unwrap();
+}
 
 #[test]
 fn current_episode_is_explicit_even_when_batch_updates_arrive_in_reverse_order() {

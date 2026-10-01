@@ -84,6 +84,7 @@ impl CollectorService {
                 let mut scan_health: BTreeMap<String, SourceReadability> = BTreeMap::new();
                 let mut manifest_at = Instant::now();
                 let mut active_at = Instant::now();
+                let mut proof_at = Instant::now();
                 let mut reconcile = true;
                 let mut suspended = false;
                 let mut retries: BTreeMap<String, (usize, Instant)> = BTreeMap::new();
@@ -418,6 +419,17 @@ impl CollectorService {
                                     }
                                 }
                             }
+                        }
+                    }
+                    if !suspended
+                        && queue.is_empty()
+                        && scans.is_empty()
+                        && !reconcile
+                        && now.duration_since(proof_at) >= Duration::from_secs(1)
+                    {
+                        proof_at = now;
+                        if let Err(error) = database.enqueue_proof_rebuild(epoch_ms()) {
+                            set_error(&thread_status, error.code);
                         }
                     }
                     if let Ok(mut s) = thread_status.lock() {

@@ -258,6 +258,9 @@ fn verify_physical_inputs(
     for input in &m.files {
         stopped(db, &m.job_id, stop)?;
         let target = db.rebuild_file_path(&input.file_id)?;
+        if !target.source_enabled {
+            continue;
+        }
         let path = Path::new(&target.path);
         match std::fs::symlink_metadata(path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,

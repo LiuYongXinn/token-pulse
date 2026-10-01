@@ -84,14 +84,11 @@ impl Database {
         validate_request_id(&id)?;
         request.validate()?;
         EpochMs::new(at_ms)?;
-        self.write(move|conn| {
-            let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let existing:Option<String>=tx.query_row("SELECT job_id FROM jobs WHERE request_key=?1",[&request.request_key],|r|r.get(0)).optional()?;
-            if let Some(existing)=existing {let old=load(&tx,&existing)?;if old.request!=request {return Err(ErrorCode::RequestKeyConflict.into());}return Ok(old.job);}
-            let pending:i64=tx.query_row("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running','validating','publishing','cancelling')",[],|r|r.get(0))?;
-            if pending>=32 {return Err(ErrorCode::InvalidQuery.into());}
-            tx.execute("INSERT INTO jobs(job_id,kind,state,request_key,scope_json,progress_json,resume_json,created_at_ms,updated_at_ms) VALUES(?1,?2,'queued',?3,?4,?5,?6,?7,?7)",params![id,text(&request.kind)?,request.request_key,serde_json::to_string(&request.scope)?,serde_json::to_string(&JobProgress::default())?,serde_json::to_string(&JobCheckpoint::default())?,at_ms])?;
-            let job=load(&tx,&id)?.job;tx.commit()?;Ok(job)
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let job = create_in_tx(&tx, &id, &request, at_ms)?;
+            tx.commit()?;
+            Ok(job)
         })
     }
     pub fn get_job(&self, id: &str) -> StoreResult<StoredJob> {
@@ -209,4 +206,31 @@ impl Database {
             tx.commit()?;Ok(count as u64)
         })
     }
+}
+pub(crate) fn create_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    id: &str,
+    request: &JobRequest,
+    at_ms: i64,
+) -> StoreResult<Job> {
+    let existing: Option<String> = tx
+        .query_row(
+            "SELECT job_id FROM jobs WHERE request_key=?1",
+            [&request.request_key],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(existing) = existing {
+        let old = load(tx, &existing)?;
+        if old.request != *request {
+            return Err(ErrorCode::RequestKeyConflict.into());
+        }
+        return Ok(old.job);
+    }
+    let pending:i64=tx.query_row("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running','validating','publishing','cancelling')",[],|r|r.get(0))?;
+    if pending >= 32 {
+        return Err(ErrorCode::InvalidQuery.into());
+    }
+    tx.execute("INSERT INTO jobs(job_id,kind,state,request_key,scope_json,progress_json,resume_json,created_at_ms,updated_at_ms) VALUES(?1,?2,'queued',?3,?4,?5,?6,?7,?7)",params![id,text(&request.kind)?,request.request_key,serde_json::to_string(&request.scope)?,serde_json::to_string(&JobProgress::default())?,serde_json::to_string(&JobCheckpoint::default())?,at_ms])?;
+    Ok(load(tx, id)?.job)
 }
