@@ -321,3 +321,11 @@ ready_set 在当前读事务按精确输入版本 / parser / accounting / cache 
 Rust 命令在主窗口权限清单和调用 label 双重限制，阻塞查询运行在 spawn_blocking，TypeScript 通过生成 DTO 接入调用；参数与错误不携带源内容 / SQL。新增三项多场景自动测试验证上下文 1000 / 2000 = 50% 与消费 110 独立、字段缺失 / 已知零、超过 2^53 的精确字符串、并发修改别名与快照值、150% 占用、确定同时间顺序及损坏 / 非法请求。完整存储层回归、workspace Clippy、TS 类型检查和协议差异检查通过；普通 Rust 场景累计 144 项，未在本模块重复全部 collector 回归。
 
 2026-10-01 20:42 Windows 10 独立 native probe 使用隔离库内无来源的合成会话，真实 WebView 调用新命令得到完整 null DTO，并通过既有启动 / 电源消息 / 托盘 / 关闭隐藏 / 单实例 / 退出检查，返回 0。测试没有配置真实来源或读取用户日志，仍有既有 class unregister 1412 提示。会话详情 UI、覆盖状态与 bundle 后续接入。
+
+## M08e：查询覆盖缺口与未归属量
+
+覆盖与同事务内可信消费分别计算。active ledger 的 pending / unattributed 观察按日期与维度绑定筛选；无观察时间的缺口始终保留，半开上界 / 其他日期、candidate / retired、duplicate / inherited 不成为本范围待确认消费。未归属向量只有全部可解释的 total 才以 checked i128 相加，任一缺失 / 无效向量使总量 null，不计入可信消费。
+
+待读文件、来源可读性与未解决格式问题按所选来源整体报告；未知事件日期 / 模型的文件错误不能因筛选某个模型而消失。格式发生次数采用精确聚合；最近成功时间可缺失。已完整解释的分项仍报告自身 complete，与来源覆盖分别表达。当前 Collector 尚未发出可验证的完整扫描 manifest，查询没有 complete 路径：存在明确缺口为 partial，否则为 unknown，并报告 scan_evidence_missing 等原因。后续需落地扫描 manifest，不能把正常读取或零消费当作完整扫描证明。
+
+四项多场景测试验证缺 manifest / 已知分解 / 空来源选择、未知时间与半开边界、候选隔离、同一调用的继承 / 镜像分类、两倍 i64::MAX 的未归属量 / 任一未知或无效向量、实际源字节上界落后、跨日期格式错误 / 解决状态、模型过滤下来源缺口及并发修改前后的真实快照。完整存储层回归、fmt / workspace Clippy 通过，累计普通 Rust 场景 148 项；本模块没有新增 UI / IPC 命令或系统验收，覆盖函数供后续同快照 bundle 使用。

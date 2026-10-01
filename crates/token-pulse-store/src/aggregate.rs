@@ -231,6 +231,17 @@ pub fn register(connection: &Connection) -> Result<()> {
             model.as_deref(),
         ))
     })?;
+    connection.create_scalar_function("usage_vector_total", 1, flags, |ctx| {
+        let json: Option<String> = ctx.get(0)?;
+        let Some(json) = json else {
+            return Ok(None::<i64>);
+        };
+        let vector: UsageVector = serde_json::from_str(&json)
+            .map_err(|_| rusqlite::Error::UserFunctionError(Box::new(ErrorCode::DbCorrupt)))?;
+        // Pending observations can have an invalid or incomplete vector. Only
+        // their provable total contributes to an unattributed amount.
+        Ok(vector.validated_total().ok().flatten())
+    })?;
     connection.create_aggregate_function(
         "sum_token_decimal",
         1,

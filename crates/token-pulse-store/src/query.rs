@@ -12,6 +12,7 @@ use token_pulse_core::{
 
 mod cached;
 pub mod context;
+pub mod coverage;
 
 pub struct BucketTotals {
     pub bucket: CalendarBucket,
