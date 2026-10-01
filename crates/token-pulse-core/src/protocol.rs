@@ -279,7 +279,7 @@ pub struct MiniSnapshot {
     pub privacy: bool,
     pub usage_last_success_ms: Option<EpochMs>,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum JobKind {
     Import,
@@ -291,7 +291,7 @@ pub enum JobKind {
     PriceRevalue,
     Clear,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum JobState {
     Queued,

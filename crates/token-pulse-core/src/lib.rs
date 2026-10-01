@@ -6,6 +6,7 @@ pub mod accounting;
 pub mod adapter;
 pub mod domain;
 pub mod error;
+pub mod jobs;
 pub mod numeric;
 pub mod protocol;
 pub mod reader;

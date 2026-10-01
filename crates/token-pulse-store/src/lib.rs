@@ -6,6 +6,7 @@ pub mod aggregate;
 pub mod batch;
 pub mod collection;
 mod database;
+pub mod jobs;
 mod migration;
 mod registration;
 pub mod source_management;

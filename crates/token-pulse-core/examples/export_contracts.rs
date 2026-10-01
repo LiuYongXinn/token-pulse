@@ -1,5 +1,6 @@
 use schemars::{JsonSchema, generate::SchemaSettings};
 use std::{collections::BTreeMap, fs, path::PathBuf};
+use token_pulse_core::jobs::*;
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
@@ -60,6 +61,9 @@ fn main() {
         JobKind,
         JobState,
         Job,
+        JobScope,
+        JobRequest,
+        CancelJobResult,
         WindowAction,
         SourceOrigin,
         SourceReadability,

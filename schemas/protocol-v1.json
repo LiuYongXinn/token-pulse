@@ -309,6 +309,16 @@
       "title": "Response",
       "type": "object"
     },
+    "CancelJobResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "accepted",
+        "already_finished",
+        "too_late"
+      ],
+      "title": "CancelJobResult",
+      "type": "string"
+    },
     "CapabilityState": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -949,6 +959,159 @@
       ],
       "title": "JobKind",
       "type": "string"
+    },
+    "JobRequest": {
+      "$defs": {
+        "JobKind": {
+          "enum": [
+            "import",
+            "reconcile",
+            "rebuild",
+            "export",
+            "backup",
+            "restore",
+            "price_revalue",
+            "clear"
+          ],
+          "type": "string"
+        },
+        "JobScope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "sources",
+                  "type": "string"
+                },
+                "source_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "source_ids"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "sessions",
+                  "type": "string"
+                },
+                "session_keys": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "session_keys"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/JobKind"
+        },
+        "request_key": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/JobScope"
+        }
+      },
+      "required": [
+        "kind",
+        "scope",
+        "request_key"
+      ],
+      "title": "JobRequest",
+      "type": "object"
+    },
+    "JobScope": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "all",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sources",
+              "type": "string"
+            },
+            "source_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "source_ids"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sessions",
+              "type": "string"
+            },
+            "session_keys": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "session_keys"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "JobScope"
     },
     "JobState": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",

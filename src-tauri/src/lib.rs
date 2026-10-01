@@ -107,7 +107,11 @@ pub fn run() {
             }
             let data_directory = app.path().app_local_data_dir()?;
             token_pulse_store::prepare_data_directory(&data_directory)?;
-            let database = token_pulse_store::Database::open(&data_directory);
+            let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
+                let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
+                database.interrupt_unfinished_jobs(now)?;
+                Ok(database)
+            });
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()),Err(error)=>Err(error.code.into())};
             app.manage(RuntimeState { data_directory, database, collector, selections: Default::default() });
             #[cfg(windows)]

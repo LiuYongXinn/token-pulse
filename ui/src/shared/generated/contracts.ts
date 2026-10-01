@@ -66,6 +66,12 @@ export type JobState = "queued" | "running" | "validating" | "publishing" | "can
 
 export type Job = { job_id: string, kind: JobKind, state: JobState, phase: string, discovered_files: DecimalInt, discovery_complete: boolean, processed_files: DecimalInt, processed_bytes: DecimalInt, accepted_events: DecimalInt, pending_observations: DecimalInt, can_cancel: boolean, error: AppError | null, created_at_ms: EpochMs, updated_at_ms: EpochMs, };
 
+export type JobScope = { "kind": "all", } | { "kind": "sources", source_ids: Array<string>, } | { "kind": "sessions", session_keys: Array<string>, };
+
+export type JobRequest = { kind: JobKind, scope: JobScope, request_key: string, };
+
+export type CancelJobResult = "accepted" | "already_finished" | "too_late";
+
 export type WindowAction = "open_stats" | "hide_main" | "quit";
 
 export type SourceOrigin = "windows_default" | "environment" | "custom" | "wsl";
