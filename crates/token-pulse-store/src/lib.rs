@@ -8,6 +8,7 @@ mod canonical_progress;
 pub mod collection;
 mod database;
 pub mod jobs;
+pub mod leases;
 mod migration;
 pub mod pricing;
 mod proof_jobs;
