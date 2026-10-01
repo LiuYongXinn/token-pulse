@@ -6,14 +6,14 @@ use token_pulse_core::{
     domain::UsageVector, error::ErrorCode, numeric::DecimalInt, protocol::TokenMeasure,
 };
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TokenSums {
     pub total: DecimalInt,
     pub measures: [TokenMeasure; 5],
 }
 
 #[derive(Default)]
-struct VectorAccumulator {
+pub(crate) struct VectorAccumulator {
     total: i128,
     values: [Option<i128>; 5],
     covered: [i128; 5],
@@ -36,63 +36,67 @@ impl Aggregate<VectorAccumulator, String> for VectorSum {
             reasoning_output: ctx.get(3)?,
             reported_total: Some(ctx.get(4)?),
         };
-        let total = i128::from(
-            vector
-                .validated_total()
-                .map_err(function_error)?
-                .ok_or_else(|| function_error(ErrorCode::InvalidUsage))?,
-        );
-        acc.total = acc
+        acc.add(vector).map_err(function_error)
+    }
+    fn finalize(&self, _: &mut Context<'_>, acc: Option<VectorAccumulator>) -> Result<String> {
+        let sums = acc.unwrap_or_default().finish().map_err(function_error)?;
+        serde_json::to_string(&sums).map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))
+    }
+}
+
+impl VectorAccumulator {
+    pub fn event_count(&self) -> u64 {
+        self.events
+    }
+    pub fn add(&mut self, vector: UsageVector) -> std::result::Result<(), ErrorCode> {
+        let total = i128::from(vector.validated_total()?.ok_or(ErrorCode::InvalidUsage)?);
+        self.total = self
             .total
             .checked_add(total)
-            .ok_or_else(|| function_error(ErrorCode::NumericOverflow))?;
-        acc.events = acc
+            .ok_or(ErrorCode::NumericOverflow)?;
+        self.events = self
             .events
             .checked_add(1)
-            .ok_or_else(|| function_error(ErrorCode::NumericOverflow))?;
+            .ok_or(ErrorCode::NumericOverflow)?;
         let values = [
             vector.input_total,
             vector.cached_input,
-            vector.noncached_input().map_err(function_error)?,
+            vector.noncached_input()?,
             vector.output_total,
             vector.reasoning_output,
         ];
         for (i, value) in values.into_iter().enumerate() {
             if let Some(value) = value {
-                acc.values[i] = Some(
-                    acc.values[i]
+                self.values[i] = Some(
+                    self.values[i]
                         .unwrap_or(0)
                         .checked_add(value.into())
-                        .ok_or_else(|| function_error(ErrorCode::NumericOverflow))?,
+                        .ok_or(ErrorCode::NumericOverflow)?,
                 );
-                acc.covered[i] = acc.covered[i]
+                self.covered[i] = self.covered[i]
                     .checked_add(total)
-                    .ok_or_else(|| function_error(ErrorCode::NumericOverflow))?;
-                acc.known[i] = acc.known[i]
+                    .ok_or(ErrorCode::NumericOverflow)?;
+                self.known[i] = self.known[i]
                     .checked_add(1)
-                    .ok_or_else(|| function_error(ErrorCode::NumericOverflow))?;
+                    .ok_or(ErrorCode::NumericOverflow)?;
             }
         }
         Ok(())
     }
-    fn finalize(&self, _: &mut Context<'_>, acc: Option<VectorAccumulator>) -> Result<String> {
-        let acc = acc.unwrap_or_default();
-        let convert = |v| DecimalInt::from_nonnegative(v).map_err(function_error);
+    pub fn finish(&self) -> std::result::Result<TokenSums, ErrorCode> {
+        let convert = DecimalInt::from_nonnegative;
         let mut measures = Vec::with_capacity(5);
         for i in 0..5 {
             measures.push(TokenMeasure {
-                value: acc.values[i].map(convert).transpose()?,
-                covered_total_tokens: convert(acc.covered[i])?,
-                complete: acc.events > 0 && acc.known[i] == acc.events,
+                value: self.values[i].map(convert).transpose()?,
+                covered_total_tokens: convert(self.covered[i])?,
+                complete: self.events > 0 && self.known[i] == self.events,
             });
         }
-        let sums = TokenSums {
-            total: convert(acc.total)?,
-            measures: measures
-                .try_into()
-                .map_err(|_| function_error(ErrorCode::DbCorrupt))?,
-        };
-        serde_json::to_string(&sums).map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))
+        Ok(TokenSums {
+            total: convert(self.total)?,
+            measures: measures.try_into().map_err(|_| ErrorCode::DbCorrupt)?,
+        })
     }
 }
 

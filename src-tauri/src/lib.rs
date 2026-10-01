@@ -115,6 +115,7 @@ pub fn run() {
             let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
                 database.interrupt_unfinished_jobs(now)?;
+                database.interrupt_rollup_builds()?;
                 Ok(database)
             });
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
