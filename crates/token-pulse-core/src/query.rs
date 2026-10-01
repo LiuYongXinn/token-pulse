@@ -13,6 +13,11 @@ use ts_rs::TS;
 
 mod sessions;
 pub use sessions::{SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest};
+mod events;
+pub use events::{
+    RawTokenCount, RawUsageVector, UsageEventRow, UsageEventSort, UsageEventsPage,
+    UsageEventsQuery, UsageEventsRequest,
+};
 
 pub fn model_key(provider: Option<&str>, model: Option<&str>) -> Option<String> {
     model.map(|name| {
@@ -173,6 +178,7 @@ pub struct FilterOptionsPage {
 pub enum CloseQuerySnapshotRequest {
     FilterOptions { request: FilterOptionsRequest },
     Sessions { request: SessionsRequest },
+    UsageEvents { request: UsageEventsRequest },
 }
 impl CloseQuerySnapshotRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
@@ -185,6 +191,13 @@ impl CloseQuerySnapshotRequest {
                 Ok(())
             }
             Self::Sessions { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
+            Self::UsageEvents { request } => {
                 request.validate()?;
                 if request.cursor.is_none() {
                     return Err(crate::error::ErrorCode::InvalidQuery);

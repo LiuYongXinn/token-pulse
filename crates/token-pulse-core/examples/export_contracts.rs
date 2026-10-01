@@ -12,6 +12,10 @@ use token_pulse_core::query::{
     GroupedUsage, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession,
     SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest, UsageSeriesBucket,
 };
+use token_pulse_core::query::{
+    RawTokenCount, RawUsageVector, UsageEventRow, UsageEventSort, UsageEventsPage,
+    UsageEventsQuery, UsageEventsRequest,
+};
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
@@ -72,6 +76,13 @@ fn main() {
         SessionsQuery,
         SessionsRequest,
         SessionsPage,
+        RawTokenCount,
+        RawUsageVector,
+        UsageEventSort,
+        UsageEventsQuery,
+        UsageEventsRequest,
+        UsageEventRow,
+        UsageEventsPage,
         CloseQuerySnapshotRequest,
         DashboardRequest,
         UsageSeriesBucket,

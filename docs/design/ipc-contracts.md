@@ -370,3 +370,11 @@ CSV 将可能被表格解释为公式的用户标签转为安全文本，数值�
 `SessionsPage` 同时返回 meta、整个 filter 的 summary / pricing / coverage、sessions 和 next_cursor；不能把每页消费当总范围消费。每行包含范围内最新可信事件的时间 / 模型 / 项目、消费 / 费用 / 覆盖，以及独立的 latest_context。父会话 key / 显示名只使用已解析关系；未解析 parent_provider_id 保留，不猜测关联。child_count 为跨日期已登记、已解析的非镜像子会话数量，与选定范围的消费会话数不同。关系本身不证明继承扣除已经确认，继承依据后续由详情模块提供。
 
 latest_desc 以最新选定事件时间降序、session_key BINARY 升序；total_desc 以精确非负十进制总量降序、session_key BINARY 升序。总量先补至相同 39 位文本宽度比较，不转 SQLite REAL 或限制为 i64；游标位置由后端登记。所有页的 facts、价格规则版本、项目标签、父子关系和最近上下文均来自同一事务，首请求 generated_at_ms 保持不变。排序 / 页长 / 范围 / 价格依据 / 窗口改变均不能重绑旧游标。
+
+### 已实现明细分页的正式 DTO
+
+`query_usage_events` 接收 `UsageEventsRequest { query: { filter, price_basis, sort, page_size }, cursor }`；sort 为 time_desc / total_desc，页长 1–200。首请求在命令内取得真实租约，续页绑定完整 query 与可信窗口；关闭使用 `CloseQuerySnapshotRequest` 的 usage_events 变体。事件自身的 total_tokens 为原始 i64，按 SQLite INTEGER 精确比较；时间或消费量降序后以 event_id BINARY 升序打破平局。游标 / TTL / WAL 与会话分页一致。
+
+`UsageEventsPage` 返回整个范围的 summary / pricing / coverage、meta、events 与 next_cursor。行包含消费精确分项、总量、时间、会话 / 项目 / 实际模型 / 提供方、不同物理来源 ID、可靠 turn_id（可空）、calculation_method、quality_flags、parser / accounting 版本及同 price_revision 的 PriceOutcome（规则 ID / 分币种精确金额，或明确未计价原因）。来源以事件 provenance 去重，选择某个镜像来源不改变事实或价格身份。
+
+原始 last / cumulative 只从必要观察的白名单向量提取，缺失保留 null；不向前端返回 normalized_json、正文、路径或任意原始 JSON。`RawUsageVector` 使用 RawTokenCount：原始 i64 经精确十进制字符串传输，允许诊断中的原始负数，Rust 拒绝越界、非规范字符串和 JSON number。这是原始证据的传输类型；已发布消费仍按对应 accounting_version 验证为非负，total_tokens 使用 DecimalInt。原始 last 无效但独立累计向量合法时，不用 null 掩盖无效原始值，也不把该负数纳入消费求和。

@@ -123,6 +123,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     try {await invoke('query_sessions',{requestId:`native-smoke-sessions-${suffix}`,request:bad});} catch(error) {rejected=error.code===code;}
                     ok=ok && rejected;
                 }
+                for(const sort of ['time_desc','total_desc']) {
+                    const eventsRequest={query:{...sessionsRequest.query,sort},cursor:null};
+                    const events=await invoke('query_usage_events',{requestId:`native-smoke-events-${sort}`,request:eventsRequest});
+                    ok=ok && events.api_version===1 && events.request_id===`native-smoke-events-${sort}`
+                        && events.data.meta.snapshot_id.startsWith('query-') && events.data.meta.price_revision==='3'
+                        && events.data.events.length===0 && events.data.next_cursor===null
+                        && events.data.summary.total_tokens==='0' && events.data.summary.input_total.value===null;
+                    let invalid=false;
+                    try { await invoke('query_usage_events',{requestId:'native-smoke-events-cursor',request:{...eventsRequest,cursor:'a'.repeat(151)}}); } catch(error) { invalid=error.code==='CURSOR_INVALID'; }
+                    ok=ok && invalid;
+                }
                 for(const dimension of ['models','projects']) {
                     const groupedRequest={filter:request.filter,price_basis:request.price_basis,dimension,sort:'total_desc',limit:200};
                     const grouped=await invoke('get_grouped_usage',{requestId:`native-smoke-groups-${dimension}`,request:groupedRequest});

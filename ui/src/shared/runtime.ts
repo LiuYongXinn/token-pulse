@@ -5,6 +5,7 @@ import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage
 import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle, GroupedUsageRequest, GroupedUsageBundle } from './generated/contracts';
 import type { PriceChanged } from './generated/contracts';
 import type { SessionsPage, SessionsRequest } from './generated/contracts';
+import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
 async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -32,6 +33,7 @@ export function getDashboardBundle(query: DashboardRequest): Promise<DashboardBu
 export function getGroupedUsage(query: GroupedUsageRequest): Promise<GroupedUsageBundle> { return request('get_grouped_usage', { request: query }); }
 export function getFilterOptions(query: FilterOptionsRequest): Promise<FilterOptionsPage> { return request('get_filter_options', { request: query }); }
 export function querySessions(query: SessionsRequest): Promise<SessionsPage> { return request('query_sessions', { request: query }); }
+export function queryUsageEvents(query: UsageEventsRequest): Promise<UsageEventsPage> { return request('query_usage_events', { request: query }); }
 export async function closeQuerySnapshot(query: CloseQuerySnapshotRequest): Promise<void> { await request<null>('close_query_snapshot', { request: query }); }
 export function getPriceRules(revision: string | null = null): Promise<PriceRulesSnapshot> { return request('get_price_rules', { revision }); }
 export function savePriceRule(priceRequest: Exclude<PriceRuleMutation, { kind: 'retire' }>, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('save_price_rule', { request: priceRequest, expectedPriceRevision }); }

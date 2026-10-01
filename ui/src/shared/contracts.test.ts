@@ -13,6 +13,16 @@ test('price invalidation carries exact revision and a whole-model marker without
   expect(validate({ price_revision: '3', all_models: true, root_path: 'private' })).toBe(false);
 });
 
+test('raw vectors retain signed diagnostic counters and null while rejecting unsafe numeric transport', () => {
+  const validate = ajv.compile(protocol.schemas.RawUsageVector);
+  const vector = { input_total: '-1', cached_input: null, output_total: '9007199254740993', reasoning_output: null, reported_total: null };
+  expect(validate(vector)).toBe(true);
+  expect(validate({ ...vector, output_total: 9007199254740992 })).toBe(false);
+  expect(validate({ ...vector, input_total: '-0' })).toBe(false);
+  expect(validate({ ...vector, input_total: '01' })).toBe(false);
+  expect(validate({ ...vector, messages: ['synthetic private content'] })).toBe(false);
+});
+
 test('dashboard contract requires one complete bundle with null metrics and real metadata', () => {
   const measure = { value: null, covered_total_tokens: '0', complete: false };
   const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
@@ -39,6 +49,16 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateSessions({ ...sessionPage, sessions: [{ ...session, summary: { ...totals, reliable_turn_count: 1 } }] })).toBe(false);
   expect(validateSessions({ ...sessionPage, sessions: [{ ...session, messages: ['private chat'] }] })).toBe(false);
   expect(validateSessions({ ...sessionPage, sessions: Array(201).fill(session) })).toBe(false);
+  const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', reported_total: '110' };
+  const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
+  const eventPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, events: [event], next_cursor: null };
+  const validateEvents = ajv.compile(protocol.schemas.UsageEventsPage);
+  expect(validateEvents(eventPage)).toBe(true);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, raw_last: undefined }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, source_ids: Array(33).fill('synthetic') }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, quality_flags: Array(17).fill('synthetic') }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, normalized_json: '{}' }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: Array(201).fill(event) })).toBe(false);
   const validateGroupRequest = ajv.compile(protocol.schemas.GroupedUsageRequest);
   const all = { kind: 'all' };
   const groupRequest = { filter: { range: { start_ms: 0, end_ms: 1000, timezone: 'UTC' }, sources: all, models: all, projects: all, sessions: all }, price_basis: { mode: 'event_time' }, dimension: 'models', sort: 'total_desc', limit: 200 };

@@ -561,3 +561,13 @@ query_sessions 正式 Rust / TS / JSON Schema、主窗口 capability 与后台 l
 2026-10-02 01:26 TS 类型、14 项 Vitest、完整 17 项 Playwright（新增三项会话多场景）、生产 Vite 构建与契约差异检查通过。验证 >2^53 完整数 / tooltip、55 会话的 50 + 5 页 / 缓存返回 / 终页禁用下一页、未知分类 / 未解析父关系、日期范围外 context / 未知容量、2 事件与 1 回合、抽屉键盘 / inert / 焦点恢复、父会话钻取 / 共享筛选、过期不拼接 / 整体替换、排序先关闭旧 query、来源空页 / 隐藏旧数据、迟到请求离开页面后的原能力清理。查看 1280 / 960 列表及抽屉顶部 / 下部截图；发现全局未知费用字体覆盖表格样式，已增加表格作用域优先级。列表自身可横向滚动，主页面没有横向溢出。
 
 同时间 Win10 随机隔离库实际 WebView 打开会话页，真实 query_sessions 返回 0 / 未计价 / 空态，排序从最近活跃改消耗最多、页长从 50 改 100，分页按钮实际禁用；全部既有 IPC / 通知 / UI / 系统路由通过，退出 0，仍有 class unregister 1412 提示。此原生检查为空库，没有真实用量、多页或实际抽屉控件操作；这些界面场景来自明确浏览器合成 DTO 桥，实际账本一致性来自 M08j 的真实 SQLite 测试。没有执行性能测试。
+
+## M08k：真实明细分页与白名单向量 / 价格依据
+
+query_usage_events 接入 Rust / TS / JSON Schema、主窗口 capability 和后台权限；time_desc / total_desc 按精确 i64 事件值和 event_id BINARY 稳定 keyset。首请求真实租约，续页绑定完整条件 / 价格依据 / 排序 / 页长 / 窗口，终页 / 错误释放；close_query_snapshot 增加 usage_events 的合法能力关闭。整页同时返回整个筛选汇总 / 费用 / 覆盖与版本，各事件的归属 / 来源 / 可靠 turn_id / 核算方法 / 质量 / PriceOutcome / 解析和核算版本可复核。
+
+原始 last / cumulative 仅提取归一化观察中的五项向量，不返回整个 JSON、聊天或任意字段；缺失向量和分项保持 null。RawTokenCount 原始 i64 使用规范字符串，保留无效原始负数作证据；已发布消费独立按账本版本检查为非负，DecimalInt 总量不变。不同镜像 provenance 来源去重，镜像筛选不使事实倍增。明细 UI、单事件价格规则展示及完整会话详情 / 回合页继续待实现。
+
+2026-10-02 01:40 新增一项核心 / 四项存储多场景及完整 workspace 230 项普通 Rust 测试通过；workspace Clippy、契约差异、15 项 Vitest、TS 类型和生产 Vite 构建通过。验证 i64::MIN / MAX 与 >2^53 的精确字符串往返、number / -0 / 前导零 / 越界拒绝；相同时间平局、9007199254740992 与 9007199254740993 精确消费排序、原 last -1 与已计入 100 分别保留、不返回测试植入的私有任意字段；旧分页原始向量 / 方法 / 会话名 / 价格不随 Writer 改变、新查询可见价格 / 原向量修订、mirror 的两份 provenance 只返回一事件且来源 DISTINCT、半开范围、未知分项、游标绑定 / 幂等关闭 / 错误行释放槽。明细 schema 独立检查页数 / 来源数 / 质量数限制、必填 nullable 向量和任意原始 JSON 拒绝。
+
+同时间 Win10 隔离库真实 WebView 逐种调用 time_desc / total_desc 明细，返回实际 query snapshot / price revision 3 / 空列表 / null cursor / 未知分项，伪 cursor 拒绝；既有原生会话控件 / 价格通知 / 总览 / 分组 / 系统路由通过，退出 0，仍有 class unregister 1412 提示。本次原生库无真实事件，原始向量、计价、多页及镜像由实际 SQLite 合成夹具验证；没有把它当作实际 Codex 格式或明细控件验收。没有执行性能测试。

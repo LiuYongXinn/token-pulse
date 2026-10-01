@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-query-usage-events"
+description = "Enables the query_usage_events command without any pre-configured scope."
+commands.allow = ["query_usage_events"]
+
+[[permission]]
+identifier = "deny-query-usage-events"
+description = "Denies the query_usage_events command without any pre-configured scope."
+commands.deny = ["query_usage_events"]

@@ -82,7 +82,25 @@ export type SessionsPage = { meta: SnapshotMeta,
  */
 summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, sessions: Array<SessionRow>, next_cursor: string | null, };
 
-export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, };
+export type RawTokenCount = string;
+
+export type RawUsageVector = { input_total: RawTokenCount | null, cached_input: RawTokenCount | null, output_total: RawTokenCount | null, reasoning_output: RawTokenCount | null, reported_total: RawTokenCount | null, };
+
+export type UsageEventSort = "time_desc" | "total_desc";
+
+export type UsageEventsQuery = { filter: UsageFilter, price_basis: PriceBasis, sort: UsageEventSort, page_size: number, };
+
+export type UsageEventsRequest = { query: UsageEventsQuery, cursor: string | null, };
+
+export type UsageEventRow = { event_id: string, session_key: string, session_display_name: string, occurred_at_ms: EpochMs, model: string | null, provider: string | null, project_id: string | null, project_display_name: string | null, source_ids: Array<string>, turn_id: string | null, total_tokens: DecimalInt,
+/**
+ * Published increment; raw_last/cumulative retain original source vectors.
+ */
+usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsageVector | null, calculation_method: string, quality_flags: Array<string>, price: PriceOutcome, parser_version: string, accounting_version: string, };
+
+export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
+
+export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, };
 
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 

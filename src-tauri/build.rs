@@ -15,6 +15,7 @@ fn main() {
             "get_grouped_usage",
             "get_filter_options",
             "query_sessions",
+            "query_usage_events",
             "close_query_snapshot",
             "get_price_rules",
             "save_price_rule",

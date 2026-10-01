@@ -14,6 +14,7 @@ mod cached;
 pub mod context;
 pub mod coverage;
 pub mod dashboard;
+pub mod events;
 pub mod facets;
 pub mod groups;
 pub mod pricing;
