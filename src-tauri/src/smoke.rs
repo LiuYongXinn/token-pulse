@@ -95,6 +95,19 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 ok=ok && replaced.data.price_revision==='2' && replaced.data.rules[0].input_rate_atoms==='3' && historical.data.rules[0].input_rate_atoms==='1';
                 const retired=await invoke('retire_price_rule',{requestId:'native-smoke-price-retire',ruleId:replaced.data.rules[0].rule_id,expectedPriceRevision:'2'});
                 ok=ok && retired.data.price_revision==='3' && retired.data.rules.length===0;
+                const range={start_ms:0,end_ms:86400000,timezone:'UTC'};
+                const request={filter:{range,sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},grain:'hour',heatmap_range:{...range,end_ms:172800000}};
+                const dashboard=await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard',request});
+                ok=ok && dashboard.api_version===1 && dashboard.request_id==='native-smoke-dashboard'
+                    && dashboard.data.meta.snapshot_id==='native-smoke-dashboard' && dashboard.data.meta.price_revision==='3'
+                    && dashboard.data.summary.total_tokens==='0' && dashboard.data.summary.input_total.value===null
+                    && dashboard.data.pricing.currencies.length===0 && dashboard.data.recent_sessions.length===0
+                    && dashboard.data.series.length===24 && dashboard.data.heatmap.length===2
+                    && dashboard.data.series.every(bucket=>bucket.totals.total_tokens==='0' && bucket.coverage.state==='unknown')
+                    && dashboard.data.meta.parser_versions.length===0;
+                let invalidRange=false;
+                try {await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard-invalid',request:{...request,heatmap_range:{...request.heatmap_range,timezone:'Asia/Shanghai'}}});} catch(error) {invalidRange=error.code==='INVALID_QUERY';}
+                ok=ok && invalidRange;
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();

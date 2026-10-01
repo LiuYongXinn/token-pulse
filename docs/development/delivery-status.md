@@ -401,3 +401,11 @@ get_price_rules / save_price_rule / retire_price_rule 已加入主窗口 capabil
 最近会话按范围内实际事件时间降序、session_key 升序；同时间最新事件按稳定 event_id 选取，项目显示取该事件的项目 / 当前别名，不用会话最终 cwd 或最终模型替代。meta 的 parser / accounting versions 来自主范围与热力图实际活跃事实，空范围为空；snapshot_id 是响应身份，没有假冒分页租约。
 
 五项自动测试验证主范围 110 / 热力图另一日 7 / 空小时 null、所有组件来源筛选、同事务并发规则替换 / 新事件仍完整保留旧 JSON 和 meta、真实新快照的 117 与费用覆盖、12 会话限定稳定 10 项 / 超过 2^53 的精确消费、相同时间最新事件与项目别名、空范围 / 非法时区 / 超过 2000 桶 / 非法身份。完整存储层 97 项普通测试、fmt / workspace Clippy、契约生成差异、TS 类型及 11 项 Vitest 通过（含完整 bundle 必填 / null / 桶上限 Schema 检查），累计普通 Rust 场景 183 项。本模块未接入新的 IPC / 页面或原生检查，完整 bundle 性能仍待实际压测与优化。
+
+## M08f3：总览正式 IPC 与 Windows 10 验证
+
+get_dashboard_bundle 接入正式主窗口命令、capability 与 label 校验；request 在后台验证，阻塞查询移至 spawn_blocking，响应身份用于固定 bundle 标识。TypeScript 调用直接使用生成的 DashboardRequest / DashboardBundle，没有 HTTP / 任意 SQL 或浏览器伪造数据入口。
+
+2026-10-01 22:11 Windows 10 独立 native probe 在随机隔离数据目录中通过真实 WebView 调用：空 Token 的可空分项、实际 price revision 3、同响应 snapshot_id、24 小时趋势 / 2 日热力图及各桶 unknown 覆盖、无消费会话不进入最近列表、空解析版本，以及不一致显示时区返回 INVALID_QUERY。既有上下文 / 价格版本 / 托盘 / 关闭隐藏 / 电源消息路由 / 单实例 / 明确退出检查继续通过，返回 0，仍有既有 WebView2 class unregister 1412 提示。
+
+fmt / workspace Clippy、TS 类型 / 11 项 Vitest 和生产 Vite 构建通过。本模块没有访问真实 Codex 来源 / 账户，没有验证实际睡眠、WSL、任务栏或安装；主总览 UI / 筛选 / 查询租约、重估缓存及性能目标仍需继续实现。

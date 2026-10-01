@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 
-import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot } from './generated/contracts';
+import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
 async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -18,6 +18,7 @@ export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit
 export function startJob(jobRequest: JobRequest): Promise<Job> { return request('start_job', { request: jobRequest }); }
 export function cancelJob(jobId: string): Promise<CancelJobResult> { return request('cancel_job', { jobId }); }
 export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }
+export function getDashboardBundle(query: DashboardRequest): Promise<DashboardBundle> { return request('get_dashboard_bundle', { request: query }); }
 export function getPriceRules(revision: string | null = null): Promise<PriceRulesSnapshot> { return request('get_price_rules', { revision }); }
 export function savePriceRule(priceRequest: Exclude<PriceRuleMutation, { kind: 'retire' }>, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('save_price_rule', { request: priceRequest, expectedPriceRevision }); }
 export function retirePriceRule(ruleId: string, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('retire_price_rule', { ruleId, expectedPriceRevision }); }

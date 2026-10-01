@@ -11,6 +11,7 @@ fn main() {
             "list_jobs",
             "cancel_job",
             "get_context_snapshot",
+            "get_dashboard_bundle",
             "get_price_rules",
             "save_price_rule",
             "retire_price_rule",
