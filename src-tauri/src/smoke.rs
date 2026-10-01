@@ -121,6 +121,20 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     ok=ok && invalidLimit;
                 }
                 const guide=document.querySelector('main .empty h2');
+                for(const dimension of ['sources','models','projects','sessions']) {
+                    const facetRequest={query:{filter:request.filter,dimension,search:'中文%_',page_size:200},cursor:null};
+                    const facet=await invoke('get_filter_options',{requestId:`native-smoke-facet-${dimension}`,request:facetRequest});
+                    ok=ok && facet.api_version===1 && facet.request_id===`native-smoke-facet-${dimension}`
+                        && facet.data.dimension===dimension && facet.data.meta.snapshot_id.startsWith('query-')
+                        && facet.data.meta.price_revision==='3' && facet.data.options.length===0 && facet.data.next_cursor===null;
+                    let invalidSize=false;
+                    try {await invoke('get_filter_options',{requestId:'native-smoke-facet-invalid',request:{...facetRequest,query:{...facetRequest.query,page_size:201}}});} catch(error) {invalidSize=error.code==='INVALID_QUERY';}
+                    let invalidCursor=false;
+                    try {await invoke('get_filter_options',{requestId:'native-smoke-facet-cursor',request:{...facetRequest,cursor:'a'.repeat(151)}});} catch(error) {invalidCursor=error.code==='CURSOR_INVALID';}
+                    let invalidClose=false;
+                    try {await invoke('close_query_snapshot',{requestId:'native-smoke-facet-close',request:{kind:'filter_options',request:{...facetRequest,cursor:'a'.repeat(151)}}});} catch(error) {invalidClose=error.code==='CURSOR_INVALID';}
+                    ok=ok && invalidSize && invalidCursor && invalidClose;
+                }
                 ok=ok && guide?.textContent==='添加 Codex 数据来源'
                     && document.querySelectorAll('nav[aria-label="主导航"] button').length===7
                     && document.querySelector('select[aria-label="日期范围"]')?.value==='today'

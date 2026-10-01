@@ -368,6 +368,184 @@
       "title": "CapabilityState",
       "type": "string"
     },
+    "CloseQuerySnapshotRequest": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DimensionSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "include_unknown": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "ids",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids",
+                "include_unknown"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FacetDimension": {
+          "enum": [
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "string"
+        },
+        "FilterOptionsQuery": {
+          "additionalProperties": false,
+          "properties": {
+            "dimension": {
+              "$ref": "#/$defs/FacetDimension"
+            },
+            "filter": {
+              "$ref": "#/$defs/UsageFilter"
+            },
+            "page_size": {
+              "format": "uint16",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "search": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "filter",
+            "dimension",
+            "search",
+            "page_size"
+          ],
+          "type": "object"
+        },
+        "FilterOptionsRequest": {
+          "additionalProperties": false,
+          "properties": {
+            "cursor": {
+              "maxLength": 151,
+              "minLength": 151,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "query": {
+              "$ref": "#/$defs/FilterOptionsQuery"
+            }
+          },
+          "required": [
+            "query",
+            "cursor"
+          ],
+          "type": "object"
+        },
+        "UsageFilter": {
+          "additionalProperties": false,
+          "properties": {
+            "models": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "projects": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "sessions": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "sources": {
+              "$ref": "#/$defs/DimensionSelection"
+            }
+          },
+          "required": [
+            "range",
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "filter_options",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/FilterOptionsRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "request"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "CloseQuerySnapshotRequest"
+    },
     "ContextSnapshot": {
       "$defs": {
         "DecimalInt": {

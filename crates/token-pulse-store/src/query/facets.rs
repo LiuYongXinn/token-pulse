@@ -110,6 +110,25 @@ fn rows(
     })
 }
 impl Database {
+    pub fn close_filter_options(
+        &self,
+        owner: &str,
+        request: &FilterOptionsRequest,
+    ) -> StoreResult<()> {
+        request.validate()?;
+        let cursor = request.cursor.as_ref().ok_or(ErrorCode::InvalidQuery)?;
+        let binding = QueryBinding::new(owner, &("filter_options", &request.query))?;
+        match self.leases().resolve_cursor::<Position>(cursor, &binding) {
+            Ok((handle, _)) => match self.leases().release(&handle, &binding) {
+                Ok(()) => Ok(()),
+                Err(error) if error.code == ErrorCode::SnapshotExpired => Ok(()),
+                Err(error) => Err(error),
+            },
+            // MAC and binding are verified before the lookup can expire.
+            Err(error) if error.code == ErrorCode::SnapshotExpired => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
     pub fn filter_options(
         &self,
         owner: &str,

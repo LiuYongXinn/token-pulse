@@ -13,6 +13,8 @@ fn main() {
             "get_context_snapshot",
             "get_dashboard_bundle",
             "get_grouped_usage",
+            "get_filter_options",
+            "close_query_snapshot",
             "get_price_rules",
             "save_price_rule",
             "retire_price_rule",

@@ -166,6 +166,25 @@ pub struct FilterOptionsPage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CloseQuerySnapshotRequest {
+    FilterOptions { request: FilterOptionsRequest },
+}
+impl CloseQuerySnapshotRequest {
+    pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
+        match self {
+            Self::FilterOptions { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct DashboardRequest {
     pub filter: UsageFilter,

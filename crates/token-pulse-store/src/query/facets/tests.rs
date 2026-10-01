@@ -278,3 +278,42 @@ fn bad_input_and_corrupt_keys_never_occupy_slots() {
         1
     );
 }
+
+#[test]
+fn closing_a_valid_cursor_is_idempotent_and_never_releases_another_query() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    extra(&db, "a", 1100, 7, (Some("before"), Some("P")), None, None);
+    let mut req = request(FacetDimension::Models, 1);
+    assert_eq!(
+        db.close_filter_options("main", &req).unwrap_err().code,
+        ErrorCode::InvalidQuery
+    );
+    req.cursor = fetch(&db, &req).next_cursor;
+    assert_eq!(
+        db.close_filter_options("other", &req).unwrap_err().code,
+        ErrorCode::CursorInvalid
+    );
+    let mut tampered = req.clone();
+    tampered.query.search = "other".into();
+    assert_eq!(
+        db.close_filter_options("main", &tampered).unwrap_err().code,
+        ErrorCode::CursorInvalid
+    );
+    assert!(
+        db.leases()
+            .resolve_cursor::<Position>(
+                req.cursor.as_ref().unwrap(),
+                &QueryBinding::new("main", &("filter_options", &req.query)).unwrap()
+            )
+            .is_ok()
+    );
+    db.close_filter_options("main", &req).unwrap();
+    db.close_filter_options("main", &req).unwrap();
+    assert_eq!(
+        db.filter_options("main", &req, EpochMs::new(1).unwrap())
+            .unwrap_err()
+            .code,
+        ErrorCode::SnapshotExpired
+    );
+}

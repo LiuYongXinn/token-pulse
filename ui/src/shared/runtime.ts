@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
 
 import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle, GroupedUsageRequest, GroupedUsageBundle } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
@@ -20,6 +21,8 @@ export function cancelJob(jobId: string): Promise<CancelJobResult> { return requ
 export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }
 export function getDashboardBundle(query: DashboardRequest): Promise<DashboardBundle> { return request('get_dashboard_bundle', { request: query }); }
 export function getGroupedUsage(query: GroupedUsageRequest): Promise<GroupedUsageBundle> { return request('get_grouped_usage', { request: query }); }
+export function getFilterOptions(query: FilterOptionsRequest): Promise<FilterOptionsPage> { return request('get_filter_options', { request: query }); }
+export async function closeQuerySnapshot(query: CloseQuerySnapshotRequest): Promise<void> { await request<null>('close_query_snapshot', { request: query }); }
 export function getPriceRules(revision: string | null = null): Promise<PriceRulesSnapshot> { return request('get_price_rules', { revision }); }
 export function savePriceRule(priceRequest: Exclude<PriceRuleMutation, { kind: 'retire' }>, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('save_price_rule', { request: priceRequest, expectedPriceRevision }); }
 export function retirePriceRule(ruleId: string, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('retire_price_rule', { ruleId, expectedPriceRevision }); }

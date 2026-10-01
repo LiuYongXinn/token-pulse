@@ -497,3 +497,9 @@ facet_filter 只重置本维度为 All，来源 / 模型 / 项目 / 会话之外
 搜索为 Unicode 小写后的字面子串，不把 % / _ 当通配符，不拼接输入为 SQL；参数绑定。分页按稳定 opaque key 的 BINARY 顺序、null 首位，使用最后 key 而非 OFFSET / 可变显示名。同租约保留事实、标签、修订和首请求生成时间；最后一页立即释放事务，先前游标随后明确 SNAPSHOT_EXPIRED。失败也释放租约。元数据版本表示 facet_filter 的候选范围，没有把搜索结果数宣称为导入完整性。
 
 2026-10-02 00:06 五项新增多场景、完整存储层 121 项普通测试（106 内部 + 15 集成，30 万性能 benchmark ignored）与 workspace Clippy 通过，累计普通 Rust 场景 209：未知候选 / 同名不同 provider / 多事件计数、多页身份不变与终页槽重用、中文 / ASCII 大小写 / SQL 字面搜索、自身选择忽略而其他筛选保留、日期右端排除、真实项目别名 / 会话名、零及暂停来源 / 同来源镜像去重、Writer 更新事实及价格修订后旧页不变 / 新页可见、跨窗口 / 搜索 / 页长 / 来源重绑拒绝、伪游标 / 超长存储 key 错误不泄漏槽。尚无生产候选 IPC / 页面及新原生验收，继续接入命令与高级筛选。
+
+## M08i3：候选 IPC 与合法能力的幂等关闭
+
+主窗口 capability / 后台 label 双重限制 get_filter_options 与 close_query_snapshot，使用正式请求身份 / 参数校验 / spawn_blocking；TypeScript 使用生成 DTO。CloseQuerySnapshotRequest 用明确 filter_options 变体携带原完整 query 和非 null cursor，先校验 MAC / 绑定 / 登记，再释放真实事务；合法已过期或重复关闭幂等成功，伪造及改查询拒绝。未开放按任意 snapshot_id 关闭其他读取的入口，后续会话 / 明细租约将扩展这个正式关闭命令。
+
+2026-10-02 00:12 六项候选存储场景（新增关闭 / 拒绝跨 owner 和查询 / 重复关闭 / 释放后明确过期）、workspace Clippy、TS 类型与 13 项 Vitest 通过，累计普通 Rust 场景 210。Win10 随机隔离库真实 WebView 验证四种候选命令的 api / request 身份、price revision 3、实际 query snapshot、空列表 / null cursor，逐种验证 201 页长 / 伪 cursor 查询 / 伪 cursor 关闭分别 INVALID_QUERY / CURSOR_INVALID；既有真实价格 / 分组 / 总览 / context / UI 导航 / 原生系统路由继续通过，退出 0，保留 class unregister 1412 提示。本次原生夹具没有真实用量或授权来源，多页和合法关闭由存储测试验证；顶部交互下一步接入。

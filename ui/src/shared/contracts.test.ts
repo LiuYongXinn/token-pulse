@@ -48,6 +48,10 @@ test('facet pages preserve null categories, exact counts, bounded queries and si
   expect(validateRequest({ query: { ...query, page_size: 201 }, cursor: null })).toBe(false);
   expect(validateRequest({ query: { ...query, search: '中'.repeat(257) }, cursor: null })).toBe(false);
   expect(validateRequest({ query, cursor: 'a'.repeat(150) })).toBe(false);
+  const validateClose = ajv.compile(protocol.schemas.CloseQuerySnapshotRequest);
+  expect(validateClose({ kind: 'filter_options', request: { query, cursor: 'a'.repeat(151) } })).toBe(true);
+  expect(validateClose({ kind: 'filter_options', request: { query, cursor: 'a'.repeat(151) }, snapshot_id: 'unauthorized' })).toBe(false);
+  expect(validateClose({ kind: 'arbitrary', request: { query, cursor: 'a'.repeat(151) } })).toBe(false);
   const page = { meta: { snapshot_id: 'synthetic-facet', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' }, dimension: 'models', options: [{ key: null, display_name: '未知模型', count: '9007199254740993' }], next_cursor: null };
   const validatePage = ajv.compile(protocol.schemas.FilterOptionsPage);
   expect(validatePage(page)).toBe(true);

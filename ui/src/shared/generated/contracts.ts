@@ -60,6 +60,8 @@ count: DecimalInt, };
 
 export type FilterOptionsPage = { meta: SnapshotMeta, dimension: FacetDimension, options: Array<FilterOption>, next_cursor: string | null, };
 
+export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, };
+
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 
 export type UsageSeriesBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, totals: TokenTotals, coverage: Coverage, };

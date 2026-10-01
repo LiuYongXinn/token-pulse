@@ -7,9 +7,10 @@ use token_pulse_core::pricing::{
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{
-    DashboardBundle, DashboardRequest, FacetDimension, FilterOption, FilterOptionsPage,
-    FilterOptionsQuery, FilterOptionsRequest, GroupDimension, GroupSort, GroupedUsage,
-    GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession, UsageSeriesBucket,
+    CloseQuerySnapshotRequest, DashboardBundle, DashboardRequest, FacetDimension, FilterOption,
+    FilterOptionsPage, FilterOptionsQuery, FilterOptionsRequest, GroupDimension, GroupSort,
+    GroupedUsage, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession,
+    UsageSeriesBucket,
 };
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -66,6 +67,7 @@ fn main() {
         FilterOptionsRequest,
         FilterOption,
         FilterOptionsPage,
+        CloseQuerySnapshotRequest,
         DashboardRequest,
         UsageSeriesBucket,
         RecentSession,
