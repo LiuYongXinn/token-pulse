@@ -2,14 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02 06:44）
+## 当前交付状态（2026-10-02 07:04）
 
 - 独立 Tauri / React 工程、SQLite / 原子采集事务、持久化作业、只读适配、镜像与分叉核算、候选重建及已知旧核算版本升级已接入；实际 Codex 格式、完整扫描证据、文件代次替换恢复、旧 parser 重解析和实际 WSL 条件仍有待办，不能宣称采集已经完整覆盖。
 - 总览、模型、项目、会话、明细五个统计页面使用正式 DTO。会话 / 明细稳定分页使用真实 SQLite 租约；范围消费与最近上下文分开。会话详情的消费 / 关系 / 账本分类摘要使用原子 bundle，子关系支持跳转；可靠回合分页已接入详情；已保存时区、自定义日期和热力图日期跳转已接统一筛选；完整继承证明、完整诊断 / 设置尚未完成。
 - 自定义价格不可变发布 / 版本快照、精确分币种估算、覆盖 / 未计价、成功变更通知与完整快照刷新已实现；指定估价时点已接统一筛选、详情和回合查询。模型别名写入、实际离线价格目录、持久化费用缓存和独立重估作业仍待实现。
 - Win10 独立开发应用已验证实际 WebView 查询 / 价格写入、五个统计页面空态与部分控件、托盘注册 / 关闭隐藏 / 单实例激活 / 电源消息路由。主窗口持久隐私、深 / 浅 / 系统主题与最新 IPC / 前端缓存门禁已实现；持久小窗独立范围 / 原子用量、实际两尺寸 / 置顶 / 隐藏恢复及跨 WebView 主题 / 隐私通过；精确同范围统计跳转、已登记会话选择及 UTC 毫秒 / 每日零点起点实测通过，主窗口详情可固定会话。小窗位置 / 展开 / 置顶已持久化，实际 WebView 重建 / 缺失屏幕标识回退通过。主窗口位置、冷启动 / 真实断屏 / 跨屏 DPI 完整验收、账户连接、任务栏、启动 / 快捷键 / notify、导出 / 备份 / 恢复 / 清除、安装 / 更新与 Win11 未完成。
-- 默认恢复快捷键 Ctrl+Alt+Shift+T 与用户修改已接原生注册、持久 CAS、设置页实际状态；Win10 真实键盘输入恢复小窗 / 解除鼠标忽略、外部冲突和 Writer 故障保留旧注册通过。透明度 / 正式穿透入口、隐私等其他快捷键和启动集成仍待实施。
-- 最新检查：完整 272 项普通 Rust 基线后新增 4 项位置、3 项快捷键领域 / SQLite 场景，完整 store lib 153 项普通检查通过（1 项性能夹具 ignored）；29 项 Vitest、53 项 Playwright、Clippy / 契约 / 类型 / 生产构建通过。浏览器合成 DTO、真实 SQLite 合成夹具和 Win10 隔离库原生 probe 分别记录，不互相替代。性能测试按用户指令留待全部功能完成后由用户决定。
+- 默认恢复快捷键 Ctrl+Alt+Shift+T 与用户修改已接原生注册、持久 CAS、设置页实际状态；Win10 真实键盘输入恢复小窗 / 解除鼠标忽略、外部冲突和 Writer 故障保留旧注册通过。小窗 70%–100% 原生透明度已接持久 CAS / 设置页，Win10 实际 alpha、置顶样式保持、Writer 回滚、恢复交互与 WebView 重建通过；正式穿透入口、隐私等其他快捷键和启动集成仍待实施。
+- 最新检查：完整 272 项普通 Rust 基线后新增 4 项位置、3 项快捷键领域 / SQLite 场景，本次新增 1 项透明度领域 / 2 项 SQLite 场景，完整 core 81 项、store lib 155 项普通检查通过（1 项性能夹具 ignored）；29 项 Vitest、55 项 Playwright、Clippy / 契约 / 类型 / 生产构建通过。浏览器合成 DTO、真实 SQLite 合成夹具和 Win10 隔离库原生 probe 分别记录，不互相替代。性能测试按用户指令留待全部功能完成后由用户决定。
 
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。
 
@@ -769,3 +769,15 @@ Windows 主 HWND 所属线程注册两个自有槽位；替换先占新槽位，
 实际 Win10 NATIVE_RECOVERY_SHORTCUT_OK 及此前 MINI / SCOPE / NAVIGATION / PLACEMENT / SMOKE 全部退出 0：实际设置 select 改 U 并保存，第二 native 线程 RegisterHotKey 同组合返回 1409 证明全局拥有，旧拥有组合可重新注册证明已释放；SendInput 发送完整 Ctrl / Alt / Shift / U 按下抬起序列，真实 WM_HOTKEY 使隐藏小窗显示，Win32 WS_EX_TRANSPARENT 确认解除。其他线程占 V 后实际界面保存返回冲突，SQLite / 注册仍为 U、草稿仍为 V、revision 不变；隔离 SQLite 故障使候选 V 注册回滚，可再次占 V 而 U 仍被保留。mini 正式 getter 能读 ready / U，合法写入参数被权限拒绝。鼠标忽略是 debug probe 直接注入以验恢复，没有开放正式穿透入口。验收库 / 身份均为隔离合成；没有访问真实日志或认证。
 
 Win32 注册与窗口线程、MOD_NOREPEAT、Windows 键与 F12 限制以 [Microsoft RegisterHotKey](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey) 和 [WM_HOTKEY](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-hotkey) 为依据。全进程冷启动配置恢复、退出后独立进程检查释放、人工按键 / 托盘恢复、Win11 仍需后续系统验收。透明度、正式穿透、其他快捷键仍待实现；穿透只有在恢复键实际注册成功后才允许。WebView 1412 退出提示仍存在；未执行性能测试。
+
+## M11f：持久原生小窗透明度
+
+小窗透明度沿用原型 70%–100% 范围，默认 100，作用于整个原生窗口，未引入 CSS 假透明度。main 设置页明确保存、读取确认状态与平台支持、精确 CAS、刷新保留草稿、失败保留输入 / 明确重置；mini 只读透明度。设置兼容旧 mini_window 缺少 opacity_percent，错误 / null / 越界不写默认。Writer 仅改该字段和全局修订，同值无写入；原生偏好 / 显示 / 范围等字段保留。
+
+2026-10-02：新增 1 项纯领域预期（70→179、75→191、80→204、90→230、99→252、100→255，非法整数 / JSON 拒绝）、2 项实际 SQLite 多场景（CAS / 同值 / 旧配置 / Writer 故障 / 独立字段 / 重开）通过。完整 core 81 项、store lib 155 项普通检查通过，既有性能夹具 1 项 ignored；Vitest 29、Playwright 55、契约 / TS / Clippy warnings denied / fmt / 生产构建通过。浏览器合成 DTO 场景验证大修订、冲突 / Writer 失败后草稿和已保存值分离、不支持禁用写入；960 px 设置页截图已审查，无横向溢出。
+
+实际 Win10 22H2 当前 150% 缩放：NATIVE_MINI_OPACITY_OK / RECOVERY_SHORTCUT / MINI / PLACEMENT / SCOPE / NAVIGATION / SMOKE 退出 0。真实设置页滑块保存 80%，GetLayeredWindowAttributes 独立检查实际 HWND alpha 255→204；置顶往返保持 204。debug 隔离库修订写入 trigger 故障时，请求 DB_WRITE_FAILED，数据库 80% / 修订保持，实际 alpha 回滚 204。mini 可以读取、不能修改。注入鼠标忽略后调用真实恢复入口，WS_EX_TRANSPARENT 解除且 alpha 保持 204；销毁并重新创建 WebView，从持久设置恢复 204。SQLite 重开与 WebView 重建分别记录，不等同完整进程冷启动验收。
+
+首次原生检查发现 Tao 的 show / hide / pin 样式重建丢失直接设置的 WS_EX_LAYERED；已使用小窗 HWND 所属线程的 subclass 保留自有 layered 位，其他样式仍按 Tauri 管理，销毁移除。应用创建锁序列化显示与透明度更新，后台 Worker 不在窗口消息回调创建 WebView。SetLayeredWindowAttributes 失败 / Writer 失败都走受控错误和撤销；实际 API 故障尚无独立 OS 条件注入，不能将 Writer 故障替代该项。
+
+未执行性能测试。Windows 11、完整应用冷启动、人工多屏 / DPI 组合与半透明窗口人工视觉验收仍待完成；此次实际系统证据为 HWND 属性和真实 UI 保存 / 恢复操作。正式鼠标穿透入口及其有效恢复键门禁继续实施。既有 WebView class unregister 1412 退出提示仍存在，进程退出 0。

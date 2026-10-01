@@ -22,14 +22,26 @@ impl WindowPlacement {
         Ok(())
     }
 }
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MiniWindowPreferences {
     pub interaction: MiniWindowState,
     pub placement: Option<WindowPlacement>,
+    #[serde(default = "crate::mini_opacity::default_opacity")]
+    pub opacity_percent: u8,
+}
+impl Default for MiniWindowPreferences {
+    fn default() -> Self {
+        Self {
+            interaction: Default::default(),
+            placement: None,
+            opacity_percent: 100,
+        }
+    }
 }
 impl MiniWindowPreferences {
     pub fn validate(&self) -> Result<(), ErrorCode> {
+        crate::mini_opacity::validate_opacity(self.opacity_percent)?;
         self.placement
             .as_ref()
             .map_or(Ok(()), WindowPlacement::validate)

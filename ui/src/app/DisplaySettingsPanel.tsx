@@ -5,6 +5,7 @@ import { runtimeError, setDisplayPrivacy, setDisplayTheme, setDisplayTimezone } 
 import './display-settings.css';
 import { displayPolicy } from '../shared/display-policy';
 import { RecoveryShortcutPanel } from './RecoveryShortcutPanel';
+import { MiniOpacityPanel } from './MiniOpacityPanel';
 
 export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChanged }: { snapshot: DisplaySettingsSnapshot | null; loadingError: string | null; onRefresh: () => void; onChanged: (value: DisplaySettingsSnapshot) => void }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
@@ -51,5 +52,6 @@ export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChan
       <p className="chart-caption">{snapshot ? `当前配置版本 ${snapshot.settings_version} · 修订 ${snapshot.settings_revision}` : '正在读取显示设置…'}{draft ? `；本次编辑基于修订 ${draft.revision}，刷新不会覆盖未保存输入。` : ''}</p>
     </form>
     <RecoveryShortcutPanel />
+    <MiniOpacityPanel revision={snapshot?.settings_revision ?? null} />
   </section>;
 }

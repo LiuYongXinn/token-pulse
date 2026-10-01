@@ -39,6 +39,8 @@
     "allow-query-usage-events",
     "allow-close-query-snapshot",
     "allow-get-recovery-shortcut",
-    "allow-set-recovery-shortcut"
+    "allow-set-recovery-shortcut",
+    "allow-get-mini-opacity",
+    "allow-set-mini-opacity"
   ]
 }

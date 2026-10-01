@@ -10,6 +10,7 @@ pub mod domain;
 pub mod error;
 pub mod jobs;
 pub mod mini;
+pub mod mini_opacity;
 pub mod numeric;
 pub mod placement;
 pub mod pricing;

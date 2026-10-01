@@ -38,6 +38,10 @@ export type MiniWindowState = { expanded: boolean, pinned: boolean, };
 
 export type MiniWindowAction = { "kind": "read", } | { "kind": "set_expanded", expanded: boolean, } | { "kind": "set_pinned", pinned: boolean, } | { "kind": "drag", } | { "kind": "hide", };
 
+export type MiniOpacitySnapshot = { opacity_percent: number, supported: boolean, settings_revision: DecimalInt, };
+
+export type MiniOpacityMutation = { opacity_percent: number, expected_settings_revision: DecimalInt, };
+
 export type RecoveryShortcut = { control: boolean, alt: boolean, shift: boolean, key: string, };
 
 export type ShortcutRegistration = "ready" | "conflict" | "unsupported" | "unavailable";

@@ -4086,6 +4086,66 @@
       ],
       "title": "ManageSourceAction"
     },
+    "MiniOpacityMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "opacity_percent": {
+          "format": "uint8",
+          "maximum": 100,
+          "minimum": 70,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "opacity_percent",
+        "expected_settings_revision"
+      ],
+      "title": "MiniOpacityMutation",
+      "type": "object"
+    },
+    "MiniOpacitySnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "opacity_percent": {
+          "format": "uint8",
+          "maximum": 100,
+          "minimum": 70,
+          "type": "integer"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "opacity_percent",
+        "supported",
+        "settings_revision"
+      ],
+      "title": "MiniOpacitySnapshot",
+      "type": "object"
+    },
     "MiniScope": {
       "$defs": {
         "EpochMs": {

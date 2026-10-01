@@ -69,6 +69,15 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
     window
         .set_ignore_cursor_events(false)
         .map_err(|e| e.to_string())?;
+    // Tauri's cursor-ignore reset changes WS_EX_LAYERED. Reapply the saved native alpha.
+    let opacity = runtime
+        .database
+        .as_ref()
+        .map_err(|e| e.code.to_string())?
+        .mini_window_preferences()
+        .map_err(|e| e.code.to_string())?
+        .opacity_percent;
+    super::mini_opacity::apply(&window, opacity).map_err(|e| e.to_string())?;
     save_current_placement(&window).map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())

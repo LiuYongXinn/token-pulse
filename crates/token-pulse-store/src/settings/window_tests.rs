@@ -52,6 +52,7 @@ fn native_fields_persist_preserve_scope_and_theme_and_old_read_transaction() {
             pinned: false,
         },
         placement: Some(placement),
+        opacity_percent: 100,
     };
     assert_eq!(db.mini_window_preferences().unwrap(), prefs);
     let display = db.display_settings().unwrap();

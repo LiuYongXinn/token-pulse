@@ -1,12 +1,43 @@
 import { expect, test } from '@playwright/test';
+type OpacityQA = { __opacityQA: { reject: (value: boolean) => void; unsupported: () => void; read: () => number } };
 type ShortcutQA = { __shortcutQA: { conflict: (value: boolean) => void; status: (value: string) => void; read: () => { control: boolean; alt: boolean; shift: boolean; key: string } } };
 test.use({ timezoneId: 'UTC' });
+
+test('native opacity keeps exact revision and explicit drafts across conflict and writer rejection', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 900 }); await page.goto('/');
+  await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click();
+  const panel = page.getByRole('region', { name: '小窗透明度设置' });
+  const slider = panel.getByRole('slider', { name: '悬浮窗透明度' });
+  await expect(slider).toBeEnabled(); await expect(slider).toHaveValue('100');
+  await slider.fill('80'); await panel.getByRole('button', { name: '保存小窗透明度' }).click();
+  await expect(panel.getByRole('status')).toContainText('已保存 80%');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_mini_opacity').at(-1)?.request)).toEqual({ opacity_percent: 80, expected_settings_revision: '9007199254740993' });
+  await slider.fill('75'); await page.evaluate(() => (window as unknown as QA).__calendarQA.externalChange());
+  await panel.getByRole('button', { name: '刷新透明度' }).click(); await expect(slider).toHaveValue('75');
+  await panel.getByRole('button', { name: '保存小窗透明度' }).click(); await expect(panel.getByRole('alert')).toContainText('已发生变化');
+  await panel.getByRole('button', { name: '重置透明度草稿' }).click(); await expect(slider).toHaveValue('80');
+  await slider.fill('70'); await page.evaluate(() => (window as unknown as OpacityQA).__opacityQA.reject(true));
+  await panel.getByRole('button', { name: '保存小窗透明度' }).click(); await expect(panel.getByRole('alert')).toContainText('写入');
+  await expect(slider).toHaveValue('70'); expect(await page.evaluate(() => (window as unknown as OpacityQA).__opacityQA.read())).toBe(80);
+  await panel.scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test-results/mini-opacity-settings-960.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('unsupported opacity exposes real saved value and disables mutation', async ({ page }) => {
+  await page.goto('/'); await page.evaluate(() => (window as unknown as OpacityQA).__opacityQA.unsupported());
+  await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click();
+  const panel = page.getByRole('region', { name: '小窗透明度设置' });
+  await expect(panel.getByRole('status')).toContainText('当前平台暂不支持');
+  await expect(panel.getByRole('slider')).toBeDisabled(); await expect(panel.getByRole('button', { name: '保存小窗透明度' })).toBeDisabled();
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_mini_opacity'))).toEqual([]);
+});
 
 test.beforeEach(async ({ page }) => {
   // This isolated browser bridge models DTO and conflict behavior; production imports none of it.
   await page.addInitScript(() => {
     let theme = sessionStorage.getItem('synthetic-theme') ?? 'dark', rejectTheme = false;
     let shortcut = { control: true, alt: true, shift: true, key: 'T' }, shortcutStatus = 'ready', shortcutConflict = false;
+    let opacity = 100, opacitySupported = true, rejectOpacity = false;
     let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
@@ -25,6 +56,15 @@ test.beforeEach(async ({ page }) => {
         if (command === 'plugin:event|unlisten') return null;
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
+        if (command === 'get_mini_opacity') return response({ opacity_percent: opacity, supported: opacitySupported, settings_revision: revision });
+        if (command === 'set_mini_opacity') {
+          const r = args.request as { opacity_percent: number; expected_settings_revision: string };
+          if (r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
+          if (rejectOpacity) throw { code: 'DB_WRITE_FAILED' };
+          if (!opacitySupported || !Number.isInteger(r.opacity_percent) || r.opacity_percent < 70 || r.opacity_percent > 100) throw { code: 'INVALID_QUERY' };
+          if (opacity !== r.opacity_percent) { opacity = r.opacity_percent; revision = String(BigInt(revision) + 1n); notify(); }
+          return response({ opacity_percent: opacity, supported: opacitySupported, settings_revision: revision });
+        }
         if (command === 'get_recovery_shortcut') return response({ shortcut, registration: shortcutStatus, settings_revision: revision });
         if (command === 'set_recovery_shortcut') {
           const r = args.request as { shortcut: typeof shortcut; expected_settings_revision: string };
@@ -66,7 +106,7 @@ test.beforeEach(async ({ page }) => {
           return response(command === 'get_grouped_usage' ? { ...common, dimension: r.dimension, groups: [], total_group_count: '0', truncated: false } : { ...common, series: [], heatmap: [], recent_sessions: [] });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __shortcutQA: { conflict: (value: boolean) => { shortcutConflict = value; }, status: (value: string) => { shortcutStatus = value; notify(); }, read: () => shortcut }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
+      } }, __opacityQA: { reject: (value: boolean) => { rejectOpacity = value; }, unsupported: () => { opacitySupported = false; notify(); }, read: () => opacity }, __shortcutQA: { conflict: (value: boolean) => { shortcutConflict = value; }, status: (value: string) => { shortcutStatus = value; notify(); }, read: () => shortcut }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
   });
 });
 type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { theme: 'dark', privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };

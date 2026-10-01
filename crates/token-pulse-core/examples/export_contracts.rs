@@ -66,6 +66,8 @@ fn main() {
         MiniUsageSnapshot,
         MiniWindowState,
         MiniWindowAction,
+        token_pulse_core::mini_opacity::MiniOpacitySnapshot,
+        token_pulse_core::mini_opacity::MiniOpacityMutation,
         token_pulse_core::shortcuts::RecoveryShortcut,
         token_pulse_core::shortcuts::ShortcutRegistration,
         token_pulse_core::shortcuts::RecoveryShortcutSnapshot,

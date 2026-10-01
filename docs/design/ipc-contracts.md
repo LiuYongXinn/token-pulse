@@ -476,3 +476,11 @@ RecoveryShortcut 包含 control / alt / shift 和 canonical key（A–Z、0–9�
 get_recovery_shortcut 允许 main / mini；set_recovery_shortcut 只允许 main。返回 RecoveryShortcutSnapshot { shortcut, registration, settings_revision }；registration 为 ready / conflict / unsupported / unavailable，持久配置不等于注册成功。DTO 只有控制配置与状态，使用普通 Response，无账户 / 路径 / 消费数据。未知或不可读配置报错，不伪造默认已注册。
 
 原生注册在主 HWND 所属线程执行，使用两个自有 ID 与 MOD_NOREPEAT。更换先在空闲 ID 注册新组合，Writer 成功后释放旧 ID；冲突不写，Writer 失败释放候选、保留旧注册。启动读取保存键，冲突不终止应用；WM_HOTKEY 按自有 ID / 实际修饰键 / key 校验后异步显示小窗并解除鼠标忽略，不在 UI 消息回调创建 WebView。WM_NCDESTROY 注销自有 ID。设置页显示实际状态、修改 / 重试、CAS 冲突保留草稿与明确重置；订阅卸载与 StrictMode 清理已验证。透明度和正式穿透入口继续实施，不能把原生 probe 的鼠标忽略注入当作已交付穿透功能。
+
+### 2.22 已实现的小窗原生透明度
+
+get_mini_opacity 允许 main / mini，返回 MiniOpacitySnapshot { opacity_percent, supported, settings_revision }。set_mini_opacity 仅 main，MiniOpacityMutation 包含整数 opacity_percent（70–100）与精确 expected_settings_revision；默认 100，不支持平台明确返回 supported=false，读取失败不冒充已保存值。DTO 不含名称 / 金额 / HWND，属于普通控制响应。现有 MiniWindowState 不增字段。
+
+内部 MiniWindowPreferences 增加可选兼容的 opacity_percent，只有旧配置缺少此字段才补 100；null、非整数、越界或未知字段拒绝。Writer 从最新配置窄更新透明度与全局 settings_revision，同事务提交，保留位置 / 置顶 / 展开 / 范围 / 主题 / 隐私 / 时区；同值不写，但仍校验 CAS。主设置页滑块与明确保存接实际 DTO，刷新不覆盖草稿，失败保留输入，明确重置使用最新确认值。
+
+Windows 使用 [SetLayeredWindowAttributes 的整窗 alpha](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)，百分比四舍五入转换到 BYTE；全部 Win32 修改在 HWND 所属线程。应用创建锁序列化透明度修改与小窗显示；先应用、后 Writer CAS，提交失败恢复旧透明度。无窗口时保存偏好，下次创建应用。Tao 会在隐藏 / 显示 / 置顶等操作重建扩展样式，原生小窗 subclass 在 [WM_STYLECHANGING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-stylechanging) 保留自有 WS_EX_LAYERED，其他样式仍交给原窗口管理；WM_NCDESTROY 移除 subclass。恢复交互入口解除 cursor-ignore 后重新应用持久 alpha。此模块不开放正式穿透；其授权与恢复校验继续实施。

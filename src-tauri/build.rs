@@ -2,6 +2,8 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_mini_opacity",
+            "set_mini_opacity",
             "get_recovery_shortcut",
             "set_recovery_shortcut",
             "get_mini_scope",

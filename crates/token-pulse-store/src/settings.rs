@@ -1,4 +1,5 @@
 //! A single Writer publishes configuration and its revision atomically.
+mod opacity;
 mod shortcuts;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
