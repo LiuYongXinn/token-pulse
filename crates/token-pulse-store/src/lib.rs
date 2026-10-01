@@ -8,6 +8,7 @@ pub mod collection;
 mod database;
 pub mod jobs;
 mod migration;
+pub mod rebuild;
 mod registration;
 pub mod source_management;
 pub use database::{Database, Revision, SourceRecord};

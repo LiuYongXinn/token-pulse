@@ -12,6 +12,7 @@ pub enum ErrorCode {
     UnsupportedFormat,
     AmbiguousUsage,
     CheckpointConflict,
+    CandidateObsolete,
     DbWriteFailed,
     DiskFull,
     DbCorrupt,

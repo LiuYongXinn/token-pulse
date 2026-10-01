@@ -19,7 +19,7 @@ pub struct ObservationWrite {
     pub record: NormalizedObservation,
     pub payload_fingerprint: String,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EventWrite {
     pub event_id: String,
     pub ledger_id: String,
@@ -33,7 +33,7 @@ pub struct EventWrite {
     pub usage: UsageVector,
     pub calculation_method: String,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StreamWrite {
     pub ledger_id: String,
     pub stream_key: String,
@@ -43,7 +43,7 @@ pub struct StreamWrite {
     pub quality: ObservationQuality,
     pub expected_state_revision: Option<i64>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ProvenanceWrite {
     pub event_id: String,
     pub observation_id: String,
@@ -55,7 +55,7 @@ pub struct PendingEvidence {
     pub parent_session_key: Option<String>,
     pub related_observation_ids: Vec<String>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PendingWrite {
     pub pending_id: String,
     pub ledger_id: String,
@@ -65,7 +65,7 @@ pub struct PendingWrite {
     pub vector: Option<UsageVector>,
     pub evidence: PendingEvidence,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ContextWrite {
     pub context_id: String,
     pub ledger_id: String,
@@ -343,103 +343,18 @@ fn commit_batch(
         }
     }
     at(CommitStage::Observations)?;
-    for event in &batch.events {
-        same_session(&tx, &event.ledger_id, &event.origin_observation_id)?;
-        let total = event
-            .usage
-            .validated_total()?
-            .ok_or(ErrorCode::InvalidUsage)?;
-        if total == 0 {
-            return Err(ErrorCode::InvalidUsage.into());
-        }
-        let (observed_model, observed_project, observed_time): (
-            Option<String>,
-            Option<String>,
-            Option<i64>,
-        ) = tx.query_row(
-            "SELECT model,project_id,observed_at_ms FROM observations WHERE observation_id=?1",
-            [&event.origin_observation_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )?;
-        if observed_model != event.model
-            || (event.project_id.is_some() && observed_project != event.project_id)
-            || observed_time != Some(event.occurred_at_ms)
-        {
-            return Err(ErrorCode::CheckpointConflict.into());
-        }
-        tx.execute("INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,semantic_key,episode_id,model,project_id,turn_id,input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,'[\"confirmed\"]')",params![event.event_id,event.ledger_id,event.origin_observation_id,event.occurred_at_ms,event.semantic_key,event.episode_id,event.model,observed_project,event.turn_id,event.usage.input_total,event.usage.cached_input,event.usage.output_total,event.usage.reasoning_output,event.usage.reported_total,total,event.calculation_method])?;
-        tx.execute(
-            "INSERT INTO event_provenance VALUES(?1,?2,'origin')",
-            params![event.event_id, event.origin_observation_id],
-        )?;
-        tx.execute("UPDATE sessions SET last_activity_ms=MAX(COALESCE(last_activity_ms,?1),?1) WHERE active_ledger_id=?2",params![event.occurred_at_ms,event.ledger_id])?;
-    }
-    for provenance in &batch.provenance {
-        let ledger: String = tx.query_row(
-            "SELECT ledger_id FROM usage_events WHERE event_id=?1",
-            [&provenance.event_id],
-            |r| r.get(0),
-        )?;
-        if !allowed.contains(ledger.as_str()) {
-            return Err(ErrorCode::CheckpointConflict.into());
-        }
-        same_session(&tx, &ledger, &provenance.observation_id)?;
-        tx.execute("INSERT INTO event_provenance(event_id,observation_id,relation) VALUES(?1,?2,?3) ON CONFLICT(event_id,observation_id) DO NOTHING",params![provenance.event_id,provenance.observation_id,provenance.relation])?;
-    }
-    for pending in &batch.pending {
-        same_session(&tx, &pending.ledger_id, &pending.observation_id)?;
-        let kind = match pending.quality {
-            ObservationQuality::Pending => "pending",
-            ObservationQuality::Inherited => "inherited",
-            ObservationQuality::Duplicate => "duplicate",
-            ObservationQuality::Unattributed => "unattributed",
-            ObservationQuality::Confirmed => return Err(ErrorCode::InvalidQuery.into()),
-        };
-        tx.execute(
-            "INSERT INTO pending_usage VALUES(?1,?2,?3,?4,?5,?6,?7)",
-            params![
-                pending.pending_id,
-                pending.ledger_id,
-                pending.observation_id,
-                kind,
-                pending.reason_code,
-                pending
-                    .vector
-                    .map(|v| serde_json::to_string(&v))
-                    .transpose()?,
-                serde_json::to_string(&pending.evidence)?
-            ],
-        )?;
-    }
-    for context in &batch.contexts {
-        same_session(&tx, &context.ledger_id, &context.observation_id)?;
-        let total = context.usage.validated_total()?;
-        tx.execute(
-            "INSERT INTO context_snapshots VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-            params![
-                context.context_id,
-                context.ledger_id,
-                context.observation_id,
-                context.observed_at_ms,
-                context.model,
-                total,
-                context.model_context_window,
-                serde_json::to_string(&context.usage)?,
-                serde_json::to_string(&context.quality)?
-            ],
-        )?;
-    }
-    at(CommitStage::Events)?;
-    for stream in &batch.streams {
-        stream.baseline.validated_total()?;
-        same_session(&tx, &stream.ledger_id, &stream.observation_id)?;
-        let next_revision = stream
-            .expected_state_revision
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or(ErrorCode::NumericOverflow)?;
-        tx.execute("INSERT INTO stream_states(ledger_id,stream_key,episode_id,baseline_json,last_observation_id,lineage_quality,state_revision) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(ledger_id,stream_key,episode_id) DO UPDATE SET baseline_json=excluded.baseline_json,last_observation_id=excluded.last_observation_id,lineage_quality=excluded.lineage_quality,state_revision=excluded.state_revision",params![stream.ledger_id,stream.stream_key,stream.episode_id,serde_json::to_string(&stream.baseline)?,stream.observation_id,serde_json::to_string(&stream.quality)?,next_revision])?;
-    }
+    write_derived_with_hook(
+        &tx,
+        DerivedRecords {
+            events: &batch.events,
+            streams: &batch.streams,
+            provenance: &batch.provenance,
+            pending: &batch.pending,
+            contexts: &batch.contexts,
+        },
+        &allowed,
+        &mut at,
+    )?;
     for diagnostic in &batch.diagnostics {
         tx.execute("INSERT INTO diagnostics(diagnostic_id,source_id,file_generation_id,byte_offset,session_key,code,severity,metadata_json,dedup_key,first_seen_at_ms,last_seen_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10) ON CONFLICT(dedup_key) DO UPDATE SET occurrences=occurrences+1,last_seen_at_ms=excluded.last_seen_at_ms",params![diagnostic.diagnostic_id,diagnostic.source_id,diagnostic.file_generation_id,diagnostic.byte_offset,diagnostic.session_key,diagnostic.code.to_string(),diagnostic.severity,serde_json::to_string(&diagnostic.metadata)?,diagnostic.dedup_key,diagnostic.observed_at_ms])?;
     }
@@ -479,4 +394,125 @@ fn commit_batch(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
+
+pub(crate) struct DerivedRecords<'a> {
+    pub events: &'a [EventWrite],
+    pub streams: &'a [StreamWrite],
+    pub provenance: &'a [ProvenanceWrite],
+    pub pending: &'a [PendingWrite],
+    pub contexts: &'a [ContextWrite],
+}
+fn write_derived_with_hook(
+    tx: &Transaction<'_>,
+    derived: DerivedRecords<'_>,
+    allowed: &std::collections::HashSet<&str>,
+    mut at: impl FnMut(CommitStage) -> StoreResult<()>,
+) -> StoreResult<()> {
+    for event in derived.events {
+        same_session(tx, &event.ledger_id, &event.origin_observation_id)?;
+        let total = event
+            .usage
+            .validated_total()?
+            .ok_or(ErrorCode::InvalidUsage)?;
+        if total == 0 {
+            return Err(ErrorCode::InvalidUsage.into());
+        }
+        let (observed_model, observed_project, observed_time): (
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        ) = tx.query_row(
+            "SELECT model,project_id,observed_at_ms FROM observations WHERE observation_id=?1",
+            [&event.origin_observation_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        if observed_model != event.model
+            || (event.project_id.is_some() && observed_project != event.project_id)
+            || observed_time != Some(event.occurred_at_ms)
+        {
+            return Err(ErrorCode::CheckpointConflict.into());
+        }
+        tx.execute("INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,semantic_key,episode_id,model,project_id,turn_id,input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,'[\"confirmed\"]')",params![event.event_id,event.ledger_id,event.origin_observation_id,event.occurred_at_ms,event.semantic_key,event.episode_id,event.model,observed_project,event.turn_id,event.usage.input_total,event.usage.cached_input,event.usage.output_total,event.usage.reasoning_output,event.usage.reported_total,total,event.calculation_method])?;
+        tx.execute(
+            "INSERT INTO event_provenance VALUES(?1,?2,'origin')",
+            params![event.event_id, event.origin_observation_id],
+        )?;
+        tx.execute("UPDATE sessions SET last_activity_ms=MAX(COALESCE(last_activity_ms,?1),?1) WHERE active_ledger_id=?2",params![event.occurred_at_ms,event.ledger_id])?;
+    }
+    for provenance in derived.provenance {
+        let ledger: String = tx.query_row(
+            "SELECT ledger_id FROM usage_events WHERE event_id=?1",
+            [&provenance.event_id],
+            |r| r.get(0),
+        )?;
+        if !allowed.contains(ledger.as_str()) {
+            return Err(ErrorCode::CheckpointConflict.into());
+        }
+        same_session(tx, &ledger, &provenance.observation_id)?;
+        tx.execute("INSERT INTO event_provenance(event_id,observation_id,relation) VALUES(?1,?2,?3) ON CONFLICT(event_id,observation_id) DO NOTHING",params![provenance.event_id,provenance.observation_id,provenance.relation])?;
+    }
+    for pending in derived.pending {
+        same_session(tx, &pending.ledger_id, &pending.observation_id)?;
+        let kind = match pending.quality {
+            ObservationQuality::Pending => "pending",
+            ObservationQuality::Inherited => "inherited",
+            ObservationQuality::Duplicate => "duplicate",
+            ObservationQuality::Unattributed => "unattributed",
+            ObservationQuality::Confirmed => return Err(ErrorCode::InvalidQuery.into()),
+        };
+        tx.execute(
+            "INSERT INTO pending_usage VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![
+                pending.pending_id,
+                pending.ledger_id,
+                pending.observation_id,
+                kind,
+                pending.reason_code,
+                pending
+                    .vector
+                    .map(|v| serde_json::to_string(&v))
+                    .transpose()?,
+                serde_json::to_string(&pending.evidence)?
+            ],
+        )?;
+    }
+    for context in derived.contexts {
+        same_session(tx, &context.ledger_id, &context.observation_id)?;
+        let total = context.usage.validated_total()?;
+        tx.execute(
+            "INSERT INTO context_snapshots VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            params![
+                context.context_id,
+                context.ledger_id,
+                context.observation_id,
+                context.observed_at_ms,
+                context.model,
+                total,
+                context.model_context_window,
+                serde_json::to_string(&context.usage)?,
+                serde_json::to_string(&context.quality)?
+            ],
+        )?;
+    }
+    at(CommitStage::Events)?;
+    for stream in derived.streams {
+        stream.baseline.validated_total()?;
+        same_session(tx, &stream.ledger_id, &stream.observation_id)?;
+        let next_revision = stream
+            .expected_state_revision
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(ErrorCode::NumericOverflow)?;
+        tx.execute("INSERT INTO stream_states(ledger_id,stream_key,episode_id,baseline_json,last_observation_id,lineage_quality,state_revision) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(ledger_id,stream_key,episode_id) DO UPDATE SET baseline_json=excluded.baseline_json,last_observation_id=excluded.last_observation_id,lineage_quality=excluded.lineage_quality,state_revision=excluded.state_revision",params![stream.ledger_id,stream.stream_key,stream.episode_id,serde_json::to_string(&stream.baseline)?,stream.observation_id,serde_json::to_string(&stream.quality)?,next_revision])?;
+    }
+    Ok(())
+}
+
+pub(crate) fn write_derived(
+    tx: &Transaction<'_>,
+    derived: DerivedRecords<'_>,
+    allowed: &std::collections::HashSet<&str>,
+) -> StoreResult<()> {
+    write_derived_with_hook(tx, derived, allowed, |_| Ok(()))
+}

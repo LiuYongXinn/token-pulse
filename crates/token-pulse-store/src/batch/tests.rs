@@ -2,7 +2,7 @@ use super::*;
 use crate::{FileRegistration, SessionRegistration, SourceRecord};
 use token_pulse_core::domain::{PhysicalPosition, UsageObservation};
 
-fn setup() -> (tempfile::TempDir, Database) {
+pub(crate) fn setup() -> (tempfile::TempDir, Database) {
     let directory = tempfile::tempdir().unwrap();
     let db = Database::open(directory.path()).unwrap();
     db.add_source(SourceRecord {
@@ -37,7 +37,7 @@ fn setup() -> (tempfile::TempDir, Database) {
     .unwrap();
     (directory, db)
 }
-fn fixture() -> WriteBatch {
+pub(crate) fn fixture() -> WriteBatch {
     let usage = UsageVector {
         input_total: Some(100),
         cached_input: Some(60),
