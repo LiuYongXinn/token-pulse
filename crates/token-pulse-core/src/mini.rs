@@ -37,6 +37,68 @@ pub enum MiniWindowAction {
     Hide {},
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniSessionsQuery {
+    #[schemars(length(max = 256))]
+    pub search: String,
+    #[schemars(range(min = 1, max = 100))]
+    pub page_size: u16,
+}
+impl MiniSessionsQuery {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        if self.search.chars().count() > 256
+            || self.search.chars().any(char::is_control)
+            || !(1..=100).contains(&self.page_size)
+        {
+            return Err(ErrorCode::InvalidQuery);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniSessionsRequest {
+    pub query: MiniSessionsQuery,
+    #[schemars(length(min = 151, max = 151))]
+    pub cursor: Option<String>,
+}
+impl MiniSessionsRequest {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        self.query.validate()?;
+        if self.cursor.as_ref().is_some_and(|cursor| {
+            cursor.len() != 151
+                || !cursor
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        }) {
+            return Err(ErrorCode::CursorInvalid);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniSessionOption {
+    pub session_key: String,
+    pub display_name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniSessionsPage {
+    pub meta: SnapshotMeta,
+    #[schemars(length(max = 100))]
+    pub options: Vec<MiniSessionOption>,
+    pub next_cursor: Option<String>,
+}
+impl crate::privacy::PrivacyRedact for MiniSessionsPage {
+    fn redact(&mut self) {
+        for option in &mut self.options {
+            option.display_name = crate::privacy::alias("会话", Some(&option.session_key));
+        }
+    }
+}
+
 impl MiniScope {
     pub fn validate(&self) -> Result<(), ErrorCode> {
         match self {

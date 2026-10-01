@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-query-mini-sessions"
+description = "Enables the query_mini_sessions command without any pre-configured scope."
+commands.allow = ["query_mini_sessions"]
+
+[[permission]]
+identifier = "deny-query-mini-sessions"
+description = "Denies the query_mini_sessions command without any pre-configured scope."
+commands.deny = ["query_mini_sessions"]

@@ -1,4 +1,5 @@
 //! Persistent shared mini scope and local usage read in a single SQLite snapshot.
+mod sessions;
 use crate::{Database, ErrorCode, Revision, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use token_pulse_core::{

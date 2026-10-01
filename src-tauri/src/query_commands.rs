@@ -244,7 +244,10 @@ pub async fn close_query_snapshot(
 ) -> Result<PrivateResponse<()>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
-    if window.label() != "main" {
+    if window.label() != "main"
+        && !(window.label() == "mini"
+            && matches!(&request, CloseQuerySnapshotRequest::MiniSessions { .. }))
+    {
         return Err(Box::new(AppError::new(
             ErrorCode::PermissionDenied,
             request_id,
@@ -260,6 +263,9 @@ pub async fn close_query_snapshot(
         .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
     let owner = window.label().to_owned();
     tauri::async_runtime::spawn_blocking(move || match request {
+        CloseQuerySnapshotRequest::MiniSessions { request } => {
+            database.close_mini_sessions(&owner, &request)
+        }
         CloseQuerySnapshotRequest::Turns { request } => database.close_turns(&owner, &request),
         CloseQuerySnapshotRequest::FilterOptions { request } => {
             database.close_filter_options(&owner, &request)

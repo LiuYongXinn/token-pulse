@@ -3,6 +3,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
             "get_mini_scope",
+            "query_mini_sessions",
             "open_mini_stats",
             "get_mini_stats_request",
             "get_mini_usage",

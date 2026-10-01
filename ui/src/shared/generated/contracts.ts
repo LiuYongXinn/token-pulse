@@ -42,6 +42,14 @@ export type MiniStatsRequest = { request_id: string, mini_scope: MiniScope, cale
 
 export type MiniStatsOpenRequest = { expected_settings_revision: DecimalInt, };
 
+export type MiniSessionsQuery = { search: string, page_size: number, };
+
+export type MiniSessionsRequest = { query: MiniSessionsQuery, cursor: string | null, };
+
+export type MiniSessionOption = { session_key: string, display_name: string, };
+
+export type MiniSessionsPage = { meta: SnapshotMeta, options: Array<MiniSessionOption>, next_cursor: string | null, };
+
 export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
 
 export type ErrorDetail = string | number | boolean | null;
@@ -172,7 +180,7 @@ usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsage
 
 export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
 
-export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, } | { "kind": "turns", request: TurnsRequest, };
+export type CloseQuerySnapshotRequest = { "kind": "mini_sessions", request: MiniSessionsRequest, } | { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, } | { "kind": "turns", request: TurnsRequest, };
 
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 

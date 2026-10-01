@@ -6,6 +6,7 @@ import { getSessionBundle } from '../shared/runtime';
 import { useSnapshotQuery } from './useSnapshotQuery';
 import { TurnList } from './TurnList';
 import { Cost, coverageNames, when } from './usage-display';
+import { PinMiniScope } from './PinMiniScope';
 
 function Measure({ label, value }: { label: string; value: TokenMeasure }) { return <div><dt>{label}</dt><dd>{fullTokens(value.value)}<small>{value.value === null ? '未知' : value.complete ? '分项已知' : `部分已知 · 覆盖 ${fullTokens(value.covered_total_tokens)} Token`}</small></dd></div>; }
 const qualityNames: Record<string, string> = { confirmed: '已确认', pending: '待确认', inherited: '继承快照', duplicate: '重复证据', unattributed: '未归属', unknown: '未知' };
@@ -50,6 +51,7 @@ export function SessionDrawer({ request, displayName, onClose, onSessionScope }:
       <section className="session-classifications"><h3>当前账本分类证据</h3><p className="chart-caption">跨日期的观察分类数量，不是消费 Token；不同分类不能相加当作全部观察数。</p>{bundle.classifications.length === 0 ? <p className="muted">当前账本没有已保存的分类证据。</p> : <ul>{bundle.classifications.map(item => <li key={`${item.kind}:${item.reason_code}`}><div><strong>{kindNames[item.kind]}</strong><small title={item.reason_code}>{classificationNames[item.reason_code] ?? item.reason_code}</small></div><span>{fullTokens(item.observation_count)}<small>条观察</small></span></li>)}</ul>}</section>
       <section className="session-turns"><div className="session-turn-heading"><h3>可靠回合</h3><button aria-expanded={showTurns} aria-controls="session-turn-list" onClick={() => setShowTurns(value => !value)}>{showTurns ? '收起回合列表' : '查看可靠回合'}</button></div>{showTurns && <TurnList request={request} />}</section>
       <button className="primary session-scope-button" onClick={() => onSessionScope(identity.session_key, identity.display_name)}>在主窗口筛选此会话</button>
+      <PinMiniScope key={`${identity.session_key}:${request.filter.range.start_ms}`} sessionKey={identity.session_key} startMs={request.filter.range.start_ms} />
       <p className="chart-caption">详情整体快照 · 数据 {bundle.meta.data_revision} / 价格 {bundle.meta.price_revision} · {when(bundle.meta.generated_at_ms, timezone)}。列表保留自己的分页快照。</p>
     </>}
   </section></div>, document.body);

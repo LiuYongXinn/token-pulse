@@ -37,6 +37,30 @@ async fn blocking<T: Send + 'static>(
         .map_err(|e| Box::new(AppError::new(e.code, id.into())))
 }
 #[tauri::command]
+pub async fn query_mini_sessions(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: token_pulse_core::mini::MiniSessionsRequest,
+    request_id: String,
+) -> Result<PrivateResponse<token_pulse_core::mini::MiniSessionsPage>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    let db = database(&state, &request_id)?;
+    let owner = window.label().to_owned();
+    let data = blocking(&request_id, move || {
+        db.mini_sessions(
+            &owner,
+            &request,
+            token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?,
+        )
+    })
+    .await?;
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
+}
+#[tauri::command]
 pub async fn get_mini_scope(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,

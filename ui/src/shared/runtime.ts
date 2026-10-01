@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest } from './generated/contracts';
+import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest, MiniSessionsRequest, MiniSessionsPage } from './generated/contracts';
 import { displayPolicy } from './display-policy';
 import type { DisplayPolicyStamp, DisplayPrivacyMutation, DisplayThemeMutation } from './generated/contracts';
 import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
@@ -17,7 +17,7 @@ export type { AppStatus } from './generated/contracts';
 
 const plainCommands = new Set(['resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
-const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
+const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
   const kind = pageKinds[command];
   if (!kind || typeof data !== 'object' || data === null || !('next_cursor' in data) || typeof data.next_cursor !== 'string') return;
@@ -122,3 +122,5 @@ export async function onMiniStatsRequested(refresh: () => void): Promise<() => v
   const stop = await listen('mini_stats_requested', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
+
+export function queryMiniSessions(query: MiniSessionsRequest): Promise<MiniSessionsPage> { return request('query_mini_sessions', { request: query }); }

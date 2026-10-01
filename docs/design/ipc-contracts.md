@@ -452,3 +452,11 @@ mini capability 允许 get_mini_scope / get_mini_usage / set_mini_scope / get_di
 open_mini_stats 为 mini-only，参数 MiniStatsOpenRequest { expected_settings_revision } 绑定用户正在看的范围版本，真实 mini 使用事务修订不同时返回 REVISION_CONFLICT，不发布导航。成功返回 MiniStatsRequest { request_id, mini_scope, calendar }，calendar.range 保留精确 UTC 半开毫秒边界（包含采样毫秒），heatmap_range 由相同采样时刻 / 时区日历解析。该 DTO 只有稳定 ID / 日期，无敏感名称 / 金额 / 账户字段，使用普通 Response。main-only get_mini_stats_request 返回当前意图或 null，mini_stats_requested 只作为失效通知。
 
 主窗口按意图 ID 只应用一次；新意图明确重置来源 / 其他维度 / specified_time 并进入总览，显示精确范围替代整日日期控件。刷新与分页沿用此范围，恢复主日历或重置不回写 mini_scope；恢复可见不会重新应用已消费过的 ID。小窗数据之后更新不暗中改变已打开主统计范围，须再次点击打开。
+
+### 2.19 已登记会话候选与明确小窗起点
+
+query_mini_sessions 允许 main / mini，接收 MiniSessionsRequest { query: { search, page_size }, cursor }，返回 MiniSessionsPage { meta, options: [{ session_key, display_name }], next_cursor }。搜索最多 256 个 Unicode 字符，不允许控制字符；页长 1–100。候选来自全部已登记 canonical sessions，包含没有消费事件的会话，排除已经验证的镜像别名，不继承主窗口日期 / 来源筛选。参数化 Unicode 字面搜索、BINARY session_key 升序 keyset 与实际 SQLite 只读租约保证续页期间新登记 / 重命名不改变既有候选。配置时区和数据 / 价格修订也在同一事务固定；generated_at_ms 沿用首请求。
+
+游标仍为 151 字符的已认证能力，绑定可信窗口标签 / mini_sessions 域 / 完整 query。末页、失败、取消、搜索改变和迟到响应清理租约；过期不自动混入新快照。close_query_snapshot 增加 mini_sessions 变体；mini 只能关闭该变体，其他统计查询仍只允许 main。名称通过最新 PrivateResponse 脱敏，稳定 key / meta / cursor 不改变。前端显示策略变化关闭编辑器并清理候选和搜索缓存；旧策略迟到页使用原 query 和返回游标释放。
+
+小窗范围编辑器打开时保存 expected_settings_revision；后台刷新不重设未保存草稿的 CAS 基线。固定起点使用明确 UTC 毫秒输入，严格校验日历与未来时刻；今日模式按已保存统计时区零点推进。冲突保留草稿并提示取消后重新打开。主窗口详情可以明确固定该会话到今日或所选范围的精确起点，提交后显示小窗，不改变主筛选或账户服务。账户额度仍属于账户范围。

@@ -167,9 +167,63 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await invoke('set_display_theme',{requestId:'mini-theme-restore',request:{theme:'dark',expected_settings_revision:s.data.settings_revision}});
     "#,
     )?;
+    verify_scope_editor(app, &main, &mini)?;
     verify_stats_navigation(app, &main, &mini)?;
     println!(
         "NATIVE_MINI_OK: two real WebViews, 280x220/360x380 DIP, native topmost, constrained IPC, shared theme/privacy, independent main filter, hide/restore/close"
+    );
+    Ok(())
+}
+
+fn verify_scope_editor(
+    app: &tauri::AppHandle,
+    main: &WebviewWindow,
+    mini: &WebviewWindow,
+) -> Result<(), String> {
+    super::mini_window::show(app)?;
+    evaluate(
+        app,
+        mini,
+        r#"
+      document.querySelector('button[aria-label="展开小窗"]').click();
+      await wait(()=>document.querySelector('button[aria-label="选择小窗会话与起点"]'));
+      document.querySelector('button[aria-label="选择小窗会话与起点"]').click();
+      await wait(()=>document.querySelector('.mini-options button'));
+      const option=[...document.querySelectorAll('.mini-options button')].find(b=>b.textContent.includes('native-probe-context'));
+      if(!option)throw new Error('REGISTERED_ZERO_USAGE_SESSION_MISSING');option.click();
+      await wait(()=>document.querySelector('select[aria-label="小窗消耗起点"]'));
+      const change=(element,value)=>{Object.getOwnPropertyDescriptor(element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype,'value').set.call(element,value);element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));};
+      change(document.querySelector('select[aria-label="小窗消耗起点"]'),'fixed');
+      await wait(()=>document.querySelector('input[aria-label="小窗固定起点（UTC）"]'));
+      change(document.querySelector('input[aria-label="小窗固定起点（UTC）"]'),'2024-02-29T01:02:03.123');
+      [...document.querySelectorAll('.mini-editor-footer button')].find(b=>b.textContent==='应用小窗范围').click();
+      await wait(()=>!document.querySelector('.mini-scope-editor'));
+      const scope=await invoke('get_mini_scope',{requestId:'mini-editor-fixed-read'});
+      if(scope.data.mini_scope.session_key!=='native-probe-context' || scope.data.mini_scope.start.start_ms!==Date.parse('2024-02-29T01:02:03.123Z'))throw new Error('EDITOR_FIXED_START_LOST');
+      const page=await invoke('query_mini_sessions',{requestId:'mini-editor-list-read',request:{query:{search:'native-probe-context',page_size:1},cursor:null}});
+      if(page.data.options.length!==1 || page.data.options[0].session_key!=='native-probe-context' || page.data.next_cursor!==null)throw new Error('EDITOR_CANDIDATE_DTO_INVALID');
+      const filter={range:{start_ms:0,end_ms:1000,timezone:'Asia/Tokyo'},sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}};
+      let denied=false;try{await invoke('close_query_snapshot',{requestId:'mini-close-main-denied',request:{kind:'sessions',request:{query:{filter,price_basis:{mode:'event_time'},sort:'latest_desc',page_size:1},cursor:'a'.repeat(151)}}});}catch(error){if(error.code!=='PERMISSION_DENIED')throw new Error('UNEXPECTED_CLOSE_REJECTION:'+JSON.stringify(error));denied=true;}
+      if(!denied)throw new Error('MINI_CAN_CLOSE_MAIN_QUERY');
+      await wait(()=>!document.querySelector('button[aria-label="选择小窗会话与起点"]')?.disabled);
+      document.querySelector('button[aria-label="选择小窗会话与起点"]').click();
+      await wait(()=>document.querySelector('select[aria-label="小窗消耗起点"]'));
+      change(document.querySelector('select[aria-label="小窗消耗起点"]'),'today');
+      [...document.querySelectorAll('.mini-editor-footer button')].find(b=>b.textContent==='应用小窗范围').click();
+      await wait(()=>!document.querySelector('.mini-scope-editor'));
+      const today=await invoke('get_mini_scope',{requestId:'mini-editor-today-read'});
+      if(today.data.mini_scope.session_key!=='native-probe-context' || today.data.mini_scope.start.kind!=='today')throw new Error('EDITOR_TODAY_NOT_SAVED');
+    "#,
+    )?;
+    evaluate(
+        app,
+        main,
+        r#"
+      if(document.querySelector('.date-range-label')?.textContent!=='2024-02-28 — 2024-02-29' || document.querySelector('.price-instant-label')?.textContent!=='2024-02-29T00:00:00.123Z')throw new Error('EDITOR_CHANGED_MAIN_FILTER');
+    "#,
+    )?;
+    println!(
+        "NATIVE_MINI_SCOPE_OK: registered zero-usage session picker, exact UTC millisecond input, daily start, main filter unchanged, mini cannot close main query leases"
     );
     Ok(())
 }
@@ -187,6 +241,7 @@ fn verify_stats_navigation(
       const s=await invoke('get_mini_scope',{requestId:'mini-navigation-scope-read'});
       await invoke('set_mini_scope',{requestId:'mini-navigation-scope',request:{mini_scope:{kind:'session',session_key:'native-probe-context',start:{kind:'fixed',start_ms:1709179200123}},expected_settings_revision:s.data.settings_revision}});
       await wait(()=>document.querySelector('.mini-scope')?.textContent.includes('native-probe-context'));
+      await wait(()=>document.querySelector('.mini-range span')?.textContent.includes('.123'));
       await wait(()=>!document.querySelector('button[aria-label="打开小窗范围统计"]')?.disabled);
       let rejected=false;try { await invoke('open_mini_stats',{requestId:'mini-stale-navigation',request:{expected_settings_revision:s.data.settings_revision}}); } catch(error) { rejected=error.code==='REVISION_CONFLICT'; }
       if(!rejected)throw new Error('STALE_SCOPE_NAVIGATION_ACCEPTED');

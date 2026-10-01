@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; end_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; price_basis: unknown; sort: string; page_size: number };
+    let miniScope: unknown = { kind: 'today_all_sources' }, rejectMini = false;
     let privacy = false, settingsRevision = '1', rejectPrivacy = false, freezePrivacyReply = false;
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
@@ -48,6 +49,9 @@ test.beforeEach(async ({ page }) => {
         const q = args.request as { query: { dimension: string; filter: { range: { timezone: string } } } };
         return response({ meta: { snapshot_id: 'facet', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: q.query.filter.range.timezone }, dimension: q.query.dimension, options: [{ key: 'synthetic-session-0', display_name: 'Synthetic 会话 0', count: '1' }], next_cursor: null });
       }
+      if (command === 'get_mini_scope') return response({ settings_revision: settingsRevision, mini_scope: miniScope });
+      if (command === 'set_mini_scope') { const r = args.request as { mini_scope: unknown; expected_settings_revision: string }; if (rejectMini || r.expected_settings_revision !== settingsRevision) throw { code: 'REVISION_CONFLICT' }; miniScope = r.mini_scope; settingsRevision = String(BigInt(settingsRevision) + 1n); return response({ settings_revision: settingsRevision, mini_scope: miniScope }); }
+      if (command === 'perform_window_action') return response(null);
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'empty', root_path: 'Synthetic Empty Source', origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null }] });
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies sessions only');
@@ -101,7 +105,7 @@ test.beforeEach(async ({ page }) => {
         return serialized ?? response(data);
       }
       throw new Error(`Unexpected synthetic command ${command}`);
-    } }, __syntheticSessionCalls: () => calls, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; }, __reviseSyntheticDetail: () => { ++detailRevision; }, __failSyntheticDetail: (fail: boolean) => { failDetail = fail; }, __deferSyntheticDetail: () => { deferDetail = true; }, __releaseSyntheticDetail: () => { deferDetail = false; for (const release of detailReleases.splice(0)) release(); } });
+    } }, __syntheticSessionCalls: () => calls, __miniPinQA: { reject: (v: boolean) => { rejectMini = v; } }, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; }, __reviseSyntheticDetail: () => { ++detailRevision; }, __failSyntheticDetail: (fail: boolean) => { failDetail = fail; }, __deferSyntheticDetail: () => { deferDetail = true; }, __releaseSyntheticDetail: () => { deferDetail = false; for (const release of detailReleases.splice(0)) release(); } });
     Object.assign(window, { __privacyQA: { external: (value: boolean) => { privacy = value; settingsRevision = String(BigInt(settingsRevision) + 1n); notifyPrivacy(); }, reject: (value: boolean) => { rejectPrivacy = value; }, deferOld: () => { freezePrivacyReply = true; defer = true; }, listeners: () => [...listeners.values()].filter(l => l.event === 'display_policy_changed').length }, __expireSyntheticTurns: () => { turnsExpired = true; }, __resetSyntheticTurns: () => { turnsExpired = false; } });
   });
   await page.goto('/');
@@ -134,7 +138,7 @@ test('sessions show exact consumption and independent context, stable pages and 
   expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(true);
   await page.screenshot({ path: 'test-results/session-drawer-top-1280.png' });
   await page.keyboard.press('Shift+Tab');
-  await expect(drawer.getByRole('button', { name: '在主窗口筛选此会话' })).toBeFocused();
+  await expect(drawer.getByRole('button', { name: '按所选起点固定到小窗' })).toBeFocused();
   await page.screenshot({ path: 'test-results/session-drawer-1280.png' });
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0); await expect(trigger).toBeFocused();
@@ -355,4 +359,25 @@ test('privacy clears candidate searches and names while retaining selected stabl
   const request = await page.evaluate(() => (window as unknown as SessionQA).__syntheticSessionCalls().filter(v => v.command === 'query_sessions').at(-1)?.args.request);
   expect(request).toMatchObject({ query: { filter: { sessions: { kind: 'ids', ids: ['synthetic-session-0'] } } } });
   expect(await page.locator('body').evaluate(e => e.innerHTML.includes('Synthetic 会话'))).toBe(false);
+});
+
+
+test('detail pins today or exact selected start to mini independently and preserves the current main query on conflict', async ({ page }) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: 'Synthetic 会话 0', exact: true });
+  await drawer.getByRole('button', { name: '固定到小窗（今日）' }).click();
+  await expect(drawer.getByRole('status')).toContainText('每天从统计时区零点');
+  const calls = await page.evaluate(() => (window as unknown as { __syntheticSessionCalls: () => { command: string; args: { request?: unknown; action?: string } }[] }).__syntheticSessionCalls());
+  expect(calls.filter(c => c.command === 'set_mini_scope').at(-1)?.args.request).toMatchObject({ mini_scope: { kind: 'session', session_key: 'synthetic-session-0', start: { kind: 'today' } } });
+  expect(calls.filter(c => c.command === 'perform_window_action').at(-1)?.args.action).toBe('show_mini');
+  await drawer.getByRole('button', { name: '按所选起点固定到小窗' }).click();
+  await expect(drawer.getByRole('status')).toContainText('精确起点');
+  const after = await page.evaluate(() => (window as unknown as { __syntheticSessionCalls: () => { command: string; args: { request?: unknown } }[] }).__syntheticSessionCalls());
+  const detail = after.filter(c => c.command === 'get_session_bundle').at(-1)?.args.request as { filter: { range: { start_ms: number } } };
+  expect(after.filter(c => c.command === 'set_mini_scope').at(-1)?.args.request).toMatchObject({ mini_scope: { start: { kind: 'fixed', start_ms: detail.filter.range.start_ms } } });
+  await page.evaluate(() => (window as unknown as { __miniPinQA: { reject(v: boolean): void } }).__miniPinQA.reject(true));
+  await drawer.getByRole('button', { name: '固定到小窗（今日）' }).click(); await expect(drawer.getByRole('alert')).toContainText('已发生变化');
+  await expect(drawer.getByRole('heading', { name: '所选范围累计消耗' })).toBeVisible();
+  await expect(page.getByLabel('日期范围')).toHaveValue('today');
 });

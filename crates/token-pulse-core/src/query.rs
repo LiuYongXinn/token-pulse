@@ -182,14 +182,32 @@ pub struct FilterOptionsPage {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CloseQuerySnapshotRequest {
-    FilterOptions { request: FilterOptionsRequest },
-    Sessions { request: SessionsRequest },
-    UsageEvents { request: UsageEventsRequest },
-    Turns { request: TurnsRequest },
+    MiniSessions {
+        request: crate::mini::MiniSessionsRequest,
+    },
+    FilterOptions {
+        request: FilterOptionsRequest,
+    },
+    Sessions {
+        request: SessionsRequest,
+    },
+    UsageEvents {
+        request: UsageEventsRequest,
+    },
+    Turns {
+        request: TurnsRequest,
+    },
 }
 impl CloseQuerySnapshotRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         match self {
+            Self::MiniSessions { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
             Self::Turns { request } => {
                 request.validate()?;
                 if request.cursor.is_none() {

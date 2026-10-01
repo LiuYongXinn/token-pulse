@@ -759,6 +759,47 @@
           ],
           "type": "object"
         },
+        "MiniSessionsQuery": {
+          "additionalProperties": false,
+          "properties": {
+            "page_size": {
+              "format": "uint16",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "search": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "search",
+            "page_size"
+          ],
+          "type": "object"
+        },
+        "MiniSessionsRequest": {
+          "additionalProperties": false,
+          "properties": {
+            "cursor": {
+              "maxLength": 151,
+              "minLength": 151,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "query": {
+              "$ref": "#/$defs/MiniSessionsQuery"
+            }
+          },
+          "required": [
+            "query",
+            "cursor"
+          ],
+          "type": "object"
+        },
         "PriceBasis": {
           "oneOf": [
             {
@@ -984,6 +1025,23 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "mini_sessions",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/MiniSessionsRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "request"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -4301,6 +4359,190 @@
         "mini_scope"
       ],
       "title": "MiniScopeSnapshot",
+      "type": "object"
+    },
+    "MiniSessionOption": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string"
+        },
+        "session_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_key",
+        "display_name"
+      ],
+      "title": "MiniSessionOption",
+      "type": "object"
+    },
+    "MiniSessionsPage": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "MiniSessionOption": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": "string"
+            },
+            "session_key": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "session_key",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "SnapshotMeta": {
+          "additionalProperties": false,
+          "properties": {
+            "accounting_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "data_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "display_timezone": {
+              "type": "string"
+            },
+            "generated_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "parser_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "price_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "snapshot_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "data_revision",
+            "price_revision",
+            "generated_at_ms",
+            "parser_versions",
+            "accounting_versions",
+            "display_timezone"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/SnapshotMeta"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/MiniSessionOption"
+          },
+          "maxItems": 100,
+          "type": "array"
+        }
+      },
+      "required": [
+        "meta",
+        "options",
+        "next_cursor"
+      ],
+      "title": "MiniSessionsPage",
+      "type": "object"
+    },
+    "MiniSessionsQuery": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "page_size": {
+          "format": "uint16",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "search": {
+          "maxLength": 256,
+          "type": "string"
+        }
+      },
+      "required": [
+        "search",
+        "page_size"
+      ],
+      "title": "MiniSessionsQuery",
+      "type": "object"
+    },
+    "MiniSessionsRequest": {
+      "$defs": {
+        "MiniSessionsQuery": {
+          "additionalProperties": false,
+          "properties": {
+            "page_size": {
+              "format": "uint16",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "search": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "search",
+            "page_size"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "maxLength": 151,
+          "minLength": 151,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/MiniSessionsQuery"
+        }
+      },
+      "required": [
+        "query",
+        "cursor"
+      ],
+      "title": "MiniSessionsRequest",
       "type": "object"
     },
     "MiniSnapshot": {
