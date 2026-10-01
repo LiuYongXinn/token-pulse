@@ -679,6 +679,21 @@ fn benchmark_300k_event_totals_groups_and_calendar_series() {
     }).unwrap();
     let mut f = filter();
     f.range.end_ms = EpochMs::new(300000 * 60000).unwrap();
+    let cached = std::env::var("TOKENPULSE_BENCH_CACHE").as_deref() == Ok("1");
+    if cached {
+        let build_start = Instant::now();
+        let mut cohorts = 0;
+        for i in 0..100 {
+            cohorts += db
+                .build_hourly_rollup(&format!("bench-ledger-{i}"), 1)
+                .unwrap()
+                .cohort_count;
+        }
+        println!(
+            "BENCH cache_build events=300000 sessions=100 cohort_rows={cohorts} elapsed_ms={}",
+            build_start.elapsed().as_millis()
+        );
+    }
     let wal = std::fs::metadata(format!("{}-wal", db.path().display()))
         .unwrap()
         .len();
@@ -721,7 +736,7 @@ fn benchmark_300k_event_totals_groups_and_calendar_series() {
         let mut hot = values[1..].to_vec();
         hot.sort_unstable();
         println!(
-            "BENCH {name} events=300000 sessions=100 first_reader_us={first} hot_p50_us={} hot_p95_nearest_rank_us={} hot_max_us={} samples=5 wal_bytes={wal}",
+            "BENCH {name} cache={cached} events=300000 sessions=100 first_reader_us={first} hot_p50_us={} hot_p95_nearest_rank_us={} hot_max_us={} samples=5 wal_bytes={wal}",
             hot[2], hot[4], hot[4]
         );
     }
