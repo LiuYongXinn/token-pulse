@@ -16,6 +16,7 @@ fn main() {
             "get_filter_options",
             "query_sessions",
             "get_session_bundle",
+            "query_turns",
             "query_usage_events",
             "close_query_snapshot",
             "get_price_rules",

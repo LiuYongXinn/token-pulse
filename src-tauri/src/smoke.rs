@@ -122,6 +122,16 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let missingDetail=false;
                 try {await invoke('get_session_bundle',{requestId:'native-smoke-detail-missing',request:{session_key:'missing-detail',filter:request.filter,price_basis:request.price_basis}});} catch(error) {missingDetail=error.code==='INVALID_QUERY';}
                 ok=ok && missingDetail;
+                const turnsRequest={query:{session_key:'native-probe-context',filter:request.filter,price_basis:request.price_basis,page_size:50},cursor:null};
+                const turns=await invoke('query_turns',{requestId:'native-smoke-turns',request:turnsRequest});
+                ok=ok && turns.api_version===1 && turns.request_id==='native-smoke-turns'
+                    && turns.data.session_key==='native-probe-context' && turns.data.meta.price_revision==='3'
+                    && turns.data.turns.length===0 && turns.data.next_cursor===null
+                    && turns.data.summary.reliable_turn_count===null && !turns.data.summary.reliable_turns_complete
+                    && turns.data.unidentified_usage_event_count==='0';
+                let badTurnCursor=false;
+                try {await invoke('query_turns',{requestId:'native-smoke-turn-cursor',request:{...turnsRequest,cursor:'a'.repeat(151)}});} catch(error) {badTurnCursor=error.code==='CURSOR_INVALID';}
+                ok=ok && badTurnCursor;
                 const sessions=await invoke('query_sessions',{requestId:'native-smoke-sessions',request:sessionsRequest});
                 ok=ok && sessions.api_version===1 && sessions.request_id==='native-smoke-sessions'
                     && sessions.data.meta.snapshot_id.startsWith('query-') && sessions.data.meta.price_revision==='3'

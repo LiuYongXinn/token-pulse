@@ -18,10 +18,12 @@ pub use sessions::{
     SessionsRequest,
 };
 mod events;
+mod turns;
 pub use events::{
     RawTokenCount, RawUsageVector, UsageEventRow, UsageEventSort, UsageEventsPage,
     UsageEventsQuery, UsageEventsRequest,
 };
+pub use turns::{TurnRow, TurnsPage, TurnsQuery, TurnsRequest};
 
 pub fn model_key(provider: Option<&str>, model: Option<&str>) -> Option<String> {
     model.map(|name| {
@@ -183,10 +185,18 @@ pub enum CloseQuerySnapshotRequest {
     FilterOptions { request: FilterOptionsRequest },
     Sessions { request: SessionsRequest },
     UsageEvents { request: UsageEventsRequest },
+    Turns { request: TurnsRequest },
 }
 impl CloseQuerySnapshotRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         match self {
+            Self::Turns { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
             Self::FilterOptions { request } => {
                 request.validate()?;
                 if request.cursor.is_none() {

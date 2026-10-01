@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-query-turns"
+description = "Enables the query_turns command without any pre-configured scope."
+commands.allow = ["query_turns"]
+
+[[permission]]
+identifier = "deny-query-turns"
+description = "Denies the query_turns command without any pre-configured scope."
+commands.deny = ["query_turns"]

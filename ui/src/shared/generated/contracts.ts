@@ -82,6 +82,22 @@ export type SessionsPage = { meta: SnapshotMeta,
  */
 summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, sessions: Array<SessionRow>, next_cursor: string | null, };
 
+export type TurnsQuery = { session_key: string, filter: UsageFilter, price_basis: PriceBasis, page_size: number, };
+
+export type TurnsRequest = { query: TurnsQuery, cursor: string | null, };
+
+export type TurnsPage = { meta: SnapshotMeta, session_key: string,
+/**
+ * All selected session consumption, including events without turn identity.
+ */
+summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, unidentified_usage_event_count: DecimalInt, turns: Array<TurnRow>, next_cursor: string | null, };
+
+export type TurnRow = { turn_id: string, first_at_ms: EpochMs, last_at_ms: EpochMs,
+/**
+ * Only selected events in this turn, not its lifetime consumption.
+ */
+summary: TokenTotals, pricing: PricingSummary, };
+
 export type SessionBundleRequest = { session_key: string, filter: UsageFilter, price_basis: PriceBasis, };
 
 export type SessionBundle = { meta: SnapshotMeta, identity: SessionIdentity, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, latest_selected_activity: SessionActivity | null, latest_context: ContextSnapshot, child_count: DecimalInt, children: Array<SessionIdentity>, children_truncated: boolean, classifications: Array<SessionClassification>, };
@@ -116,7 +132,7 @@ usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsage
 
 export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
 
-export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, };
+export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, } | { "kind": "turns", request: TurnsRequest, };
 
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 

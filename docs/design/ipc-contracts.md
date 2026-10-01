@@ -386,3 +386,9 @@ get_session_bundle 接收 SessionBundleRequest（session_key、完整 filter、p
 meta、identity、summary、pricing、coverage、latest_selected_activity、latest_context、child_count、children、children_truncated、classifications 属于同一事务。identity 与 children 的父关系只使用已经解析的 canonical key，未解析 parent_provider_id 保留。children 跨日期，按 canonical session_key 排序，排除镜像别名，最多 100 个；child_count 是全部已解析子关系数，超过上限显式 children_truncated=true。
 
 classifications 是当前 active ledger 的跨日期观察分类，按 kind / reason_code 汇总 COUNT(DISTINCT observation_id)，最多 64 组；kind 限 pending / inherited / duplicate / unattributed。它表示已保存的分类证据数，不是消费 Token、回合或完整继承证明。不同分类的数量不假定互斥，不能相加作为全部观察数。不发送 vector_json、evidence_json 或日志内容，不能把原始累计证据重新加到可信消费。该接口的详情独立获得新快照，UI 必须整体替换详情而非将其字段补到旧列表快照。
+
+### 2.9 已实现的可靠回合分页
+
+query_turns 接收 TurnsRequest（query.session_key / filter / price_basis / page_size、cursor），最多 200 条，固定按所选事件最大时间降序 / turn_id 的 BINARY 升序稳定 keyset 分页。目标会话与 filter.sessions 取交集，解析镜像别名；不使用模型、请求数、时间邻近或计数流猜测回合。仅明确非空 turn_id 分组，每组的 first_at_ms / last_at_ms / summary / pricing 都只覆盖所选日期与维度下的事件，不能称为该回合的完整生命周期消耗。
+
+TurnsPage 的 summary / pricing / coverage 覆盖指定会话全部所选消费，包括没有回合标识的事件；unidentified_usage_event_count 单独报告 null / 空标识事件数量。turns 是已识别回合，不将未知身份事件折成伪回合，不把总范围汇总当作当前页合计。meta / 价格 / 回合成员在真实租约中固定，与详情 bundle 独立。游标绑定 owner / 完整 query / turns 域，close_query_snapshot 的 Turns 分支接受原 TurnsRequest + 非空游标，合法重复关闭幂等；任意 snapshot_id 不授权读取。末页和失败释放租约。

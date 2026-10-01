@@ -18,6 +18,7 @@ pub struct PricedEvent {
     pub model: Option<String>,
     pub project_id: Option<String>,
     pub occurred_at_ms: EpochMs,
+    pub turn_id: Option<String>,
     pub total_tokens: i64,
     pub outcome: PriceOutcome,
 }
@@ -33,7 +34,7 @@ pub fn visit(
     // it never silently drops a source from rule matching. Mirrors are DISTINCT.
     let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY LIMIT 33))";
     let sql = format!(
-        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id) FROM {FROM} WHERE {}",
+        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id FROM {FROM} WHERE {}",
         p.sql
     );
     let mut statement = tx.prepare(&sql)?;
@@ -88,6 +89,7 @@ pub fn visit(
             model,
             project_id: row.get(5)?,
             occurred_at_ms,
+            turn_id: row.get(14)?,
             total_tokens: total,
             outcome,
         })?;

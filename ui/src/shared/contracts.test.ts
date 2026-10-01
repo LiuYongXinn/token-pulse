@@ -57,6 +57,13 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateDetail({ ...detail, children: Array(101).fill(identity) })).toBe(false);
   expect(validateDetail({ ...detail, classifications: Array(65).fill(detail.classifications[0]) })).toBe(false);
   expect(validateDetail({ ...detail, classifications: [{ ...detail.classifications[0], evidence_json: '{}' }] })).toBe(false);
+  const turn = { turn_id: 'synthetic-turn', first_at_ms: 0, last_at_ms: 1000, summary: totals, pricing: fixture.pricing };
+  const turnPage = { meta: fixture.meta, session_key: 'synthetic', summary: totals, pricing: fixture.pricing, coverage, unidentified_usage_event_count: '9007199254740993', turns: [turn], next_cursor: null };
+  const validateTurns = ajv.compile(protocol.schemas.TurnsPage);
+  expect(validateTurns(turnPage)).toBe(true);
+  expect(validateTurns({ ...turnPage, unidentified_usage_event_count: undefined })).toBe(false);
+  expect(validateTurns({ ...turnPage, turns: Array(201).fill(turn) })).toBe(false);
+  expect(validateTurns({ ...turnPage, turns: [{ ...turn, messages: ['private'] }] })).toBe(false);
   const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', reported_total: '110' };
   const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
   const eventPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, events: [event], next_cursor: null };

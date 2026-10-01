@@ -24,25 +24,21 @@ fn identity(row: &Row<'_>) -> rusqlite::Result<SessionIdentity> {
 }
 const IDENTITY: &str = "SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key),parent.session_key,COALESCE(parent.provider_session_id,parent.session_key),s.parent_provider_id FROM sessions s LEFT JOIN sessions parent ON parent.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key)";
 
-pub(super) fn bundle(
+pub(super) fn scoped_filter(
     tx: &Transaction<'_>,
-    revision: Revision,
-    request: &SessionBundleRequest,
-    at: EpochMs,
-    snapshot_id: &str,
-) -> StoreResult<SessionBundle> {
-    let key = canonical(tx, &request.session_key)?;
-    let identity = tx
-        .query_row(
-            &format!("{IDENTITY} WHERE s.session_key=?1"),
-            [&key],
-            identity,
-        )
-        .optional()?
-        .ok_or(ErrorCode::InvalidQuery)?;
-    let mut filter = request.filter.clone();
-    // A detail target intersects the supplied session selection. It does not
-    // silently broaden it, including when aliases occur in either selection.
+    session_key: &str,
+    original: &token_pulse_core::protocol::UsageFilter,
+) -> StoreResult<(String, token_pulse_core::protocol::UsageFilter)> {
+    let key = canonical(tx, session_key)?;
+    let exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sessions WHERE session_key=?1)",
+        [&key],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        return Err(ErrorCode::InvalidQuery.into());
+    }
+    let mut filter = original.clone();
     let allowed = match &filter.sessions {
         DimensionSelection::All {} => true,
         DimensionSelection::Ids { ids, .. } => {
@@ -57,6 +53,24 @@ pub(super) fn bundle(
         ids: if allowed { vec![key.clone()] } else { vec![] },
         include_unknown: false,
     };
+    Ok((key, filter))
+}
+pub(super) fn bundle(
+    tx: &Transaction<'_>,
+    revision: Revision,
+    request: &SessionBundleRequest,
+    at: EpochMs,
+    snapshot_id: &str,
+) -> StoreResult<SessionBundle> {
+    let (key, filter) = scoped_filter(tx, &request.session_key, &request.filter)?;
+    let identity = tx
+        .query_row(
+            &format!("{IDENTITY} WHERE s.session_key=?1"),
+            [&key],
+            identity,
+        )
+        .optional()?
+        .ok_or(ErrorCode::InvalidQuery)?;
     let mut page = rows(
         tx,
         revision,
