@@ -13,6 +13,9 @@ use ts_rs::TS;
 /// Confirmed storage contract: at most 1,000,000 currency units per million.
 pub const MAX_RATE_ATOMS: i128 = 1_000_000_000_000_000;
 
+mod summary;
+pub use summary::PricingAccumulator;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum PriceOrigin {
@@ -245,6 +248,17 @@ pub enum UnpricedCode {
     AmbiguousRule,
     InsufficientUsage,
     Overflow,
+}
+impl UnpricedCode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::UnknownModel => "unknown_model",
+            Self::MissingRule => "missing_rule",
+            Self::AmbiguousRule => "ambiguous_rule",
+            Self::InsufficientUsage => "insufficient_usage",
+            Self::Overflow => "overflow",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
