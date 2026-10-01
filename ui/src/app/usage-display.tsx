@@ -5,6 +5,7 @@ export const coverageNames = { complete: '已配置来源覆盖完整', partial:
 export const reasonNames: Record<string, string> = { unknown_model: '模型或提供方未知', missing_rule: '无匹配价格', ambiguous_rule: '价格规则存在歧义', insufficient_usage: '必要分项不足', overflow: '精确计算溢出' };
 export function when(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(time); }
 export function whenExact(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 }).format(time); }
+export function whenFull(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 }).format(time); }
 export function Cost({ pricing }: { pricing: PricingSummary }) {
   if (pricing.redacted) return <strong className="cost-number">已隐藏</strong>;
   if (!pricing.currencies.length) return <strong className="cost-number unavailable">未计价</strong>;

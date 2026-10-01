@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let privacy = false, policyRevision = '1';
+    let miniIntent: unknown = null;
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let lastDashboardRequest: unknown = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
@@ -22,6 +23,7 @@ test.beforeEach(async ({ page }) => {
     const price = (partial: boolean, basis: { mode: string } = { mode: 'event_time' }) => ({ redacted: privacy, basis, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: privacy ? null : basis.mode === 'specified_time' ? '2.321234567890123' : cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: privacy ? [] : [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: policyRevision, privacy }, data });
+      if (command === 'get_mini_stats_request') return response(miniIntent);
       if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: policyRevision, preferences: { theme: 'dark', privacy, display_timezone: 'Asia/Shanghai' } });
       if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
@@ -49,6 +51,10 @@ test.beforeEach(async ({ page }) => {
       throw new Error(`unexpected synthetic command ${command}`);
     } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
     __lastDashboardRequest: () => lastDashboardRequest,
+    __requestSyntheticMiniStats: (all = false, id = 'synthetic-mini-open') => {
+      miniIntent = { request_id: id, mini_scope: all ? { kind: 'today_all_sources' } : { kind: 'session', session_key: 'synthetic-fixed', start: { kind: 'fixed', start_ms: 1709179200123 } }, calendar: { range: { start_ms: 1709179200123, end_ms: 1709203200457, timezone: 'UTC' }, heatmap_range: { start_ms: Date.parse('2023-09-01T00:00:00Z'), end_ms: Date.parse('2024-03-01T00:00:00Z'), timezone: 'UTC' }, local_today: '2024-02-29' } };
+      for (const [id, listener] of listeners) if (listener.event === 'mini_stats_requested') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null });
+    },
     __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
     __emitSyntheticPrivacyChange: (value: boolean) => { privacy = value; policyRevision = String(BigInt(policyRevision) + 1n); for (const [id, listener] of listeners) if (listener.event === 'display_policy_changed' || listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: policyRevision, privacy } }); },
@@ -212,4 +218,27 @@ test('global privacy removes overview amounts, original paths and names includin
   await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
   await expect(page.getByLabel('来源', { exact: true })).toHaveValue('synthetic-a');
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+});
+
+
+test('explicit mini navigation imports exact milliseconds and session, resets price/source, and remains independent afterwards', async ({ page }) => {
+  await page.getByLabel('日期范围').selectOption('last7'); await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
+  await page.getByLabel('计价依据').selectOption('specified_time');
+  await page.evaluate(() => (window as unknown as { __requestSyntheticMiniStats: () => void }).__requestSyntheticMiniStats());
+  await expect(page.getByLabel('从小窗带入的精确范围')).toContainText('2024/02/29');
+  await expect(page.getByLabel('从小窗带入的精确范围')).toContainText('.123');
+  await expect(page.getByLabel('日期范围')).toHaveCount(0);
+  await expect(page.getByLabel('来源', { exact: true })).toHaveValue(''); await expect(page.getByLabel('计价依据')).toHaveValue('event_time');
+  await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('固定会话（小窗）');
+  await expect.poll(async () => page.evaluate(() => (window as unknown as { __lastDashboardRequest: () => unknown }).__lastDashboardRequest())).toMatchObject({ filter: { range: { start_ms: 1709179200123, end_ms: 1709203200457, timezone: 'UTC' }, sources: { kind: 'all' }, sessions: { kind: 'ids', ids: ['synthetic-fixed'], include_unknown: false } }, price_basis: { mode: 'event_time' } });
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.getByLabel('从小窗带入的精确范围')).toContainText('.123');
+  await page.screenshot({ path: 'test-results/mini-stats-main-1280.png', fullPage: true });
+  await page.getByRole('button', { name: '改用主窗口日期' }).click(); await expect(page.getByLabel('日期范围')).toHaveValue('last7');
+  await page.evaluate(() => (window as unknown as { __setSyntheticHidden: (v: boolean) => void }).__setSyntheticHidden(false));
+  await expect(page.getByLabel('从小窗带入的精确范围')).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as { __requestSyntheticMiniStats: (v: boolean, id: string) => void }).__requestSyntheticMiniStats(true, 'synthetic-mini-open-2'));
+  await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('全部会话');
+  await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('日期范围')).toHaveValue('today');
+  await expect(page.getByLabel('从小窗带入的精确范围')).toHaveCount(0);
 });

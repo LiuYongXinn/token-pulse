@@ -36,6 +36,7 @@ async function bridge(page: Page) {
           if (hold) { hold = false; await new Promise<void>(resolve => waits.push(resolve)); }
           return { api_version: 1, request_id: args.requestId, display_policy: stamp, data };
         }
+        if (command === 'open_mini_stats') { if ((args.request as { expected_settings_revision: string }).expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' }; const data = snapshot(); return { api_version: 1, request_id: args.requestId, data: { request_id: String(args.requestId), mini_scope: data.mini_scope, calendar: { range: data.range, heatmap_range: data.range, local_today: '2024-02-29' } } }; }
         if (command === 'mini_window_action') {
           const r = args.request as { kind: string; expanded?: boolean; pinned?: boolean };
           if (r.kind === 'set_expanded') state.expanded = r.expanded!;
@@ -79,6 +80,8 @@ test('real DTO presentation has compact and expanded layouts, exact pricing and 
   await page.getByLabel('费用估算详情').click();
   await expect(page.getByLabel('小窗价格覆盖')).toContainText('USD 0.573123');
   await expect(page.getByLabel('小窗价格覆盖')).toContainText('未计价 83.1K');
+  await page.getByLabel('打开小窗范围统计').click();
+  expect(await page.evaluate(() => (window as unknown as QA).__miniQA.calls().filter(v => v.command === 'open_mini_stats').at(-1)?.request)).toEqual({ expected_settings_revision: '9007199254740993' });
   await page.getByLabel('小窗置顶').click(); await expect(page.getByLabel('小窗置顶')).toHaveAttribute('aria-pressed', 'true');
   await page.getByLabel('隐藏小窗').click();
   const actions = await page.evaluate(() => (window as unknown as QA).__miniQA.calls().filter(v => v.command === 'mini_window_action').map(v => v.request));

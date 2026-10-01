@@ -66,6 +66,8 @@ fn main() {
         MiniUsageSnapshot,
         MiniWindowState,
         MiniWindowAction,
+        MiniStatsRequest,
+        MiniStatsOpenRequest,
         ErrorCode,
         ErrorDetail,
         AppError,

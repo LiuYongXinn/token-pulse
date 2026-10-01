@@ -97,6 +97,48 @@ pub struct MiniUsageSnapshot {
     pub pricing: PricingSummary,
     pub coverage: Coverage,
 }
+/// Explicit navigation intent. It contains no names, paths, prices or account fields.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniStatsRequest {
+    pub request_id: String,
+    pub mini_scope: MiniScope,
+    pub calendar: crate::calendar::CalendarSelectionResult,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniStatsOpenRequest {
+    pub expected_settings_revision: DecimalInt,
+}
+pub fn open_stats_request(
+    usage: &MiniUsageSnapshot,
+    request: &MiniStatsOpenRequest,
+    id: String,
+) -> Result<MiniStatsRequest, ErrorCode> {
+    if request.expected_settings_revision.value() != usage.settings_revision.value() {
+        return Err(ErrorCode::RevisionConflict);
+    }
+    stats_request(usage, id)
+}
+pub fn stats_request(usage: &MiniUsageSnapshot, id: String) -> Result<MiniStatsRequest, ErrorCode> {
+    crate::protocol::validate_request_id(&id)?;
+    usage.range.validate()?;
+    usage.mini_scope.validate()?;
+    let mut calendar = resolve_selection(
+        &CalendarSelectionRequest {
+            timezone: usage.range.timezone.clone(),
+            selection: CalendarSelection::Today {},
+        },
+        usage.meta.generated_at_ms,
+    )?;
+    // Preserve the exact UTC bounds already read with the mini scope. Never round a fixed start.
+    calendar.range = usage.range.clone();
+    Ok(MiniStatsRequest {
+        request_id: id,
+        mini_scope: usage.mini_scope.clone(),
+        calendar,
+    })
+}
 pub fn usage_filter(
     scope: &MiniScope,
     timezone: &str,

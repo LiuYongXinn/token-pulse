@@ -337,6 +337,13 @@ pub async fn get_dashboard_bundle(
     request
         .validate()
         .map_err(|code| Box::new(AppError::new(code, request_id.clone())))?;
+    // Native acceptance observes the validated real IPC request; release builds contain no probe state.
+    #[cfg(debug_assertions)]
+    if std::env::args().any(|arg| arg == "--native-smoke") {
+        if let Ok(mut latest) = state.native_dashboard_request.lock() {
+            *latest = Some(request.clone());
+        }
+    }
     let database = state
         .database
         .as_ref()

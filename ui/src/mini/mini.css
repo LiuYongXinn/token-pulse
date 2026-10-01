@@ -19,3 +19,5 @@
 .mini-price-details h2{font-size:11px}.mini-price-details p{font-size:11px;line-height:1.5;margin-top:4px}.mini-price-details small{font-size:9px;color:var(--muted)}
 .sidebar-bottom button{margin-top:14px;width:100%;font-size:11px}
 @media(forced-colors:active){.mini-window{border-color:CanvasText}.mini-cost strong{color:CanvasText}.mini-dot{background:Highlight}}
+
+.mini-stat-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:4px 8px;border:1px solid var(--selectedLine);border-radius:7px;background:var(--selected);max-width:100%}.filters .mini-stat-scope span{margin:0;font-size:11px;color:var(--fg);width:auto}.mini-stat-scope button{font-size:11px;padding:4px 7px}

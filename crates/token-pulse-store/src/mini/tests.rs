@@ -50,6 +50,52 @@ fn rule(rate: &str) -> PriceRuleDraft {
     }
 }
 #[test]
+fn explicit_stats_navigation_preserves_exact_scope_and_changes_no_stored_main_or_mini_settings() {
+    let (_, db) = setup();
+    db.commit(fixture()).unwrap();
+    initialize(&db);
+    crate::query::tests::extra(&db, "later", 2000, 7, (None, None), None, None);
+    let before = db.mini_scope().unwrap().settings_revision;
+    let (saved, _) = set(&db, fixed("session", 1501), before.as_str()).unwrap();
+    let usage = db.mini_usage(at(2000), "navigation").unwrap();
+    assert_eq!(
+        token_pulse_core::mini::open_stats_request(
+            &usage,
+            &token_pulse_core::mini::MiniStatsOpenRequest {
+                expected_settings_revision: before
+            },
+            "stale-open".into()
+        )
+        .unwrap_err(),
+        ErrorCode::RevisionConflict
+    );
+    let intent =
+        token_pulse_core::mini::stats_request(&usage, "explicit-navigation".into()).unwrap();
+    assert_eq!(intent.calendar.range.start_ms.value(), 1501);
+    assert_eq!(intent.calendar.range.end_ms.value(), 2001);
+    assert_eq!(intent.calendar.range.timezone, "UTC");
+    assert_eq!(intent.calendar.local_today, "1970-01-01");
+    assert_eq!(intent.calendar.heatmap_range.end_ms.value(), 86_400_000);
+    let mut filter = crate::query::tests::filter();
+    filter.range = intent.calendar.range;
+    filter.sessions = token_pulse_core::protocol::DimensionSelection::Ids {
+        ids: vec!["session".into()],
+        include_unknown: false,
+    };
+    assert_eq!(db.usage_totals(&filter).unwrap().total_tokens.as_str(), "7");
+    let scope = db.mini_scope().unwrap();
+    assert_eq!(
+        scope.settings_revision.as_str(),
+        saved.settings_revision.as_str()
+    );
+    assert_eq!(scope.mini_scope, fixed("session", 1501));
+    assert_eq!(
+        db.display_settings().unwrap().settings_revision.as_str(),
+        saved.settings_revision.as_str()
+    );
+    assert!(token_pulse_core::mini::stats_request(&usage, "bad\nrequest".into()).is_err());
+}
+#[test]
 fn mini_is_independent_of_main_filters_and_uses_captured_cutoff_and_persistent_fixed_start() {
     let (dir, db) = setup();
     db.commit(fixture()).unwrap();

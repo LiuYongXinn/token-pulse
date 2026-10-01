@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { useAppTheme } from '../shared/useAppTheme';
 import { compactTokens, fullTokens, money, percentage } from '../shared/format';
-import { getDisplaySettings, getMiniUsage, miniWindowAction, onDisplayPolicyChanged, onPriceRulesChanged, onSettingsChanged, runtimeError, setDisplayPrivacy, setMiniScope } from '../shared/runtime';
+import { getDisplaySettings, getMiniUsage, openMiniStats, miniWindowAction, onDisplayPolicyChanged, onPriceRulesChanged, onSettingsChanged, runtimeError, setDisplayPrivacy, setMiniScope } from '../shared/runtime';
 import type { DisplaySettingsSnapshot, MiniUsageSnapshot, MiniWindowAction, MiniWindowState } from '../shared/generated/contracts';
 import { coverageNames, whenExact } from '../app/usage-display';
 import './mini.css';
@@ -63,6 +63,13 @@ export function MiniApp() {
     catch (e) { if (mounted.current) { setError(runtimeError(e)); void refresh(); } }
     finally { acting.current = false; if (mounted.current) setBusy(false); }
   };
+  const openStats = async () => {
+    if (!usage || acting.current) return;
+    acting.current = true; setBusy(true);
+    try { await openMiniStats({ expected_settings_revision: usage.settings_revision }); if (mounted.current) setError(null); }
+    catch (e) { if (mounted.current) setError(runtimeError(e)); }
+    finally { acting.current = false; if (mounted.current) setBusy(false); }
+  };
   const resetScope = async () => {
     if (!usage || acting.current) return;
     acting.current = true; setBusy(true);
@@ -82,7 +89,7 @@ export function MiniApp() {
     <header className="mini-title"><div className="mini-drag" onPointerDown={e => { if (e.button === 0) void nativeAction({ kind: 'drag' }); }}><span className="mini-dot" />TokenPulse</div><div className="mini-title-actions"><button aria-label="小窗置顶" aria-pressed={interaction.pinned} disabled={busy} onClick={() => void nativeAction({ kind: 'set_pinned', pinned: !interaction.pinned })}>置顶</button><button aria-label={interaction.expanded ? '收起小窗' : '展开小窗'} disabled={busy} onClick={() => void nativeAction({ kind: 'set_expanded', expanded: !interaction.expanded })}>{interaction.expanded ? '−' : '+'}</button><button aria-label="隐藏小窗" disabled={busy} onClick={() => void nativeAction({ kind: 'hide' })}>×</button></div></header>
     <div className="mini-metric"><button className="mini-tokens" aria-label="可信 Token 分解" onClick={() => void nativeAction({ kind: 'set_expanded', expanded: true })} title={known && usage ? fullTokens(usage.usage.total_tokens) + ' Token' : '尚无已确认用量'}>{known && usage ? compactTokens(usage.usage.total_tokens) : '—'}</button><button className="mini-cost" aria-label="费用估算详情" disabled={!usage || policy.privacy !== false} onClick={() => { setDetails(value => !value); void nativeAction({ kind: 'set_expanded', expanded: true }); }}><strong>{cost}</strong><small>已计价估算</small></button></div>
     <div className="mini-scope" title={scopeName}>{scopeName} · 可信 Token</div>
-    <div className="mini-meta"><span>输入缓存 {ratio === null ? '—' : `${ratio}%`}</span><button aria-label="刷新小窗" title={usage ? `最近成功统计快照 ${whenExact(usage.meta.generated_at_ms, usage.range.timezone)} · ${usage.range.timezone}；不表示最后消费时间` : '读取真实统计'} onClick={() => void refresh()}>{usage ? new Intl.DateTimeFormat('zh-CN', { timeZone: usage.range.timezone, hour: '2-digit', minute: '2-digit' }).format(usage.meta.generated_at_ms) : '刷新'}</button><button aria-label="小窗隐私模式" aria-pressed={policy.privacy === true} disabled={!settings || busy || policy.pending} onClick={() => void privacy()}>{policy.privacy === true ? '隐私开' : '隐私'}</button></div>
+    <div className="mini-meta"><span>输入缓存 {ratio === null ? '—' : `${ratio}%`}</span><button aria-label="刷新小窗" title={usage ? `最近成功统计快照 ${whenExact(usage.meta.generated_at_ms, usage.range.timezone)} · ${usage.range.timezone}；不表示最后消费时间` : '读取真实统计'} onClick={() => void refresh()}>{usage ? new Intl.DateTimeFormat('zh-CN', { timeZone: usage.range.timezone, hour: '2-digit', minute: '2-digit' }).format(usage.meta.generated_at_ms) : '刷新'}</button><button aria-label="打开小窗范围统计" disabled={!usage || busy} onClick={() => void openStats()}>打开统计</button><button aria-label="小窗隐私模式" aria-pressed={policy.privacy === true} disabled={!settings || busy || policy.pending} onClick={() => void privacy()}>{policy.privacy === true ? '隐私开' : '隐私'}</button></div>
     <div className="mini-quota" aria-label="账户额度未连接"><div><span>短周期剩余 <b>—</b></span><span>周剩余 <b>—</b></span></div><p>周重置 — <span>账户未连接</span></p></div>
     <div className="mini-health" role={error ? 'alert' : 'status'} title={error ?? (usage ? coverageNames[usage.coverage.state] : undefined)}>{error ? usage ? '更新失败 · 保留上次快照，点击时间重试' : '读取失败 · 点击刷新重试' : usage ? known ? coverageNames[usage.coverage.state] : '尚无已确认用量' : '正在读取用量…'}</div>
     {interaction.expanded && <div className="mini-expanded-content">

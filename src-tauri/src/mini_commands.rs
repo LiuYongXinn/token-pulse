@@ -100,3 +100,76 @@ pub async fn set_mini_scope(
         state.privacy.clone(),
     ))
 }
+
+#[tauri::command]
+pub async fn open_mini_stats(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: token_pulse_core::mini::MiniStatsOpenRequest,
+    request_id: String,
+) -> Result<
+    token_pulse_core::protocol::Response<token_pulse_core::mini::MiniStatsRequest>,
+    Box<AppError>,
+> {
+    authorized(&window, &request_id)?;
+    if window.label() != "mini" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
+    let db = database(&state, &request_id)?;
+    let id = request_id.clone();
+    let data = blocking(&request_id, move || {
+        let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
+        let usage = db.mini_usage(at, &id)?;
+        Ok(token_pulse_core::mini::open_stats_request(
+            &usage, &request, id,
+        )?)
+    })
+    .await?;
+    *state.mini_stats_request.lock().map_err(|_| {
+        Box::new(AppError::new(
+            ErrorCode::WindowUnavailable,
+            request_id.clone(),
+        ))
+    })? = Some(data.clone());
+    let app = window.app_handle();
+    // Only an invalidation is emitted. The main window retrieves the latest retained intent.
+    let _ = app.emit_to("main", "mini_stats_requested", ());
+    super::show_main(app).map_err(|_| {
+        Box::new(AppError::new(
+            ErrorCode::WindowUnavailable,
+            request_id.clone(),
+        ))
+    })?;
+    Ok(token_pulse_core::protocol::Response::new(request_id, data))
+}
+#[tauri::command]
+pub fn get_mini_stats_request(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request_id: String,
+) -> Result<
+    token_pulse_core::protocol::Response<Option<token_pulse_core::mini::MiniStatsRequest>>,
+    Box<AppError>,
+> {
+    authorized(&window, &request_id)?;
+    if window.label() != "main" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
+    let data = state
+        .mini_stats_request
+        .lock()
+        .map_err(|_| {
+            Box::new(AppError::new(
+                ErrorCode::WindowUnavailable,
+                request_id.clone(),
+            ))
+        })?
+        .clone();
+    Ok(token_pulse_core::protocol::Response::new(request_id, data))
+}

@@ -445,3 +445,10 @@ get_mini_usage 返回 MiniUsageSnapshot { meta, settings_revision, mini_scope, s
 WindowAction 增加 show_mini，由主窗口 perform_window_action 异步创建 / 显示独立 mini；托盘调用同一创建 / 恢复实现。MiniWindowAction 为 read / set_expanded { expanded } / set_pinned { pinned } / drag / hide，返回 MiniWindowState { expanded, pinned }，纯原生交互无敏感显示字段。只允许 mini；尺寸固定两组 DIP，无任意窗口标签 / 路径 / 外部 URL / 穿透参数。当前交互状态只在进程内保留，跨启动持久化后续实现。
 
 mini capability 允许 get_mini_scope / get_mini_usage / set_mini_scope / get_display_settings / set_display_privacy；后两项共享隐私协调与最新出口。主题 / 时区写入继续仅 main。小窗 frontend 采用相同显示 epoch / 延迟响应门禁、共享主题，完整 MiniUsageSnapshot 单体更新；隐藏不关闭后台采集。账户区当前明确未连接，没有本地推测的额度值。
+
+
+### 2.18 明确打开同范围统计
+
+open_mini_stats 为 mini-only，参数 MiniStatsOpenRequest { expected_settings_revision } 绑定用户正在看的范围版本，真实 mini 使用事务修订不同时返回 REVISION_CONFLICT，不发布导航。成功返回 MiniStatsRequest { request_id, mini_scope, calendar }，calendar.range 保留精确 UTC 半开毫秒边界（包含采样毫秒），heatmap_range 由相同采样时刻 / 时区日历解析。该 DTO 只有稳定 ID / 日期，无敏感名称 / 金额 / 账户字段，使用普通 Response。main-only get_mini_stats_request 返回当前意图或 null，mini_stats_requested 只作为失效通知。
+
+主窗口按意图 ID 只应用一次；新意图明确重置来源 / 其他维度 / specified_time 并进入总览，显示精确范围替代整日日期控件。刷新与分页沿用此范围，恢复主日历或重置不回写 mini_scope；恢复可见不会重新应用已消费过的 ID。小窗数据之后更新不暗中改变已打开主统计范围，须再次点击打开。
