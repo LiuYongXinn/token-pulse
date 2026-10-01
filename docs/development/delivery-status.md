@@ -433,3 +433,13 @@ limit 明确验证 1–200；实际 total_group_count 包含未知分类，trunc
 get_grouped_usage 已接入主窗口 capability / label 校验、请求身份、后台参数验证与 spawn_blocking；TypeScript 使用生成契约直接请求同事务模型 / 项目 bundle，没有动态 SQL / 自定义文件路径入口。
 
 2026-10-01 22:51 Windows 10 隔离库的真实 WebView 分别验证 models / projects：实际 price revision 3、响应 snapshot_id、零可信总量的 null 输入、未知覆盖、空币种、零分类 / 未截断，以及 limit 201 拒绝 INVALID_QUERY；既有 UI 引导 / dashboard / 价格版本 / context / 单实例 / 托盘 / 关闭隐藏 / 电源消息路由 / 退出继续通过，返回 0。保留既有 class unregister 1412 提示。workspace Clippy、TS 类型和生产构建通过，本模块没有验证真实 Codex 来源或统计页交互。
+
+## M10b：真实模型表格与项目列表
+
+模型页保留原型表格，项目页保留列表，接入正式 GroupedUsageBundle。共享主窗口日期 / 来源，显示整体消费、分币种费用、消费会话、数量 / 排序、每组占比、独立费用 / 未计价覆盖与来源覆盖；模型缓存占比要求输入 / 缓存分项完整。未知模型 / 项目独立保留，空范围不填假费用。limit 支持 50 / 100 / 200，truncated 明确解释汇总含全部范围。价格覆盖按钮进入实际价格设置。项目路径详情、别名编辑 / 会话钻取、三个高级维度候选与费用排序尚未接入，本模块没有以无效控件模拟已完成操作。
+
+总览与分组复用完整快照请求 Hook，维持筛选变更隐藏旧结果、同范围失败保留 / 标记快照、可见时轮询以及乱序防护；费用组件统一 null / redacted / 单 USD / 其他币种与精确金额 tooltip。redacted 只证明页面尊重 DTO，跨窗口隐私策略与服务端最新 PrivacyState 仍待实现。
+
+2026-10-01 23:02 TS 类型、12 项 Vitest、9 项 Playwright、生产 Vite 构建通过。新增明确合成 UI 夹具验证超过 2^53 消费 tooltip、USD / EUR 分开及 EUR 真实零、未知缓存 / 未计价、主筛选跨模型 / 项目、空来源范围、真实规则入口、201 组显示 50 / 整体总量不截断和 redacted 所有金额 / tooltip。查看 1280×860 模型、960×680 项目 / redacted 模型截图，页面无横向溢出，模型表格自身容器可滚动；修正表内“未计价”与全局标题样式优先级使文字大小一致。
+
+23:01 随机隔离库的 Windows 10 独立应用 native probe 用真实 UI 导航到模型 / 项目，两页查询完成后实际显示零可信总量 / 未计价 / 空范围，并返回总览无来源引导；既有正式 IPC / 系统路由检查通过，退出 0。随后只有表内字体样式调整并重新构建 / 浏览器检查；既有 class unregister 1412 提示仍存在。此模块没有验收真实 Codex 格式、WSL、实际睡眠、账户 / 任务栏 / 安装，不宣称主窗口整体完成。

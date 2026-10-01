@@ -1,17 +1,10 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { DashboardRequest, Grain, PricingSummary, SourcesSnapshot, TokenMeasure, UsageSeriesBucket } from '../shared/generated/contracts';
-import { compactTokens, fullTokens, money, percentage } from '../shared/format';
+import type { DashboardRequest, Grain, SourcesSnapshot, TokenMeasure, UsageSeriesBucket } from '../shared/generated/contracts';
+import { compactTokens, fullTokens, percentage } from '../shared/format';
 import { useDashboard } from './useDashboard';
+import { Cost, coverageNames, reasonNames, when } from './usage-display';
 
-const coverageNames = { complete: '已配置来源覆盖完整', partial: '存在采集或解释缺口', unknown: '来源覆盖尚未确认' };
-const reasonNames: Record<string, string> = { unknown_model: '模型或提供方未知', missing_rule: '无匹配价格', ambiguous_rule: '价格规则存在歧义', insufficient_usage: '必要分项不足', overflow: '精确计算溢出' };
-function when(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(time); }
-function Cost({ pricing }: { pricing: PricingSummary }) {
-  if (pricing.redacted) return <strong className="cost-number">已隐藏</strong>;
-  if (!pricing.currencies.length) return <strong className="cost-number unavailable">未计价</strong>;
-  return <div className="currency-list">{pricing.currencies.map(currency => <strong className="cost-number" key={currency.currency} title={currency.estimated_cost === null ? '金额未知' : `${currency.currency} ${currency.estimated_cost}（精确估算）`}>{currency.estimated_cost === null ? '—' : `${pricing.currencies.length === 1 && currency.currency === 'USD' ? '$' : `${currency.currency} `}${money(currency.estimated_cost)}`}</strong>)}</div>;
-}
 function Measure({ label, measure }: { label: string; measure: TokenMeasure }) { return <div className="measure"><dt>{label}</dt><dd>{fullTokens(measure.value)}<small>{measure.value === null ? '未知' : measure.complete ? '分项已知' : `部分已知 · 覆盖 ${fullTokens(measure.covered_total_tokens)} Token`}</small></dd></div>; }
 
 function Trend({ buckets }: { buckets: UsageSeriesBucket[] }) {

@@ -125,6 +125,22 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     && document.querySelectorAll('nav[aria-label="主导航"] button').length===7
                     && document.querySelector('select[aria-label="日期范围"]')?.value==='today'
                     && !document.querySelector('.total-number');
+                const waitFor=async predicate=> {
+                    const deadline=Date.now()+2500;
+                    while(!predicate()) {
+                        if(Date.now()>=deadline) throw new Error('UI did not render');
+                        await new Promise(resolve=>setTimeout(resolve,25));
+                    }
+                };
+                for(const [name,label] of [['模型','模型统计汇总'],['项目','项目统计汇总']]) {
+                    [...document.querySelectorAll('nav button')].find(button=>button.textContent===name)?.click();
+                    await waitFor(()=>document.querySelector(`section[aria-label="${label}"]`) && document.querySelector('.group-empty h2')?.textContent==='当前筛选暂无可信消费');
+                    ok=ok && document.querySelector('h1')?.textContent===name
+                        && document.querySelector('.group-total[aria-label="0 Token"]')!==null
+                        && document.querySelector('.group-stat-strip .cost-number')?.textContent==='未计价';
+                }
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='总览')?.click();
+                await waitFor(()=>document.querySelector('main .empty h2')?.textContent==='添加 Codex 数据来源');
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
