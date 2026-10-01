@@ -96,6 +96,24 @@ pub struct DiagnosticWrite {
     pub observed_at_ms: i64,
 }
 #[derive(Debug, Clone)]
+pub enum CanonicalStep {
+    Append {
+        observation_id: String,
+    },
+    Copy {
+        observation_id: String,
+        origin_observation_id: String,
+    },
+}
+#[derive(Debug, Clone)]
+pub struct CanonicalProgressWrite {
+    pub ledger_id: String,
+    pub expected_cursor: i64,
+    pub expected_length: i64,
+    pub steps: Vec<CanonicalStep>,
+    pub requires_rebuild: bool,
+}
+#[derive(Debug, Clone)]
 pub struct WriteBatch {
     pub file_generation_id: String,
     pub expected_offset: i64,
@@ -112,6 +130,7 @@ pub struct WriteBatch {
     pub pending: Vec<PendingWrite>,
     pub contexts: Vec<ContextWrite>,
     pub diagnostics: Vec<DiagnosticWrite>,
+    pub canonical: Vec<CanonicalProgressWrite>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommitReceipt {
@@ -363,6 +382,7 @@ fn commit_batch(
         &allowed,
         &mut at,
     )?;
+    super::canonical_progress::write(&tx, &batch, &allowed)?;
     for diagnostic in &batch.diagnostics {
         tx.execute("INSERT INTO diagnostics(diagnostic_id,source_id,file_generation_id,byte_offset,session_key,code,severity,metadata_json,dedup_key,first_seen_at_ms,last_seen_at_ms) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?10) ON CONFLICT(dedup_key) DO UPDATE SET occurrences=occurrences+1,last_seen_at_ms=excluded.last_seen_at_ms",params![diagnostic.diagnostic_id,diagnostic.source_id,diagnostic.file_generation_id,diagnostic.byte_offset,diagnostic.session_key,diagnostic.code.to_string(),diagnostic.severity,serde_json::to_string(&diagnostic.metadata)?,diagnostic.dedup_key,diagnostic.observed_at_ms])?;
     }
@@ -378,7 +398,8 @@ fn commit_batch(
         || !batch.provenance.is_empty()
         || !batch.pending.is_empty()
         || !batch.contexts.is_empty()
-        || !batch.diagnostics.is_empty();
+        || !batch.diagnostics.is_empty()
+        || !batch.canonical.is_empty();
     let mut revision: i64 = tx.query_row(
         "SELECT data_revision FROM app_state WHERE singleton=1",
         [],

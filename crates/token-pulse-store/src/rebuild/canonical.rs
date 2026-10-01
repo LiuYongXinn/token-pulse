@@ -48,6 +48,7 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     drop(query);
+    let mut changed_roots = BTreeSet::new();
     for (alias, canonical) in aliases {
         if !m.ledgers.iter().any(|l| l.session_key == alias)
             || !m.ledgers.iter().any(|l| l.session_key == canonical)
@@ -97,9 +98,16 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
             "UPDATE sessions SET parent_key=?1 WHERE parent_key=?2",
             params![canonical, alias],
         )?;
-        // Until live ordinal alignment is connected, new records remain pending instead of charging
-        // the same mirrored continuation twice against a shared baseline.
-        tx.execute("UPDATE file_generations SET reader_context_json=json_set(reader_context_json,'$.session_key',?1,'$.requires_sequence_rebuild',json('true'),'$.independent_head_available',json('false')) WHERE file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1)",[&canonical])?;
+        changed_roots.insert(canonical);
+    }
+    for canonical in changed_roots {
+        // The collector must consult the aligned ordinal cursor before using the shared baseline.
+        // Keeping this conservative flag also protects callers that do not load that evidence.
+        let overflow:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_generations WHERE state='current' AND checkpoint_revision=9223372036854775807 AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1))",[&canonical],|r|r.get(0))?;
+        if overflow {
+            return Err(ErrorCode::NumericOverflow.into());
+        }
+        tx.execute("UPDATE file_generations SET checkpoint_revision=checkpoint_revision+1,reader_context_json=json_set(reader_context_json,'$.session_key',?1,'$.requires_sequence_rebuild',json('true'),'$.independent_head_available',json('false')) WHERE state='current' AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1)",[&canonical])?;
     }
     Ok(())
 }

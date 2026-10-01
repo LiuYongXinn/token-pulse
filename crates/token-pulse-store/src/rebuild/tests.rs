@@ -247,6 +247,32 @@ fn mirror_publication_failure_rolls_back_aliases_observation_keys_bindings_and_r
     done_tx.send(()).unwrap();
     handle.join().unwrap();
     db.snapshot(|tx,r|{assert_eq!(r.data,3);assert_eq!(tx.query_row("SELECT canonical_session_key FROM session_aliases WHERE alias_session_key='mirror'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT session_key FROM observations WHERE observation_id='mirror-observation'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT json_extract(normalized_json,'$.session_key') FROM observations WHERE observation_id='mirror-observation'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT COUNT(*) FROM file_session_bindings WHERE session_key='session'",[],|r|r.get::<_,i64>(0))?,2);assert_eq!(tx.query_row("SELECT COUNT(*) FROM file_session_bindings WHERE session_key='mirror'",[],|r|r.get::<_,i64>(0))?,1);assert_eq!(tx.query_row("SELECT COUNT(*) FROM active_usage_events",[],|r|r.get::<_,i64>(0))?,1);assert_eq!(tx.query_row("SELECT COUNT(*) FROM rebuild_audits",[],|r|r.get::<_,i64>(0))?,2);Ok(())}).unwrap();
+    let mut stale = fixture();
+    stale.file_generation_id = "mirror-generation".into();
+    stale.expected_offset = 100;
+    stale.expected_checkpoint_revision = 1;
+    stale.observations.clear();
+    stale.events.clear();
+    stale.streams.clear();
+    stale.ledgers = vec![crate::batch::LedgerExpectation {
+        session_key: "mirror".into(),
+        ledger_id: m
+            .ledgers
+            .iter()
+            .find(|l| l.session_key == "mirror")
+            .unwrap()
+            .candidate_ledger_id
+            .clone(),
+    }];
+    stale.reader_context = ReaderContext {
+        session_key: Some("mirror".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        db.commit(stale).unwrap_err().code,
+        ErrorCode::CheckpointConflict
+    );
+    db.snapshot(|tx,_|{assert_eq!(tx.query_row("SELECT checkpoint_revision FROM file_generations WHERE file_generation_id='mirror-generation'",[],|r|r.get::<_,i64>(0))?,2);assert_eq!(tx.query_row("SELECT json_extract(reader_context_json,'$.session_key') FROM file_generations WHERE file_generation_id='mirror-generation'",[],|r|r.get::<_,String>(0))?,"session");Ok(())}).unwrap();
 }
 #[test]
 fn candidate_is_invisible_and_publication_preserves_a_real_old_read_snapshot() {

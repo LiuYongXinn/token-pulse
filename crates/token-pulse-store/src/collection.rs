@@ -22,6 +22,20 @@ pub struct SessionAccounting {
     pub ledger_id: String,
     pub state: AccountingState,
     pub revisions: BTreeMap<(String, String), i64>,
+    pub canonical: Option<CanonicalFileState>,
+}
+pub struct CanonicalFileState {
+    pub cursor: i64,
+    pub length: i64,
+    pub aligned: bool,
+    pub head_proven: bool,
+    pub slots: Vec<CanonicalSlot>,
+}
+pub struct CanonicalSlot {
+    pub ordinal: i64,
+    pub observation_id: String,
+    pub signature: token_pulse_core::sequence::UsageSignature,
+    pub reference_usage: Option<UsageVector>,
 }
 impl Database {
     pub fn enabled_sources(&self) -> StoreResult<Vec<crate::SourceRecord>> {
@@ -97,9 +111,29 @@ impl Database {
         provider_id: &str,
         exclude_session: &str,
     ) -> StoreResult<bool> {
-        self.snapshot(|tx,_|Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE provider='codex' AND provider_session_id=?1 AND session_key<>?2)",params![provider_id,exclude_session],|r|r.get(0))?))
+        self.snapshot(|tx,_|Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions s LEFT JOIN session_aliases a ON a.alias_session_key=s.session_key WHERE s.provider='codex' AND s.provider_session_id=?1 AND COALESCE(a.canonical_session_key,s.session_key)<>?2)",params![provider_id,exclude_session],|r|r.get(0))?))
+    }
+    pub fn resolve_session(&self, session: &str) -> StoreResult<String> {
+        self.snapshot(|tx,_|{
+            let result:String=tx.query_row("SELECT COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=?1),?1)",[session],|r|r.get(0))?;
+            if tx.query_row("SELECT EXISTS(SELECT 1 FROM session_aliases WHERE alias_session_key=?1)",[&result],|r|r.get::<_,bool>(0))?{return Err(ErrorCode::DbCorrupt.into());}Ok(result)
+        })
     }
     pub fn session_accounting(&self, session: &str) -> StoreResult<SessionAccounting> {
+        self.accounting_snapshot(session, None)
+    }
+    pub fn session_file_accounting(
+        &self,
+        session: &str,
+        generation: &str,
+    ) -> StoreResult<SessionAccounting> {
+        self.accounting_snapshot(session, Some(generation))
+    }
+    fn accounting_snapshot(
+        &self,
+        session: &str,
+        generation: Option<&str>,
+    ) -> StoreResult<SessionAccounting> {
         self.snapshot(|tx,_| {
             let ledger_id:String=tx.query_row("SELECT active_ledger_id FROM sessions WHERE session_key=?1",[session],|r|r.get(0))?;
             let mut statement=tx.prepare("SELECT st.stream_key,st.episode_id,st.baseline_json,st.state_revision,o.normalized_json FROM stream_frontiers fr JOIN stream_states st ON st.ledger_id=fr.ledger_id AND st.stream_key=fr.stream_key AND st.episode_id=fr.episode_id LEFT JOIN observations o ON o.observation_id=st.last_observation_id WHERE st.ledger_id=?1 ORDER BY st.stream_key")?;
@@ -112,7 +146,26 @@ impl Database {
                 state.streams.insert(key.clone(),StreamBaseline{stream_key:key,episode_id:episode,cumulative,last_snapshot});
             }
             if state.streams.len()>token_pulse_core::accounting::MAX_STREAMS {return Err(ErrorCode::InvalidUsage.into());}
-            Ok(SessionAccounting{ledger_id,state,revisions})
+            let canonical=if let Some(generation)=generation {
+                let cursor:Option<(i64,String)>=tx.query_row("SELECT next_ordinal,state FROM file_usage_cursors WHERE ledger_id=?1 AND file_generation_id=?2",params![ledger_id,generation],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+                if let Some((cursor,status))=cursor {
+                    let length:i64=tx.query_row("SELECT COUNT(*) FROM canonical_usage_sequence WHERE ledger_id=?1",[&ledger_id],|r|r.get(0))?;
+                    if cursor>length{return Err(ErrorCode::DbCorrupt.into());}
+                    let mut slots=vec![];
+                    if status=="aligned" {
+                        let mut q=tx.prepare("SELECT c.ordinal,c.observation_id,o.normalized_json FROM canonical_usage_sequence c JOIN observations o ON o.observation_id=c.observation_id WHERE c.ledger_id=?1 AND c.ordinal>=?2 ORDER BY c.ordinal LIMIT 500")?;
+                        let mut rows=q.query(params![ledger_id,cursor])?;
+                        while let Some(row)=rows.next()? {
+                            let encoded:String=row.get(2)?;if encoded.len()>16*1024*1024{return Err(ErrorCode::DbCorrupt.into());}
+                            let NormalizedObservation::Usage(u)=serde_json::from_str(&encoded)? else{return Err(ErrorCode::DbCorrupt.into());};
+                            slots.push(CanonicalSlot{ordinal:row.get(0)?,observation_id:row.get(1)?,signature:token_pulse_core::sequence::UsageSignature::from(&u),reference_usage:u.last.or(u.cumulative)});
+                        }
+                    }
+                    let head_proven:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM observations WHERE file_generation_id=?1 AND session_key=?2 AND byte_offset=0 AND kind='session_meta')",params![generation,session],|r|r.get(0))?;
+                    Some(CanonicalFileState{cursor,length,aligned:status=="aligned",head_proven,slots})
+                }else{None}
+            }else{None};
+            Ok(SessionAccounting{ledger_id,state,revisions,canonical})
         })
     }
 }

@@ -133,6 +133,9 @@ fn collect_file_with_hook(
         .map_err(|e| e.code())?;
     }
     let mut context = saved.context;
+    if let Some(session) = &context.session_key {
+        context.session_key = Some(database.resolve_session(session)?);
+    }
     let mut write = WriteBatch {
         file_generation_id: saved.file_generation_id.clone(),
         expected_offset: saved.committed_offset,
@@ -149,11 +152,12 @@ fn collect_file_with_hook(
         pending: vec![],
         contexts: vec![],
         diagnostics: vec![],
+        canonical: vec![],
     };
     let mut sessions: BTreeMap<String, SessionAccounting> = BTreeMap::new();
     let mut streams: BTreeMap<(String, String, String), StreamWrite> = BTreeMap::new();
     for line in batch.lines {
-        let record = match line {
+        let mut record = match line {
             FramedLine::Oversized { position } => {
                 context.independent_head_available = false;
                 diagnostic(
@@ -204,6 +208,7 @@ fn collect_file_with_hook(
                 ledger_id: id("ledger", &session),
                 registered_at_ms: observed_at_ms,
             })?;
+            let session = database.resolve_session(&session)?;
             // Registration is serialized by the Writer. Query afterwards so two first imports
             // cannot both observe an empty namespace and charge the same unproven logical stream.
             let related = database.related_session_exists(provider_session_id, &session)?;
@@ -220,8 +225,27 @@ fn collect_file_with_hook(
         let session_key = context.session_key.clone();
         if let Some(session) = &session_key {
             if !sessions.contains_key(session) {
-                sessions.insert(session.clone(), database.session_accounting(session)?);
+                sessions.insert(
+                    session.clone(),
+                    database.session_file_accounting(session, &saved.file_generation_id)?,
+                );
             }
+        }
+        match &mut record {
+            NormalizedObservation::Usage(u) => {
+                u.session_key = context
+                    .session_key
+                    .clone()
+                    .ok_or(ErrorCode::CheckpointConflict)?
+            }
+            NormalizedObservation::TurnMetadata { session_key, .. }
+            | NormalizedObservation::Context { session_key, .. } => {
+                *session_key = context
+                    .session_key
+                    .clone()
+                    .ok_or(ErrorCode::CheckpointConflict)?
+            }
+            NormalizedObservation::SessionMetadata { .. } => {}
         }
         let (position, fingerprint) = match &record {
             NormalizedObservation::SessionMetadata {
@@ -249,7 +273,7 @@ fn collect_file_with_hook(
             let session = sessions
                 .get_mut(&usage.session_key)
                 .ok_or(ErrorCode::CheckpointConflict)?;
-            let evidence = AccountingEvidence {
+            let mut evidence = AccountingEvidence {
                 independent_new_stream: context.independent_head_available,
                 lineage: if context.requires_sequence_rebuild {
                     LineageEvidence::Pending
@@ -258,6 +282,74 @@ fn collect_file_with_hook(
                 },
                 ..Default::default()
             };
+            let mut related = vec![];
+            if let Some(canonical) = &mut session.canonical {
+                if canonical.aligned {
+                    let index = write
+                        .canonical
+                        .iter()
+                        .position(|p| p.ledger_id == session.ledger_id)
+                        .unwrap_or_else(|| {
+                            write.canonical.push(CanonicalProgressWrite {
+                                ledger_id: session.ledger_id.clone(),
+                                expected_cursor: canonical.cursor,
+                                expected_length: canonical.length,
+                                steps: vec![],
+                                requires_rebuild: false,
+                            });
+                            write.canonical.len() - 1
+                        });
+                    let update = &mut write.canonical[index];
+                    let ordinal = canonical
+                        .cursor
+                        .checked_add(update.steps.len() as i64)
+                        .ok_or(ErrorCode::NumericOverflow)?;
+                    if ordinal < canonical.length {
+                        let slot = canonical
+                            .slots
+                            .get((ordinal - canonical.cursor) as usize)
+                            .ok_or(ErrorCode::CheckpointConflict)?;
+                        if slot.ordinal == ordinal && slot.signature == UsageSignature::from(usage)
+                        {
+                            evidence.verified_duplicate =
+                                slot.reference_usage.map(|vector| CanonicalReference {
+                                    event_id: id("reference", &slot.observation_id),
+                                    usage: vector,
+                                    observation: slot.signature.clone(),
+                                });
+                            related.push(slot.observation_id.clone());
+                            update.steps.push(CanonicalStep::Copy {
+                                observation_id: observation_id.clone(),
+                                origin_observation_id: slot.observation_id.clone(),
+                            });
+                            if evidence.verified_duplicate.is_none() {
+                                evidence.lineage = LineageEvidence::Pending;
+                            }
+                        } else {
+                            canonical.aligned = false;
+                            update.requires_rebuild = true;
+                            evidence.lineage = LineageEvidence::Pending;
+                            context.requires_sequence_rebuild = true;
+                        }
+                    } else {
+                        evidence.lineage = if context.metadata.parent_provider_id.is_none()
+                            || !session.state.streams.is_empty()
+                        {
+                            LineageEvidence::Independent
+                        } else {
+                            LineageEvidence::Pending
+                        };
+                        evidence.independent_new_stream = canonical.head_proven
+                            && context.metadata.parent_provider_id.is_none()
+                            && session.state.streams.is_empty();
+                        update.steps.push(CanonicalStep::Append {
+                            observation_id: observation_id.clone(),
+                        });
+                    }
+                } else {
+                    evidence.lineage = LineageEvidence::Pending;
+                }
+            }
             let result = account(&session.state, usage, &evidence);
             context.independent_head_available = false;
             let method = method_name(result.method);
@@ -283,7 +375,10 @@ fn collect_file_with_hook(
                     calculation_method: method.clone(),
                 });
             }
-            if result.quality != ObservationQuality::Confirmed || result.prior_anchor.is_some() {
+            if result.quality != ObservationQuality::Confirmed
+                || result.prior_anchor.is_some()
+                || result.event_usage.is_none()
+            {
                 write.pending.push(PendingWrite {
                     pending_id: id(
                         "pending",
@@ -291,17 +386,26 @@ fn collect_file_with_hook(
                     ),
                     ledger_id: session.ledger_id.clone(),
                     observation_id: observation_id.clone(),
-                    quality: if result.quality == ObservationQuality::Confirmed {
+                    quality: if result.prior_anchor.is_some() {
                         ObservationQuality::Unattributed
+                    } else if result.quality == ObservationQuality::Confirmed {
+                        ObservationQuality::Duplicate
                     } else {
                         result.quality
                     },
-                    reason_code: method.clone(),
+                    reason_code: if result.quality == ObservationQuality::Confirmed
+                        && result.event_usage.is_none()
+                        && result.prior_anchor.is_none()
+                    {
+                        "zero_usage_excluded".into()
+                    } else {
+                        method.clone()
+                    },
                     vector: result.prior_anchor.or(usage.last).or(usage.cumulative),
                     evidence: PendingEvidence {
                         candidate_stream_keys: result.candidate_stream_keys.clone(),
                         parent_session_key: None,
-                        related_observation_ids: vec![],
+                        related_observation_ids: related,
                     },
                 });
             }

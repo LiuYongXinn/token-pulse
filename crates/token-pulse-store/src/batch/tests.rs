@@ -105,7 +105,151 @@ pub(crate) fn fixture() -> WriteBatch {
         pending: vec![],
         contexts: vec![],
         diagnostics: vec![],
+        canonical: vec![],
     }
+}
+#[test]
+fn live_canonical_progress_and_consumption_rollback_with_the_physical_checkpoint() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.write(|conn| {
+        conn.execute(
+            "INSERT INTO canonical_usage_sequence VALUES('ledger',0,'observation','event')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO file_usage_cursors VALUES('ledger','generation',1,'aligned')",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    let mut b = fixture();
+    b.expected_offset = 100;
+    b.expected_checkpoint_revision = 1;
+    b.next_offset = 200;
+    b.observed_size = 200;
+    b.observations[0].observation_id = "next-observation".into();
+    let last = UsageVector {
+        input_total: Some(20),
+        cached_input: Some(5),
+        output_total: Some(5),
+        reasoning_output: Some(1),
+        reported_total: Some(25),
+    };
+    let cumulative = UsageVector {
+        input_total: Some(120),
+        cached_input: Some(65),
+        output_total: Some(15),
+        reasoning_output: Some(3),
+        reported_total: Some(135),
+    };
+    if let NormalizedObservation::Usage(u) = &mut b.observations[0].record {
+        u.physical_position.byte_offset = 100;
+        u.physical_position.byte_end = 200;
+        u.last = Some(last);
+        u.cumulative = Some(cumulative);
+    }
+    b.events[0].event_id = "next-event".into();
+    b.events[0].origin_observation_id = "next-observation".into();
+    b.events[0].usage = last;
+    b.streams[0].observation_id = "next-observation".into();
+    b.streams[0].baseline = cumulative;
+    b.streams[0].expected_state_revision = Some(1);
+    b.canonical = vec![CanonicalProgressWrite {
+        ledger_id: "ledger".into(),
+        expected_cursor: 1,
+        expected_length: 1,
+        steps: vec![CanonicalStep::Append {
+            observation_id: "next-observation".into(),
+        }],
+        requires_rebuild: false,
+    }];
+    let failed = b.clone();
+    assert_eq!(
+        db.write(move |conn| commit_batch(conn, failed, |stage| {
+            if stage == CommitStage::BeforeCommit {
+                Err(ErrorCode::DiskFull.into())
+            } else {
+                Ok(())
+            }
+        }))
+        .unwrap_err()
+        .code,
+        ErrorCode::DiskFull
+    );
+    let assert_old = || {
+        db.snapshot(|tx, r| {
+            assert_eq!(r.data, 1);
+            assert_eq!(
+                tx.query_row("SELECT COUNT(*) FROM canonical_usage_sequence", [], |r| r
+                    .get::<_, i64>(
+                    0
+                ))?,
+                1
+            );
+            assert_eq!(
+                tx.query_row("SELECT next_ordinal FROM file_usage_cursors", [], |r| r
+                    .get::<_, i64>(0))?,
+                1
+            );
+            assert_eq!(
+                tx.query_row("SELECT committed_offset FROM file_generations", [], |r| r
+                    .get::<_, i64>(
+                    0
+                ))?,
+                100
+            );
+            assert_eq!(
+                tx.query_row("SELECT COUNT(*) FROM observations", [], |r| r
+                    .get::<_, i64>(0))?,
+                1
+            );
+            Ok(())
+        })
+        .unwrap()
+    };
+    assert_old();
+    let mut stale = b.clone();
+    stale.canonical[0].expected_length = 2;
+    assert_eq!(
+        db.commit(stale).unwrap_err().code,
+        ErrorCode::CheckpointConflict
+    );
+    assert_old();
+    db.commit(b).unwrap();
+    db.snapshot(|tx, r| {
+        assert_eq!(r.data, 2);
+        assert_eq!(
+            tx.query_row("SELECT COUNT(*) FROM canonical_usage_sequence", [], |r| r
+                .get::<_, i64>(
+                0
+            ))?,
+            2
+        );
+        assert_eq!(
+            tx.query_row("SELECT next_ordinal FROM file_usage_cursors", [], |r| r
+                .get::<_, i64>(0))?,
+            2
+        );
+        assert_eq!(
+            tx.query_row("SELECT committed_offset FROM file_generations", [], |r| r
+                .get::<_, i64>(
+                0
+            ))?,
+            200
+        );
+        assert_eq!(
+            tx.query_row(
+                "SELECT sum_token_decimal(total_tokens) FROM active_usage_events",
+                [],
+                |r| r.get::<_, String>(0)
+            )?,
+            "135"
+        );
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[test]

@@ -4,6 +4,7 @@ use std::{io, path::Path};
 
 pub mod aggregate;
 pub mod batch;
+mod canonical_progress;
 pub mod collection;
 mod database;
 pub mod jobs;

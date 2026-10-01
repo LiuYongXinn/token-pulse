@@ -126,7 +126,7 @@ fn mirror_publication_keeps_one_identity_primary_metadata_and_all_source_evidenc
         .unwrap();
     collect_file(&db, "local", &primary, 8000).unwrap();
     collect_file(&db, "custom", &mirror, 8001).unwrap();
-    assert_eq!(total(&db), "148"); // Live ordinal alignment is the next module; unproved append stays pending.
+    assert_eq!(total(&db), "155"); // Both sources align the same continuation and consume it only once.
     job(&db, "append-mirror");
     execute_rebuild(&db, "append-mirror", || false, || 9000).unwrap();
     assert_eq!(total(&db), "155");

@@ -65,7 +65,7 @@ pub fn plan(sequences: &[PhysicalSequence]) -> Result<CanonicalPlan, ErrorCode> 
         return Err(ErrorCode::InvalidQuery);
     }
     let mut keys = BTreeSet::new();
-    let mut buckets: BTreeMap<(String, String), Vec<&PhysicalSequence>> = BTreeMap::new();
+    let mut buckets: BTreeMap<(String, bool, String), Vec<&PhysicalSequence>> = BTreeMap::new();
     for sequence in sequences {
         if !valid_id(&sequence.sequence_key)
             || !valid_id(&sequence.owner_session_key)
@@ -74,13 +74,18 @@ pub fn plan(sequences: &[PhysicalSequence]) -> Result<CanonicalPlan, ErrorCode> 
             return Err(ErrorCode::InvalidQuery);
         }
         // Unknown provider IDs never collect into one anonymous bucket.
-        let provider_id = if sequence.identity.provider_session_id.is_empty() {
-            format!("unknown:{}", sequence.sequence_key)
+        let anonymous = sequence.identity.provider_session_id.is_empty();
+        let provider_id = if anonymous {
+            sequence.sequence_key.clone()
         } else {
             sequence.identity.provider_session_id.clone()
         };
         buckets
-            .entry((sequence.identity.provider_namespace.clone(), provider_id))
+            .entry((
+                sequence.identity.provider_namespace.clone(),
+                anonymous,
+                provider_id,
+            ))
             .or_default()
             .push(sequence);
     }

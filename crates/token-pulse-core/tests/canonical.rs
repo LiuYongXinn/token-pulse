@@ -108,8 +108,10 @@ fn anonymous_sessions_and_namespaces_do_not_form_a_shared_bucket_and_duplicate_k
     b.identity.provider_session_id.clear();
     let mut c = physical("c", "c", vec![record(1, 5, 5)]);
     c.identity.provider_namespace = "another-provider".into();
-    let result = plan(&[a, b, c]).unwrap();
-    assert_eq!(result.groups.len(), 3);
+    let mut d = physical("d", "d", vec![record(1, 5, 5)]);
+    d.identity.provider_session_id = "a".into();
+    let result = plan(&[a, b, c, d]).unwrap();
+    assert_eq!(result.groups.len(), 4);
     assert!(
         result
             .groups
