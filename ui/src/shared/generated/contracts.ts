@@ -68,4 +68,14 @@ export type Job = { job_id: string, kind: JobKind, state: JobState, phase: strin
 
 export type WindowAction = "open_stats" | "hide_main" | "quit";
 
+export type SourceOrigin = "windows_default" | "environment" | "custom" | "wsl";
+
+export type SourceReadability = "awaiting_directory" | "readable" | "partially_readable" | "unreadable" | "disabled";
+
+export type CapabilityState = "not_probed" | "available" | "unavailable";
+
+export type SourceCapabilities = { physical_identity: CapabilityState, byte_seek: CapabilityState, watcher: CapabilityState, polling_required: boolean, };
+
+export type SourceSummary = { source_id: string, root_path: string, origin: SourceOrigin, enabled: boolean, readability: SourceReadability, capabilities: SourceCapabilities, last_scan_at_ms: EpochMs | null, last_success_at_ms: EpochMs | null, error: ErrorCode | null, };
+
 export type Response<T> = { api_version: 1, request_id: string, data: T, };

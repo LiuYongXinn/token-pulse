@@ -309,6 +309,16 @@
       "title": "Response",
       "type": "object"
     },
+    "CapabilityState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "not_probed",
+        "available",
+        "unavailable"
+      ],
+      "title": "CapabilityState",
+      "type": "string"
+    },
     "ContextSnapshot": {
       "$defs": {
         "DecimalInt": {
@@ -2232,6 +2242,42 @@
       "title": "SnapshotMeta",
       "type": "object"
     },
+    "SourceCapabilities": {
+      "$defs": {
+        "CapabilityState": {
+          "enum": [
+            "not_probed",
+            "available",
+            "unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "byte_seek": {
+          "$ref": "#/$defs/CapabilityState"
+        },
+        "physical_identity": {
+          "$ref": "#/$defs/CapabilityState"
+        },
+        "polling_required": {
+          "type": "boolean"
+        },
+        "watcher": {
+          "$ref": "#/$defs/CapabilityState"
+        }
+      },
+      "required": [
+        "physical_identity",
+        "byte_seek",
+        "watcher",
+        "polling_required"
+      ],
+      "title": "SourceCapabilities",
+      "type": "object"
+    },
     "SourceIssue": {
       "$defs": {
         "EpochMs": {
@@ -2266,6 +2312,187 @@
         "last_success_ms"
       ],
       "title": "SourceIssue",
+      "type": "object"
+    },
+    "SourceOrigin": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "windows_default",
+        "environment",
+        "custom",
+        "wsl"
+      ],
+      "title": "SourceOrigin",
+      "type": "string"
+    },
+    "SourceReadability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "awaiting_directory",
+        "readable",
+        "partially_readable",
+        "unreadable",
+        "disabled"
+      ],
+      "title": "SourceReadability",
+      "type": "string"
+    },
+    "SourceSummary": {
+      "$defs": {
+        "CapabilityState": {
+          "enum": [
+            "not_probed",
+            "available",
+            "unavailable"
+          ],
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "SourceCapabilities": {
+          "additionalProperties": false,
+          "properties": {
+            "byte_seek": {
+              "$ref": "#/$defs/CapabilityState"
+            },
+            "physical_identity": {
+              "$ref": "#/$defs/CapabilityState"
+            },
+            "polling_required": {
+              "type": "boolean"
+            },
+            "watcher": {
+              "$ref": "#/$defs/CapabilityState"
+            }
+          },
+          "required": [
+            "physical_identity",
+            "byte_seek",
+            "watcher",
+            "polling_required"
+          ],
+          "type": "object"
+        },
+        "SourceOrigin": {
+          "enum": [
+            "windows_default",
+            "environment",
+            "custom",
+            "wsl"
+          ],
+          "type": "string"
+        },
+        "SourceReadability": {
+          "enum": [
+            "awaiting_directory",
+            "readable",
+            "partially_readable",
+            "unreadable",
+            "disabled"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/SourceCapabilities"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_scan_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_success_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "$ref": "#/$defs/SourceOrigin"
+        },
+        "readability": {
+          "$ref": "#/$defs/SourceReadability"
+        },
+        "root_path": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "root_path",
+        "origin",
+        "enabled",
+        "readability",
+        "capabilities",
+        "last_scan_at_ms",
+        "last_success_at_ms",
+        "error"
+      ],
+      "title": "SourceSummary",
       "type": "object"
     },
     "TokenMeasure": {

@@ -1,5 +1,6 @@
 use schemars::{JsonSchema, generate::SchemaSettings};
 use std::{collections::BTreeMap, fs, path::PathBuf};
+use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
 
@@ -59,7 +60,12 @@ fn main() {
         JobKind,
         JobState,
         Job,
-        WindowAction
+        WindowAction,
+        SourceOrigin,
+        SourceReadability,
+        CapabilityState,
+        SourceCapabilities,
+        SourceSummary
     );
     // Generic response cannot be represented by a single JSON Schema. Instantiated responses can.
     schemas.insert(

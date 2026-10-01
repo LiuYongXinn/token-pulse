@@ -9,7 +9,9 @@ pub mod error;
 pub mod numeric;
 pub mod protocol;
 pub mod reader;
+pub mod scheduling;
 pub mod sequence;
+pub mod sources;
 
 #[derive(
     Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema, ts_rs::TS,
