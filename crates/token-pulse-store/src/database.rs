@@ -35,6 +35,7 @@ struct Inner {
     thread: Option<JoinHandle<()>>,
     readers: ReaderPool,
     path: PathBuf,
+    leases: crate::leases::LeaseService,
 }
 impl Drop for Inner {
     fn drop(&mut self) {
@@ -92,6 +93,23 @@ pub struct Database {
 impl Database {
     /// Only the trusted runtime supplies this application-owned local directory.
     pub fn open(app_data_directory: &Path) -> StoreResult<Self> {
+        Self::open_with_lease_service(app_data_directory, crate::leases::LeaseService::new)
+    }
+    #[cfg(test)]
+    pub(crate) fn open_testing_leases(
+        path: &Path,
+        total: Duration,
+        idle: Duration,
+        wal: u64,
+    ) -> StoreResult<Self> {
+        Self::open_with_lease_service(path, |path| {
+            crate::leases::LeaseService::for_testing(path, total, idle, wal)
+        })
+    }
+    fn open_with_lease_service(
+        app_data_directory: &Path,
+        lease_service: impl FnOnce(&Path) -> StoreResult<crate::leases::LeaseService>,
+    ) -> StoreResult<Self> {
         if !app_data_directory.is_absolute()
             || app_data_directory.to_string_lossy().starts_with("\\\\")
         {
@@ -156,12 +174,16 @@ impl Database {
                     connections: Mutex::new(readers),
                     available: Condvar::new(),
                 },
+                leases: lease_service(&path)?,
                 path,
             }),
         })
     }
     pub fn path(&self) -> &Path {
         &self.inner.path
+    }
+    pub fn leases(&self) -> &crate::leases::LeaseService {
+        &self.inner.leases
     }
     pub(crate) fn write<T: Send + 'static>(
         &self,
@@ -207,7 +229,7 @@ impl Database {
         })
     }
 }
-fn configure(conn: &Connection) -> StoreResult<()> {
+pub(crate) fn configure(conn: &Connection) -> StoreResult<()> {
     conn.busy_timeout(Duration::from_secs(5))?;
     conn.pragma_update(None, "foreign_keys", true)?;
     aggregate::register(conn)?;

@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-rusqlite = { version = "0.40.2", features = ["bundled", "functions", "backup"] }
+rusqlite = { version = "0.40.2", features = ["bundled", "functions", "backup", "hooks"] }
 serde.workspace = true
 serde_json.workspace = true
 token-pulse-core.workspace = true
