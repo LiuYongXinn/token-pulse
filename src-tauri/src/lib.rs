@@ -159,7 +159,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -198,6 +198,7 @@ pub fn run() {
 mod job_commands;
 #[cfg(windows)]
 mod power;
+mod query_commands;
 #[cfg(debug_assertions)]
 mod smoke;
 mod source_commands;

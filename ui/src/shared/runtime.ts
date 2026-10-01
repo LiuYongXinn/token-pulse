@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 
-import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult } from './generated/contracts';
+import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
 async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -17,6 +17,7 @@ export function manageSource(action: ManageSourceAction, expectedSettingsRevisio
 export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit: 50 }); }
 export function startJob(jobRequest: JobRequest): Promise<Job> { return request('start_job', { request: jobRequest }); }
 export function cancelJob(jobId: string): Promise<CancelJobResult> { return request('cancel_job', { jobId }); }
+export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }
 export function runtimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error !== null && 'code' in error) {

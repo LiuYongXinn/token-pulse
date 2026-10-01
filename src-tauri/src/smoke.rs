@@ -44,6 +44,20 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("main window missing")?;
+    app.state::<super::RuntimeState>()
+        .database
+        .as_ref()
+        .map_err(|e| e.to_string())?
+        .ensure_session(token_pulse_store::SessionRegistration {
+            session_key: "native-probe-context".into(),
+            provider_session_id: None,
+            parent_key: None,
+            parent_provider_id: None,
+            created_at_ms: None,
+            ledger_id: "native-probe-ledger".into(),
+            registered_at_ms: 1,
+        })
+        .map_err(|e| e.to_string())?;
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     let listener = app.listen("native-smoke-ipc", move |event| {
         let _ = sender.try_send(event.payload().to_owned());
@@ -64,6 +78,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     && Array.isArray(sources.data.sources) && typeof sources.data.settings_revision === 'string';
                 const jobs=await invoke('list_jobs',{requestId:'native-smoke-jobs',limit:20});
                 ok=ok && jobs.api_version===1 && jobs.request_id==='native-smoke-jobs' && Array.isArray(jobs.data) && jobs.data.length===0;
+                const context=await invoke('get_context_snapshot',{requestId:'native-smoke-context',sessionKey:'native-probe-context'});
+                ok=ok && context.api_version===1 && context.request_id==='native-smoke-context'
+                    && context.data.context_tokens===null && context.data.model_context_window===null
+                    && context.data.percentage===null && context.data.observed_at_ms===null && context.data.quality==='unknown';
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();

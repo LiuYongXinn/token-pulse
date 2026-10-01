@@ -3,5 +3,5 @@
   "identifier": "main",
   "description": "Local main window with explicitly enumerated commands; no shell or filesystem API.",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-get-app-status", "allow-perform-window-action", "allow-get-sources", "allow-choose-source-directory", "allow-manage-source", "allow-start-job", "allow-get-job", "allow-list-jobs", "allow-cancel-job"]
+  "permissions": ["core:default", "allow-get-app-status", "allow-perform-window-action", "allow-get-sources", "allow-choose-source-directory", "allow-manage-source", "allow-start-job", "allow-get-job", "allow-list-jobs", "allow-cancel-job", "allow-get-context-snapshot"]
 }

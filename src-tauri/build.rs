@@ -10,6 +10,7 @@ fn main() {
             "get_job",
             "list_jobs",
             "cancel_job",
+            "get_context_snapshot",
         ]),
     ))
     .expect("failed to build desktop resources");
