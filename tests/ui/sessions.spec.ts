@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
     let turnsExpired = false;
     const measure = { value: null, covered_total_tokens: '0', complete: false };
     const tokens = (total: string, count = '1') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: count, usage_event_count: '2', reliable_turn_count: '1', reliable_turns_complete: false });
-    const price = (total: string) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: total, reasons: total === '0' ? [] : [{ code: 'insufficient_usage', total_tokens: total, event_count: '2' }], calculating: false });
+    const price = (total: string, basis: unknown = { mode: 'event_time' }) => ({ redacted: false, basis, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: total, reasons: total === '0' ? [] : [{ code: 'insufficient_usage', total_tokens: total, event_count: '2' }], calculating: false });
     const coverage = { state: 'partial', pending_observation_count: '1', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
       calls.push({ command, args });
@@ -34,12 +34,12 @@ test.beforeEach(async ({ page }) => {
         const offset = stored?.offset ?? 0, snapshot = stored?.snapshot ?? `synthetic-turn-snapshot-${++id}`;
         const turns = Array.from({ length: 23 }, (_, index) => {
           const total = index === 0 ? '18446744073709551614' : String(100 - index);
-          return { turn_id: `synthetic-turn-${index}`, first_at_ms: query.filter.range.start_ms + (23 - index) * 1000, last_at_ms: query.filter.range.start_ms + (23 - index) * 1000 + 500, summary: { ...tokens(total), usage_event_count: '2', reliable_turns_complete: true }, pricing: price(total) };
+          return { turn_id: `synthetic-turn-${index}`, first_at_ms: query.filter.range.start_ms + (23 - index) * 1000, last_at_ms: query.filter.range.start_ms + (23 - index) * 1000 + 500, summary: { ...tokens(total), usage_event_count: '2', reliable_turns_complete: true }, pricing: price(total, query.price_basis) };
         });
         const total = (turns.reduce((sum, t) => sum + BigInt(t.summary.total_tokens), 0n) + 7n).toString();
         const next = offset + query.page_size < turns.length ? `${++id}`.padStart(151, 't') : null;
         if (next !== null) turnCursors.set(next, { query: JSON.stringify(query), offset: offset + query.page_size, snapshot });
-        return response({ meta: { snapshot_id: snapshot, data_revision: '10', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 3000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, session_key: query.session_key, summary: { ...tokens(total), usage_event_count: '49', reliable_turn_count: '23' }, pricing: price(total), coverage, unidentified_usage_event_count: '3', turns: turns.slice(offset, offset + query.page_size), next_cursor: next });
+        return response({ meta: { snapshot_id: snapshot, data_revision: '10', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 3000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, session_key: query.session_key, summary: { ...tokens(total), usage_event_count: '49', reliable_turn_count: '23' }, pricing: price(total, query.price_basis), coverage, unidentified_usage_event_count: '3', turns: turns.slice(offset, offset + query.page_size), next_cursor: next });
       }
       if (command === 'get_session_bundle') {
         const request = args.request as { session_key: string; filter: Query['filter']; price_basis: unknown };
@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
         const index = Number(request.session_key.split('-').at(-1));
         const identity = { session_key: request.session_key, display_name: `Synthetic 会话 ${index}`, parent_key: index === 0 ? 'synthetic-session-1' : null, parent_display_name: index === 0 ? 'Synthetic 会话 1' : null, parent_provider_id: index === 0 ? 'parent-provider' : 'unresolved-parent' };
         const total = detailRevision === 0 ? '321' : '654';
-        const data = { meta: { snapshot_id: `synthetic-detail-${detailRevision}`, data_revision: String(8 + detailRevision), price_revision: String(3 + detailRevision), generated_at_ms: request.filter.range.start_ms + 2000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: request.filter.range.timezone }, identity, summary: tokens(total), pricing: price(total), coverage, latest_selected_activity: { occurred_at_ms: request.filter.range.start_ms + 1000, model: `Synthetic Detail Model ${detailRevision}`, project_id: 'detail-project', project_display_name: 'Synthetic Detail Project' }, latest_context: { context_tokens: index === 0 ? '9007199254740993' : null, model_context_window: null, percentage: null, observed_at_ms: index === 0 ? request.filter.range.end_ms + 12000 : null, quality: index === 0 ? 'confirmed' : 'unknown' }, child_count: index === 0 ? '3' : '0', children: index === 0 ? [{ session_key: 'synthetic-session-2', display_name: 'Synthetic 会话 2', parent_key: request.session_key, parent_display_name: identity.display_name, parent_provider_id: null }] : [], children_truncated: index === 0, classifications: [{ kind: 'inherited', reason_code: 'inherited_prefix', observation_count: '1' }, { kind: 'pending', reason_code: 'lineage_pending', observation_count: '2' }] };
+        const data = { meta: { snapshot_id: `synthetic-detail-${detailRevision}`, data_revision: String(8 + detailRevision), price_revision: String(3 + detailRevision), generated_at_ms: request.filter.range.start_ms + 2000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: request.filter.range.timezone }, identity, summary: tokens(total), pricing: price(total, request.price_basis), coverage, latest_selected_activity: { occurred_at_ms: request.filter.range.start_ms + 1000, model: `Synthetic Detail Model ${detailRevision}`, project_id: 'detail-project', project_display_name: 'Synthetic Detail Project' }, latest_context: { context_tokens: index === 0 ? '9007199254740993' : null, model_context_window: null, percentage: null, observed_at_ms: index === 0 ? request.filter.range.end_ms + 12000 : null, quality: index === 0 ? 'confirmed' : 'unknown' }, child_count: index === 0 ? '3' : '0', children: index === 0 ? [{ session_key: 'synthetic-session-2', display_name: 'Synthetic 会话 2', parent_key: request.session_key, parent_display_name: identity.display_name, parent_provider_id: null }] : [], children_truncated: index === 0, classifications: [{ kind: 'inherited', reason_code: 'inherited_prefix', observation_count: '1' }, { kind: 'pending', reason_code: 'lineage_pending', observation_count: '2' }] };
         if (deferDetail) await new Promise<void>(resolve => { detailReleases.push(resolve); });
         return response(data);
       }
@@ -62,13 +62,13 @@ test.beforeEach(async ({ page }) => {
         let sessions = empty ? [] : Array.from({ length: 55 }, (_, index) => {
           const key = `synthetic-session-${index}`;
           const total = index === 0 ? '9007199254740993' : String(100 - index);
-          return { session_key: key, display_name: `Synthetic 会话 ${index}`, latest_at_ms: query.filter.range.start_ms + (55 - index) * 1000, latest_model: index === 1 ? null : 'Synthetic Model', latest_project_id: index === 1 ? null : 'project', latest_project_name: index === 1 ? null : 'Synthetic Project', parent_key: index === 0 ? 'synthetic-session-1' : null, parent_display_name: index === 0 ? 'Synthetic 会话 1' : null, parent_provider_id: index === 0 ? 'parent-provider' : index === 1 ? 'unresolved-parent' : null, child_count: index === 1 ? '1' : '0', summary: tokens(total), pricing: price(total), coverage, latest_context: { context_tokens: index === 0 ? '9007199254740993' : null, model_context_window: null, percentage: null, observed_at_ms: index === 0 ? query.filter.range.end_ms + 12000 : null, quality: index === 0 ? 'confirmed' : 'unknown' } };
+          return { session_key: key, display_name: `Synthetic 会话 ${index}`, latest_at_ms: query.filter.range.start_ms + (55 - index) * 1000, latest_model: index === 1 ? null : 'Synthetic Model', latest_project_id: index === 1 ? null : 'project', latest_project_name: index === 1 ? null : 'Synthetic Project', parent_key: index === 0 ? 'synthetic-session-1' : null, parent_display_name: index === 0 ? 'Synthetic 会话 1' : null, parent_provider_id: index === 0 ? 'parent-provider' : index === 1 ? 'unresolved-parent' : null, child_count: index === 1 ? '1' : '0', summary: tokens(total), pricing: price(total, query.price_basis), coverage, latest_context: { context_tokens: index === 0 ? '9007199254740993' : null, model_context_window: null, percentage: null, observed_at_ms: index === 0 ? query.filter.range.end_ms + 12000 : null, quality: index === 0 ? 'confirmed' : 'unknown' } };
         });
         if (query.filter.sessions.ids) sessions = sessions.filter(s => query.filter.sessions.ids!.includes(s.session_key));
         const total = sessions.reduce((sum, s) => sum + BigInt(s.summary.total_tokens), 0n).toString();
         const next = offset + query.page_size < sessions.length ? `${++id}`.padStart(151, 'a') : null;
         if (next !== null) cursors.set(next, { query: JSON.stringify(query), offset: offset + query.page_size, snapshot });
-        const data = { meta: { snapshot_id: snapshot, data_revision: '7', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, summary: tokens(total, String(sessions.length)), pricing: price(total), coverage, sessions: sessions.slice(offset, offset + query.page_size), next_cursor: next };
+        const data = { meta: { snapshot_id: snapshot, data_revision: '7', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, summary: tokens(total, String(sessions.length)), pricing: price(total, query.price_basis), coverage, sessions: sessions.slice(offset, offset + query.page_size), next_cursor: next };
         if (defer) { defer = false; await new Promise<void>(resolve => { release = resolve; }); }
         return response(data);
       }
@@ -242,4 +242,21 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   // Terminal pages release themselves on the server. Collapse closes exactly
   // the remaining nonterminal capability, rather than inventing extra closes.
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls())).filter(c => c.command === 'close_query_snapshot' && c.args.request?.kind === 'turns').length).toBe(beforeCollapse + 1);
+});
+
+test('specified estimate time reaches session pages, detail and reliable turns with exact cursor scope', async ({ page }) => {
+  await expect(page.locator('.session-table>tbody>tr')).toHaveCount(50);
+  await page.getByLabel('计价依据').selectOption('specified_time'); await page.getByTitle('编辑明确估价时点（UTC）').click();
+  await page.getByLabel('估价时点（UTC）').fill('2026-11-01T05:30:00.123'); await page.getByRole('button', { name: '应用估价时点' }).click();
+  await expect(page.locator('.session-table>tbody>tr')).toHaveCount(50);
+  await page.locator('.session-table>tbody>tr').first().getByRole('button').click();
+  await expect(page.getByRole('dialog', { name: 'Synthetic 会话 0' })).toBeVisible();
+  await page.getByRole('button', { name: '查看可靠回合' }).click(); await expect(page.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  type Bridge = { __syntheticSessionCalls: () => { command: string; args: { request: { query?: { price_basis: unknown }; price_basis?: unknown } } }[] };
+  const calls = await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls());
+  const expected = { mode: 'specified_time', specified_at_ms: Date.parse('2026-11-01T05:30:00.123Z') };
+  for (const command of ['query_sessions', 'get_session_bundle', 'query_turns']) {
+    const r = calls.filter(value => value.command === command).at(-1)!.args.request;
+    expect(r.query?.price_basis ?? r.price_basis).toEqual(expected);
+  }
 });

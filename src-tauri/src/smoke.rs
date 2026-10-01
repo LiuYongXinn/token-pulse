@@ -290,6 +290,21 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 await waitFor(()=>document.querySelector('section[aria-label="模型统计汇总"]'));
                 ok=ok && document.querySelector('.date-range-label')?.textContent==='2024-02-28 — 2024-02-29'
                     && document.querySelector('.filters')?.textContent.includes('Asia/Tokyo');
+                const priceSelect=document.querySelector('select[aria-label="计价依据"]');
+                priceSelect.value='specified_time'; priceSelect.dispatchEvent(new Event('change',{bubbles:true}));
+                await waitFor(()=>document.querySelector('.price-instant-label'));
+                document.querySelector('.price-instant-label').click();
+                await waitFor(()=>document.querySelector('input[aria-label="估价时点（UTC）"]'));
+                const priceInput=document.querySelector('input[aria-label="估价时点（UTC）"]');
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(priceInput,'2024-02-29T00:00:00.123');
+                priceInput.dispatchEvent(new Event('input',{bubbles:true}));
+                document.querySelector('.price-instant-editor button[type="submit"]').click();
+                await waitFor(()=>document.querySelector('.price-instant-label')?.textContent==='2024-02-29T00:00:00.123Z' && document.querySelector('.group-empty h2')?.textContent==='当前筛选暂无可信消费');
+                ok=ok && !document.querySelector('.price-instant-editor') && priceSelect.value==='specified_time';
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='项目')?.click();
+                await waitFor(()=>document.querySelector('section[aria-label="项目统计汇总"]'));
+                ok=ok && document.querySelector('.price-instant-label')?.textContent==='2024-02-29T00:00:00.123Z';
+
 
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });

@@ -11,9 +11,10 @@ import { EventsPage } from './EventsPage';
 import { useMainCalendar } from './useMainCalendar';
 import { DisplaySettingsPanel } from './DisplaySettingsPanel';
 import { DateFilter } from './DateFilter';
+import { PriceBasisFilter } from './PriceBasisFilter';
 import { AdvancedFilters, type FilterChoices } from './AdvancedFilters';
 import { mainRequestForCalendar } from '../shared/main-filter';
-import type { CalendarSelection, Grain, SourcesSnapshot } from '../shared/generated/contracts';
+import type { PriceBasis, CalendarSelection, Grain, SourcesSnapshot } from '../shared/generated/contracts';
 
 const pages = [
   ['overview', '总览', '在同一统计快照中查看本地消费'],
@@ -37,6 +38,7 @@ export function App() {
   const [selection, setSelection] = useState<CalendarSelection>({ kind: 'today' });
   const [source, setSource] = useState<string | null>(null);
   const [choices, setChoices] = useState<FilterChoices>({ models: null, projects: null, sessions: null });
+  const [priceBasis, setPriceBasis] = useState<PriceBasis>({ mode: 'event_time' });
   const [grain, setGrain] = useState<Grain>('hour');
   const [clock, setClock] = useState(Date.now());
   const [refreshRevision, setRefreshRevision] = useState(0);
@@ -46,12 +48,13 @@ export function App() {
   const query = useMemo(() => {
     if (!display.calendar) return null;
     const request = mainRequestForCalendar(display.calendar, source, grain);
+    request.price_basis = priceBasis;
     for (const dimension of ['models', 'projects', 'sessions'] as const) {
       const choice = choices[dimension];
       request.filter[dimension] = choice === null ? { kind: 'all' } : { kind: 'ids', ids: choice.key === null ? [] : [choice.key], include_unknown: choice.key === null };
     }
     return request;
-  }, [display.calendar, source, grain, choices]);
+  }, [display.calendar, source, grain, choices, priceBasis]);
   const current = pages.find(p => p[0] === page)!;
   const refresh = async () => {
     const sequence = ++statusRequest.current;
@@ -76,7 +79,7 @@ export function App() {
     </aside>
     <main>
       <header className="heading"><div><h1>{current[1]}</h1><p>{current[2]}</p></div><div className="head-actions"><button onClick={() => void refresh()} disabled={loading}>刷新</button>{status && <button onClick={() => void windowAction('hide_main').catch(e => setError(String(e)))}>隐藏到托盘</button>}</div></header>
-      {!['settings', 'diagnostics'].includes(page) && <div className="filters" aria-label="统一筛选"><DateFilter selection={selection} calendar={display.calendar} timezone={display.settings?.preferences.display_timezone ?? null} disabled={!status} onChange={setSelection} /><select aria-label="来源" disabled={sources === null} value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(source => <option value={source.source_id} key={source.source_id}>{source.root_path}{source.removed ? '（历史来源）' : ''}</option>)}</select>{query && <AdvancedFilters filter={query.filter} choices={choices} disabled={status?.storage !== 'ready'} onChange={(dimension, choice) => setChoices(value => ({ ...value, [dimension]: choice }))} />}{(selection.kind !== 'today' || source !== null || Object.values(choices).some(choice => choice !== null)) && <button className="reset-filters" onClick={() => { setSelection({ kind: 'today' }); setSource(null); setChoices({ models: null, projects: null, sessions: null }); }}>重置筛选</button>}<span>{display.settings?.preferences.display_timezone ?? '等待统计时区'}</span></div>}
+      {!['settings', 'diagnostics'].includes(page) && <div className="filters" aria-label="统一筛选"><DateFilter selection={selection} calendar={display.calendar} timezone={display.settings?.preferences.display_timezone ?? null} disabled={!status} onChange={setSelection} /><select aria-label="来源" disabled={sources === null} value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(source => <option value={source.source_id} key={source.source_id}>{source.root_path}{source.removed ? '（历史来源）' : ''}</option>)}</select>{query && <AdvancedFilters filter={query.filter} choices={choices} disabled={status?.storage !== 'ready'} onChange={(dimension, choice) => setChoices(value => ({ ...value, [dimension]: choice }))} />}{(selection.kind !== 'today' || source !== null || Object.values(choices).some(choice => choice !== null) || priceBasis.mode !== 'event_time') && <button className="reset-filters" onClick={() => { setSelection({ kind: 'today' }); setPriceBasis({ mode: 'event_time' }); setSource(null); setChoices({ models: null, projects: null, sessions: null }); }}>重置筛选</button>}<PriceBasisFilter basis={priceBasis} disabled={!status} onChange={setPriceBasis} /><span>{display.settings?.preferences.display_timezone ?? '等待统计时区'}</span></div>}
       {error && <div role="alert" className="notice">{error}<button onClick={() => void refresh()}>重试连接</button></div>}
       {status?.storage_error && <div role="alert" className="notice">本地数据库无法使用（{status.storage_error}）。已保留数据库文件，采集尚未启动。请查看采集诊断。</div>}
       {sourceError && !['settings', 'diagnostics'].includes(page) && <div className="notice" role="alert">来源候选暂不可用：{sourceError}</div>}

@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
     const tokens = (partial = false) => ({ total_tokens: partial ? '17' : '683067', input_total: partial ? unknown : complete(630630, 683067), cached_input: partial ? unknown : complete(429566, 683067), noncached_input: partial ? unknown : complete(201064, 683067), output_total: partial ? unknown : complete(52437, 683067), reasoning_output: partial ? unknown : complete(19926, 683067), session_count: '1', usage_event_count: partial ? '1' : '5', reliable_turn_count: null, reliable_turns_complete: false });
     const coverage = { state: 'partial', pending_observation_count: '2', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '1', source_issues: [{ source_id: 'synthetic-a', code: 'scan_evidence_missing', last_success_ms: 1000 }], format_issues: [], breakdown_complete: true };
     const empty = { total_tokens: '0', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
-    const price = (partial: boolean) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
+    const price = (partial: boolean, basis: { mode: string } = { mode: 'event_time' }) => ({ redacted: false, basis, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: basis.mode === 'specified_time' ? '2.321234567890123' : cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_dashboard_bundle') {
         ++reads; lastDashboardRequest = structuredClone(args.request);
         if (fail) throw new Error('synthetic refresh failure');
-        const r = args.request as { filter: { sources: { ids?: string[] }; range: { start_ms: number; end_ms: number; timezone: string } }; grain: string; heatmap_range: { start_ms: number; end_ms: number } };
+        const r = args.request as { price_basis: { mode: string }; filter: { sources: { ids?: string[] }; range: { start_ms: number; end_ms: number; timezone: string } }; grain: string; heatmap_range: { start_ms: number; end_ms: number } };
         const partial = r.filter.sources.ids?.includes('synthetic-b') ?? false;
         const step = r.grain === 'hour' ? 3_600_000 : 86_400_000;
         const series = Array.from({ length: Math.ceil((r.filter.range.end_ms - r.filter.range.start_ms) / step) }, (_, i) => {
@@ -40,7 +40,7 @@ test.beforeEach(async ({ page }) => {
           return { start_ms: start, end_ms: Math.min(start + step, r.filter.range.end_ms), display_label: new Date(start).toISOString().slice(0, 16), utc_offset: '+08:00', totals: count, coverage: { ...coverage, breakdown_complete: i === 0 && !partial } };
         });
         const heatmap = Array.from({ length: 182 }, (_, i) => ({ start_ms: r.heatmap_range.start_ms + i * 86_400_000, end_ms: r.heatmap_range.start_ms + (i + 1) * 86_400_000, display_label: `synthetic-day-${i + 1}`, utc_offset: '+08:00', totals: i % 5 === 0 ? tokens(partial) : empty, coverage: { ...coverage, breakdown_complete: !partial && i % 5 === 0 } }));
-        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: priceRevision, generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
+        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: priceRevision, generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial, r.price_basis), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
         if (deferNext) { deferNext = false; await new Promise<void>(resolve => { release = resolve; }); }
         return response(data);
       }
@@ -172,4 +172,25 @@ test('long custom history changes trend grain to daily without reducing the sele
   await expect(page.getByRole('button', { name: '小时', exact: true })).toBeDisabled();
   await expect(page.getByRole('group', { name: '各时间桶可信 Token' }).getByRole('button')).toHaveCount(365);
   await expect(page.getByTitle('编辑已应用日期')).toHaveText('2025-10-01 — 2026-09-30');
+});
+
+test('explicit price time changes estimates, preserves token scope and stays fixed across refresh', async ({ page }) => {
+  await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+  await page.getByLabel('计价依据').selectOption('specified_time');
+  await expect(page.getByText('$2.32', { exact: true })).toBeVisible(); await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await page.getByTitle('编辑明确估价时点（UTC）').click(); await page.getByLabel('估价时点（UTC）').fill('2024-02-29T00:00:00.123');
+  await page.screenshot({ path: 'test-results/price-basis-1280.png', fullPage: true });
+  await page.getByRole('button', { name: '应用估价时点' }).click();
+  await expect(page.getByTitle('编辑明确估价时点（UTC）')).toHaveText('2024-02-29T00:00:00.123Z');
+  type Bridge = { __lastDashboardRequest: () => { price_basis: unknown; filter: unknown } };
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest().price_basis)).toEqual({ mode: 'specified_time', specified_at_ms: Date.parse('2024-02-29T00:00:00.123Z') });
+  const before = await page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest());
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.getByText('$2.32', { exact: true })).toBeVisible();
+  const after = await page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest()); expect(after.price_basis).toEqual(before.price_basis); expect(after.filter).toEqual(before.filter);
+  await page.setViewportSize({ width: 960, height: 680 }); await page.getByTitle('编辑明确估价时点（UTC）').click(); await page.screenshot({ path: 'test-results/price-basis-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByLabel('估价时点（UTC）').press('Escape'); await expect(page.getByRole('form', { name: '指定估价时点' })).toHaveCount(0);
+  await expect(page.getByTitle('编辑明确估价时点（UTC）')).toBeFocused();
+  await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('计价依据')).toHaveValue('event_time'); await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
 });
