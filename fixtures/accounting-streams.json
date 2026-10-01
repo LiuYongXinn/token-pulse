@@ -1,0 +1,53 @@
+{
+  "purpose": "M05 independent arithmetic and classification expectations; all records synthetic",
+  "scenarios": [
+    {"name":"contained-single-stream","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[20,10,5,1,25],"total":[120,70,15,3,135],"expected":"last_with_baseline","event":[20,10,5,1,25]}
+    ],"confirmed_total":135},
+    {"name":"interleaved-streams","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[200,20,30,4,230],"total":[200,20,30,4,230],"head":true,"expected":"last_new_stream","event":[200,20,30,4,230]},
+      {"last":[20,10,5,1,25],"total":[120,70,15,3,135],"expected":"last_with_baseline","event":[20,10,5,1,25]},
+      {"last":[10,2,3,1,13],"total":[210,22,33,5,243],"expected":"last_with_baseline","event":[10,2,3,1,13]}
+    ],"confirmed_total":378},
+    {"name":"same-timestamp-last-only-are-two-calls","steps":[
+      {"last":[100,60,10,2,110],"expected":"last_only","event":[100,60,10,2,110]},
+      {"last":[100,60,10,2,110],"expected":"last_only","event":[100,60,10,2,110]}
+    ],"confirmed_total":220},
+    {"name":"first-total-is-anchor","steps":[
+      {"total":[100,60,10,2,110],"stream":"trusted-A","expected":"unattributed_anchor"},
+      {"total":[120,70,15,3,135],"stream":"trusted-A","expected":"cumulative_delta","event":[20,10,5,1,25]}
+    ],"confirmed_total":25},
+    {"name":"unproven-reset-is-pending","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"stream":"trusted-A","expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[10,2,3,1,13],"total":[10,2,3,1,13],"stream":"trusted-A","expected":"ambiguous_usage"}
+    ],"confirmed_total":110},
+    {"name":"explicit-reset-new-episode","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"stream":"trusted-A","expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[10,2,3,1,13],"total":[10,2,3,1,13],"stream":"trusted-A","reset":true,"head":true,"expected":"episode_reset","event":[10,2,3,1,13]}
+    ],"confirmed_total":123},
+    {"name":"ambiguous-multiple-baselines","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"stream":"trusted-A","expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"stream":"trusted-B","expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[20,10,5,1,25],"total":[120,70,15,3,135],"expected":"ambiguous_usage"}
+    ],"confirmed_total":220},
+    {"name":"total-scalar-cannot-match-stream","steps":[
+      {"total":[null,null,null,null,110],"expected":"unattributed_anchor"},
+      {"last":[null,null,null,null,25],"total":[null,null,null,null,135],"expected":"ambiguous_usage"}
+    ],"confirmed_total":0},
+    {"name":"missing-subcomponents-remain-null","steps":[
+      {"last":[100,null,20,null,120],"expected":"last_only","event":[100,null,20,null,120]}
+    ],"confirmed_total":120},
+    {"name":"inconsistent-reported-total-is-invalid","steps":[
+      {"last":[100,60,10,2,999],"expected":"invalid_usage"}
+    ],"confirmed_total":0},
+    {"name":"missing-time-is-unattributed","steps":[
+      {"last":[100,60,10,2,110],"missing_time":true,"expected":"unattributed_usage"}
+    ],"confirmed_total":0},
+    {"name":"trusted-repeated-snapshot","steps":[
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"head":true,"stream":"trusted-A","expected":"last_new_stream","event":[100,60,10,2,110]},
+      {"last":[100,60,10,2,110],"total":[100,60,10,2,110],"stream":"trusted-A","expected":"repeated_snapshot"}
+    ],"confirmed_total":110}
+  ]
+}

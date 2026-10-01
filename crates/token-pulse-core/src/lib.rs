@@ -2,6 +2,7 @@
 
 pub const API_VERSION: u32 = 1;
 
+pub mod accounting;
 pub mod adapter;
 pub mod domain;
 pub mod error;
