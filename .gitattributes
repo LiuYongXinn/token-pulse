@@ -1,3 +1,4 @@
 # Generated protocol comparison is byte-for-byte on Windows and CI.
 ui/src/shared/generated/*.ts text eol=lf
 schemas/*.json text eol=lf
+crates/token-pulse-store/migrations/*.sql text eol=lf

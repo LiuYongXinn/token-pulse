@@ -31,3 +31,9 @@ M02 固定 Rust 领域类型、DTO / TypeScript / schema 生成和精度规则�
 `fixtures/usage-vectors.json` 包含 10 组人工列出预期的合成向量；manifest 记录版本与来源。标准观察拒绝正文和任意附加字段，未声明任何真实 Codex 格式已兼容。
 
 验证：Rust 5 项测试（含 property test 和 10 组向量）、前端 5 项测试（含生成 schema / TS 样本、精确格式化）、七页导航浏览器场景、typecheck / 生产前端构建通过。fmt、workspace tests、Clippy 与协议生成差异检查通过。2026-10-01 原生 probe 返回 0，已在真实 WebView 调用 `get_app_status` 并核对协议版本、请求身份和开发状态，随后完成窗口 / 托盘 / 第二实例 / 退出回归。退出时同样有 WebView2 class unregister 1412 提示。
+
+## M03a：迁移、写线程与读连接
+
+已建立 v1 的 25 张业务表与迁移校验表，含活跃账本 / 文件代次组合外键、必要观察、事件、来源证据、基线、jobs / diagnostics 和维护基础表。写入集中于有界队列的专用线程；两个只读连接启用 query_only，bundle 回调在固定读事务内运行。初始化使用 foreign_keys / busy_timeout / WAL / FULL，校验迁移 checksum、quick_check 和 schema 版本；未知较新结构或损坏文件拒绝初始化，不创建零历史覆盖旧文件。
+
+`sum_token_decimal` / `sum_money_atoms` 使用 checked i128，全部缺失返回 NULL。四项真实 SQLite 集成测试通过：建表 / 重开 / 禁止只读写入、并发提交时旧读事务仍固定、超 i64 总量及金额溢出、未知结构与损坏文件保留。fmt / Clippy 通过。本阶段还未接入采集整批事务，M03 完成需继续实现该部分。
