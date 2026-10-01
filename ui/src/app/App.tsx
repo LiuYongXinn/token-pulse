@@ -6,6 +6,7 @@ import { JobsPanel } from './JobsPanel';
 import { PriceRulesPanel } from './PriceRulesPanel';
 import { GroupedPage } from './GroupedPage';
 import { OverviewPage } from './OverviewPage';
+import { AdvancedFilters, type FilterChoices } from './AdvancedFilters';
 import { mainDayIdentity, mainRequest } from '../shared/main-filter';
 import type { DatePreset } from '../shared/main-filter';
 import type { Grain, SourcesSnapshot } from '../shared/generated/contracts';
@@ -31,13 +32,21 @@ export function App() {
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [preset, setPreset] = useState<DatePreset>('today');
   const [source, setSource] = useState<string | null>(null);
+  const [choices, setChoices] = useState<FilterChoices>({ models: null, projects: null, sessions: null });
   const [grain, setGrain] = useState<Grain>('hour');
   const [clock, setClock] = useState(Date.now());
   const [refreshRevision, setRefreshRevision] = useState(0);
   const statusRequest = useRef(0);
   const mounted = useRef(false);
   const dayIdentity = mainDayIdentity(clock);
-  const query = useMemo(() => mainRequest(preset, source, grain, clock), [preset, source, grain, dayIdentity]);
+  const query = useMemo(() => {
+    const request = mainRequest(preset, source, grain, clock);
+    for (const dimension of ['models', 'projects', 'sessions'] as const) {
+      const choice = choices[dimension];
+      request.filter[dimension] = choice === null ? { kind: 'all' } : { kind: 'ids', ids: choice.key === null ? [] : [choice.key], include_unknown: choice.key === null };
+    }
+    return request;
+  }, [preset, source, grain, dayIdentity, choices]);
   const current = pages.find(p => p[0] === page)!;
   const refresh = async () => {
     const sequence = ++statusRequest.current;
@@ -62,7 +71,7 @@ export function App() {
     </aside>
     <main>
       <header className="heading"><div><h1>{current[1]}</h1><p>{current[2]}</p></div><div className="head-actions"><button onClick={() => void refresh()} disabled={loading}>刷新</button>{status && <button onClick={() => void windowAction('hide_main').catch(e => setError(String(e)))}>隐藏到托盘</button>}</div></header>
-      {!['settings', 'diagnostics'].includes(page) && <div className="filters" aria-label="统一筛选"><select aria-label="日期范围" disabled={!status} value={preset} onChange={e => setPreset(e.target.value as DatePreset)}><option value="today">今日</option><option value="last7">近 7 日</option><option value="last30">近 30 日</option></select><select aria-label="来源" disabled={sources === null} value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(source => <option value={source.source_id} key={source.source_id}>{source.root_path}{source.removed ? '（历史来源）' : ''}</option>)}</select>{['模型', '项目', '会话'].map(label => <select key={label} aria-label={label} disabled title="候选查询正在接入"><option>全部{label}</option></select>)}<span>{status ? query.filter.range.timezone : '等待接入统计服务'}</span></div>}
+      {!['settings', 'diagnostics'].includes(page) && <div className="filters" aria-label="统一筛选"><select aria-label="日期范围" disabled={!status} value={preset} onChange={e => setPreset(e.target.value as DatePreset)}><option value="today">今日</option><option value="last7">近 7 日</option><option value="last30">近 30 日</option></select><select aria-label="来源" disabled={sources === null} value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(source => <option value={source.source_id} key={source.source_id}>{source.root_path}{source.removed ? '（历史来源）' : ''}</option>)}</select><AdvancedFilters filter={query.filter} choices={choices} disabled={status?.storage !== 'ready'} onChange={(dimension, choice) => setChoices(value => ({ ...value, [dimension]: choice }))} />{(preset !== 'today' || source !== null || Object.values(choices).some(choice => choice !== null)) && <button className="reset-filters" onClick={() => { setPreset('today'); setSource(null); setChoices({ models: null, projects: null, sessions: null }); }}>重置筛选</button>}<span>{status ? query.filter.range.timezone : '等待接入统计服务'}</span></div>}
       {error && <div role="alert" className="notice">{error}<button onClick={() => void refresh()}>重试连接</button></div>}
       {status?.storage_error && <div role="alert" className="notice">本地数据库无法使用（{status.storage_error}）。已保留数据库文件，采集尚未启动。请查看采集诊断。</div>}
       {sourceError && !['settings', 'diagnostics'].includes(page) && <div className="notice" role="alert">来源候选暂不可用：{sourceError}</div>}

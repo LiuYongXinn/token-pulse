@@ -503,3 +503,13 @@ facet_filter 只重置本维度为 All，来源 / 模型 / 项目 / 会话之外
 主窗口 capability / 后台 label 双重限制 get_filter_options 与 close_query_snapshot，使用正式请求身份 / 参数校验 / spawn_blocking；TypeScript 使用生成 DTO。CloseQuerySnapshotRequest 用明确 filter_options 变体携带原完整 query 和非 null cursor，先校验 MAC / 绑定 / 登记，再释放真实事务；合法已过期或重复关闭幂等成功，伪造及改查询拒绝。未开放按任意 snapshot_id 关闭其他读取的入口，后续会话 / 明细租约将扩展这个正式关闭命令。
 
 2026-10-02 00:12 六项候选存储场景（新增关闭 / 拒绝跨 owner 和查询 / 重复关闭 / 释放后明确过期）、workspace Clippy、TS 类型与 13 项 Vitest 通过，累计普通 Rust 场景 210。Win10 随机隔离库真实 WebView 验证四种候选命令的 api / request 身份、price revision 3、实际 query snapshot、空列表 / null cursor，逐种验证 201 页长 / 伪 cursor 查询 / 伪 cursor 关闭分别 INVALID_QUERY / CURSOR_INVALID；既有真实价格 / 分组 / 总览 / context / UI 导航 / 原生系统路由继续通过，退出 0，保留 class unregister 1412 提示。本次原生夹具没有真实用量或授权来源，多页和合法关闭由存储测试验证；顶部交互下一步接入。
+
+## M10c：顶部真实可搜索高级筛选
+
+顶部模型 / 项目 / 会话改为正式候选搜索，每页 50 条，可续页；已选名称保留、未知候选以 ids=[] / include_unknown=true 区别全部。日期 / 来源 / 三维度组合传给同快照总览及分组，跨页面保持，重置恢复今天 / 全部维度。沿用七项文字导航、顶部布局与深灰蓝色视觉；搜索 / Esc 焦点恢复、输入下键 / 候选上下键 / Home / End、原生按钮 Enter / Space 支持键盘操作。
+
+候选 Hook 串行查询 / 关闭 / 续页，请求完成后清理迟到结果；换搜索 / 维度 / 日期 / 来源 / 页面释放原 query 的合法 cursor，失败依靠服务器有界 TTL 回收。250 ms 搜索防抖，准备新搜索时隐藏旧候选；续页校验完整 meta / dimension，拒绝重复已显示 key，过期不拼接新快照并允许重新查询。单框最多显示 1,000 条并提示缩小搜索，同时释放其租约。当前为每维度单选，来源仍使用已登记来源 select；自定义日期 / 价格依据 / 配置时区 / 隐私最新策略 / 会话页面与钻取继续待实现。
+
+2026-10-02 00:20 TS 类型、13 项 Vitest、完整 13 项 Playwright（新增四项高级筛选多场景）、生产 Vite 构建通过。新增场景覆盖 >2^53 候选计数 / tooltip、同页续接、未知项 / 组合条件 / 跨页保持 / 重置、准确原 query 关闭且先于新查询、Esc / 搜索焦点 / 键盘移动、过期重新查询、迟到响应串行清理、空搜索、257 中文字符拒绝及页面卸载释放。截图检查发现 960 宽下全局 span 宽度使名称竖排，已修正并新增名称宽度断言；重新跑四项 / 构建，查看 1280 与 960 图片确认候选正常横排、页面无横向溢出。
+
+00:22 Win10 独立应用随机隔离库真实 WebView 逐一打开三维度候选框，实际查询空候选 / 输入焦点，Esc 关闭并返回原触发器焦点；既有候选 / 关闭错误拒绝、统计 / 价格 / context / UI 导航 / 原生系统路由通过，退出 0，仍有 class unregister 1412 提示。此检查没有真实 Codex 来源、多页桌面数据、账户、任务栏、实际睡眠或安装测试。

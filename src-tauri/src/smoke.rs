@@ -146,6 +146,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                         await new Promise(resolve=>setTimeout(resolve,25));
                     }
                 };
+                for(const name of ['模型','项目','会话']) {
+                    const trigger=document.querySelector(`button[role="combobox"][aria-label="${name}"]`);
+                    if(!trigger || trigger.disabled) throw new Error('Advanced filter missing');
+                    trigger.click();
+                    await waitFor(()=>document.querySelector('.facet-popup')?.textContent.includes('当前范围没有匹配候选。'));
+                    ok=ok && document.querySelector(`input[aria-label="搜索${name}"]`)===document.activeElement
+                        && document.querySelectorAll('.facet-options [role="option"]').length===0;
+                    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+                    await waitFor(()=>!document.querySelector('.facet-popup'));
+                    ok=ok && document.activeElement===trigger;
+                }
                 for(const [name,label] of [['模型','模型统计汇总'],['项目','项目统计汇总']]) {
                     [...document.querySelectorAll('nav button')].find(button=>button.textContent===name)?.click();
                     await waitFor(()=>document.querySelector(`section[aria-label="${label}"]`) && document.querySelector('.group-empty h2')?.textContent==='当前筛选暂无可信消费');
