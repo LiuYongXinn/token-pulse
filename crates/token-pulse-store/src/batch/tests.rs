@@ -341,6 +341,14 @@ fn current_episode_is_explicit_even_when_batch_updates_arrive_in_reverse_order()
 fn assert_state(db: &Database, committed: bool) {
     db.snapshot(|tx, revision| {
         assert_eq!(revision.data, i64::from(committed));
+        assert_eq!(
+            tx.query_row(
+                "SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            i64::from(committed) * 2
+        );
         for table in [
             "observations",
             "usage_events",

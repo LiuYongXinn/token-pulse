@@ -24,7 +24,7 @@ fn migration_reopens_and_readers_cannot_write() {
             [],
             |r| r.get(0),
         )?;
-        assert_eq!(tables, 31);
+        assert_eq!(tables, 35);
         let fk: i64 = tx.pragma_query_value(None, "foreign_keys", |r| r.get(0))?;
         assert_eq!(fk, 1);
         Ok(())

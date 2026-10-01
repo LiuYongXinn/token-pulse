@@ -46,6 +46,115 @@ fn assert_legacy(conn: &Connection) {
         0
     );
 }
+
+fn legacy_v2(path: &Path) -> Connection {
+    let conn = legacy(path);
+    conn.execute_batch(MIGRATIONS[1].1).unwrap();
+    conn.execute(
+        "INSERT INTO schema_migrations VALUES(2,?1)",
+        [checksum(MIGRATIONS[1].1)],
+    )
+    .unwrap();
+    conn.execute_batch("PRAGMA user_version=2; INSERT INTO sessions(session_key,provider,identity_status) VALUES('old-session','codex','confirmed'); INSERT INTO ledger_generations VALUES('old-ledger','old-session','active','old-parser','old-accounting',19,1,1,'{}'); UPDATE sessions SET active_ledger_id='old-ledger' WHERE session_key='old-session';").unwrap();
+    conn
+}
+
+#[test]
+fn v2_upgrade_initializes_only_rebuildable_versions_and_backs_up_the_actual_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("token-pulse.db");
+    drop(legacy_v2(&path));
+    let db = crate::Database::open(dir.path()).unwrap();
+    db.snapshot(|tx, r| {
+        assert_eq!(r.data, 19);
+        assert_eq!(r.settings, 77);
+        assert_eq!(
+            tx.query_row(
+                "SELECT revision FROM ledger_usage_versions WHERE ledger_id='old-ledger'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            0
+        );
+        assert_eq!(
+            tx.query_row("SELECT COUNT(*) FROM usage_rollup_sets", [], |r| r
+                .get::<_, i64>(0))?,
+            0
+        );
+        assert_eq!(
+            tx.query_row(
+                "SELECT active_ledger_id FROM sessions WHERE session_key='old-session'",
+                [],
+                |r| r.get::<_, String>(0)
+            )?,
+            "old-ledger"
+        );
+        Ok(())
+    })
+    .unwrap();
+    let copied_path = fs::read_dir(dir.path().join("migration-backups"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|s| s == "db"))
+        .unwrap();
+    let copied =
+        Connection::open_with_flags(&copied_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    assert_eq!(
+        copied
+            .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+    assert!(
+        copied
+            .prepare("SELECT * FROM ledger_usage_versions")
+            .is_err()
+    );
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(copied_path.with_extension("json")).unwrap()).unwrap();
+    assert_eq!(manifest["source_schema_version"], 2);
+    assert_eq!(manifest["target_schema_version"], 3);
+}
+
+#[test]
+fn v2_upgrade_faults_leave_old_pointers_versions_and_backups_intact() {
+    for failure in [Stage::AfterBackup, Stage::AfterDdl, Stage::BeforeCommit] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("token-pulse.db");
+        let mut conn = legacy_v2(&path);
+        assert!(
+            migrate_with_hook(&mut conn, &path, |stage| {
+                if std::mem::discriminant(&stage) == std::mem::discriminant(&failure) {
+                    Err(ErrorCode::MigrationFailed.into())
+                } else {
+                    Ok(())
+                }
+            })
+            .is_err()
+        );
+        assert_eq!(
+            conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT active_ledger_id FROM sessions WHERE session_key='old-session'",
+                [],
+                |r| r.get::<_, String>(0)
+            )
+            .unwrap(),
+            "old-ledger"
+        );
+        assert!(conn.prepare("SELECT * FROM ledger_usage_versions").is_err());
+        assert_eq!(
+            fs::read_dir(dir.path().join("migration-backups"))
+                .unwrap()
+                .count(),
+            2
+        );
+    }
+}
 #[test]
 fn legacy_upgrade_has_a_verified_consistent_backup_and_preserves_configuration() {
     let dir = tempfile::tempdir().unwrap();
@@ -58,7 +167,7 @@ fn legacy_upgrade_has_a_verified_consistent_backup_and_preserves_configuration()
         assert_eq!(r.settings, 77);
         assert_eq!(
             tx.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))?,
-            2
+            SCHEMA_VERSION
         );
         assert!(tx.query_row(
             "SELECT json_extract(payload_json,'$.privacy') FROM settings",

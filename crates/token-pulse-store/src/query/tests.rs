@@ -248,6 +248,73 @@ fn unknown_model_is_one_dimension_even_when_provider_is_known() {
 }
 
 #[test]
+fn cache_evidence_versions_include_provenance_and_preserve_real_snapshots() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.snapshot(|tx,_| {
+        assert_eq!(tx.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,2);
+        db.write(|conn| {
+            conn.execute("INSERT INTO event_provenance VALUES('event','observation','origin') ON CONFLICT DO NOTHING",[])?;
+            assert_eq!(conn.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,2);
+            conn.execute("UPDATE event_provenance SET relation='mirror' WHERE event_id='event'",[])?;
+            assert_eq!(conn.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,3);
+            conn.execute("UPDATE observations SET normalized_json=json_set(normalized_json,'$.effective_metadata.provider','different') WHERE observation_id='observation'",[])?;
+            assert_eq!(conn.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,4);
+            conn.execute("UPDATE usage_events SET turn_id='recognized' WHERE event_id='event'",[])?;
+            assert_eq!(conn.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,5);
+            Ok(())
+        })?;
+        assert_eq!(tx.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,2); Ok(())
+    }).unwrap();
+    db.write(|conn| {
+        conn.execute("DELETE FROM event_provenance WHERE event_id='event'", [])?;
+        assert_eq!(
+            conn.query_row(
+                "SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            6
+        );
+        conn.execute("DELETE FROM usage_events WHERE event_id='event'", [])?;
+        assert_eq!(
+            conn.query_row(
+                "SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            7
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn rollup_schema_rejects_unpublished_ready_sets_and_invalid_cohort_references() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.write(|conn| {
+        assert!(conn.execute("INSERT INTO usage_rollup_sets VALUES('bad','ledger',2,1,'p','a','ready',1,NULL)",[]).is_err());
+        assert!(conn.execute("INSERT INTO usage_rollup_sets VALUES('bad','ledger',2,1,'p','a','building',1,1)",[]).is_err());
+        conn.execute("INSERT INTO usage_rollup_sets VALUES('candidate','ledger',2,1,'p','a','building',1,NULL)",[])?;
+        let sums: String = conn.query_row("SELECT sum_usage_vector(input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,total_tokens) FROM usage_events",[],|r|r.get(0))?;
+        assert!(conn.execute("INSERT INTO utc_hour_usage_rollups VALUES('candidate',1,'cohort',NULL,NULL,NULL,'[\"source\"]',?1,1,0)",[&sums]).is_err());
+        assert!(conn.execute("INSERT INTO utc_hour_usage_rollups VALUES('candidate',0,'cohort',NULL,NULL,NULL,'{}',?1,1,0)",[&sums]).is_err());
+        assert!(conn.execute("INSERT INTO utc_hour_usage_rollups VALUES('candidate',0,'cohort',NULL,NULL,NULL,'[\"source\"]',?1,1,2)",[&sums]).is_err());
+        conn.execute("INSERT INTO utc_hour_usage_rollups VALUES('candidate',0,'cohort',NULL,NULL,NULL,'[\"source\"]',?1,1,0)",[&sums])?;
+        assert!(conn.execute("INSERT INTO utc_hour_rollup_turns VALUES('candidate',3600000,'cohort','turn')",[]).is_err());
+        assert!(conn.execute("INSERT INTO utc_hour_rollup_turns VALUES('candidate',0,'cohort','')",[]).is_err());
+        conn.execute("INSERT INTO utc_hour_rollup_turns VALUES('candidate',0,'cohort','turn')",[])?;
+        conn.execute("DELETE FROM usage_rollup_sets WHERE set_id='candidate'",[])?;
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM utc_hour_usage_rollups",[],|r|r.get::<_,i64>(0))?,0);
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM utc_hour_rollup_turns",[],|r|r.get::<_,i64>(0))?,0);
+        assert_eq!(conn.query_row("SELECT revision FROM ledger_usage_versions WHERE ledger_id='ledger'",[],|r|r.get::<_,i64>(0))?,2);
+        Ok(())
+    }).unwrap();
+}
+
+#[test]
 fn exact_large_group_sort_and_half_open_time_range() {
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();

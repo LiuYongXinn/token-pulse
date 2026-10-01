@@ -235,3 +235,15 @@ Token 分项分别返回已知值、对应已覆盖消费和完整性；空集�
 重测命令：`cargo test -p token-pulse-store --release query::tests::benchmark_300k -- --ignored --nocapture`。普通回归跳过耗时 benchmark；测量必须明确单独执行，避免把 ignored 记作普通自动通过。
 
 117 项普通 Rust 测试、fmt / Clippy、协议差异与 TypeScript 检查通过；30 万事件 release benchmark 已单独执行并通过精确预期。未新增原生系统检查，正式主页面仍待 bundle / coverage / IPC 接入。
+
+## M08c1：可重建汇总的版本与 v3 存储
+
+新增不可变 0003 migration，保持 v1 / v2 SQL 与 checksum 原样。账本级 usage revision 由 SQLite trigger 在事件 / provenance 的插入、更新、删除，以及来源观察 provider 改变时同步推进；重复 provenance 的 DO NOTHING 不变更版本。候选 / 正式批次仍使用既有事实事务，版本与观察 / 消费 / 基线 / 检查点一起回滚。空核对不更新版本；旧只读快照保持当时的缓存输入版本。
+
+新增独立 usage_rollup_sets、UTC 小时 / 元数据 / 来源集合 cohort、可靠 turn membership 表。候选必须显式 building，ready 必须有发布时间，小时边界、JSON 类别、事件 / 回合数量和组合外键有数据库约束；候选删除级联清理派生行，不更改事实账本。缓存按 evidence revision、parser / accounting / cache version 识别，不以当前 settings 覆盖旧事实。
+
+本模块只提供缓存版本 / 候选存储基础，尚未构建或使用 ready cache，查询延迟仍沿用 M08b2 实测，不宣称性能目标已达成。下一模块实现有界构建、候选验证 / 原子发布与同事务读取，保留原始查询回退。
+
+新增 v2 → v3 一致备份 / 原账本配置保留、三个失败边界、版本与真实旧快照、无效候选与 cohort / turn 外键场景，并把原有全部批次故障注入扩展为同时验证缓存版本回滚。v1 → v3 的既有迁移回归一并通过；实际升级强杀 / 安装升级仍需后续灾难和部署验收。
+
+全部 121 项普通 Rust 测试、fmt / Clippy 与协议差异检查通过。2026-10-01 19:13 Windows 10 独立 native probe 在隔离 v3 库通过真实 WebView IPC、电源消息路由、托盘注册、关闭隐藏、单实例激活和明确退出，返回 0；退出的 WebView2 class unregister 1412 提示仍存在。本次不包含实际睡眠、WSL、任务栏、Windows 11 或安装验收。
