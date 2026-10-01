@@ -1,12 +1,12 @@
 import type { PriceRule, PriceRuleDraft } from './generated/contracts';
 
 const atomScale = 1_000_000_000n;
-const maxAtoms = (1n << 127n) - 1n;
+const maxAtoms = 1_000_000_000_000_000n;
 export function priceAtoms(value: string): string {
   if (!/^(0|[1-9][0-9]*)(\.[0-9]{1,9})?$/.test(value)) throw new Error('单价须为非负十进制，最多 9 位小数。');
   const [whole, fraction = ''] = value.split('.');
   const atoms = BigInt(whole) * atomScale + BigInt(fraction.padEnd(9, '0'));
-  if (atoms > maxAtoms) throw new Error('单价超过精确计算范围。');
+  if (atoms > maxAtoms) throw new Error('每百万 Token 单价不能超过 1000000。');
   return atoms.toString();
 }
 export function pricePerMillion(atoms: string | null): string {

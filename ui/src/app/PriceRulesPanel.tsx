@@ -79,7 +79,7 @@ export function PriceRulesPanel({ onChanged }: { onChanged: () => void }) {
         <div className="price-wide">{textField('reference', '价格依据或链接（可留空）', true)}</div>
       </fieldset>
       {sourceError && <p className="muted">来源详情未加载：{sourceError}。可保存全局规则，已有来源标识保留。</p>}
-      <p className="muted">单价最多 9 位小数。空缓存单价表示未知，填写 0 表示免费；截止时刻不包含。来源规则优先于全局规则，同范围内优先级较高者优先。</p>
+      <p className="muted">每百万单价为 0 至 1000000，最多 9 位小数。空缓存单价表示未知，填写 0 表示免费；截止时刻不包含。来源规则优先于全局规则，同范围内优先级较高者优先。</p>
       <div className="price-actions"><button className="primary" disabled={busy} type="submit">{busy ? '正在发布…' : '保存并发布版本'}</button></div>
     </form>}
     {snapshot?.rules.length === 0 && <div className="price-empty"><h3>此版本暂无价格规则</h3><p>添加有依据的单价后可估算费用。尚无匹配规则的消费保持未计价。</p></div>}

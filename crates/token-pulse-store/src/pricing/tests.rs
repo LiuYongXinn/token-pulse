@@ -25,6 +25,73 @@ fn draft() -> PriceRuleDraft {
         origin_reference: Some("synthetic fixture".into()),
     }
 }
+
+#[test]
+fn rate_limit_rejects_create_and_replace_without_retiring_or_advancing_revision() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    let limit = token_pulse_core::pricing::MAX_RATE_ATOMS;
+    for field in 0..3 {
+        let mut excessive = draft();
+        match field {
+            0 => excessive.input_rate_atoms = n(limit + 1),
+            1 => excessive.cached_rate_atoms = Some(n(limit + 1)),
+            _ => excessive.output_rate_atoms = n(limit + 1),
+        }
+        assert_eq!(
+            db.mutate_price_rule(PriceRuleMutation::Create { draft: excessive }, 0, 1)
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidQuery
+        );
+        assert_eq!(db.price_rules().unwrap().price_revision.as_str(), "0");
+    }
+    let mut valid = draft();
+    valid.input_rate_atoms = n(limit);
+    db.mutate_price_rule(
+        PriceRuleMutation::Create {
+            draft: valid.clone(),
+        },
+        0,
+        1,
+    )
+    .unwrap();
+    let original = db.price_rules().unwrap().rules.remove(0);
+    valid.input_rate_atoms = n(limit + 1);
+    assert_eq!(
+        db.mutate_price_rule(
+            PriceRuleMutation::Replace {
+                rule_id: original.rule_id.clone(),
+                draft: valid
+            },
+            1,
+            2
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidQuery
+    );
+    let after = db.price_rules().unwrap();
+    assert_eq!(after.price_revision.as_str(), "1");
+    assert_eq!(after.rules[0].rule_id, original.rule_id);
+    assert!(after.rules[0].retired_revision.is_none());
+    assert_eq!(
+        db.usage_totals(&crate::query::tests::filter())
+            .unwrap()
+            .total_tokens
+            .as_str(),
+        "110"
+    );
+    db.write(move |conn| {
+        conn.execute(
+            "UPDATE price_rules SET input_rate_atoms=?1",
+            [(limit + 1).to_string()],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(db.price_rules().unwrap_err().code, ErrorCode::DbCorrupt);
+}
 fn estimate(catalog: PriceCatalog) -> String {
     let e = PricingEvent {
         provider: Some("fixture-provider"),

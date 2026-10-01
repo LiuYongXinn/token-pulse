@@ -83,6 +83,7 @@ fn rate_conversion_is_exact_to_nine_places_and_rejects_bad_or_overflowing_inputs
         ("1.750000000", "1750000000", "1.75"),
         ("0.000000001", "1", "0.000000001"),
         ("12.123456789", "12123456789", "12.123456789"),
+        ("1000000.000000000", "1000000000000000", "1000000"),
     ] {
         let a = rate_atoms(value).unwrap();
         assert_eq!(a.as_str(), expected);
@@ -106,10 +107,28 @@ fn rate_conversion_is_exact_to_nine_places_and_rejects_bad_or_overflowing_inputs
     }
     assert_eq!(
         rate_atoms("170141183460469231731687303715884105727").unwrap_err(),
-        ErrorCode::NumericOverflow
+        ErrorCode::InvalidQuery
     );
     let big = DecimalInt::parse("170141183460469231731687303715884105727").unwrap();
-    assert_eq!(rate_atoms(&rate_per_million(&big)).unwrap(), big);
+    assert!(rate_atoms(&rate_per_million(&big)).is_err());
+}
+
+#[test]
+fn business_rate_limit_is_enforced_for_all_rates_and_drafts_without_rounding() {
+    for value in ["1000000.000000001", "1000001", "9999999.123456789"] {
+        assert_eq!(rate_atoms(value).unwrap_err(), ErrorCode::InvalidQuery);
+    }
+    for field in 0..3 {
+        let mut r = rule("bounded");
+        let excessive = n(MAX_RATE_ATOMS + 1);
+        match field {
+            0 => r.input_rate_atoms = excessive,
+            1 => r.cached_rate_atoms = Some(excessive),
+            _ => r.output_rate_atoms = excessive,
+        }
+        assert_eq!(r.validate().unwrap_err(), ErrorCode::InvalidQuery);
+        assert!(PriceCatalog::new(vec![r], vec![], n(1)).is_err());
+    }
 }
 
 #[test]
@@ -349,14 +368,15 @@ fn large_amounts_invalid_usage_and_overflow_never_become_rounded_or_zero_estimat
         atoms(catalog(vec![r.clone()]).estimate(&event(u), &PriceBasis::EventTime {})).2,
         "9.007199254740993"
     );
-    r.input_rate_atoms = n(i128::MAX);
     let mut invalid = u;
-    invalid.input_total = Some(2);
+    invalid.input_total = Some(i64::MAX);
+    invalid.output_total = Some(1);
     assert_eq!(
         reason(catalog(vec![r.clone()]).estimate(&event(invalid), &PriceBasis::EventTime {})),
         UnpricedCode::Overflow
     );
     invalid.input_total = Some(1);
+    invalid.output_total = Some(0);
     invalid.cached_input = Some(2);
     assert_eq!(
         reason(catalog(vec![r.clone()]).estimate(&event(invalid), &PriceBasis::EventTime {})),

@@ -46,11 +46,15 @@ test('price editor preserves precise rates, null cache prices, immutable history
   await editor.getByLabel('输出单价 / 百万 Token', { exact: true }).fill('0.000000001');
   await editor.getByLabel('开始时间（UTC）', { exact: true }).fill('2026-10-01T00:00:00.123');
   await editor.getByLabel('价格依据或链接（可留空）', { exact: true }).fill('Synthetic UI test fixture');
+  await editor.getByRole('button', { name: '保存并发布版本' }).click();
+  await expect(panel.getByRole('alert')).toContainText('每百万 Token 单价不能超过 1000000');
+  await expect(panel.getByText('当前价格版本 0', { exact: true })).toBeVisible();
+  await editor.getByLabel('输入单价 / 百万 Token', { exact: true }).fill('999999.123456789');
   await page.screenshot({ path: 'test-results/prices-editor.png', fullPage: true });
   await editor.getByRole('button', { name: '保存并发布版本' }).click();
   await expect(panel.getByText('当前价格版本 1', { exact: true })).toBeVisible();
   const row = panel.getByRole('row').filter({ hasText: 'fixture-only-model' });
-  await expect(row.getByRole('cell', { name: '9007199254740993.000000001', exact: true })).toBeVisible();
+  await expect(row.getByRole('cell', { name: '999999.123456789', exact: true })).toBeVisible();
   await expect(row.getByRole('cell', { name: '未知', exact: true })).toBeVisible();
   await expect(row.getByText('2026-10-01 00:00:00.123 UTC 起', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/prices-list.png', fullPage: true });

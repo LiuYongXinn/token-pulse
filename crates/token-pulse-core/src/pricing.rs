@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 
+/// Confirmed storage contract: at most 1,000,000 currency units per million.
+pub const MAX_RATE_ATOMS: i128 = 1_000_000_000_000_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum PriceOrigin {
@@ -153,6 +156,14 @@ impl PriceRule {
                 .effective_to_ms
                 .is_some_and(|end| end <= self.effective_from_ms)
             || !(0..=10_000).contains(&self.priority)
+            || [
+                Some(&self.input_rate_atoms),
+                self.cached_rate_atoms.as_ref(),
+                Some(&self.output_rate_atoms),
+            ]
+            .into_iter()
+            .flatten()
+            .any(|rate| rate.value() > MAX_RATE_ATOMS)
             || self.origin == PriceOrigin::Offline && self.source_id.is_some()
             || self
                 .origin_reference
@@ -197,18 +208,23 @@ impl ModelAlias {
 pub fn rate_atoms(price: &str) -> Result<DecimalInt, ErrorCode> {
     let (whole, fraction) = price.split_once('.').unwrap_or((price, ""));
     let whole = DecimalInt::parse(whole)?.value();
+    if whole > 1_000_000 {
+        return Err(ErrorCode::InvalidQuery);
+    }
     if price.ends_with('.') || fraction.len() > 9 || !fraction.bytes().all(|c| c.is_ascii_digit()) {
         return Err(ErrorCode::InvalidQuery);
     }
     let fraction = format!("{fraction:0<9}")
         .parse::<i128>()
         .map_err(|_| ErrorCode::InvalidQuery)?;
-    DecimalInt::from_nonnegative(
-        whole
-            .checked_mul(1_000_000_000)
-            .and_then(|v| v.checked_add(fraction))
-            .ok_or(ErrorCode::NumericOverflow)?,
-    )
+    let atoms = whole
+        .checked_mul(1_000_000_000)
+        .and_then(|v| v.checked_add(fraction))
+        .ok_or(ErrorCode::NumericOverflow)?;
+    if atoms > MAX_RATE_ATOMS {
+        return Err(ErrorCode::InvalidQuery);
+    }
+    DecimalInt::from_nonnegative(atoms)
 }
 pub fn rate_per_million(atoms: &DecimalInt) -> String {
     let value = atoms.value();

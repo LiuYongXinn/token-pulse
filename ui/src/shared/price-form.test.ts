@@ -2,13 +2,13 @@ import { expect, test } from 'vitest';
 import { blankPriceForm, priceAtoms, priceDraft, pricePerMillion, utcEpoch, utcInput } from './price-form';
 
 test('rates preserve every atom and distinguish unknown from a known zero', () => {
-  expect(priceAtoms('9007199254740993.000000001')).toBe('9007199254740993000000001');
-  expect(pricePerMillion('9007199254740993000000001')).toBe('9007199254740993.000000001');
+  expect(priceAtoms('999999.123456789')).toBe('999999123456789');
+  expect(pricePerMillion('999999123456789')).toBe('999999.123456789');
   expect(priceAtoms('0.000000001')).toBe('1');
   expect(pricePerMillion(null)).toBe('未知'); expect(pricePerMillion('0')).toBe('0');
-  const max = ((1n << 127n) - 1n).toString();
+  const max = '1000000000000000';
   expect(priceAtoms(pricePerMillion(max))).toBe(max);
-  for (const invalid of ['01', '-1', '1e3', '1.', '.1', ' 1', '1.0000000001', '170141183460469231731687303716']) expect(() => priceAtoms(invalid)).toThrow();
+  for (const invalid of ['01', '-1', '1e3', '1.', '.1', ' 1', '1.0000000001', '1000000.000000001', '1000001', '9007199254740993.000000001', '170141183460469231731687303716']) expect(() => priceAtoms(invalid)).toThrow();
 });
 test('explicit UTC times reject normalized invalid days and retain millisecond boundaries', () => {
   for (const value of ['2024-02-29T12:30', '2026-10-01T12:30:05.123', '1900-01-01T00:00:00.001']) {
