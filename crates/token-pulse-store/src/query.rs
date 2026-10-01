@@ -13,6 +13,7 @@ use token_pulse_core::{
 mod cached;
 pub mod context;
 pub mod coverage;
+pub mod dashboard;
 pub mod pricing;
 
 pub struct BucketTotals {

@@ -40,6 +40,14 @@ export type GroupSort = "total_desc" | "name_asc";
 
 export type GroupedUsage = { key: string | null, display_name: string, totals: TokenTotals, };
 
+export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
+
+export type UsageSeriesBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, totals: TokenTotals, coverage: Coverage, };
+
+export type RecentSession = { session_key: string, display_name: string, latest_at_ms: EpochMs, latest_model: string | null, latest_project_id: string | null, latest_project_name: string | null, summary: TokenTotals, pricing: PricingSummary, };
+
+export type DashboardBundle = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, series: Array<UsageSeriesBucket>, heatmap: Array<UsageSeriesBucket>, recent_sessions: Array<RecentSession>, };
+
 export type CurrencyEstimate = { currency: string, estimated_cost: DecimalMoney | null, priced_total_tokens: DecimalInt, };
 
 export type UnpricedReason = { code: string, total_tokens: DecimalInt, event_count: DecimalInt, };

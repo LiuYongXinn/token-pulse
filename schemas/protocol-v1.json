@@ -604,6 +604,670 @@
       "title": "CurrencyEstimate",
       "type": "object"
     },
+    "DashboardBundle": {
+      "$defs": {
+        "Coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "breakdown_complete": {
+              "type": "boolean"
+            },
+            "format_issues": {
+              "items": {
+                "$ref": "#/$defs/FormatIssue"
+              },
+              "type": "array"
+            },
+            "pending_file_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "pending_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "source_issues": {
+              "items": {
+                "$ref": "#/$defs/SourceIssue"
+              },
+              "type": "array"
+            },
+            "state": {
+              "$ref": "#/$defs/CoverageState"
+            },
+            "unattributed_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "unattributed_total_tokens": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "pending_observation_count",
+            "unattributed_observation_count",
+            "unattributed_total_tokens",
+            "pending_file_count",
+            "source_issues",
+            "format_issues",
+            "breakdown_complete"
+          ],
+          "type": "object"
+        },
+        "CoverageState": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "CurrencyEstimate": {
+          "additionalProperties": false,
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "estimated_cost": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalMoney"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "currency",
+            "estimated_cost",
+            "priced_total_tokens"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FormatIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "format": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "count"
+          ],
+          "type": "object"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PricingSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PriceBasis"
+            },
+            "calculating": {
+              "type": "boolean"
+            },
+            "currencies": {
+              "items": {
+                "$ref": "#/$defs/CurrencyEstimate"
+              },
+              "type": "array"
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "reasons": {
+              "items": {
+                "$ref": "#/$defs/UnpricedReason"
+              },
+              "type": "array"
+            },
+            "redacted": {
+              "type": "boolean"
+            },
+            "unpriced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "redacted",
+            "basis",
+            "currencies",
+            "priced_total_tokens",
+            "unpriced_total_tokens",
+            "reasons",
+            "calculating"
+          ],
+          "type": "object"
+        },
+        "RecentSession": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": "string"
+            },
+            "latest_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "latest_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "latest_project_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "latest_project_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pricing": {
+              "$ref": "#/$defs/PricingSummary"
+            },
+            "session_key": {
+              "type": "string"
+            },
+            "summary": {
+              "$ref": "#/$defs/TokenTotals"
+            }
+          },
+          "required": [
+            "session_key",
+            "display_name",
+            "latest_at_ms",
+            "latest_model",
+            "latest_project_id",
+            "latest_project_name",
+            "summary",
+            "pricing"
+          ],
+          "type": "object"
+        },
+        "SnapshotMeta": {
+          "additionalProperties": false,
+          "properties": {
+            "accounting_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "data_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "display_timezone": {
+              "type": "string"
+            },
+            "generated_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "parser_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "price_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "snapshot_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "data_revision",
+            "price_revision",
+            "generated_at_ms",
+            "parser_versions",
+            "accounting_versions",
+            "display_timezone"
+          ],
+          "type": "object"
+        },
+        "SourceIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "last_success_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "code",
+            "last_success_ms"
+          ],
+          "type": "object"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "TokenTotals": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "input_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "noncached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "output_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reasoning_output": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reliable_turn_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliable_turns_complete": {
+              "type": "boolean"
+            },
+            "session_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "usage_event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "total_tokens",
+            "input_total",
+            "cached_input",
+            "noncached_input",
+            "output_total",
+            "reasoning_output",
+            "session_count",
+            "usage_event_count",
+            "reliable_turn_count",
+            "reliable_turns_complete"
+          ],
+          "type": "object"
+        },
+        "UnpricedReason": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "code",
+            "total_tokens",
+            "event_count"
+          ],
+          "type": "object"
+        },
+        "UsageSeriesBucket": {
+          "additionalProperties": false,
+          "properties": {
+            "coverage": {
+              "$ref": "#/$defs/Coverage"
+            },
+            "display_label": {
+              "type": "string"
+            },
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "totals": {
+              "$ref": "#/$defs/TokenTotals"
+            },
+            "utc_offset": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "display_label",
+            "utc_offset",
+            "totals",
+            "coverage"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "heatmap": {
+          "items": {
+            "$ref": "#/$defs/UsageSeriesBucket"
+          },
+          "maxItems": 2000,
+          "type": "array"
+        },
+        "meta": {
+          "$ref": "#/$defs/SnapshotMeta"
+        },
+        "pricing": {
+          "$ref": "#/$defs/PricingSummary"
+        },
+        "recent_sessions": {
+          "items": {
+            "$ref": "#/$defs/RecentSession"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/UsageSeriesBucket"
+          },
+          "maxItems": 2000,
+          "type": "array"
+        },
+        "summary": {
+          "$ref": "#/$defs/TokenTotals"
+        }
+      },
+      "required": [
+        "meta",
+        "summary",
+        "pricing",
+        "coverage",
+        "series",
+        "heatmap",
+        "recent_sessions"
+      ],
+      "title": "DashboardBundle",
+      "type": "object"
+    },
+    "DashboardRequest": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DimensionSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "include_unknown": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "ids",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids",
+                "include_unknown"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "Grain": {
+          "enum": [
+            "hour",
+            "day",
+            "month"
+          ],
+          "type": "string"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "UsageFilter": {
+          "additionalProperties": false,
+          "properties": {
+            "models": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "projects": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "sessions": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "sources": {
+              "$ref": "#/$defs/DimensionSelection"
+            }
+          },
+          "required": [
+            "range",
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "$ref": "#/$defs/UsageFilter"
+        },
+        "grain": {
+          "$ref": "#/$defs/Grain"
+        },
+        "heatmap_range": {
+          "$ref": "#/$defs/DateRange"
+        },
+        "price_basis": {
+          "$ref": "#/$defs/PriceBasis"
+        }
+      },
+      "required": [
+        "filter",
+        "price_basis",
+        "grain",
+        "heatmap_range"
+      ],
+      "title": "DashboardRequest",
+      "type": "object"
+    },
     "DateRange": {
       "$defs": {
         "EpochMs": {
@@ -3267,6 +3931,279 @@
       "title": "QuotaWindow",
       "type": "object"
     },
+    "RecentSession": {
+      "$defs": {
+        "CurrencyEstimate": {
+          "additionalProperties": false,
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "estimated_cost": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalMoney"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "currency",
+            "estimated_cost",
+            "priced_total_tokens"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PricingSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PriceBasis"
+            },
+            "calculating": {
+              "type": "boolean"
+            },
+            "currencies": {
+              "items": {
+                "$ref": "#/$defs/CurrencyEstimate"
+              },
+              "type": "array"
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "reasons": {
+              "items": {
+                "$ref": "#/$defs/UnpricedReason"
+              },
+              "type": "array"
+            },
+            "redacted": {
+              "type": "boolean"
+            },
+            "unpriced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "redacted",
+            "basis",
+            "currencies",
+            "priced_total_tokens",
+            "unpriced_total_tokens",
+            "reasons",
+            "calculating"
+          ],
+          "type": "object"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "TokenTotals": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "input_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "noncached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "output_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reasoning_output": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reliable_turn_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliable_turns_complete": {
+              "type": "boolean"
+            },
+            "session_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "usage_event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "total_tokens",
+            "input_total",
+            "cached_input",
+            "noncached_input",
+            "output_total",
+            "reasoning_output",
+            "session_count",
+            "usage_event_count",
+            "reliable_turn_count",
+            "reliable_turns_complete"
+          ],
+          "type": "object"
+        },
+        "UnpricedReason": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "code",
+            "total_tokens",
+            "event_count"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string"
+        },
+        "latest_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "latest_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latest_project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latest_project_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pricing": {
+          "$ref": "#/$defs/PricingSummary"
+        },
+        "session_key": {
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/TokenTotals"
+        }
+      },
+      "required": [
+        "session_key",
+        "display_name",
+        "latest_at_ms",
+        "latest_model",
+        "latest_project_id",
+        "latest_project_name",
+        "summary",
+        "pricing"
+      ],
+      "title": "RecentSession",
+      "type": "object"
+    },
     "ScopeStart": {
       "$defs": {
         "EpochMs": {
@@ -4143,6 +5080,238 @@
         "sessions"
       ],
       "title": "UsageFilter",
+      "type": "object"
+    },
+    "UsageSeriesBucket": {
+      "$defs": {
+        "Coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "breakdown_complete": {
+              "type": "boolean"
+            },
+            "format_issues": {
+              "items": {
+                "$ref": "#/$defs/FormatIssue"
+              },
+              "type": "array"
+            },
+            "pending_file_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "pending_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "source_issues": {
+              "items": {
+                "$ref": "#/$defs/SourceIssue"
+              },
+              "type": "array"
+            },
+            "state": {
+              "$ref": "#/$defs/CoverageState"
+            },
+            "unattributed_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "unattributed_total_tokens": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "pending_observation_count",
+            "unattributed_observation_count",
+            "unattributed_total_tokens",
+            "pending_file_count",
+            "source_issues",
+            "format_issues",
+            "breakdown_complete"
+          ],
+          "type": "object"
+        },
+        "CoverageState": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FormatIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "format": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "count"
+          ],
+          "type": "object"
+        },
+        "SourceIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "last_success_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "code",
+            "last_success_ms"
+          ],
+          "type": "object"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "TokenTotals": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "input_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "noncached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "output_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reasoning_output": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reliable_turn_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliable_turns_complete": {
+              "type": "boolean"
+            },
+            "session_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "usage_event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "total_tokens",
+            "input_total",
+            "cached_input",
+            "noncached_input",
+            "output_total",
+            "reasoning_output",
+            "session_count",
+            "usage_event_count",
+            "reliable_turn_count",
+            "reliable_turns_complete"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "display_label": {
+          "type": "string"
+        },
+        "end_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "start_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "totals": {
+          "$ref": "#/$defs/TokenTotals"
+        },
+        "utc_offset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_ms",
+        "end_ms",
+        "display_label",
+        "utc_offset",
+        "totals",
+        "coverage"
+      ],
+      "title": "UsageSeriesBucket",
       "type": "object"
     },
     "WindowAction": {

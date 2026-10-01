@@ -6,7 +6,10 @@ use token_pulse_core::pricing::{
     ModelAlias, PriceChanged, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft,
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
-use token_pulse_core::query::{GroupDimension, GroupSort, GroupedUsage};
+use token_pulse_core::query::{
+    DashboardBundle, DashboardRequest, GroupDimension, GroupSort, GroupedUsage, RecentSession,
+    UsageSeriesBucket,
+};
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
@@ -54,6 +57,10 @@ fn main() {
         GroupDimension,
         GroupSort,
         GroupedUsage,
+        DashboardRequest,
+        UsageSeriesBucket,
+        RecentSession,
+        DashboardBundle,
         CurrencyEstimate,
         UnpricedReason,
         PricingSummary,

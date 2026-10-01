@@ -172,6 +172,8 @@ range 左闭右开，start < end；时区必须合法 IANA 名称。ids 数量�
 
 series bucket 包含 start_ms、end_ms、display_label、utc_offset、totals 与 coverage。heatmap_range 与主 filter.range 分开；同一事务继承维度。上下文 DTO：context_tokens / model_context_window 为 DecimalInt|null，percentage 为 number|null，observed_at_ms 与 quality 必填。
 
+正式 `DashboardRequest` 将 filter、price_basis、grain、heatmap_range 放在同一个 request 对象内，两种日期范围使用同一显示时区。`DashboardBundle.summary` 为 TokenTotals，pricing / coverage 独立返回；series / heatmap 使用上述完整桶结构，各最多 2000 项。recent_sessions 最多 10 项，按筛选范围内最新消费时间降序、session_key 升序，包含该范围的消费 / 费用及最新实际事件的模型 / 项目；不会使用最终 cwd 回填。meta 的解析 / 核算版本覆盖主范围与热力图中实际活跃事实，空范围保留空列表。完整 Rust 生成契约为运行时权威。
+
 模型筛选 key 包含 provider 与规范模型名，由后端生成和解析；显示标签不能直接拼入 SQL。项目 / 会话 / 来源使用已有 ID。候选分页返回 key、display_name、count、next_cursor 和版本；未知选项通过 include_unknown 表达。facet 查询只忽略当前维度，其他筛选继续生效；隐私时只替换标签，不改变 key。
 
 reliable_turn_count 表示已识别回合；reliable_turns_complete=false 时 UI 标“已识别回合”，不把它称为完整用户回合总数。usage_event_count 也不能替代模型调用数。

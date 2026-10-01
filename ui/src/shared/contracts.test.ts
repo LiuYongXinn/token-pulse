@@ -1,9 +1,22 @@
 import Ajv from 'ajv/dist/2020.js';
 import { expect, test } from 'vitest';
 import protocol from '../../../schemas/protocol-v1.json';
-import type { TokenMeasure, MiniScope, DecimalInt } from './generated/contracts';
+import type { TokenMeasure, MiniScope, DecimalInt, DashboardBundle } from './generated/contracts';
 
 const ajv = new Ajv({ strict: false });
+
+test('dashboard contract requires one complete bundle with null metrics and real metadata', () => {
+  const measure = { value: null, covered_total_tokens: '0', complete: false };
+  const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
+  const coverage = { state: 'unknown' as const, pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
+  const fixture: DashboardBundle = { meta: { snapshot_id: 'synthetic-bundle', data_revision: '0', price_revision: '0', generated_at_ms: 0, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' }, summary: totals, pricing: { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false }, coverage, series: [{ start_ms: 0, end_ms: 1000, display_label: 'synthetic', utc_offset: '+00:00', totals, coverage }], heatmap: [], recent_sessions: [] };
+  const validate = ajv.compile(protocol.schemas.DashboardBundle);
+  expect(validate(fixture)).toBe(true);
+  expect(validate({ ...fixture, pricing: undefined })).toBe(false);
+  expect(validate({ ...fixture, meta: { ...fixture.meta, price_revision: undefined } })).toBe(false);
+  expect(validate({ ...fixture, series: [{ ...fixture.series[0], coverage: undefined }] })).toBe(false);
+  expect(validate({ ...fixture, series: Array(2001).fill(fixture.series[0]) })).toBe(false);
+});
 test('Rust schema and TS preserve nullable fields and exact decimal strings', () => {
   const validate = ajv.compile(protocol.schemas.TokenMeasure);
   const fixture: TokenMeasure = { value: null, covered_total_tokens: '9007199254740993', complete: false };
