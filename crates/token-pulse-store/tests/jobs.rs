@@ -277,3 +277,27 @@ fn restart_marks_unfinished_work_interrupted_and_keeps_old_active_ledger() {
     })
     .unwrap();
 }
+
+#[test]
+fn durable_queue_is_bounded_but_an_idempotent_retry_does_not_consume_another_slot() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    for n in 0..32 {
+        let id = format!("job-{n}");
+        db.create_job(id.clone(), request(&id), n).unwrap();
+    }
+    assert_eq!(
+        db.create_job("overflow".into(), request("overflow"), 33)
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidQuery
+    );
+    assert_eq!(
+        db.create_job("retry".into(), request("job-0"), 33)
+            .unwrap()
+            .job_id,
+        "job-0"
+    );
+    db.cancel_job("job-0".into(), 34).unwrap();
+    db.create_job("new".into(), request("new"), 35).unwrap();
+}

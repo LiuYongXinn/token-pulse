@@ -35,7 +35,7 @@ cargo test --workspace
 npm run tauri:build -- --no-bundle
 ```
 
-开发标识对应 `%LOCALAPPDATA%\com.tokenpulse.desktop.dev`，发布标识为 `com.tokenpulse.desktop`。开发、发布的数据、WebView 与单实例命名空间独立。所有 Codex 来源仍只读；M01 尚未读取任何来源。
+开发标识对应 `%LOCALAPPDATA%\com.tokenpulse.desktop.dev`，发布标识为 `com.tokenpulse.desktop`。开发、发布的数据、WebView 与单实例命名空间独立。应用只读采集在设置中启用的 Codex 来源；自动测试使用临时目录和合成夹具。
 
 ## 桌面运行壳验收
 
@@ -45,7 +45,7 @@ cargo build -p token-pulse-desktop --features custom-protocol
 & .\target\debug\token-pulse-desktop.exe --native-smoke
 ```
 
-debug 专用 probe 在真实 Tauri / Win32 运行时中验证冷启动、开发目录隔离、托盘注册、关闭转隐藏、第二实例激活、明确退出。成功输出 `NATIVE_SMOKE_OK` 并返回 0；失败输出错误并返回 1。应用内置静态前端，不依赖 Vite 服务。该入口不进入 release 构建。
+debug 专用 probe 每次在开发数据目录下创建独立 `native-probe-<UUID>` 数据库，不读取已配置的开发来源。它在真实 Tauri / Win32 运行时中验证冷启动、目录隔离、WebView 状态 / 来源 / 作业 IPC、托盘注册、合成电源消息路由、关闭转隐藏、第二实例激活和明确退出。成功输出 `NATIVE_SMOKE_OK` 并返回 0；失败输出错误并返回 1。应用内置静态前端，不依赖 Vite 服务。该入口不进入 release 构建。
 
 自动 probe 不替代人工点击托盘、屏幕阅读器、DPI、锁屏 / 休眠或 Explorer 重启验收。后续功能逐模块补充相应原生验证，不能将浏览器检查记为系统验收。
 

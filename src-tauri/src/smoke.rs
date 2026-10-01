@@ -31,7 +31,11 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("debug identifier is not isolated".into());
     }
     let path = &app.state::<super::RuntimeState>().data_directory;
-    if path.file_name().and_then(|name| name.to_str()) != Some("com.tokenpulse.desktop.dev") {
+    if !path.starts_with(app.path().app_local_data_dir().map_err(|e| e.to_string())?)
+        || !path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with("native-probe-"))
+    {
         return Err("debug storage is not isolated".into());
     }
     if app.tray_by_id("main-tray").is_none() {
@@ -58,6 +62,8 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 const sources = await invoke('get_sources', { requestId: 'native-smoke-sources' });
                 ok = ok && sources.api_version === 1 && sources.request_id === 'native-smoke-sources'
                     && Array.isArray(sources.data.sources) && typeof sources.data.settings_revision === 'string';
+                const jobs=await invoke('list_jobs',{requestId:'native-smoke-jobs',limit:20});
+                ok=ok && jobs.api_version===1 && jobs.request_id==='native-smoke-jobs' && Array.isArray(jobs.data) && jobs.data.length===0;
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();

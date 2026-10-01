@@ -14,7 +14,10 @@ struct RuntimeState {
     selections: std::sync::Arc<std::sync::Mutex<token_pulse_core::selections::DirectorySelections>>,
     data_directory: PathBuf,
     database: token_pulse_store::StoreResult<token_pulse_store::Database>,
-    collector: token_pulse_store::StoreResult<token_pulse_collector::service::CollectorService>,
+    collector: token_pulse_store::StoreResult<
+        std::sync::Arc<token_pulse_collector::service::CollectorService>,
+    >,
+    jobs: token_pulse_store::StoreResult<token_pulse_collector::jobs::JobService>,
 }
 
 #[tauri::command]
@@ -106,14 +109,20 @@ pub fn run() {
                 return Err("application identifier must match build profile; use npm run tauri:dev for debug".into());
             }
             let data_directory = app.path().app_local_data_dir()?;
+            #[cfg(debug_assertions)]
+            let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))} else {data_directory};
             token_pulse_store::prepare_data_directory(&data_directory)?;
             let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
                 database.interrupt_unfinished_jobs(now)?;
                 Ok(database)
             });
-            let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()),Err(error)=>Err(error.code.into())};
-            app.manage(RuntimeState { data_directory, database, collector, selections: Default::default() });
+            let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
+            let jobs=match &database {Ok(database)=>{
+                let notify:std::sync::Arc<dyn Fn()+Send+Sync>=if let Ok(collector)=&collector {let collector=collector.clone();std::sync::Arc::new(move||collector.reconcile())} else {std::sync::Arc::new(||{})};
+                token_pulse_collector::jobs::JobService::start_with_notify(database.clone(),notify)
+            },Err(error)=>Err(error.code.into())};
+            app.manage(RuntimeState { data_directory, database, collector, jobs, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
@@ -147,7 +156,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -169,6 +178,9 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
                 if let Some(state) = app.try_state::<RuntimeState>() {
+                    if let Ok(jobs) = &state.jobs {
+                        jobs.shutdown();
+                    }
                     if let Ok(collector) = &state.collector {
                         collector.shutdown();
                     }
@@ -177,6 +189,7 @@ pub fn run() {
         });
 }
 
+mod job_commands;
 #[cfg(windows)]
 mod power;
 #[cfg(debug_assertions)]

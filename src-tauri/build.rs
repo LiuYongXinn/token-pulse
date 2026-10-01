@@ -6,6 +6,10 @@ fn main() {
             "get_sources",
             "choose_source_directory",
             "manage_source",
+            "start_job",
+            "get_job",
+            "list_jobs",
+            "cancel_job",
         ]),
     ))
     .expect("failed to build desktop resources");

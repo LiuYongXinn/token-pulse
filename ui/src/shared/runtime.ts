@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 
-import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction } from './generated/contracts';
+import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
 async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -14,11 +14,14 @@ export function getAppStatus(): Promise<AppStatus> { return request('get_app_sta
 export function getSources(): Promise<SourcesSnapshot> { return request('get_sources'); }
 export function chooseSourceDirectory(kind: SourceDirectoryKind): Promise<SourceDirectorySelection | null> { return request('choose_source_directory', { kind }); }
 export function manageSource(action: ManageSourceAction, expectedSettingsRevision: string): Promise<SourcesSnapshot> { return request('manage_source', { action, expectedSettingsRevision }); }
+export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit: 50 }); }
+export function startJob(jobRequest: JobRequest): Promise<Job> { return request('start_job', { request: jobRequest }); }
+export function cancelJob(jobId: string): Promise<CancelJobResult> { return request('cancel_job', { jobId }); }
 export function runtimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error !== null && 'code' in error) {
     const code = String(error.code);
-    const descriptions: Record<string, string> = { REVISION_CONFLICT: '配置已发生变化，请刷新后重试。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '所选目录或操作无效，请重新选择 Codex Home。', STALE_CONFIRMATION: '目录选择已过期，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。' };
+    const descriptions: Record<string, string> = { REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '目录选择已过期，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
     return descriptions[code] ?? `操作失败（${code}），请查看采集诊断。`;
   }
   return '桌面服务未能完成操作，请重试。';

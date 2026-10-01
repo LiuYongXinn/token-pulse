@@ -88,6 +88,8 @@ impl Database {
             let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let existing:Option<String>=tx.query_row("SELECT job_id FROM jobs WHERE request_key=?1",[&request.request_key],|r|r.get(0)).optional()?;
             if let Some(existing)=existing {let old=load(&tx,&existing)?;if old.request!=request {return Err(ErrorCode::RequestKeyConflict.into());}return Ok(old.job);}
+            let pending:i64=tx.query_row("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running','validating','publishing','cancelling')",[],|r|r.get(0))?;
+            if pending>=32 {return Err(ErrorCode::InvalidQuery.into());}
             tx.execute("INSERT INTO jobs(job_id,kind,state,request_key,scope_json,progress_json,resume_json,created_at_ms,updated_at_ms) VALUES(?1,?2,'queued',?3,?4,?5,?6,?7,?7)",params![id,text(&request.kind)?,request.request_key,serde_json::to_string(&request.scope)?,serde_json::to_string(&JobProgress::default())?,serde_json::to_string(&JobCheckpoint::default())?,at_ms])?;
             let job=load(&tx,&id)?.job;tx.commit()?;Ok(job)
         })
@@ -95,6 +97,9 @@ impl Database {
     pub fn get_job(&self, id: &str) -> StoreResult<StoredJob> {
         validate_request_id(id)?;
         self.snapshot(|tx, _| load(tx, id))
+    }
+    pub fn next_queued_rebuild(&self) -> StoreResult<Option<Job>> {
+        self.snapshot(|tx,_| {let id:Option<String>=tx.query_row("SELECT job_id FROM jobs WHERE state='queued' AND kind='rebuild' ORDER BY created_at_ms,job_id LIMIT 1",[],|r|r.get(0)).optional()?;id.map(|id|load(tx,&id).map(|j|j.job)).transpose()})
     }
     pub fn list_jobs(&self, limit: u32) -> StoreResult<Vec<Job>> {
         if limit == 0 || limit > 100 {

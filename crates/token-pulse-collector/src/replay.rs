@@ -92,9 +92,11 @@ fn advance(
     )?;
     Ok(())
 }
-fn stopped(db: &Database, id: &str, stop: &impl Fn() -> bool) -> StoreResult<()> {
-    if stop() || db.get_job(id)?.job.state == JobState::Cancelling {
+fn stopped(db: &Database, id: &str, stop: &impl Fn() -> Option<ErrorCode>) -> StoreResult<()> {
+    if db.get_job(id)?.job.state == JobState::Cancelling {
         Err(ErrorCode::JobCancelled.into())
+    } else if let Some(code) = stop() {
+        Err(code.into())
     } else {
         Ok(())
     }
@@ -102,7 +104,7 @@ fn stopped(db: &Database, id: &str, stop: &impl Fn() -> bool) -> StoreResult<()>
 fn sequences(
     db: &Database,
     m: &RebuildManifest,
-    stop: &impl Fn() -> bool,
+    stop: &impl Fn() -> Option<ErrorCode>,
 ) -> StoreResult<BTreeMap<String, Sequence>> {
     let mut result = BTreeMap::new();
     let mut footprint = 0usize;
@@ -168,7 +170,7 @@ fn sequences(
 fn verify_physical_inputs(
     db: &Database,
     m: &RebuildManifest,
-    stop: &impl Fn() -> bool,
+    stop: &impl Fn() -> Option<ErrorCode>,
 ) -> StoreResult<()> {
     for input in &m.files {
         stopped(db, &m.job_id, stop)?;
@@ -213,6 +215,25 @@ pub fn execute_rebuild(
     stop: impl Fn() -> bool,
     now: impl Fn() -> i64,
 ) -> StoreResult<i64> {
+    execute_rebuild_controlled(
+        db,
+        job_id,
+        || {
+            if stop() {
+                Some(ErrorCode::JobCancelled)
+            } else {
+                None
+            }
+        },
+        now,
+    )
+}
+pub fn execute_rebuild_controlled(
+    db: &Database,
+    job_id: &str,
+    stop: impl Fn() -> Option<ErrorCode>,
+    now: impl Fn() -> i64,
+) -> StoreResult<i64> {
     let job = db.get_job(job_id)?;
     if job.job.kind != JobKind::Rebuild || job.job.state != JobState::Queued {
         return Err(ErrorCode::InvalidQuery.into());
@@ -226,7 +247,7 @@ pub fn execute_rebuild(
 fn run(
     db: &Database,
     job_id: &str,
-    stop: &impl Fn() -> bool,
+    stop: &impl Fn() -> Option<ErrorCode>,
     now: &impl Fn() -> i64,
 ) -> StoreResult<i64> {
     stopped(db, job_id, stop)?;
@@ -238,6 +259,44 @@ fn run(
         "planning",
         now(),
     )?;
+    if !db.rebuild_has_targets(&db.get_job(job_id)?.request.scope)? {
+        let mut progress = progress_of(db, job_id)?;
+        progress.discovery_complete = true;
+        db.checkpoint_job(
+            job_id.into(),
+            JobState::Running,
+            progress,
+            db.get_job(job_id)?.checkpoint,
+            now(),
+        )?;
+        stopped(db, job_id, stop)?;
+        advance(
+            db,
+            job_id,
+            JobState::Running,
+            JobState::Validating,
+            "validating",
+            now(),
+        )?;
+        stopped(db, job_id, stop)?;
+        advance(
+            db,
+            job_id,
+            JobState::Validating,
+            JobState::Publishing,
+            "publishing",
+            now(),
+        )?;
+        advance(
+            db,
+            job_id,
+            JobState::Publishing,
+            JobState::Succeeded,
+            "complete",
+            now(),
+        )?;
+        return db.snapshot(|_, revision| Ok(revision.data));
+    }
     let m = db.prepare_rebuild(job_id.into(), now())?;
     let seqs = sequences(db, &m, stop)?;
     let mut p = JobProgress {
@@ -299,6 +358,11 @@ fn run(
     let mut result_footprint = 0usize;
     for key in order {
         let sequence = &seqs[&key];
+        let has_children = seqs.values().any(|child| {
+            child.identity.provider_namespace == sequence.identity.provider_namespace
+                && child.identity.parent_provider_id.as_ref()
+                    == Some(&sequence.identity.provider_session_id)
+        });
         let ledger = &m
             .ledgers
             .iter()
@@ -520,13 +584,9 @@ fn run(
                     .as_ref()
                     .and_then(|k| result.state.streams.get(k))
                     .cloned();
-                if seqs.values().any(|child| {
-                    child.identity.provider_namespace == sequence.identity.provider_namespace
-                        && child.identity.parent_provider_id.as_ref()
-                            == Some(&sequence.identity.provider_session_id)
-                }) {
+                if has_children {
                     result_footprint = result_footprint
-                        .checked_add(1024)
+                        .checked_add(serde_json::to_vec(&UsageSignature::from(&u))?.len() + 1024)
                         .ok_or(ErrorCode::NumericOverflow)?;
                     if result_footprint > 128 * 1024 * 1024 {
                         return Err(ErrorCode::InvalidQuery.into());

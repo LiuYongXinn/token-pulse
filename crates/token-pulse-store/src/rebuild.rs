@@ -201,6 +201,9 @@ fn require_state(tx: &Transaction<'_>, id: &str, expected: JobState) -> StoreRes
     Ok(())
 }
 impl Database {
+    pub fn rebuild_has_targets(&self, scope: &JobScope) -> StoreResult<bool> {
+        self.snapshot(|tx, _| Ok(!dependency_closure(tx, scope)?.is_empty()))
+    }
     pub fn rebuild_file_path(&self, file_id: &str) -> StoreResult<ReplayPath> {
         self.snapshot(|tx,_|Ok(tx.query_row("SELECT f.canonical_path,s.root_path FROM source_files f JOIN sources s ON s.source_id=f.source_id WHERE f.file_id=?1",[file_id],|r|Ok(ReplayPath{path:r.get(0)?,source_root:r.get(1)?}))?))
     }
@@ -300,7 +303,7 @@ impl Database {
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;let job=jobs::load(&tx,&job_id)?;
             if token_pulse_core::jobs::finished(job.job.state) {return Err(ErrorCode::RevisionConflict.into());}
             for id in job.checkpoint.candidate_ledger_ids {tx.execute("UPDATE ledger_generations SET state='failed' WHERE ledger_id=?1 AND state='candidate'",[id])?;}
-            let state=if code==ErrorCode::JobCancelled {"cancelled"} else {"failed"};
+            let state=if code==ErrorCode::JobCancelled {"cancelled"} else if code==ErrorCode::JobInterrupted {"interrupted"} else {"failed"};
             tx.execute("UPDATE jobs SET state=?1,error_code=?2,updated_at_ms=?3 WHERE job_id=?4",params![state,code.to_string(),at_ms,job_id])?;tx.commit()?;Ok(())
         })
     }
