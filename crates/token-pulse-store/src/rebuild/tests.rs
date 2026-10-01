@@ -73,6 +73,182 @@ fn candidate(m: &RebuildManifest) -> CandidateBatch {
     }
 }
 #[test]
+fn mirror_publication_failure_rolls_back_aliases_observation_keys_bindings_and_readers() {
+    use crate::{FileRegistration, batch::ObservationWrite};
+    use token_pulse_core::domain::{
+        EffectiveMetadata, NormalizedObservation, PhysicalPosition, ReaderContext,
+    };
+    let (_dir, db) = setup();
+    let with_head =
+        |mut b: crate::batch::WriteBatch, session: &str, generation: &str, observation: &str| {
+            b.file_generation_id = generation.into();
+            b.observations[0].observation_id = observation.into();
+            b.observations[0].session_key = Some(session.into());
+            if let NormalizedObservation::Usage(u) = &mut b.observations[0].record {
+                u.session_key = session.into();
+                u.physical_position.file_generation_id = generation.into();
+                u.physical_position.byte_offset = 10;
+            }
+            b.observations.insert(
+                0,
+                ObservationWrite {
+                    observation_id: format!("head-{generation}"),
+                    session_key: Some(session.into()),
+                    payload_fingerprint: format!("header-{generation}"),
+                    record: NormalizedObservation::SessionMetadata {
+                        physical_position: PhysicalPosition {
+                            file_generation_id: generation.into(),
+                            byte_offset: 0,
+                            byte_end: 10,
+                        },
+                        provider_session_id: "provider-session".into(),
+                        metadata: EffectiveMetadata::default(),
+                        created_at_ms: Some(0),
+                    },
+                },
+            );
+            b.reader_context = ReaderContext {
+                session_key: Some(session.into()),
+                ..Default::default()
+            };
+            b
+        };
+    db.commit(with_head(fixture(), "session", "generation", "observation"))
+        .unwrap();
+    db.ensure_session(SessionRegistration {
+        session_key: "mirror".into(),
+        provider_session_id: Some("provider-session".into()),
+        parent_key: None,
+        parent_provider_id: None,
+        created_at_ms: None,
+        ledger_id: "mirror-ledger".into(),
+        registered_at_ms: 1,
+    })
+    .unwrap();
+    db.register_file(FileRegistration {
+        file_id: "mirror-file".into(),
+        source_id: "source".into(),
+        canonical_path: "mirror.jsonl".into(),
+        file_identity: Some("mirror-identity".into()),
+        file_generation_id: "mirror-generation".into(),
+        observed_size: 100,
+        created_at_ms: 1,
+        reader_context: ReaderContext::default(),
+    })
+    .unwrap();
+    let mut mirror = with_head(
+        fixture(),
+        "mirror",
+        "mirror-generation",
+        "mirror-observation",
+    );
+    mirror.events.clear();
+    mirror.streams.clear();
+    mirror.ledgers = vec![crate::batch::LedgerExpectation {
+        session_key: "mirror".into(),
+        ledger_id: "mirror-ledger".into(),
+    }];
+    mirror.pending.push(PendingWrite {
+        pending_id: "mirror-pending".into(),
+        ledger_id: "mirror-ledger".into(),
+        observation_id: "mirror-observation".into(),
+        quality: ObservationQuality::Pending,
+        reason_code: "lineage_pending".into(),
+        vector: None,
+        evidence: Default::default(),
+    });
+    db.commit(mirror).unwrap();
+    let m = planned(&db);
+    let proof = db.prepare_canonical_replay("rebuild").unwrap();
+    assert_eq!(proof.plan.groups[0].alias_session_keys, ["mirror"]);
+    let ledger = &m
+        .ledgers
+        .iter()
+        .find(|l| l.session_key == "session")
+        .unwrap()
+        .candidate_ledger_id;
+    let mut b = candidate(&m);
+    b.pending.push(PendingWrite {
+        pending_id: "candidate-mirror".into(),
+        ledger_id: ledger.clone(),
+        observation_id: "mirror-observation".into(),
+        quality: ObservationQuality::Duplicate,
+        reason_code: "verified_mirror".into(),
+        vector: None,
+        evidence: Default::default(),
+    });
+    b.provenance.push(ProvenanceWrite {
+        event_id: "candidate-event".into(),
+        observation_id: "mirror-observation".into(),
+        relation: "mirror".into(),
+    });
+    db.stage_candidate_batch(b).unwrap();
+    db.stage_candidate_ordinals(
+        "rebuild".into(),
+        ledger.clone(),
+        0,
+        vec!["observation".into()],
+    )
+    .unwrap();
+    db.finish_candidate_alignment("rebuild".into()).unwrap();
+    assert_eq!(
+        db.stage_candidate_batch(candidate(&m)).unwrap_err().code,
+        ErrorCode::RevisionConflict
+    );
+    change(&db, "rebuild", JobState::Running, JobState::Validating);
+    db.validate_candidate("rebuild").unwrap();
+    change(&db, "rebuild", JobState::Validating, JobState::Publishing);
+    assert_eq!(
+        db.write(|conn| publish(conn, "rebuild", 3, || Err(ErrorCode::DiskFull.into())))
+            .unwrap_err()
+            .code,
+        ErrorCode::DiskFull
+    );
+    db.snapshot(|tx, r| {
+        assert_eq!(r.data, 2);
+        assert_eq!(
+            tx.query_row("SELECT COUNT(*) FROM session_aliases", [], |r| r
+                .get::<_, i64>(0))?,
+            0
+        );
+        assert_eq!(
+            tx.query_row(
+                "SELECT session_key FROM observations WHERE observation_id='mirror-observation'",
+                [],
+                |r| r.get::<_, String>(0)
+            )?,
+            "mirror"
+        );
+        assert_eq!(
+            tx.query_row(
+                "SELECT COUNT(*) FROM file_session_bindings WHERE session_key='session'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            1
+        );
+        assert_eq!(
+            tx.query_row("SELECT COUNT(*) FROM rebuild_audits", [], |r| r
+                .get::<_, i64>(0))?,
+            0
+        );
+        Ok(())
+    })
+    .unwrap();
+    use std::sync::mpsc;
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel();
+    let reader = db.clone();
+    let handle = std::thread::spawn(move || {
+        reader.snapshot(|tx,r|{assert_eq!(r.data,2);ready_tx.send(()).unwrap();done_rx.recv().unwrap();assert_eq!(tx.query_row("SELECT COUNT(*) FROM session_aliases",[],|r|r.get::<_,i64>(0))?,0);assert_eq!(tx.query_row("SELECT session_key FROM observations WHERE observation_id='mirror-observation'",[],|r|r.get::<_,String>(0))?,"mirror");Ok(())}).unwrap()
+    });
+    ready_rx.recv().unwrap();
+    db.publish_candidate("rebuild".into(), 4).unwrap();
+    done_tx.send(()).unwrap();
+    handle.join().unwrap();
+    db.snapshot(|tx,r|{assert_eq!(r.data,3);assert_eq!(tx.query_row("SELECT canonical_session_key FROM session_aliases WHERE alias_session_key='mirror'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT session_key FROM observations WHERE observation_id='mirror-observation'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT json_extract(normalized_json,'$.session_key') FROM observations WHERE observation_id='mirror-observation'",[],|r|r.get::<_,String>(0))?,"session");assert_eq!(tx.query_row("SELECT COUNT(*) FROM file_session_bindings WHERE session_key='session'",[],|r|r.get::<_,i64>(0))?,2);assert_eq!(tx.query_row("SELECT COUNT(*) FROM file_session_bindings WHERE session_key='mirror'",[],|r|r.get::<_,i64>(0))?,1);assert_eq!(tx.query_row("SELECT COUNT(*) FROM active_usage_events",[],|r|r.get::<_,i64>(0))?,1);assert_eq!(tx.query_row("SELECT COUNT(*) FROM rebuild_audits",[],|r|r.get::<_,i64>(0))?,2);Ok(())}).unwrap();
+}
+#[test]
 fn candidate_is_invisible_and_publication_preserves_a_real_old_read_snapshot() {
     use std::sync::mpsc;
     let (_dir, db) = setup();

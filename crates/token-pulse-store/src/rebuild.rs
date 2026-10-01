@@ -231,6 +231,28 @@ impl Database {
             Ok(result)
         })
     }
+    pub fn replay_observation_ids(
+        &self,
+        job_id: &str,
+        ids: &[String],
+    ) -> StoreResult<Vec<ReplayRecord>> {
+        if ids.is_empty() || ids.len() > 256 {
+            return Err(ErrorCode::InvalidQuery.into());
+        }
+        self.snapshot(|tx,_| {
+            let m=manifest(tx,job_id)?;fresh(tx,&m)?;
+            let mut s=tx.prepare("SELECT o.observation_id,o.normalized_json,o.file_generation_id,o.byte_end,o.session_key FROM json_each(?1) requested JOIN observations o ON o.observation_id=requested.value ORDER BY CAST(requested.key AS INTEGER)")?;
+            let mut rows=s.query([serde_json::to_string(ids)?])?;let mut result=vec![];let mut size=0usize;
+            while let Some(row)=rows.next()? {
+                let encoded:String=row.get(1)?;let next=size.checked_add(encoded.len()).ok_or(ErrorCode::NumericOverflow)?;
+                if next>16*1024*1024 {if result.is_empty(){return Err(ErrorCode::InvalidQuery.into());}break;}
+                let generation:String=row.get(2)?;let end:i64=row.get(3)?;let session:String=row.get(4)?;
+                if !m.ledgers.iter().any(|l|l.session_key==session) || !m.files.iter().any(|f|f.generation_id==generation && end<=f.committed_offset){return Err(ErrorCode::CandidateObsolete.into());}
+                result.push(ReplayRecord{observation_id:row.get(0)?,record:json(&encoded)?});size=next;
+            }
+            if result.is_empty(){return Err(ErrorCode::InvalidQuery.into());}Ok(result)
+        })
+    }
     pub fn active_session_event_count(&self, session: &str) -> StoreResult<i64> {
         self.snapshot(|tx, _| {
             Ok(tx.query_row(
@@ -285,6 +307,8 @@ impl Database {
         }
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;require_state(&tx,&batch.job_id,JobState::Running)?;
             let m=manifest(&tx,&batch.job_id)?;fresh(&tx,&m)?;
+            let sealed:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_usage_cursors c JOIN json_each((SELECT resume_json FROM jobs WHERE job_id=?1),'$.candidate_ledger_ids') owned ON owned.value=c.ledger_id)",[&batch.job_id],|r|r.get(0))?;
+            if sealed{return Err(ErrorCode::RevisionConflict.into());}
             let allowed=m.ledgers.iter().map(|l|l.candidate_ledger_id.as_str()).collect::<HashSet<_>>();
             for ledger in batch.events.iter().map(|e|&e.ledger_id).chain(batch.streams.iter().map(|e|&e.ledger_id)).chain(batch.pending.iter().map(|e|&e.ledger_id)).chain(batch.contexts.iter().map(|e|&e.ledger_id)) {
                 if !allowed.contains(ledger.as_str()) {return Err(ErrorCode::InvalidQuery.into());}
@@ -332,7 +356,23 @@ fn validate(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
         if state != "candidate" {
             return Err(ErrorCode::CandidateObsolete.into());
         }
-        let missing:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM observations o WHERE o.session_key=?1 AND o.kind='usage' AND NOT EXISTS(SELECT 1 FROM usage_events e WHERE e.ledger_id=?2 AND e.origin_observation_id=o.observation_id) AND NOT EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=?2 AND p.observation_id=o.observation_id))",params![ledger.session_key,ledger.candidate_ledger_id],|r|r.get(0))?;
+        if canonical::alias_target(tx, &m.job_id, &ledger.session_key)?.is_some() {
+            let nonempty:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM usage_events WHERE ledger_id=?1 UNION ALL SELECT 1 FROM pending_usage WHERE ledger_id=?1 UNION ALL SELECT 1 FROM stream_states WHERE ledger_id=?1 UNION ALL SELECT 1 FROM context_snapshots WHERE ledger_id=?1)",[&ledger.candidate_ledger_id],|r|r.get(0))?;
+            if nonempty {
+                return Err(ErrorCode::InvalidUsage.into());
+            }
+            continue;
+        }
+        let proof_count:Option<String>=tx.query_row("SELECT json_extract(evidence_json,'$.record_count') FROM candidate_session_aliases WHERE job_id=?1 AND canonical_session_key=?2 LIMIT 1",params![m.job_id,ledger.session_key],|r|r.get(0)).optional()?;
+        if let Some(expected) = proof_count {
+            let expected: i64 = expected.parse().map_err(|_| ErrorCode::DbCorrupt)?;
+            let (count,min,max):(i64,Option<i64>,Option<i64>)=tx.query_row("SELECT COUNT(*),MIN(ordinal),MAX(ordinal) FROM canonical_usage_sequence WHERE ledger_id=?1",[&ledger.candidate_ledger_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
+            let sealed:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_usage_cursors WHERE ledger_id=?1 AND state='aligned')",[&ledger.candidate_ledger_id],|r|r.get(0))?;
+            if count != expected || min != Some(0) || max != Some(expected - 1) || !sealed {
+                return Err(ErrorCode::InvalidUsage.into());
+            }
+        }
+        let missing:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM observations o WHERE (o.session_key=?1 OR o.session_key IN (SELECT alias_session_key FROM candidate_session_aliases WHERE job_id=?3 AND canonical_session_key=?1)) AND o.kind='usage' AND NOT EXISTS(SELECT 1 FROM usage_events e WHERE e.ledger_id=?2 AND e.origin_observation_id=o.observation_id) AND NOT EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=?2 AND p.observation_id=o.observation_id))",params![ledger.session_key,ledger.candidate_ledger_id,m.job_id],|r|r.get(0))?;
         let overlap:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM usage_events e JOIN pending_usage p ON p.observation_id=e.origin_observation_id AND p.ledger_id=e.ledger_id WHERE e.ledger_id=?1 AND p.kind<>'unattributed')",[&ledger.candidate_ledger_id],|r|r.get(0))?;
         if missing || overlap {
             return Err(ErrorCode::InvalidUsage.into());
@@ -378,6 +418,7 @@ fn publish(
         );
         tx.execute("INSERT INTO rebuild_audits(audit_id,job_id,session_key,old_ledger_id,new_ledger_id,reason,difference_json,committed_data_revision,created_at_ms) VALUES(?1,?2,?3,?4,?5,'rebuild',?6,?7,?8)",params![audit,job_id,ledger.session_key,ledger.old_ledger_id,ledger.candidate_ledger_id,serde_json::to_string(&difference)?,next,at_ms])?;
     }
+    canonical::publish_aliases(&tx, &m)?;
     tx.execute("UPDATE app_state SET data_revision=?1", [next])?;
     let job = jobs::load(&tx, job_id)?;
     let mut progress: token_pulse_core::jobs::JobProgress = json(&tx.query_row(
@@ -391,6 +432,18 @@ fn publish(
         |n, l| -> StoreResult<i128> {
             let count: i64 = tx.query_row(
                 "SELECT COUNT(*) FROM usage_events WHERE ledger_id=?1",
+                [&l.candidate_ledger_id],
+                |r| r.get(0),
+            )?;
+            n.checked_add(i128::from(count))
+                .ok_or(ErrorCode::NumericOverflow.into())
+        },
+    )?)?;
+    progress.pending_observations = DecimalInt::from_nonnegative(m.ledgers.iter().try_fold(
+        0i128,
+        |n, l| -> StoreResult<i128> {
+            let count: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM pending_usage WHERE ledger_id=?1 AND kind='pending'",
                 [&l.candidate_ledger_id],
                 |r| r.get(0),
             )?;

@@ -47,6 +47,153 @@ fn usage(second: u32, last: [i64; 5], cumulative: [i64; 5]) -> String {
     let vector = |v: [i64; 5]| serde_json::json!({"input_tokens":v[0],"cached_input_tokens":v[1],"output_tokens":v[2],"reasoning_output_tokens":v[3],"total_tokens":v[4]});
     serde_json::json!({"timestamp":format!("1970-01-01T00:00:{second:02}Z"),"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":vector(last),"total_token_usage":vector(cumulative)}}}).to_string()+"\n"
 }
+fn turn(model: &str) -> String {
+    serde_json::json!({"timestamp":"1970-01-01T00:00:00Z","type":"turn_context","payload":{"model":model}}).to_string()+"\n"
+}
+#[test]
+fn mirror_publication_keeps_one_identity_primary_metadata_and_all_source_evidence() {
+    let data = tempfile::tempdir().unwrap();
+    let one = tempfile::tempdir().unwrap();
+    let two = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, one.path());
+    fs::create_dir_all(two.path().join("sessions")).unwrap();
+    db.add_source(SourceRecord {
+        source_id: "custom".into(),
+        root_path: two.path().to_str().unwrap().into(),
+        directory_identity: None,
+        kind: "local".into(),
+        enabled: true,
+        created_at_ms: 1,
+    })
+    .unwrap();
+    let a = usage(1, [100, 60, 10, 2, 110], [100, 60, 10, 2, 110]);
+    let b = usage(2, [20, 5, 5, 1, 25], [120, 65, 15, 3, 135]);
+    let c = usage(3, [10, 2, 3, 1, 13], [130, 67, 18, 4, 148]);
+    let primary = one.path().join("sessions/primary.jsonl");
+    let mirror = two.path().join("sessions/mirror.jsonl");
+    let primary_bytes = header("shared", None) + &turn("primary-model") + &a + &b;
+    let mirror_bytes = header("shared", None) + &turn("mirror-model") + &a + &b + &c;
+    fs::write(&primary, &primary_bytes).unwrap();
+    collect_file(&db, "local", &primary, 5000).unwrap();
+    let stable: String = db
+        .snapshot(|tx, _| {
+            Ok(tx.query_row(
+                "SELECT session_key FROM active_usage_events LIMIT 1",
+                [],
+                |r| r.get(0),
+            )?)
+        })
+        .unwrap();
+    fs::write(&mirror, &mirror_bytes).unwrap();
+    collect_file(&db, "custom", &mirror, 5001).unwrap();
+    assert_eq!(total(&db), "135");
+    job(&db, "mirror");
+    execute_rebuild(&db, "mirror", || false, || 6000).unwrap();
+    assert_eq!(total(&db), "148");
+    db.snapshot(|tx,_| {
+        let mut s=tx.prepare("SELECT total_tokens,model,session_key FROM active_usage_events ORDER BY occurred_at_ms")?;
+        let rows=s.query_map([],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?)))?.collect::<Result<Vec<_>,_>>()?;
+        assert_eq!(rows,vec![(110,"primary-model".into(),stable.clone()),(25,"primary-model".into(),stable.clone()),(13,"mirror-model".into(),stable.clone())]);
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM session_aliases",[],|r|r.get::<_,i64>(0))?,1);
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM event_provenance p JOIN active_usage_events e ON e.event_id=p.event_id",[],|r|r.get::<_,i64>(0))?,5);
+        for (source,expected) in [("local","135"),("custom","148")] {
+            let sum:String=tx.query_row("SELECT sum_token_decimal(e.total_tokens) FROM active_usage_events e WHERE EXISTS(SELECT 1 FROM event_provenance p JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations g ON g.file_generation_id=o.file_generation_id JOIN source_files f ON f.file_id=g.file_id WHERE p.event_id=e.event_id AND f.source_id=?1)",[source],|r|r.get(0))?;assert_eq!(sum,expected);
+        }
+        assert_eq!(tx.query_row("SELECT COUNT(DISTINCT session_key) FROM observations WHERE kind='usage'",[],|r|r.get::<_,i64>(0))?,1);
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM file_usage_cursors c JOIN sessions s ON s.active_ledger_id=c.ledger_id WHERE c.state='aligned'",[],|r|r.get::<_,i64>(0))?,2);
+        Ok(())
+    }).unwrap();
+    assert_eq!(fs::read_to_string(&primary).unwrap(), primary_bytes);
+    assert_eq!(fs::read_to_string(&mirror).unwrap(), mirror_bytes);
+    job(&db, "again-mirror");
+    execute_rebuild(&db, "again-mirror", || false, || 7000).unwrap();
+    assert_eq!(total(&db), "148");
+    use std::io::Write;
+    let d = usage(4, [5, 1, 2, 0, 7], [135, 68, 20, 4, 155]);
+    // Keep the shorter source's order intact when it catches up to the longer source.
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&primary)
+        .unwrap()
+        .write_all((c.clone() + &d).as_bytes())
+        .unwrap();
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&mirror)
+        .unwrap()
+        .write_all(d.as_bytes())
+        .unwrap();
+    collect_file(&db, "local", &primary, 8000).unwrap();
+    collect_file(&db, "custom", &mirror, 8001).unwrap();
+    assert_eq!(total(&db), "148"); // Live ordinal alignment is the next module; unproved append stays pending.
+    job(&db, "append-mirror");
+    execute_rebuild(&db, "append-mirror", || false, || 9000).unwrap();
+    assert_eq!(total(&db), "155");
+    db.snapshot(|tx, _| {
+        assert_eq!(
+            tx.query_row(
+                "SELECT COUNT(DISTINCT session_key) FROM active_usage_events",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            1
+        );
+        assert_eq!(
+            tx.query_row(
+                "SELECT canonical_session_key FROM session_aliases",
+                [],
+                |r| r.get::<_, String>(0)
+            )?,
+            stable
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+#[test]
+fn mirrored_parent_is_one_lineage_candidate_and_conflicting_tails_remain_pending() {
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, logs.path());
+    let a = usage(1, [100, 60, 10, 2, 110], [100, 60, 10, 2, 110]);
+    let b = usage(2, [20, 5, 5, 1, 25], [120, 65, 15, 3, 135]);
+    let c = usage(3, [10, 2, 3, 1, 13], [130, 67, 18, 4, 148]);
+    for (name, bytes) in [
+        ("parent", header("parent", None) + &a + &b),
+        ("mirror", header("parent", None) + &a + &b),
+        ("child", header("child", Some("parent")) + &a + &b + &c),
+    ] {
+        let path = logs.path().join(format!("sessions/{name}.jsonl"));
+        fs::write(&path, bytes).unwrap();
+        collect_file(&db, "local", &path, 5000).unwrap();
+    }
+    job(&db, "family-mirror");
+    execute_rebuild(&db, "family-mirror", || false, || 6000).unwrap();
+    assert_eq!(total(&db), "148");
+    db.snapshot(|tx,_|{assert_eq!(tx.query_row("SELECT COUNT(*) FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id WHERE p.kind='inherited'",[],|r|r.get::<_,i64>(0))?,2);Ok(())}).unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, logs.path());
+    for (name, bytes) in [
+        ("primary", header("same", None) + &a),
+        ("one", header("same", None) + &a + &b),
+        (
+            "two",
+            header("same", None) + &a + &usage(2, [10, 2, 3, 1, 13], [110, 62, 13, 3, 123]),
+        ),
+    ] {
+        let path = logs.path().join(format!("sessions/{name}.jsonl"));
+        fs::write(&path, bytes).unwrap();
+        collect_file(&db, "local", &path, 5000).unwrap();
+    }
+    job(&db, "conflict");
+    execute_rebuild(&db, "conflict", || false, || 6000).unwrap();
+    assert_eq!(total(&db), "110");
+    db.snapshot(|tx,_|{assert_eq!(tx.query_row("SELECT COUNT(*) FROM session_aliases",[],|r|r.get::<_,i64>(0))?,0);assert_eq!(tx.query_row("SELECT COUNT(*) FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id WHERE p.reason_code='sequence_identity_conflict'",[],|r|r.get::<_,i64>(0))?,4);Ok(())}).unwrap();
+}
 #[test]
 fn rebuild_replays_real_observations_and_source_absence_does_not_erase_history() {
     let data = tempfile::tempdir().unwrap();

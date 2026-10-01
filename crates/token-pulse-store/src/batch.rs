@@ -142,7 +142,11 @@ fn session_for_ledger(tx: &Transaction<'_>, ledger: &str) -> StoreResult<String>
         |r| r.get(0),
     )?)
 }
-fn same_session(tx: &Transaction<'_>, ledger: &str, observation: &str) -> StoreResult<()> {
+pub(crate) fn same_session(
+    tx: &Transaction<'_>,
+    ledger: &str,
+    observation: &str,
+) -> StoreResult<()> {
     let session: String = tx.query_row(
         "SELECT session_key FROM observations WHERE observation_id=?1",
         [observation],

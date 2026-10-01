@@ -22,7 +22,6 @@ struct Sequence {
     head: bool,
     complete: bool,
     single_generation: bool,
-    has_old_events: bool,
 }
 impl Sequence {
     fn view(&self) -> SessionSequence<'_> {
@@ -38,6 +37,10 @@ struct ParentOutcome {
     reference: Option<CanonicalReference>,
     baseline: Option<StreamBaseline>,
     observation_id: String,
+}
+struct ReplaySequences {
+    sequences: BTreeMap<String, Sequence>,
+    origins: BTreeMap<String, Vec<String>>,
 }
 fn position(record: &NormalizedObservation) -> &PhysicalPosition {
     match record {
@@ -101,71 +104,151 @@ fn stopped(db: &Database, id: &str, stop: &impl Fn() -> Option<ErrorCode>) -> St
         Ok(())
     }
 }
-fn sequences(
+fn sequences(canonical: &mut CanonicalReplayPlan) -> StoreResult<ReplaySequences> {
+    let mut result = BTreeMap::new();
+    let mut origins = BTreeMap::new();
+    for group in &canonical.plan.groups {
+        let primary = canonical
+            .sequences
+            .get_mut(&group.primary_sequence_key)
+            .ok_or(ErrorCode::InvalidQuery)?;
+        let mut signatures = std::mem::take(&mut primary.physical.records);
+        let mut observation_ids = primary.observation_ids.clone();
+        let mut seq = Sequence {
+            identity: primary.physical.identity.clone(),
+            signatures: vec![],
+            head: primary.physical.starts_at_session_head,
+            complete: primary.physical.scanned_to_upper_bound,
+            single_generation: true,
+        };
+        if group.longest_sequence_key != group.primary_sequence_key {
+            let longest = canonical
+                .sequences
+                .get_mut(&group.longest_sequence_key)
+                .ok_or(ErrorCode::InvalidQuery)?;
+            signatures.extend(longest.physical.records.drain(group.primary_record_count..));
+            observation_ids
+                .extend_from_slice(&longest.observation_ids[group.primary_record_count..]);
+            seq.complete = longest.physical.scanned_to_upper_bound;
+        }
+        seq.signatures = signatures;
+        origins.insert(group.session_key.clone(), observation_ids);
+        result.insert(group.session_key.clone(), seq);
+    }
+    Ok(ReplaySequences {
+        sequences: result,
+        origins,
+    })
+}
+fn empty_batch(job: &str) -> CandidateBatch {
+    CandidateBatch {
+        job_id: job.into(),
+        events: vec![],
+        streams: vec![],
+        provenance: vec![],
+        pending: vec![],
+        contexts: vec![],
+    }
+}
+fn classify_copies(
     db: &Database,
     m: &RebuildManifest,
+    canonical: &CanonicalReplayPlan,
+    origins: &BTreeMap<String, Vec<String>>,
     stop: &impl Fn() -> Option<ErrorCode>,
-) -> StoreResult<BTreeMap<String, Sequence>> {
-    let mut result = BTreeMap::new();
-    let mut footprint = 0usize;
-    for ledger in &m.ledgers {
-        let mut seq = Sequence {
-            identity: SequenceIdentity {
-                provider_namespace: ledger.provider.clone(),
-                provider_session_id: ledger.provider_session_id.clone().unwrap_or_default(),
-                created_at_ms: ledger.created_at_ms,
-                parent_provider_id: ledger.parent_provider_id.clone(),
-            },
-            signatures: vec![],
-            head: false,
-            complete: true,
-            single_generation: true,
-            has_old_events: db.active_session_event_count(&ledger.session_key)? > 0,
-        };
-        let mut after: Option<(String, i64)> = None;
-        let mut generations = BTreeSet::new();
-        loop {
-            stopped(db, &m.job_id, stop)?;
-            let records = db.replay_records(
-                &m.job_id,
-                &ledger.session_key,
-                after.as_ref().map(|(g, o)| (g.as_str(), *o)),
-            )?;
-            if records.is_empty() {
-                break;
-            }
-            for record in records {
-                let p = position(&record.record);
-                after = Some((p.file_generation_id.clone(), p.byte_offset as i64));
-                generations.insert(p.file_generation_id.clone());
-                if matches!(
-                    &record.record,
-                    NormalizedObservation::SessionMetadata { .. }
-                ) && p.byte_offset == 0
-                {
-                    seq.head = true;
-                }
-                if let NormalizedObservation::Usage(u) = record.record {
-                    let signature = UsageSignature::from(&u);
-                    footprint = footprint
-                        .checked_add(serde_json::to_vec(&signature)?.len() + 128)
-                        .ok_or(ErrorCode::NumericOverflow)?;
-                    if footprint > 128 * 1024 * 1024 {
-                        return Err(ErrorCode::InvalidQuery.into());
+) -> StoreResult<()> {
+    for group in &canonical.plan.groups {
+        let ledger = &m
+            .ledgers
+            .iter()
+            .find(|l| l.session_key == group.session_key)
+            .ok_or(ErrorCode::InvalidQuery)?
+            .candidate_ledger_id;
+        for member in &group.member_sequence_keys {
+            let sequence = &canonical.sequences[member];
+            let mut index = 0usize;
+            while index < sequence.observation_ids.len() {
+                stopped(db, &m.job_id, stop)?;
+                let end = (index + 256).min(sequence.observation_ids.len());
+                let records =
+                    db.replay_observation_ids(&m.job_id, &sequence.observation_ids[index..end])?;
+                let events =
+                    db.candidate_event_ids(&m.job_id, ledger, index as i64, records.len())?;
+                let mut batch = empty_batch(&m.job_id);
+                for (record, event) in records.into_iter().zip(events) {
+                    let origin = &origins[&group.session_key][index];
+                    index += 1;
+                    if record.observation_id == *origin {
+                        continue;
                     }
-                    seq.signatures.push(signature);
+                    let NormalizedObservation::Usage(u) = record.record else {
+                        return Err(ErrorCode::InvalidUsage.into());
+                    };
+                    if let Some(event_id) = event {
+                        batch.provenance.push(ProvenanceWrite {
+                            event_id,
+                            observation_id: record.observation_id.clone(),
+                            relation: "mirror".into(),
+                        });
+                    }
+                    batch.pending.push(PendingWrite {
+                        pending_id: id("pending", &format!("{ledger}:{}", record.observation_id)),
+                        ledger_id: ledger.clone(),
+                        observation_id: record.observation_id,
+                        quality: ObservationQuality::Duplicate,
+                        reason_code: "verified_mirror".into(),
+                        vector: u.last.or(u.cumulative),
+                        evidence: PendingEvidence {
+                            related_observation_ids: vec![origin.clone()],
+                            ..Default::default()
+                        },
+                    });
+                }
+                if !batch.pending.is_empty() {
+                    db.stage_candidate_batch(batch)?;
                 }
             }
         }
-        seq.complete = generations.iter().all(|g| {
-            m.files
-                .iter()
-                .any(|f| &f.generation_id == g && f.committed_offset == f.observed_size)
-        });
-        seq.single_generation = generations.len() <= 1;
-        result.insert(ledger.session_key.clone(), seq);
     }
-    Ok(result)
+    for isolated in &canonical.plan.isolated {
+        let sequence = &canonical.sequences[&isolated.sequence_key];
+        let ledger = &m
+            .ledgers
+            .iter()
+            .find(|l| l.session_key == isolated.session_key)
+            .ok_or(ErrorCode::InvalidQuery)?
+            .candidate_ledger_id;
+        let mut index = 0usize;
+        while index < sequence.observation_ids.len() {
+            stopped(db, &m.job_id, stop)?;
+            let end = (index + 256).min(sequence.observation_ids.len());
+            let records =
+                db.replay_observation_ids(&m.job_id, &sequence.observation_ids[index..end])?;
+            let mut batch = empty_batch(&m.job_id);
+            for record in records {
+                index += 1;
+                let NormalizedObservation::Usage(u) = record.record else {
+                    return Err(ErrorCode::InvalidUsage.into());
+                };
+                batch.pending.push(PendingWrite {
+                    pending_id: id("pending", &format!("{ledger}:{}", record.observation_id)),
+                    ledger_id: ledger.clone(),
+                    observation_id: record.observation_id,
+                    quality: ObservationQuality::Pending,
+                    reason_code: match isolated.reason {
+                        SequenceDecision::IdentityConflict => "sequence_identity_conflict",
+                        SequenceDecision::PendingIncomplete => "sequence_incomplete",
+                        _ => "sequence_unproven",
+                    }
+                    .into(),
+                    vector: u.last.or(u.cumulative),
+                    evidence: PendingEvidence::default(),
+                });
+            }
+            db.stage_candidate_batch(batch)?;
+        }
+    }
+    Ok(())
 }
 fn verify_physical_inputs(
     db: &Database,
@@ -298,7 +381,12 @@ fn run(
         return db.snapshot(|_, revision| Ok(revision.data));
     }
     let m = db.prepare_rebuild(job_id.into(), now())?;
-    let seqs = sequences(db, &m, stop)?;
+    stopped(db, job_id, stop)?;
+    let mut canonical = db.prepare_canonical_replay(job_id)?;
+    let ReplaySequences {
+        sequences: seqs,
+        origins,
+    } = sequences(&mut canonical)?;
     let mut p = JobProgress {
         phase: "replaying_observations".into(),
         discovered_files: decimal(m.files.len()),
@@ -313,22 +401,7 @@ fn run(
         checkpoint.clone(),
         now(),
     )?;
-    // Existing trusted primary remains primary. Other physical sequences stay pending until a full mirror mapping is published.
-    let mut primaries = BTreeSet::new();
-    for (key, seq) in &seqs {
-        let peers = seqs
-            .iter()
-            .filter(|(_, s)| {
-                s.identity.provider_namespace == seq.identity.provider_namespace
-                    && s.identity.provider_session_id == seq.identity.provider_session_id
-            })
-            .collect::<Vec<_>>();
-        if peers.len() == 1
-            || (seq.has_old_events && peers.iter().filter(|(_, s)| s.has_old_events).count() == 1)
-        {
-            primaries.insert(key.clone());
-        }
-    }
+    let primaries = seqs.keys().cloned().collect::<BTreeSet<_>>();
     let mut order = vec![];
     let mut cycles = BTreeSet::new();
     let mut remaining = seqs.keys().cloned().collect::<BTreeSet<_>>();
@@ -394,17 +467,17 @@ fn run(
             _ => None,
         };
         let mut state = AccountingState::new(key.clone());
-        let mut after: Option<(String, i64)> = None;
         let mut usage_index = 0usize;
         let mut outcomes = vec![];
         let mut revisions = BTreeMap::new();
         loop {
             stopped(db, job_id, stop)?;
-            let records =
-                db.replay_records(job_id, &key, after.as_ref().map(|(g, o)| (g.as_str(), *o)))?;
-            if records.is_empty() {
+            if usage_index == origins[&key].len() {
                 break;
             }
+            let page_start = usage_index;
+            let end = (usage_index + 256).min(origins[&key].len());
+            let records = db.replay_observation_ids(job_id, &origins[&key][usage_index..end])?;
             let mut batch = CandidateBatch {
                 job_id: job_id.into(),
                 events: vec![],
@@ -416,7 +489,6 @@ fn run(
             let mut updates = BTreeMap::new();
             for record in records {
                 let pos = position(&record.record);
-                after = Some((pos.file_generation_id.clone(), pos.byte_offset as i64));
                 checkpoint.batch_position = DecimalInt::from_nonnegative(
                     checkpoint
                         .batch_position
@@ -430,9 +502,10 @@ fn run(
                         .checked_add(i128::from(pos.byte_end - pos.byte_offset))
                         .ok_or(ErrorCode::NumericOverflow)?,
                 )?;
-                let NormalizedObservation::Usage(u) = record.record else {
-                    continue;
+                let NormalizedObservation::Usage(mut u) = record.record else {
+                    return Err(ErrorCode::InvalidUsage.into());
                 };
+                u.session_key = key.clone();
                 let mut evidence = AccountingEvidence {
                     independent_new_stream: usage_index == 0
                         && sequence.head
@@ -609,6 +682,12 @@ fn run(
                 batch.streams.push(update);
             }
             db.stage_candidate_batch(batch)?;
+            db.stage_candidate_ordinals(
+                job_id.into(),
+                ledger.clone(),
+                page_start as i64,
+                origins[&key][page_start..usage_index].to_vec(),
+            )?;
             db.checkpoint_job(
                 job_id.into(),
                 JobState::Running,
@@ -619,6 +698,13 @@ fn run(
         }
         parent_results.insert(key, outcomes);
     }
+    classify_copies(db, &m, &canonical, &origins, stop)?;
+    drop(canonical);
+    drop(seqs);
+    drop(origins);
+    drop(parent_results);
+    stopped(db, job_id, stop)?;
+    db.finish_candidate_alignment(job_id.into())?;
     p.processed_files = decimal(m.files.len());
     db.checkpoint_job(job_id.into(), JobState::Running, p, checkpoint, now())?;
     stopped(db, job_id, stop)?;

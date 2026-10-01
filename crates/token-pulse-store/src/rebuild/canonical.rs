@@ -33,6 +33,76 @@ fn root(tx: &Transaction<'_>, key: &str) -> StoreResult<String> {
     }
     Ok(result)
 }
+pub(super) fn alias_target(
+    tx: &Transaction<'_>,
+    job: &str,
+    session: &str,
+) -> StoreResult<Option<String>> {
+    Ok(tx.query_row("SELECT canonical_session_key FROM candidate_session_aliases WHERE job_id=?1 AND alias_session_key=?2 UNION ALL SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=?2 LIMIT 1", params![job,session], |r|r.get(0)).optional()?)
+}
+pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
+    let mut query=tx.prepare("SELECT alias_session_key,canonical_session_key FROM candidate_session_aliases WHERE job_id=?1 ORDER BY alias_session_key")?;
+    let aliases = query
+        .query_map([&m.job_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(query);
+    for (alias, canonical) in aliases {
+        if !m.ledgers.iter().any(|l| l.session_key == alias)
+            || !m.ledgers.iter().any(|l| l.session_key == canonical)
+            || alias_target(tx, &m.job_id, &canonical)?.is_some()
+        {
+            return Err(ErrorCode::InvalidUsage.into());
+        }
+        // Move only derived logical keys. Physical positions and original usage fingerprints remain.
+        let mut after = 0i64;
+        loop {
+            let mut q=tx.prepare("SELECT rowid,observation_id,normalized_json FROM observations WHERE session_key=?1 AND rowid>?2 ORDER BY rowid LIMIT 256")?;
+            let rows = q
+                .query_map(params![alias, after], |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            drop(q);
+            if rows.is_empty() {
+                break;
+            }
+            for (rowid, id, encoded) in rows {
+                let mut record: NormalizedObservation = json(&encoded)?;
+                match &mut record {
+                    NormalizedObservation::Usage(u) => u.session_key = canonical.clone(),
+                    NormalizedObservation::TurnMetadata { session_key, .. }
+                    | NormalizedObservation::Context { session_key, .. } => {
+                        *session_key = canonical.clone()
+                    }
+                    NormalizedObservation::SessionMetadata { .. } => {}
+                }
+                tx.execute("UPDATE observations SET session_key=?1,normalized_json=?2 WHERE observation_id=?3",params![canonical,serde_json::to_string(&record)?,id])?;
+                after = rowid;
+            }
+        }
+        tx.execute("INSERT INTO file_session_bindings(file_generation_id,session_key,first_offset,identity_evidence) SELECT file_generation_id,?1,first_offset,'verified_mirror' FROM file_session_bindings WHERE session_key=?2 ON CONFLICT(file_generation_id,session_key) DO NOTHING",params![canonical,alias])?;
+        tx.execute("UPDATE session_aliases SET canonical_session_key=?1,evidence_job_id=?2 WHERE canonical_session_key=?3",params![canonical,m.job_id,alias])?;
+        tx.execute("INSERT INTO session_aliases VALUES(?1,?2,?3) ON CONFLICT(alias_session_key) DO UPDATE SET canonical_session_key=excluded.canonical_session_key,evidence_job_id=excluded.evidence_job_id",params![alias,canonical,m.job_id])?;
+        tx.execute(
+            "UPDATE sessions SET identity_status='verified_mirror' WHERE session_key=?1",
+            [&alias],
+        )?;
+        tx.execute(
+            "UPDATE sessions SET parent_key=?1 WHERE parent_key=?2",
+            params![canonical, alias],
+        )?;
+        // Until live ordinal alignment is connected, new records remain pending instead of charging
+        // the same mirrored continuation twice against a shared baseline.
+        tx.execute("UPDATE file_generations SET reader_context_json=json_set(reader_context_json,'$.session_key',?1,'$.requires_sequence_rebuild',json('true'),'$.independent_head_available',json('false')) WHERE file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1)",[&canonical])?;
+    }
+    Ok(())
+}
 fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalReplayPlan> {
     let mut sequences: BTreeMap<String, PhysicalReplaySequence> = BTreeMap::new();
     let mut footprint = 0usize;
@@ -156,6 +226,94 @@ fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalRepla
     })
 }
 impl Database {
+    pub fn candidate_event_ids(
+        &self,
+        job: &str,
+        ledger: &str,
+        from: i64,
+        count: usize,
+    ) -> StoreResult<Vec<Option<String>>> {
+        if from < 0 || count == 0 || count > 256 {
+            return Err(ErrorCode::InvalidQuery.into());
+        }
+        self.snapshot(|tx,_| {
+            let m=manifest(tx,job)?;fresh(tx,&m)?;
+            if !m.ledgers.iter().any(|l|l.candidate_ledger_id==ledger){return Err(ErrorCode::InvalidQuery.into());}
+            let end=from.checked_add(count as i64).ok_or(ErrorCode::NumericOverflow)?;
+            let mut q=tx.prepare("SELECT event_id FROM canonical_usage_sequence WHERE ledger_id=?1 AND ordinal>=?2 AND ordinal<?3 ORDER BY ordinal")?;
+            let result=q.query_map(params![ledger,from,end],|r|r.get::<_,Option<String>>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            if result.len()!=count{return Err(ErrorCode::InvalidUsage.into());}Ok(result)
+        })
+    }
+    pub fn stage_candidate_ordinals(
+        &self,
+        job: String,
+        ledger: String,
+        from: i64,
+        observation_ids: Vec<String>,
+    ) -> StoreResult<()> {
+        if from < 0 || observation_ids.is_empty() || observation_ids.len() > 256 {
+            return Err(ErrorCode::InvalidQuery.into());
+        }
+        self.write(move|conn| {
+            let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            require_state(&tx,&job,JobState::Running)?;let m=manifest(&tx,&job)?;fresh(&tx,&m)?;
+            if !m.ledgers.iter().any(|l|l.candidate_ledger_id==ledger){return Err(ErrorCode::InvalidQuery.into());}
+            let count:i64=tx.query_row("SELECT COUNT(*) FROM canonical_usage_sequence WHERE ledger_id=?1",[&ledger],|r|r.get(0))?;
+            let sealed:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_usage_cursors WHERE ledger_id=?1)",[&ledger],|r|r.get(0))?;
+            if sealed{return Err(ErrorCode::RevisionConflict.into());}
+            if count!=from {return Err(ErrorCode::RevisionConflict.into());}
+            for (index,observation) in observation_ids.into_iter().enumerate() {
+                batch::same_session(&tx,&ledger,&observation)?;
+                let classified:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM usage_events WHERE ledger_id=?1 AND origin_observation_id=?2 UNION ALL SELECT 1 FROM pending_usage WHERE ledger_id=?1 AND observation_id=?2)",params![ledger,observation],|r|r.get(0))?;
+                if !classified{return Err(ErrorCode::InvalidUsage.into());}
+                let ordinal=from.checked_add(index as i64).ok_or(ErrorCode::NumericOverflow)?;
+                tx.execute("INSERT INTO canonical_usage_sequence SELECT ?1,?2,?3,(SELECT event_id FROM usage_events WHERE ledger_id=?1 AND origin_observation_id=?3)",params![ledger,ordinal,observation])?;
+            }
+            tx.commit()?;Ok(())
+        })
+    }
+    /// Rechecks canonical origin selection and fixes episode frontiers by canonical order.
+    pub fn finish_candidate_alignment(&self, job: String) -> StoreResult<()> {
+        let (m, result) = self.snapshot(|tx, _| {
+            require_state(tx, &job, JobState::Running)?;
+            let m = manifest(tx, &job)?;
+            fresh(tx, &m)?;
+            let result = load(tx, &m)?;
+            Ok((m, result))
+        })?;
+        self.write(move|conn| {
+            let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            require_state(&tx,&job,JobState::Running)?;fresh(&tx,&m)?;
+            for group in &result.plan.groups {
+                let ledger=&m.ledgers.iter().find(|l|l.session_key==group.session_key).ok_or(ErrorCode::InvalidQuery)?.candidate_ledger_id;
+                let mut q=tx.prepare("SELECT ordinal,observation_id FROM canonical_usage_sequence WHERE ledger_id=?1 ORDER BY ordinal")?;
+                let mut rows=q.query([ledger])?;let mut count=0usize;
+                while let Some(row)=rows.next()? {
+                    let ordinal:i64=row.get(0)?;let observation:String=row.get(1)?;
+                    let origin=group.origin_sequence_for(count).ok_or(ErrorCode::InvalidUsage)?;
+                    if ordinal!=count as i64 || result.sequences[origin].observation_ids[count]!=observation {return Err(ErrorCode::InvalidUsage.into());}
+                    count+=1;
+                }
+                if count!=group.record_count{return Err(ErrorCode::InvalidUsage.into());}
+                drop(rows);drop(q);
+                for member in &group.member_sequence_keys {
+                    let sequence=&result.sequences[member];
+                    tx.execute("INSERT INTO file_usage_cursors VALUES(?1,?2,?3,'aligned')",params![ledger,sequence.file_generation_id,sequence.observation_ids.len() as i64])?;
+                }
+                tx.execute("DELETE FROM stream_frontiers WHERE ledger_id=?1",[ledger])?;
+                tx.execute("INSERT INTO stream_frontiers SELECT ledger_id,stream_key,episode_id FROM (SELECT st.ledger_id,st.stream_key,st.episode_id,ROW_NUMBER() OVER(PARTITION BY st.stream_key ORDER BY c.ordinal DESC) AS rank FROM stream_states st JOIN canonical_usage_sequence c ON c.ledger_id=st.ledger_id AND c.observation_id=st.last_observation_id WHERE st.ledger_id=?1) WHERE rank=1",[ledger])?;
+                let missing:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM stream_states st WHERE st.ledger_id=?1 AND NOT EXISTS(SELECT 1 FROM canonical_usage_sequence c WHERE c.ledger_id=st.ledger_id AND c.observation_id=st.last_observation_id))",[ledger],|r|r.get(0))?;
+                if missing{return Err(ErrorCode::InvalidUsage.into());}
+            }
+            for isolated in &result.plan.isolated {
+                let sequence=&result.sequences[&isolated.sequence_key];
+                let ledger=&m.ledgers.iter().find(|l|l.session_key==isolated.session_key).ok_or(ErrorCode::InvalidQuery)?.candidate_ledger_id;
+                tx.execute("INSERT INTO file_usage_cursors VALUES(?1,?2,0,'rebuild_required')",params![ledger,sequence.file_generation_id])?;
+            }
+            tx.commit()?;Ok(())
+        })
+    }
     /// Produces the evidence internally, then persists it with the same frozen-input checks.
     /// This does not switch an active session or publish consumption.
     pub fn prepare_canonical_replay(&self, job_id: &str) -> StoreResult<CanonicalReplayPlan> {
