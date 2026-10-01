@@ -463,3 +463,13 @@ Database 管理两条普通只读连接和两条专用租约 actor，应用查�
 WAL 压力夹具首次在已打开连接上截断初始 WAL 得到 SQLite DATABASE_LOCKED；改为应用启动前用单连接完成夹具迁移并关闭，再打开正式四连接、执行实际增长验证，没有放宽阈值或替换保护实现。原生 probe 验证四连接启动与既有 UI / IPC / 系统路由，仍有 class unregister 1412 提示；没有页面租约 IPC 的系统测试。
 
 WAL 缩小 / 后台 checkpoint 恢复机制、全局写入压力信号、按窗口批量取消、服务器最后位置生命周期与分页仍需后续接入。当前按物理 WAL 长度保护，超过阈值后新租约也拒绝，需完成维护回收以恢复分页；不能把当前基础服务视为候选 / 会话 / 明细分页已交付。
+
+## M08h3：WAL 压力后的真实回收与租约恢复
+
+新增 Writer 专属 checkpoint 封装，直接调用 SQLite sqlite3_wal_checkpoint_v2 针对 main 库；没有手动删 / 截 WAL 或替换主库。只在事务外调用，维护期间 busy timeout 为零，结束恢复正常五秒。BUSY / LOCKED 返回 Deferred，帧数负哨兵保留 null；其他失败返回受控存储错误并保留文件。退出用实际 PASSIVE 核对替换旧 PRAGMA 入口。
+
+Writer 在空闲及持续作业之间至少按 500 ms 节奏检查物理 WAL；超过正式 64 MiB 时尝试 TRUNCATE。活跃普通读者仍可阻止截断，延后不等待前端；租约的压力终止释放后可在后续 tick 回收，恢复新租约。检查发生在受限任务之间，不打断或分割当前写事务。后台 checkpoint 状态 / 失败的诊断上报与额外全局写入压力仍待接入。
+
+定位原 M08h2 夹具在当前运行库上 PRAGMA 截断的 DATABASE_LOCKED：同一 Writer 是 autocommit、无活跃语句，直接 main C API 返回 SQLITE_OK 并实际回收。临时仅检查应用语句的诊断代码已撤回；没有据此宣称 SQLite 版本缺陷或修改原始日志。
+
+2026-10-01 23:37 两项自动场景通过：旧普通读取事务在 Writer 写入 100 KiB / 修订后仍读旧状态，checkpoint Deferred 不等待、WAL 不变；释放后 Complete / 0 帧 / 实际 WAL 零、新读取完整保留内容。后台低阈值仅测试配置验证实际增长 → 旧租约 SNAPSHOT_EXPIRED → 回收 → 新租约见完整新内容。完整存储层 113 项普通测试（98 内部 + 15 集成，30 万 benchmark ignored）、workspace Clippy 与 Windows 10 隔离库 native probe 通过，累计普通 Rust 场景 199 项。原生既有 UI / IPC / 系统路由退出 0，仍有 class unregister 1412；未重新压测 30 万性能，过去的性能失败仍有效待复测 / 优化。签名最后位置注册与实际候选 / 会话 / 明细分页继续待实现。

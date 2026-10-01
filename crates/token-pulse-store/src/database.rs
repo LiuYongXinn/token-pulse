@@ -7,7 +7,7 @@ use std::{
         mpsc::{self, SyncSender},
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,7 +93,11 @@ pub struct Database {
 impl Database {
     /// Only the trusted runtime supplies this application-owned local directory.
     pub fn open(app_data_directory: &Path) -> StoreResult<Self> {
-        Self::open_with_lease_service(app_data_directory, crate::leases::LeaseService::new)
+        Self::open_with_lease_service(
+            app_data_directory,
+            crate::leases::LeaseService::new,
+            crate::maintenance::WAL_LIMIT,
+        )
     }
     #[cfg(test)]
     pub(crate) fn open_testing_leases(
@@ -102,13 +106,16 @@ impl Database {
         idle: Duration,
         wal: u64,
     ) -> StoreResult<Self> {
-        Self::open_with_lease_service(path, |path| {
-            crate::leases::LeaseService::for_testing(path, total, idle, wal)
-        })
+        Self::open_with_lease_service(
+            path,
+            |path| crate::leases::LeaseService::for_testing(path, total, idle, wal),
+            wal,
+        )
     }
     fn open_with_lease_service(
         app_data_directory: &Path,
         lease_service: impl FnOnce(&Path) -> StoreResult<crate::leases::LeaseService>,
+        wal_limit: u64,
     ) -> StoreResult<Self> {
         if !app_data_directory.is_absolute()
             || app_data_directory.to_string_lossy().starts_with("\\\\")
@@ -134,14 +141,25 @@ impl Database {
                         if ready_sender.send(Ok(())).is_err() {
                             return;
                         }
-                        while let Ok(message) = receiver.recv() {
-                            match message {
-                                Message::Run(task) => task(&mut conn),
-                                Message::Shutdown => break,
+                        let mut maintained = Instant::now();
+                        loop {
+                            match receiver.recv_timeout(Duration::from_millis(500)) {
+                                Ok(Message::Run(task)) => task(&mut conn),
+                                Ok(Message::Shutdown)
+                                | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                            }
+                            if maintained.elapsed() >= Duration::from_millis(500) {
+                                crate::maintenance::recover_if_large(
+                                    &conn,
+                                    &writer_path,
+                                    wal_limit,
+                                );
+                                maintained = Instant::now();
                             }
                         }
                         // All accepted batches have completed before shutdown reaches this point.
-                        let _ = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE)");
+                        let _ = crate::maintenance::checkpoint(&conn, false);
                     }
                     Err(e) => {
                         let _ = ready_sender.send(Err(e));
