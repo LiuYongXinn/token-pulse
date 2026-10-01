@@ -9,6 +9,8 @@ test.beforeEach(async ({ page }) => {
     const detailReleases: (() => void)[] = [];
     const calls: { command: string; args: Record<string, unknown> }[] = [];
     const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
+    const turnCursors = new Map<string, { query: string; offset: number; snapshot: string }>();
+    let turnsExpired = false;
     const measure = { value: null, covered_total_tokens: '0', complete: false };
     const tokens = (total: string, count = '1') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: count, usage_event_count: '2', reliable_turn_count: '1', reliable_turns_complete: false });
     const price = (total: string) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: total, reasons: total === '0' ? [] : [{ code: 'insufficient_usage', total_tokens: total, event_count: '2' }], calculating: false });
@@ -21,6 +23,21 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies sessions only');
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'close_query_snapshot') return response(null);
+      if (command === 'query_turns') {
+        const { query, cursor } = args.request as { query: Omit<Query, 'sort'> & { session_key: string }; cursor: string | null };
+        if (cursor !== null && turnsExpired) throw { code: 'SNAPSHOT_EXPIRED' };
+        const stored = cursor === null ? null : turnCursors.get(cursor);
+        if (cursor !== null && (!stored || stored.query !== JSON.stringify(query))) throw { code: 'CURSOR_INVALID' };
+        const offset = stored?.offset ?? 0, snapshot = stored?.snapshot ?? `synthetic-turn-snapshot-${++id}`;
+        const turns = Array.from({ length: 23 }, (_, index) => {
+          const total = index === 0 ? '18446744073709551614' : String(100 - index);
+          return { turn_id: `synthetic-turn-${index}`, first_at_ms: query.filter.range.start_ms + (23 - index) * 1000, last_at_ms: query.filter.range.start_ms + (23 - index) * 1000 + 500, summary: { ...tokens(total), usage_event_count: '2', reliable_turns_complete: true }, pricing: price(total) };
+        });
+        const total = (turns.reduce((sum, t) => sum + BigInt(t.summary.total_tokens), 0n) + 7n).toString();
+        const next = offset + query.page_size < turns.length ? `${++id}`.padStart(151, 't') : null;
+        if (next !== null) turnCursors.set(next, { query: JSON.stringify(query), offset: offset + query.page_size, snapshot });
+        return response({ meta: { snapshot_id: snapshot, data_revision: '10', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 3000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, session_key: query.session_key, summary: { ...tokens(total), usage_event_count: '49', reliable_turn_count: '23' }, pricing: price(total), coverage, unidentified_usage_event_count: '3', turns: turns.slice(offset, offset + query.page_size), next_cursor: next });
+      }
       if (command === 'get_session_bundle') {
         const request = args.request as { session_key: string; filter: Query['filter']; price_basis: unknown };
         if (failDetail) throw { code: 'DB_CORRUPT' };
@@ -54,6 +71,7 @@ test.beforeEach(async ({ page }) => {
       }
       throw new Error(`Unexpected synthetic command ${command}`);
     } }, __syntheticSessionCalls: () => calls, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; }, __reviseSyntheticDetail: () => { ++detailRevision; }, __failSyntheticDetail: (fail: boolean) => { failDetail = fail; }, __deferSyntheticDetail: () => { deferDetail = true; }, __releaseSyntheticDetail: () => { deferDetail = false; for (const release of detailReleases.splice(0)) release(); } });
+    Object.assign(window, { __expireSyntheticTurns: () => { turnsExpired = true; }, __resetSyntheticTurns: () => { turnsExpired = false; } });
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
@@ -182,4 +200,43 @@ test('detail refresh replaces its whole bundle, child navigation retains filters
   await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticDetail());
   await expect(drawer).toHaveCount(0);
   expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(false);
+});
+
+test('reliable turns use their own stable pages, retain unknown event counts and release on collapse', async ({ page }) => {
+  type Bridge = { __syntheticSessionCalls: () => { command: string; args: { request?: { kind?: string } } }[]; __expireSyntheticTurns: () => void; __resetSyntheticTurns: () => void };
+  await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
+  const drawer = page.getByRole('dialog');
+  const trigger = drawer.getByRole('button', { name: '查看可靠回合' });
+  await trigger.click();
+  await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  await expect(drawer.locator('.session-turn-list')).toContainText('已识别回合 23，未识别回合的用量事件 3 条');
+  await expect(drawer.locator('.session-turn-list')).toContainText('回合识别不完整');
+  await expect(drawer.locator('.session-turn-list')).toContainText('回合分页固定数据 10 / 价格 3');
+  await expect(drawer.locator('.session-turn-cards [title="18,446,744,073,709,551,614"]')).toBeVisible();
+  await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/session-turns-1280.png' });
+  await drawer.getByRole('button', { name: '下一页回合' }).click();
+  await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(3);
+  await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeDisabled();
+  await drawer.getByRole('button', { name: '上一页回合' }).click();
+  await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  await drawer.getByRole('button', { name: '重新读取回合' }).click();
+  await page.evaluate(() => (window as unknown as Bridge).__expireSyntheticTurns());
+  await drawer.getByRole('button', { name: '下一页回合' }).click();
+  await expect(drawer.locator('.session-turn-list').getByRole('alert')).toContainText('查询快照已过期');
+  await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeDisabled();
+  await page.evaluate(() => (window as unknown as Bridge).__resetSyntheticTurns());
+  await drawer.getByRole('button', { name: '重新读取回合' }).click();
+  await expect(drawer.locator('.session-turn-list').getByRole('alert')).toHaveCount(0);
+  await page.setViewportSize({ width: 960, height: 680 });
+  await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/session-turns-960.png' });
+  expect(await drawer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const beforeCollapse = await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls().filter(c => c.command === 'close_query_snapshot' && c.args.request?.kind === 'turns').length);
+  await drawer.getByRole('button', { name: '收起回合列表' }).click();
+  await expect(drawer.getByRole('list', { name: '已识别回合列表' })).toHaveCount(0);
+  // Terminal pages release themselves on the server. Collapse closes exactly
+  // the remaining nonterminal capability, rather than inventing extra closes.
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls())).filter(c => c.command === 'close_query_snapshot' && c.args.request?.kind === 'turns').length).toBe(beforeCollapse + 1);
 });
