@@ -427,3 +427,9 @@ fmt / workspace Clippy、TS 类型 / 11 项 Vitest 和生产 Vite 构建通过�
 limit 明确验证 1–200；实际 total_group_count 包含未知分类，truncated 报告未显示分类，整体汇总始终覆盖完整筛选，不把可见前 200 组当全量。当前排序支持可信 Token 降序 / 名称升序及稳定 key；尚无候选分页 / 组内钻取 / 费用排序 / IPC / 页面。模型别名规范化仍待后续契约完善。覆盖查询最多 200 组，未宣称满足 30 万事件性能目标。
 
 2026-10-01 22:49 四项多场景自动测试验证整体 146、已计价 110 / 未计价 36、独立合成 USD 220 原子、未知 16 / provider 隔离、按组 pending、来源 / 日期 / 模型 / 会话筛选、项目别名 / truncation 与完整 128、真实旧 SQLite 快照在并发价格替换 / 新事实 / 别名修改后保持完整旧 JSON、18014398509482106 总量与 9007199254740993 排序 / 稳定并列、非法 limit / identity 和注入字符串不扩展筛选。完整存储层 101 项普通测试、workspace Clippy、契约差异、TS 类型及 12 项 Vitest 通过；Schema 验证必填费用 / 分类总数、行数 200 和 limit 范围。累计普通 Rust 场景 187 项，没有新增原生验收。
+
+## M08g2：分组正式 IPC 与 Windows 10 独立验证
+
+get_grouped_usage 已接入主窗口 capability / label 校验、请求身份、后台参数验证与 spawn_blocking；TypeScript 使用生成契约直接请求同事务模型 / 项目 bundle，没有动态 SQL / 自定义文件路径入口。
+
+2026-10-01 22:51 Windows 10 隔离库的真实 WebView 分别验证 models / projects：实际 price revision 3、响应 snapshot_id、零可信总量的 null 输入、未知覆盖、空币种、零分类 / 未截断，以及 limit 201 拒绝 INVALID_QUERY；既有 UI 引导 / dashboard / 价格版本 / context / 单实例 / 托盘 / 关闭隐藏 / 电源消息路由 / 退出继续通过，返回 0。保留既有 class unregister 1412 提示。workspace Clippy、TS 类型和生产构建通过，本模块没有验证真实 Codex 来源或统计页交互。

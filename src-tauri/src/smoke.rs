@@ -108,6 +108,18 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let invalidRange=false;
                 try {await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard-invalid',request:{...request,heatmap_range:{...request.heatmap_range,timezone:'Asia/Shanghai'}}});} catch(error) {invalidRange=error.code==='INVALID_QUERY';}
                 ok=ok && invalidRange;
+                for(const dimension of ['models','projects']) {
+                    const groupedRequest={filter:request.filter,price_basis:request.price_basis,dimension,sort:'total_desc',limit:200};
+                    const grouped=await invoke('get_grouped_usage',{requestId:`native-smoke-groups-${dimension}`,request:groupedRequest});
+                    ok=ok && grouped.data.meta.snapshot_id===`native-smoke-groups-${dimension}`
+                        && grouped.data.meta.price_revision==='3' && grouped.data.groups.length===0
+                        && grouped.data.total_group_count==='0' && !grouped.data.truncated
+                        && grouped.data.summary.total_tokens==='0' && grouped.data.summary.input_total.value===null
+                        && grouped.data.pricing.currencies.length===0 && grouped.data.coverage.state==='unknown';
+                    let invalidLimit=false;
+                    try { await invoke('get_grouped_usage',{requestId:'native-smoke-groups-invalid',request:{...groupedRequest,limit:201}}); } catch(error) { invalidLimit=error.code==='INVALID_QUERY'; }
+                    ok=ok && invalidLimit;
+                }
                 const guide=document.querySelector('main .empty h2');
                 ok=ok && guide?.textContent==='添加 Codex 数据来源'
                     && document.querySelectorAll('nav[aria-label="主导航"] button').length===7
