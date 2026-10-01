@@ -6,6 +6,20 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; end_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; price_basis: unknown; sort: string; page_size: number };
+    let privacy = false, settingsRevision = '1', rejectPrivacy = false, freezePrivacyReply = false;
+    let callbackId = 0, eventId = 0;
+    const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
+    const notifyPrivacy = () => {
+      for (const [id, listener] of listeners) if (listener.event === 'display_policy_changed' || listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: settingsRevision, privacy } });
+    };
+    // Synthetic display oracle tests client invalidation; Rust privacy tests own actual field policy.
+    const hide = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(hide);
+      if (typeof value !== 'object' || value === null) return value;
+      const data = value as Record<string, unknown>;
+      if ('currencies' in data && 'redacted' in data) return { ...data, redacted: true, currencies: [], reasons: [] };
+      return Object.fromEntries(Object.entries(data).map(([key, val]) => [key, val !== null && ['display_name', 'latest_project_name', 'project_display_name', 'parent_display_name', 'parent_provider_id', 'root_path', 'data_directory'].includes(key) ? '隐藏标签' : hide(val)]));
+    };
     let id = 0, expired = false, defer = false, release: (() => void) | null = null;
     let detailRevision = 0, deferDetail = false, failDetail = false;
     const detailReleases: (() => void)[] = [];
@@ -17,10 +31,23 @@ test.beforeEach(async ({ page }) => {
     const tokens = (total: string, count = '1') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: count, usage_event_count: '2', reliable_turn_count: '1', reliable_turns_complete: false });
     const price = (total: string, basis: unknown = { mode: 'event_time' }) => ({ redacted: false, basis, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: total, reasons: total === '0' ? [] : [{ code: 'insufficient_usage', total_tokens: total, event_count: '2' }], calculating: false });
     const coverage = { state: 'partial', pending_observation_count: '1', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
-    Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
+    Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       calls.push({ command, args });
-      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
-      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
+      if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
+      if (command === 'plugin:event|unlisten') return null;
+      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: settingsRevision, privacy }, data: privacy ? hide(data) : data });
+      if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { privacy, display_timezone: 'Asia/Shanghai' } });
+      if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
+      if (command === 'set_display_privacy') {
+        const mutation = args.request as { privacy: boolean; expected_settings_revision: string };
+        if (rejectPrivacy || mutation.expected_settings_revision !== settingsRevision) throw { code: 'REVISION_CONFLICT' };
+        if (mutation.privacy !== privacy) { privacy = mutation.privacy; settingsRevision = String(BigInt(settingsRevision) + 1n); notifyPrivacy(); }
+        return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { privacy, display_timezone: 'Asia/Shanghai' } });
+      }
+      if (command === 'get_filter_options') {
+        const q = args.request as { query: { dimension: string; filter: { range: { timezone: string } } } };
+        return response({ meta: { snapshot_id: 'facet', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: q.query.filter.range.timezone }, dimension: q.query.dimension, options: [{ key: 'synthetic-session-0', display_name: 'Synthetic 会话 0', count: '1' }], next_cursor: null });
+      }
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'empty', root_path: 'Synthetic Empty Source', origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null }] });
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies sessions only');
@@ -69,12 +96,13 @@ test.beforeEach(async ({ page }) => {
         const next = offset + query.page_size < sessions.length ? `${++id}`.padStart(151, 'a') : null;
         if (next !== null) cursors.set(next, { query: JSON.stringify(query), offset: offset + query.page_size, snapshot });
         const data = { meta: { snapshot_id: snapshot, data_revision: '7', price_revision: '3', generated_at_ms: query.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: query.filter.range.timezone }, summary: tokens(total, String(sessions.length)), pricing: price(total, query.price_basis), coverage, sessions: sessions.slice(offset, offset + query.page_size), next_cursor: next };
+        const serialized = freezePrivacyReply ? response(data) : null;
         if (defer) { defer = false; await new Promise<void>(resolve => { release = resolve; }); }
-        return response(data);
+        return serialized ?? response(data);
       }
       throw new Error(`Unexpected synthetic command ${command}`);
     } }, __syntheticSessionCalls: () => calls, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; }, __reviseSyntheticDetail: () => { ++detailRevision; }, __failSyntheticDetail: (fail: boolean) => { failDetail = fail; }, __deferSyntheticDetail: () => { deferDetail = true; }, __releaseSyntheticDetail: () => { deferDetail = false; for (const release of detailReleases.splice(0)) release(); } });
-    Object.assign(window, { __expireSyntheticTurns: () => { turnsExpired = true; }, __resetSyntheticTurns: () => { turnsExpired = false; } });
+    Object.assign(window, { __privacyQA: { external: (value: boolean) => { privacy = value; settingsRevision = String(BigInt(settingsRevision) + 1n); notifyPrivacy(); }, reject: (value: boolean) => { rejectPrivacy = value; }, deferOld: () => { freezePrivacyReply = true; defer = true; }, listeners: () => [...listeners.values()].filter(l => l.event === 'display_policy_changed').length }, __expireSyntheticTurns: () => { turnsExpired = true; }, __resetSyntheticTurns: () => { turnsExpired = false; } });
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
@@ -259,4 +287,72 @@ test('specified estimate time reaches session pages, detail and reliable turns w
     const r = calls.filter(value => value.command === command).at(-1)!.args.request;
     expect(r.query?.price_basis ?? r.price_basis).toEqual(expected);
   }
+});
+type SessionQA = { __syntheticSessionCalls: () => { command: string; args: Record<string, unknown> }[]; __releaseSyntheticSessions: () => void };
+type PrivacyQA = { __privacyQA: { external: (value: boolean) => void; reject: (value: boolean) => void; deferOld: () => void; listeners: () => number } };
+
+test('external privacy closes the real drawer and clears retained pages, labels and path attributes', async ({ page }) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Synthetic 会话 0', exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.external(true));
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.locator('.workspace').evaluate(e => (e as HTMLElement).inert)).toBe(false);
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await expect(page.locator('.session-table')).toContainText('隐藏标签');
+  await expect(page.locator('.session-table tbody tr').first().locator('td.numeric[title="9,007,199,254,740,993"]')).toBeVisible();
+  expect(await page.locator('body').evaluate(e => e.innerHTML.includes('Synthetic 会话') || e.innerHTML.includes('Synthetic Project') || e.innerHTML.includes('Synthetic Empty Source'))).toBe(false);
+  await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click();
+  await expect(page.getByLabel('隐私模式')).toBeChecked();
+  await page.screenshot({ path: 'test-results/privacy-display-1280.png', fullPage: true });
+  await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/privacy-display-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('tab', { name: '价格规则' }).click(); await expect(page.getByRole('heading', { name: '价格规则已隐藏' })).toBeVisible();
+  await page.getByRole('tab', { name: '数据来源' }).click(); await expect(page.getByRole('button', { name: '添加自定义目录' })).toHaveCount(0);
+  await page.getByRole('tab', { name: '显示与窗口' }).click(); await page.getByLabel('隐私模式').uncheck();
+  await expect(page.getByLabel('隐私模式')).not.toBeChecked();
+  await page.getByRole('button', { name: '会话', exact: true }).click(); await expect(page.getByRole('button', { name: 'Synthetic 会话 0', exact: true })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.listeners())).toBe(1);
+});
+
+test('late serialized unmasked page is dropped and releases its original query while new private page remains', async ({ page }) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.deferOld());
+  await page.getByLabel('会话排序').selectOption('total_desc');
+  await expect.poll(async () => page.evaluate(() => (window as unknown as SessionQA).__syntheticSessionCalls().filter(v => v.command === 'query_sessions').at(-1)?.args.request)).toMatchObject({ query: { sort: 'total_desc' } });
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.external(true));
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.evaluate(() => (window as unknown as SessionQA).__releaseSyntheticSessions());
+  await expect.poll(async () => page.evaluate(() => (window as unknown as SessionQA).__syntheticSessionCalls().filter(v => v.command === 'close_query_snapshot').some(v => {
+    const request = v.args.request as { request: { query: { sort: string }; cursor: string } }; return request.request.query.sort === 'total_desc' && request.request.cursor.length === 151;
+  }))).toBe(true);
+  expect(await page.locator('body').evaluate(e => e.innerHTML.includes('Synthetic 会话') || e.innerHTML.includes('Synthetic Project'))).toBe(false);
+});
+
+test('failed privacy save keeps protection and explicit successful disable restores only new data', async ({ page }) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click();
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.reject(true));
+  await page.getByLabel('隐私模式').check();
+  await expect(page.locator('.privacy-status')).toContainText('保存失败');
+  await expect(page.getByLabel('隐私模式')).toBeChecked();
+  expect(await page.locator('body').evaluate(e => e.innerHTML.includes('Synthetic Empty Source'))).toBe(false);
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.reject(false));
+  await page.getByLabel('隐私模式').uncheck(); await expect(page.getByLabel('隐私模式')).not.toBeChecked();
+  await page.getByRole('button', { name: '会话', exact: true }).click(); await expect(page.getByRole('button', { name: 'Synthetic 会话 0', exact: true })).toBeVisible();
+});
+test('privacy clears candidate searches and names while retaining selected stable session scope', async ({ page }) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.getByRole('combobox', { name: '会话', exact: true }).click();
+  await page.getByRole('option', { name: /Synthetic 会话 0/ }).click();
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(1);
+  await page.getByRole('combobox', { name: '会话', exact: true }).click();
+  await page.getByRole('textbox', { name: /搜索会话/ }).fill('Synthetic 会话');
+  await page.evaluate(() => (window as unknown as PrivacyQA).__privacyQA.external(true));
+  await expect(page.getByRole('textbox', { name: /搜索会话/ })).toHaveCount(0);
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(1);
+  await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('已隐藏');
+  const request = await page.evaluate(() => (window as unknown as SessionQA).__syntheticSessionCalls().filter(v => v.command === 'query_sessions').at(-1)?.args.request);
+  expect(request).toMatchObject({ query: { filter: { sessions: { kind: 'ids', ids: ['synthetic-session-0'] } } } });
+  expect(await page.locator('body').evaluate(e => e.innerHTML.includes('Synthetic 会话'))).toBe(false);
 });

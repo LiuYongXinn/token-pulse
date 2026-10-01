@@ -48,7 +48,7 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
     let stop: (() => void) | null = null;
     void onPriceRulesChanged(invalidate).then(unsubscribe => { if (controller.disposed) unsubscribe(); else stop = unsubscribe; }).catch(() => {});
     document.addEventListener('visibilitychange', invalidate);
-    return () => { controller.disposed = true; stop?.(); document.removeEventListener('visibilitychange', invalidate); enqueue(() => release(controller)); };
+    return () => { controller.disposed = true; controller.pages = []; stop?.(); document.removeEventListener('visibilitychange', invalidate); enqueue(() => release(controller)); };
   }, [key, adapter]);
   const previous = () => { const controller = current.current; if (controller && !controller.disposed && !controller.busy && controller.index > 0) { --controller.index; display(controller, key); } };
   const next = () => {

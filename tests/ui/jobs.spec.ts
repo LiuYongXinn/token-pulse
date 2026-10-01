@@ -5,8 +5,9 @@ test('synthetic job IPC fixture shows accepted cancellation until final state an
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let jobs: Record<string, unknown>[] = [];let requestKey:string|null=null;let lostResponse=true;
-    Object.assign(window, {isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:Record<string,unknown>)=>{
-      const response=(data:unknown)=>({api_version:1,request_id:args.requestId,data});
+    Object.assign(window, {isTauri:true,__TAURI_EVENT_PLUGIN_INTERNALS__:{unregisterListener:()=>{}},__TAURI_INTERNALS__:{transformCallback:()=>0,invoke:async(command:string,args:Record<string,unknown>)=>{
+      if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
+      const response=(data:unknown)=>({api_version:1,request_id:args.requestId,display_policy:{settings_revision:'1',privacy:false},data});
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if(command==='get_app_status')return response({version:'synthetic-test',development:true,data_directory:'synthetic-test',collector:'ready',storage:'ready',storage_error:null,quota:'not_configured',taskbar:'not_implemented'});
       if(command==='list_jobs')return response(structuredClone(jobs));

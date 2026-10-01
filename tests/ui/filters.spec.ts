@@ -12,8 +12,9 @@ test.beforeEach(async ({ page }) => {
     const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
     const coverage = { state: 'unknown', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     const pricing = { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false };
-    Object.assign(window, { isTauri: true, __facetCalls: calls, __expireFacet: () => { expired = true; }, __deferFacet: () => { deferSlow = true; }, __releaseFacet: () => { releaseSlow?.(); }, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
-      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+    Object.assign(window, { isTauri: true, __facetCalls: calls, __expireFacet: () => { expired = true; }, __deferFacet: () => { deferSlow = true; }, __releaseFacet: () => { releaseSlow?.(); }, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
+      if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
+      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data });
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });

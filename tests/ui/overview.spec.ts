@@ -5,6 +5,7 @@ test.beforeEach(async ({ page }) => {
   // Explicit synthetic UI DTO bridge. No fixture is imported into production.
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
+    let privacy = false, policyRevision = '1';
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let lastDashboardRequest: unknown = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
@@ -18,14 +19,15 @@ test.beforeEach(async ({ page }) => {
     const tokens = (partial = false) => ({ total_tokens: partial ? '17' : '683067', input_total: partial ? unknown : complete(630630, 683067), cached_input: partial ? unknown : complete(429566, 683067), noncached_input: partial ? unknown : complete(201064, 683067), output_total: partial ? unknown : complete(52437, 683067), reasoning_output: partial ? unknown : complete(19926, 683067), session_count: '1', usage_event_count: partial ? '1' : '5', reliable_turn_count: null, reliable_turns_complete: false });
     const coverage = { state: 'partial', pending_observation_count: '2', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '1', source_issues: [{ source_id: 'synthetic-a', code: 'scan_evidence_missing', last_success_ms: 1000 }], format_issues: [], breakdown_complete: true };
     const empty = { total_tokens: '0', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
-    const price = (partial: boolean, basis: { mode: string } = { mode: 'event_time' }) => ({ redacted: false, basis, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: basis.mode === 'specified_time' ? '2.321234567890123' : cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
+    const price = (partial: boolean, basis: { mode: string } = { mode: 'event_time' }) => ({ redacted: privacy, basis, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: privacy ? null : basis.mode === 'specified_time' ? '2.321234567890123' : cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: privacy ? [] : [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
-      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
-      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
+      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: policyRevision, privacy }, data });
+      if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: policyRevision, preferences: { privacy, display_timezone: 'Asia/Shanghai' } });
+      if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
       if (command === 'plugin:event|unlisten') return null;
-      if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
-      if (command === 'get_sources') return response({ settings_revision: '1', sources });
+      if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: privacy ? '应用数据目录（已隐藏）' : 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
+      if (command === 'get_sources') return response({ settings_revision: policyRevision, sources: privacy ? sources.map(s => ({ ...s, root_path: '来源 #' + s.source_id })) : sources });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'get_dashboard_bundle') {
         ++reads; lastDashboardRequest = structuredClone(args.request);
@@ -40,7 +42,7 @@ test.beforeEach(async ({ page }) => {
           return { start_ms: start, end_ms: Math.min(start + step, r.filter.range.end_ms), display_label: new Date(start).toISOString().slice(0, 16), utc_offset: '+08:00', totals: count, coverage: { ...coverage, breakdown_complete: i === 0 && !partial } };
         });
         const heatmap = Array.from({ length: 182 }, (_, i) => ({ start_ms: r.heatmap_range.start_ms + i * 86_400_000, end_ms: r.heatmap_range.start_ms + (i + 1) * 86_400_000, display_label: `synthetic-day-${i + 1}`, utc_offset: '+08:00', totals: i % 5 === 0 ? tokens(partial) : empty, coverage: { ...coverage, breakdown_complete: !partial && i % 5 === 0 } }));
-        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: priceRevision, generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial, r.price_basis), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
+        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: priceRevision, generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial, r.price_basis), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: privacy ? '会话 #synthetic-session' : 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: privacy ? '项目 #synthetic-project' : 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
         if (deferNext) { deferNext = false; await new Promise<void>(resolve => { release = resolve; }); }
         return response(data);
       }
@@ -49,6 +51,7 @@ test.beforeEach(async ({ page }) => {
     __lastDashboardRequest: () => lastDashboardRequest,
     __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
+    __emitSyntheticPrivacyChange: (value: boolean) => { privacy = value; policyRevision = String(BigInt(policyRevision) + 1n); for (const [id, listener] of listeners) if (listener.event === 'display_policy_changed' || listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: policyRevision, privacy } }); },
     __emitSyntheticPriceChange: () => { priceRevision = String(Number(priceRevision) + 1); cost = '1.231234567890123'; for (const [id, listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: priceRevision, all_models: true } }); } });
   });
   await page.goto('/');
@@ -193,4 +196,20 @@ test('explicit price time changes estimates, preserves token scope and stays fix
   await page.getByLabel('估价时点（UTC）').press('Escape'); await expect(page.getByRole('form', { name: '指定估价时点' })).toHaveCount(0);
   await expect(page.getByTitle('编辑明确估价时点（UTC）')).toBeFocused();
   await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('计价依据')).toHaveValue('event_time'); await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+});
+
+test('global privacy removes overview amounts, original paths and names including titles without hiding tokens', async ({ page }) => {
+  await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+  await page.getByLabel('来源', { exact: true }).selectOption('synthetic-a');
+  await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as { __emitSyntheticPrivacyChange: (value: boolean) => void }).__emitSyntheticPrivacyChange(true));
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await expect(page.locator('.cost-number').first()).toHaveText('已隐藏');
+  await expect(page.getByLabel('来源', { exact: true })).toHaveValue('synthetic-a');
+  const html = await page.locator('body').evaluate(e => e.innerHTML);
+  for (const original of ['$0.87', '0.871234567890123', 'synthetic-qa-a', 'synthetic-ui-session', 'Synthetic QA Project']) expect(html).not.toContain(original);
+  await page.evaluate(() => (window as unknown as { __emitSyntheticPrivacyChange: (value: boolean) => void }).__emitSyntheticPrivacyChange(false));
+  await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('来源', { exact: true })).toHaveValue('synthetic-a');
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
 });

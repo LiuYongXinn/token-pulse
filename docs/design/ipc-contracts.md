@@ -420,3 +420,9 @@ GroupedUsageBundle 没有 dimension 字段，必须使用携带可信请求 Grou
 DisplayPreferences 公开 privacy；DisplayPrivacyMutation { privacy, expected_settings_revision } 使用十进制字符串 CAS，全局设置冲突与同值行为同 timezone。set_display_privacy 已注册主窗口权限；小窗权限随其实际实现增加。RuntimeState 初始化已保存策略，不可读配置先隐藏。通用 update_privacy 协调函数在 PrivacyState.commit_update 内提交数据库并发布策略，之后先发 display_policy_changed { settings_revision, privacy }，再发 settings_changed。同值 / 冲突不通知。
 
 实际统计、来源、应用目录、价格规则、作业、显示设置出口均使用最新 PrivateResponse；GroupedUsage 明确传入模型 / 项目上下文。目录选择在已启用时拒绝，选择中途变化的返回结果仍由发送时策略处理。前端必须监听策略、丢弃旧缓存和迟到响应，并在关闭后重新查询；后台出口不能清除已经进入 WebView 的旧字段，该客户端门禁为后续必需实现。
+
+### 2.14 主窗口显示策略门禁
+
+主窗口要求敏感响应带 display_policy；DisplayPolicyGate 用精确十进制修订判定最新策略，并用独立 epoch 失效已显示 DTO。开启在发 IPC 前本地封闭，提交冲突 / 失败不自动恢复显示；明确关闭成功才重新查询。display_policy_changed 独立监听，settings_changed 继续只触发配置重读。已开启时空价格规则响应通过策略状态明确显示“已隐藏”，不解释为规则缺失。
+
+响应请求捕获 epoch；返回旧策略 / 旧世代则拒绝数据。get_filter_options / query_sessions / query_usage_events / query_turns 的迟到拒绝必须用原 query 与返回 next_cursor 释放租约；close 不使用 snapshot_id。显示设置 / 关闭租约等无身份控制响应保留安全处理，纯日历 / 窗口动作没有显示字段。策略变化清空统计 / 来源缓存、候选和详情 / 价格编辑器；保留稳定筛选 ID / 日期 / 估价时点，旧会话 / 项目候选名字以通用文字替代，关闭后通过新查询恢复可显示值。

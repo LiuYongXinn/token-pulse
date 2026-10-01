@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { displayPolicy } from '../shared/display-policy';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { chooseSourceDirectory, getSources, manageSource, runtimeError } from '../shared/runtime';
 import type { CapabilityState, ManageSourceAction, SourceDirectoryKind, SourceReadability, SourcesSnapshot } from '../shared/generated/contracts';
 
@@ -8,6 +9,7 @@ const origins = { windows_default: 'Windows 本地', environment: 'CODEX_HOME', 
 function time(value: number | null): string { return value === null ? '尚无成功记录' : new Date(value).toLocaleString(); }
 
 export function SourcesPanel({ onChanged }: { onChanged: () => void }) {
+  const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
   const [snapshot, setSnapshot] = useState<SourcesSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,7 +48,7 @@ export function SourcesPanel({ onChanged }: { onChanged: () => void }) {
   };
   return <section className="panel source-panel" role="tabpanel" aria-label="数据来源设置">
     <div className="source-heading"><div><h2>数据来源</h2><p className="muted">仅采集用量与必要元数据；原始日志保持只读。</p></div><button onClick={() => void refresh()} disabled={busy}>刷新来源</button></div>
-    <div className="source-actions"><button className="primary" disabled={busy || !snapshot} onClick={() => void choose('local')}>添加自定义目录</button><button disabled={busy || !snapshot} onClick={() => void run({ kind: 'detect' })}>检测 Windows 本地来源</button><button disabled={busy || !snapshot} onClick={() => void choose('wsl')}>启用 WSL 来源</button></div>
+    {policy.privacy !== false ? <p className="notice">隐私模式已隐藏来源路径；关闭后可选择新目录。</p> : <div className="source-actions"><button className="primary" disabled={busy || !snapshot} onClick={() => void choose('local')}>添加自定义目录</button><button disabled={busy || !snapshot} onClick={() => void run({ kind: 'detect' })}>检测 Windows 本地来源</button><button disabled={busy || !snapshot} onClick={() => void choose('wsl')}>启用 WSL 来源</button></div>}
     {error && <div className="notice" role="alert">{error}{snapshot && <span>保留上次来源状态</span>}</div>}
     {!snapshot && !error && <p className="muted" role="status">正在读取来源配置…</p>}
     {snapshot?.sources.length === 0 && <div className="source-empty"><h3>尚未配置 Codex Home</h3><p>可检测当前 Windows 用户的默认目录与 CODEX_HOME，或选择包含 sessions 的目录。</p></div>}

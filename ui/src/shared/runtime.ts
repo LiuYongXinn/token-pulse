@@ -1,5 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { displayPolicy } from './display-policy';
+import type { DisplayPolicyStamp, DisplayPrivacyMutation } from './generated/contracts';
 import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
 
 import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle, GroupedUsageRequest, GroupedUsageBundle } from './generated/contracts';
@@ -12,12 +14,50 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+const plainCommands = new Set(['resolve_calendar_selection', 'perform_window_action']);
+const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_privacy', 'close_query_snapshot']);
+const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
+async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
+  const kind = pageKinds[command];
+  if (!kind || typeof data !== 'object' || data === null || !('next_cursor' in data) || typeof data.next_cursor !== 'string') return;
+  // Return only the original request and authenticated cursor. A snapshot ID is never a close capability.
+  const original = args.request;
+  if (typeof original !== 'object' || original === null) return;
+  await invoke('close_query_snapshot', { requestId: crypto.randomUUID(), request: { kind, request: { ...original, cursor: data.next_cursor } } }).catch(() => {});
+}
+async function request<T>(command: string, args: Record<string, unknown> = {}, explicitDisable = false): Promise<T> {
   if (!isTauri()) throw new Error('请通过桌面应用打开。浏览器预览不提供本地采集与统计。');
+  const epoch = displayPolicy.get().epoch;
   const requestId = crypto.randomUUID();
   const response = await invoke<Response<T>>(command, { ...args, requestId });
   if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('桌面协议版本或响应身份不匹配。');
+  if (!plainCommands.has(command)) {
+    const stamp = response.display_policy;
+    let accepted = false;
+    try { accepted = stamp ? displayPolicy.accept(stamp, explicitDisable) : false; }
+    catch (error) {
+      displayPolicy.enable(); displayPolicy.failed('无法确认响应中的显示隐私策略。');
+      await releaseRejectedPage(command, args, response.data);
+      throw error;
+    }
+    if (command === 'set_display_privacy' && !accepted) throw new Error('显示隐私策略已变化，请刷新设置后重试。');
+    if (!controlCommands.has(command) && (!accepted || !stamp || stamp.privacy !== displayPolicy.get().privacy || epoch !== displayPolicy.get().epoch)) {
+      await releaseRejectedPage(command, args, response.data);
+      throw new Error('显示隐私策略已变化，已丢弃旧响应，请重新读取。');
+    }
+    if (!stamp) throw new Error('桌面响应缺少显示隐私策略，已停止显示。');
+  }
   return response.data;
+}
+export async function setDisplayPrivacy(mutation: DisplayPrivacyMutation): Promise<DisplaySettingsSnapshot> {
+  if (mutation.privacy) displayPolicy.enable();
+  try { return await request('set_display_privacy', { request: mutation }, !mutation.privacy); }
+  catch (error) { if (mutation.privacy) displayPolicy.failed(runtimeError(error)); throw error; }
+}
+export async function onDisplayPolicyChanged(): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen<DisplayPolicyStamp>('display_policy_changed', event => { try { displayPolicy.accept(event.payload); } catch { displayPolicy.enable(); displayPolicy.failed('无法确认显示隐私策略，已隐藏敏感信息。'); } });
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
 export function getDisplaySettings(): Promise<DisplaySettingsSnapshot> { return request('get_display_settings'); }

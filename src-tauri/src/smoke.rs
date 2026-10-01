@@ -325,12 +325,29 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 try {await invoke('choose_source_directory',{requestId:'native-smoke-private-picker',kind:'local'});} catch(error) {privatePickerBlocked=error.code==='PERMISSION_DENIED';}
                 try {await invoke('set_display_privacy',{requestId:'native-smoke-privacy-conflict',request:{privacy:false,expected_settings_revision:'4'}});} catch(error) {privacyConflict=error.code==='REVISION_CONFLICT';}
                 ok=ok && privacyNoop.data.settings_revision==='5' && privatePickerBlocked && privacyConflict;
-                const disabledPrivacy=await invoke('set_display_privacy',{requestId:'native-smoke-privacy-off',request:{privacy:false,expected_settings_revision:'5'}});
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
+                [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
+                await waitFor(()=>document.querySelector('input[aria-label="隐私模式"]')?.checked===true && !document.querySelector('input[aria-label="隐私模式"]')?.disabled);
+                document.querySelector('input[aria-label="隐私模式"]').click();
+                await waitFor(()=>document.querySelector('input[aria-label="隐私模式"]')?.checked===false);
+                const disabledPrivacy=await invoke('get_display_settings',{requestId:'native-smoke-privacy-ui-off'});
                 const restoredHistory=await invoke('get_price_rules',{requestId:'native-smoke-price-restored',revision:'1'});
                 const restoredStatus=await invoke('get_app_status',{requestId:'native-smoke-status-restored'});
                 ok=ok && disabledPrivacy.data.settings_revision==='6' && disabledPrivacy.display_policy.privacy===false
                     && restoredHistory.data.rules.length===1 && restoredHistory.data.rules[0].input_rate_atoms==='1'
                     && restoredStatus.data.data_directory===r.data.data_directory && restoredStatus.display_policy.settings_revision==='6';
+                await waitFor(()=>!document.querySelector('input[aria-label="隐私模式"]')?.disabled);
+                document.querySelector('input[aria-label="隐私模式"]').click();
+                await waitFor(()=>document.querySelector('.privacy-status')?.textContent.includes('隐私已开启'));
+                const enabledByUI=await invoke('get_display_settings',{requestId:'native-smoke-privacy-ui-on'});
+                ok=ok && enabledByUI.data.settings_revision==='7' && enabledByUI.data.preferences.privacy===true;
+                await waitFor(()=>!document.querySelector('input[aria-label="隐私模式"]')?.disabled);
+                document.querySelector('input[aria-label="隐私模式"]').click();
+                await waitFor(()=>document.querySelector('.privacy-status')?.textContent.includes('隐私已关闭'));
+                const disabledByUI=await invoke('get_display_settings',{requestId:'native-smoke-privacy-ui-final'});
+                ok=ok && disabledByUI.data.settings_revision==='8' && disabledByUI.data.preferences.privacy===false;
+
 
             } catch (error) { console.error('Native IPC check:', error); }
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
@@ -347,10 +364,13 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("WebView get_app_status IPC failed".into());
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
-    if settings_events.len() != 5 {
-        return Err("display changes did not emit exactly five settings notifications".into());
+    if settings_events.len() != 7 {
+        return Err("display changes did not emit exactly seven settings notifications".into());
     }
-    for (payload, revision) in settings_events.iter().zip(["2", "3", "4", "5", "6"]) {
+    for (payload, revision) in settings_events
+        .iter()
+        .zip(["2", "3", "4", "5", "6", "7", "8"])
+    {
         let event: token_pulse_core::settings::SettingsChanged =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if event.settings_revision.as_str() != revision {
@@ -358,10 +378,14 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         }
     }
     let policy_events = policy_receiver.try_iter().collect::<Vec<_>>();
-    if policy_events.len() != 2 {
-        return Err("privacy changes did not emit exactly two policy notifications".into());
+    if policy_events.len() != 4 {
+        return Err("privacy changes did not emit exactly four policy notifications".into());
     }
-    for (payload, (revision, privacy)) in policy_events.iter().zip([("5", true), ("6", false)]) {
+    for (payload, (revision, privacy)) in
+        policy_events
+            .iter()
+            .zip([("5", true), ("6", false), ("7", true), ("8", false)])
+    {
         let stamp: token_pulse_core::privacy::DisplayPolicyStamp =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if stamp.settings_revision.as_str() != revision || stamp.privacy != privacy {

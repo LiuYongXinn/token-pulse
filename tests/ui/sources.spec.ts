@@ -8,9 +8,11 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
     Object.defineProperty(window, 'isTauri', { value: true });
     let revision = 1;
     const source = { source_id: 'synthetic-source', root_path: 'E:\\synthetic-fixture\\.codex', origin: 'custom', enabled: true, removed: false, readability: 'awaiting_directory', capabilities: { physical_identity: 'not_probed', byte_seek: 'not_probed', watcher: 'unavailable', polling_required: true }, last_scan_at_ms: null, last_success_at_ms: null, error: null };
-    Object.defineProperty(window, '__TAURI_INTERNALS__', { value: { invoke: async (command: string, args: Record<string, unknown>) => {
+    Object.assign(window, { __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} } });
+    Object.defineProperty(window, '__TAURI_INTERNALS__', { value: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
       let data: unknown;
-      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return { api_version: 1, request_id: args.requestId, data: window.__syntheticCalendar(command, args) };
+      if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: window.__syntheticCalendar(command, args) };
       if (command === 'get_app_status') data = { version: 'synthetic-test', development: true, data_directory: 'E:\\synthetic-test-data', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' };
       else if (command === 'get_sources') data = { settings_revision: String(revision), sources: [{ ...source }] };
       else if (command === 'manage_source') {
@@ -22,7 +24,7 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
         revision += 1;
         data = { settings_revision: String(revision), sources: [{ ...source }] };
       } else throw { code: 'INVALID_QUERY' };
-      return { api_version: 1, request_id: args.requestId, data };
+      return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data };
     } } });
   });
   await page.goto('/');
