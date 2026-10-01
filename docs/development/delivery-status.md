@@ -21,3 +21,13 @@
 ## 后续依赖
 
 M02 固定 Rust 领域类型、DTO / TypeScript / schema 生成和精度规则；随后 M03 建立数据库、单写线程和完整事务，M04 / M05 分别实现只读适配和可重放核算。每模块经必要验证后单独提交，后续模块继续沿用本文件记录。
+
+## M02：领域与协议
+
+以 Rust 定义标准用量向量、物理位置、白名单元数据 / 观察、质量分类、状态、错误、筛选、快照、Token 分解、费用 / 覆盖、额度、mini 范围与作业 DTO。使用 ts-rs / schemars 生成 TypeScript 和序列化 JSON Schema；前端运行状态已改用生成类型。后续模块新增 DTO 必须加入同一生成流程。
+
+大整数和修订使用受校验的非负十进制字符串；金额为最多 15 位小数的定点字符串，原始 Token 保持 i64，聚合 checked i128。前端用 BigInt 格式化完整数值 / 缩写 / 有界百分比 / 最终金额舍入。未知值显式 null；超范围返回错误，不截断为零。时区、日期范围、维度数量、非法枚举与未知字段拒绝。带标签的空分支采用空 struct variant，避免 Serde unit variant 忽略额外字段。
+
+`fixtures/usage-vectors.json` 包含 10 组人工列出预期的合成向量；manifest 记录版本与来源。标准观察拒绝正文和任意附加字段，未声明任何真实 Codex 格式已兼容。
+
+验证：Rust 5 项测试（含 property test 和 10 组向量）、前端 5 项测试（含生成 schema / TS 样本、精确格式化）、七页导航浏览器场景、typecheck / 生产前端构建通过。fmt、workspace tests、Clippy 与协议生成差异检查通过。2026-10-01 原生 probe 返回 0，已在真实 WebView 调用 `get_app_status` 并核对协议版本、请求身份和开发状态，随后完成窗口 / 托盘 / 第二实例 / 退出回归。退出时同样有 WebView2 class unregister 1412 提示。

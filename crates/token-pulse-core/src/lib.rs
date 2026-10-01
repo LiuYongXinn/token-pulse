@@ -2,7 +2,14 @@
 
 pub const API_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub mod domain;
+pub mod error;
+pub mod numeric;
+pub mod protocol;
+
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema, ts_rs::TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceState {
     NotConfigured,

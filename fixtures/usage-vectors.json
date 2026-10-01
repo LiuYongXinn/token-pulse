@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "cases": [
+    { "name": "cache-and-reasoning-contained", "vector": { "input_total": 100000, "cached_input": 90000, "output_total": 5000, "reasoning_output": 2000, "reported_total": 105000 }, "expected_total": 105000, "expected_noncached": 10000, "expected_error": null },
+    { "name": "unknown-subfields", "vector": { "input_total": 100, "cached_input": null, "output_total": 10, "reasoning_output": null, "reported_total": 110 }, "expected_total": 110, "expected_noncached": null, "expected_error": null },
+    { "name": "total-only", "vector": { "input_total": null, "cached_input": null, "output_total": null, "reasoning_output": null, "reported_total": 9007199254740993 }, "expected_total": 9007199254740993, "expected_noncached": null, "expected_error": null },
+    { "name": "all-unknown", "vector": { "input_total": null, "cached_input": null, "output_total": null, "reasoning_output": null, "reported_total": null }, "expected_total": null, "expected_noncached": null, "expected_error": null },
+    { "name": "true-zero", "vector": { "input_total": 0, "cached_input": 0, "output_total": 0, "reasoning_output": 0, "reported_total": 0 }, "expected_total": 0, "expected_noncached": 0, "expected_error": null },
+    { "name": "cache-exceeds-input", "vector": { "input_total": 100, "cached_input": 101, "output_total": 10, "reasoning_output": 0, "reported_total": 110 }, "expected_total": null, "expected_noncached": null, "expected_error": "INVALID_USAGE" },
+    { "name": "reasoning-exceeds-output", "vector": { "input_total": 100, "cached_input": 0, "output_total": 10, "reasoning_output": 11, "reported_total": 110 }, "expected_total": null, "expected_noncached": null, "expected_error": "INVALID_USAGE" },
+    { "name": "source-total-mismatch", "vector": { "input_total": 100, "cached_input": 0, "output_total": 10, "reasoning_output": 0, "reported_total": 111 }, "expected_total": null, "expected_noncached": null, "expected_error": "INVALID_USAGE" },
+    { "name": "negative", "vector": { "input_total": -1, "cached_input": null, "output_total": null, "reasoning_output": null, "reported_total": null }, "expected_total": null, "expected_noncached": null, "expected_error": "INVALID_USAGE" },
+    { "name": "raw-total-overflow", "vector": { "input_total": 9223372036854775807, "cached_input": 0, "output_total": 1, "reasoning_output": 0, "reported_total": null }, "expected_total": null, "expected_noncached": null, "expected_error": "NUMERIC_OVERFLOW" }
+  ]
+}

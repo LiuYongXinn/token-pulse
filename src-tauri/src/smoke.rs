@@ -5,7 +5,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 pub fn start(app: tauri::AppHandle) {
     thread::spawn(move || {
@@ -13,7 +13,7 @@ pub fn start(app: tauri::AppHandle) {
         match result {
             Ok(()) => {
                 println!(
-                    "NATIVE_SMOKE_OK: isolated startup, tray, close-to-hide, single-instance activation, explicit exit"
+                    "NATIVE_SMOKE_OK: isolated startup, real WebView IPC, tray, close-to-hide, single-instance activation, explicit exit"
                 );
                 app.exit(0);
             }
@@ -40,6 +40,31 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("main window missing")?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let listener = app.listen("native-smoke-ipc", move |event| {
+        let _ = sender.try_send(event.payload().to_owned());
+    });
+    window
+        .eval(
+            r#"
+        (async () => {
+            const invoke = window.__TAURI_INTERNALS__.invoke;
+            let ok = false;
+            try {
+                const r = await invoke('get_app_status', { requestId: 'native-smoke' });
+                ok = r.api_version === 1 && r.request_id === 'native-smoke'
+                    && r.data.development === true && r.data.collector === 'not_configured';
+            } catch (_) {}
+            await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
+        })();
+    "#,
+        )
+        .map_err(|e| e.to_string())?;
+    let ipc = receiver.recv_timeout(Duration::from_secs(10));
+    app.unlisten(listener);
+    if ipc.as_deref() != Ok("true") {
+        return Err("WebView get_app_status IPC failed".into());
+    }
     if !window.is_visible().map_err(|e| e.to_string())? {
         return Err("cold start window is hidden".into());
     }

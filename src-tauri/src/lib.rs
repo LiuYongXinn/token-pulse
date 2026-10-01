@@ -4,69 +4,69 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
-use token_pulse_core::{API_VERSION, ServiceState};
+use token_pulse_core::{
+    ServiceState,
+    error::{AppError, ErrorCode},
+    protocol::{AppStatus, Response, WindowAction, validate_request_id},
+};
 
 struct RuntimeState {
     data_directory: PathBuf,
-}
-
-#[derive(serde::Serialize)]
-struct AppStatus {
-    api_version: u32,
-    version: &'static str,
-    development: bool,
-    data_directory: String,
-    collector: ServiceState,
-    storage: ServiceState,
-    quota: ServiceState,
-    taskbar: ServiceState,
 }
 
 #[tauri::command]
 fn get_app_status(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, RuntimeState>,
-) -> Result<AppStatus, &'static str> {
+    request_id: String,
+) -> Result<Response<AppStatus>, Box<AppError>> {
+    validate_request_id(&request_id)
+        .map_err(|code| AppError::new(code, "invalid-request".into()))?;
     if window.label() != "main" {
-        return Err("PERMISSION_DENIED");
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
     }
-    Ok(AppStatus {
-        api_version: API_VERSION,
-        version: env!("CARGO_PKG_VERSION"),
-        development: cfg!(debug_assertions),
-        data_directory: state.data_directory.to_string_lossy().into_owned(),
-        collector: ServiceState::NotConfigured,
-        storage: ServiceState::NotImplemented,
-        quota: ServiceState::NotConfigured,
-        taskbar: ServiceState::NotImplemented,
-    })
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum WindowAction {
-    OpenStats,
-    HideMain,
-    Quit,
+    Ok(Response::new(
+        request_id,
+        AppStatus {
+            version: env!("CARGO_PKG_VERSION").into(),
+            development: cfg!(debug_assertions),
+            data_directory: state.data_directory.to_string_lossy().into_owned(),
+            collector: ServiceState::NotConfigured,
+            storage: ServiceState::NotImplemented,
+            quota: ServiceState::NotConfigured,
+            taskbar: ServiceState::NotImplemented,
+        },
+    ))
 }
 
 #[tauri::command]
-fn window_action(
+fn perform_window_action(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
     action: WindowAction,
-) -> Result<(), String> {
+    request_id: String,
+) -> Result<Response<()>, Box<AppError>> {
+    validate_request_id(&request_id)
+        .map_err(|code| AppError::new(code, "invalid-request".into()))?;
     if window.label() != "main" {
-        return Err("PERMISSION_DENIED".into());
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
     }
-    match action {
+    let result = match action {
         WindowAction::OpenStats => show_main(&app),
         WindowAction::HideMain => window.hide().map_err(|e| e.to_string()),
         WindowAction::Quit => {
             app.exit(0);
             Ok(())
         }
-    }
+    };
+    result.map_err(|_| AppError::new(ErrorCode::WindowUnavailable, request_id.clone()))?;
+    Ok(Response::new(request_id, ()))
 }
 
 fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
@@ -118,7 +118,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, window_action]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {

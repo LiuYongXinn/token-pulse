@@ -14,7 +14,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "contracts": "cargo run -p token-pulse-core --example export_contracts",
+    "contracts:check": "cargo run -p token-pulse-core --example export_contracts -- --check"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.1",
@@ -23,10 +25,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
+    "@tauri-apps/cli": "2.12.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@tauri-apps/cli": "2.12.1",
+    "ajv": "^8.20.0",
     "typescript": "~6.0.2",
     "vite": "8.3.1",
     "vitest": "5.0.3"

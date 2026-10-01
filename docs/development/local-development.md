@@ -23,6 +23,8 @@ npm run tauri:dev
 
 ```powershell
 npm run typecheck
+npm run contracts
+npm run contracts:check
 npm run test
 npx playwright install chromium
 npm run test:e2e
@@ -46,6 +48,8 @@ cargo build -p token-pulse-desktop --features custom-protocol
 debug 专用 probe 在真实 Tauri / Win32 运行时中验证冷启动、开发目录隔离、托盘注册、关闭转隐藏、第二实例激活、明确退出。成功输出 `NATIVE_SMOKE_OK` 并返回 0；失败输出错误并返回 1。应用内置静态前端，不依赖 Vite 服务。该入口不进入 release 构建。
 
 自动 probe 不替代人工点击托盘、屏幕阅读器、DPI、锁屏 / 休眠或 Explorer 重启验收。后续功能逐模块补充相应原生验证，不能将浏览器检查记为系统验收。
+
+DTO 权威位于 `crates/token-pulse-core/src/protocol.rs`，`npm run contracts` 从 Rust 生成 `ui/src/shared/generated/contracts.ts` 和 `schemas/protocol-v1.json`；CI 通过 `contracts:check` 检测漂移，不允许分别手写两端契约。JSON Schema 用序列化契约生成，包含必需的 nullable 字段。生成依赖使用 [ts-rs](https://docs.rs/ts-rs/latest/ts_rs/trait.TS.html) 和 [schemars](https://docs.rs/schemars/latest/schemars/)。
 
 ## 工程边界
 

@@ -1,0 +1,2446 @@
+{
+  "api_version": 1,
+  "schemas": {
+    "AppError": {
+      "$defs": {
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "ErrorDetail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "double",
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "correlation_id": {
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ErrorDetail"
+          },
+          "type": "object"
+        },
+        "job_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message_key": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "message_key",
+        "retryable",
+        "correlation_id",
+        "source_id",
+        "job_id",
+        "details"
+      ],
+      "title": "AppError",
+      "type": "object"
+    },
+    "AppStatus": {
+      "$defs": {
+        "ServiceState": {
+          "enum": [
+            "not_configured",
+            "not_implemented",
+            "ready"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "collector": {
+          "$ref": "#/$defs/ServiceState"
+        },
+        "data_directory": {
+          "type": "string"
+        },
+        "development": {
+          "type": "boolean"
+        },
+        "quota": {
+          "$ref": "#/$defs/ServiceState"
+        },
+        "storage": {
+          "$ref": "#/$defs/ServiceState"
+        },
+        "taskbar": {
+          "$ref": "#/$defs/ServiceState"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "development",
+        "data_directory",
+        "collector",
+        "storage",
+        "quota",
+        "taskbar"
+      ],
+      "title": "AppStatus",
+      "type": "object"
+    },
+    "AppStatusResponse": {
+      "$defs": {
+        "AppStatus": {
+          "additionalProperties": false,
+          "properties": {
+            "collector": {
+              "$ref": "#/$defs/ServiceState"
+            },
+            "data_directory": {
+              "type": "string"
+            },
+            "development": {
+              "type": "boolean"
+            },
+            "quota": {
+              "$ref": "#/$defs/ServiceState"
+            },
+            "storage": {
+              "$ref": "#/$defs/ServiceState"
+            },
+            "taskbar": {
+              "$ref": "#/$defs/ServiceState"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "development",
+            "data_directory",
+            "collector",
+            "storage",
+            "quota",
+            "taskbar"
+          ],
+          "type": "object"
+        },
+        "ServiceState": {
+          "enum": [
+            "not_configured",
+            "not_implemented",
+            "ready"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "format": "uint32",
+          "maximum": 1,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "data": {
+          "$ref": "#/$defs/AppStatus"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "api_version",
+        "request_id",
+        "data"
+      ],
+      "title": "Response",
+      "type": "object"
+    },
+    "ContextSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "context_tokens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model_context_window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "percentage": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "quality": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "context_tokens",
+        "model_context_window",
+        "percentage",
+        "observed_at_ms",
+        "quality"
+      ],
+      "title": "ContextSnapshot",
+      "type": "object"
+    },
+    "Coverage": {
+      "$defs": {
+        "CoverageState": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FormatIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "format": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "count"
+          ],
+          "type": "object"
+        },
+        "SourceIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "last_success_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "code",
+            "last_success_ms"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "breakdown_complete": {
+          "type": "boolean"
+        },
+        "format_issues": {
+          "items": {
+            "$ref": "#/$defs/FormatIssue"
+          },
+          "type": "array"
+        },
+        "pending_file_count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "pending_observation_count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "source_issues": {
+          "items": {
+            "$ref": "#/$defs/SourceIssue"
+          },
+          "type": "array"
+        },
+        "state": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "unattributed_observation_count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "unattributed_total_tokens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "pending_observation_count",
+        "unattributed_observation_count",
+        "unattributed_total_tokens",
+        "pending_file_count",
+        "source_issues",
+        "format_issues",
+        "breakdown_complete"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "CoverageState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "complete",
+        "partial",
+        "unknown"
+      ],
+      "title": "CoverageState",
+      "type": "string"
+    },
+    "CurrencyEstimate": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "estimated_cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalMoney"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "priced_total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "currency",
+        "estimated_cost",
+        "priced_total_tokens"
+      ],
+      "title": "CurrencyEstimate",
+      "type": "object"
+    },
+    "DateRange": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "end_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "start_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_ms",
+        "end_ms",
+        "timezone"
+      ],
+      "title": "DateRange",
+      "type": "object"
+    },
+    "DecimalInt": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxLength": 39,
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "title": "DecimalInt",
+      "type": "string"
+    },
+    "DecimalMoney": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxLength": 40,
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+      "title": "DecimalMoney",
+      "type": "string"
+    },
+    "DimensionSelection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "all",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            "include_unknown": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "ids",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "ids",
+            "include_unknown"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "DimensionSelection"
+    },
+    "EpochMs": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maximum": 8640000000000000,
+      "minimum": -8640000000000000,
+      "title": "EpochMs",
+      "type": "integer"
+    },
+    "ErrorCode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "INVALID_QUERY",
+        "UNSUPPORTED_API",
+        "SOURCE_UNREADABLE",
+        "UNSUPPORTED_FORMAT",
+        "AMBIGUOUS_USAGE",
+        "CHECKPOINT_CONFLICT",
+        "DB_WRITE_FAILED",
+        "DISK_FULL",
+        "DB_CORRUPT",
+        "MIGRATION_FAILED",
+        "SNAPSHOT_EXPIRED",
+        "CURSOR_INVALID",
+        "REVISION_CONFLICT",
+        "STALE_CONFIRMATION",
+        "REQUEST_KEY_CONFLICT",
+        "JOB_CANCELLED",
+        "JOB_INTERRUPTED",
+        "QUOTA_DISCONNECTED",
+        "QUOTA_UNSUPPORTED",
+        "QUOTA_TIMEOUT",
+        "QUOTA_AUTH_REQUIRED",
+        "TASKBAR_UNSUPPORTED",
+        "TASKBAR_NO_SPACE",
+        "TASKBAR_EMBED_FAILED",
+        "NUMERIC_OVERFLOW",
+        "PERMISSION_DENIED",
+        "INVALID_USAGE",
+        "WINDOW_UNAVAILABLE"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    },
+    "ErrorDetail": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "format": "double",
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "ErrorDetail"
+    },
+    "FormatIssue": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "format": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "count"
+      ],
+      "title": "FormatIssue",
+      "type": "object"
+    },
+    "Job": {
+      "$defs": {
+        "AppError": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "correlation_id": {
+              "type": "string"
+            },
+            "details": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ErrorDetail"
+              },
+              "type": "object"
+            },
+            "job_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message_key": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "message_key",
+            "retryable",
+            "correlation_id",
+            "source_id",
+            "job_id",
+            "details"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "ErrorDetail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "double",
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "JobKind": {
+          "enum": [
+            "import",
+            "reconcile",
+            "rebuild",
+            "export",
+            "backup",
+            "restore",
+            "price_revalue",
+            "clear"
+          ],
+          "type": "string"
+        },
+        "JobState": {
+          "enum": [
+            "queued",
+            "running",
+            "validating",
+            "publishing",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "interrupted"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accepted_events": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "can_cancel": {
+          "type": "boolean"
+        },
+        "created_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "discovered_files": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "discovery_complete": {
+          "type": "boolean"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/JobKind"
+        },
+        "pending_observations": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "processed_bytes": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "processed_files": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "state": {
+          "$ref": "#/$defs/JobState"
+        },
+        "updated_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        }
+      },
+      "required": [
+        "job_id",
+        "kind",
+        "state",
+        "phase",
+        "discovered_files",
+        "discovery_complete",
+        "processed_files",
+        "processed_bytes",
+        "accepted_events",
+        "pending_observations",
+        "can_cancel",
+        "error",
+        "created_at_ms",
+        "updated_at_ms"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "JobKind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "import",
+        "reconcile",
+        "rebuild",
+        "export",
+        "backup",
+        "restore",
+        "price_revalue",
+        "clear"
+      ],
+      "title": "JobKind",
+      "type": "string"
+    },
+    "JobState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "queued",
+        "running",
+        "validating",
+        "publishing",
+        "cancelling",
+        "succeeded",
+        "cancelled",
+        "failed",
+        "interrupted"
+      ],
+      "title": "JobState",
+      "type": "string"
+    },
+    "MiniScope": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ScopeStart": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "fixed",
+                  "type": "string"
+                },
+                "start_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "kind",
+                "start_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "today_all_sources",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "session",
+              "type": "string"
+            },
+            "session_key": {
+              "type": "string"
+            },
+            "start": {
+              "$ref": "#/$defs/ScopeStart"
+            }
+          },
+          "required": [
+            "kind",
+            "session_key",
+            "start"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "MiniScope"
+    },
+    "MiniSnapshot": {
+      "$defs": {
+        "Coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "breakdown_complete": {
+              "type": "boolean"
+            },
+            "format_issues": {
+              "items": {
+                "$ref": "#/$defs/FormatIssue"
+              },
+              "type": "array"
+            },
+            "pending_file_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "pending_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "source_issues": {
+              "items": {
+                "$ref": "#/$defs/SourceIssue"
+              },
+              "type": "array"
+            },
+            "state": {
+              "$ref": "#/$defs/CoverageState"
+            },
+            "unattributed_observation_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "unattributed_total_tokens": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "pending_observation_count",
+            "unattributed_observation_count",
+            "unattributed_total_tokens",
+            "pending_file_count",
+            "source_issues",
+            "format_issues",
+            "breakdown_complete"
+          ],
+          "type": "object"
+        },
+        "CoverageState": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "CurrencyEstimate": {
+          "additionalProperties": false,
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "estimated_cost": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalMoney"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "currency",
+            "estimated_cost",
+            "priced_total_tokens"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FormatIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "format": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "format",
+            "count"
+          ],
+          "type": "object"
+        },
+        "MiniScope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today_all_sources",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "session",
+                  "type": "string"
+                },
+                "session_key": {
+                  "type": "string"
+                },
+                "start": {
+                  "$ref": "#/$defs/ScopeStart"
+                }
+              },
+              "required": [
+                "kind",
+                "session_key",
+                "start"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PricingSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PriceBasis"
+            },
+            "calculating": {
+              "type": "boolean"
+            },
+            "currencies": {
+              "items": {
+                "$ref": "#/$defs/CurrencyEstimate"
+              },
+              "type": "array"
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "reasons": {
+              "items": {
+                "$ref": "#/$defs/UnpricedReason"
+              },
+              "type": "array"
+            },
+            "redacted": {
+              "type": "boolean"
+            },
+            "unpriced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "redacted",
+            "basis",
+            "currencies",
+            "priced_total_tokens",
+            "unpriced_total_tokens",
+            "reasons",
+            "calculating"
+          ],
+          "type": "object"
+        },
+        "QuotaLimit": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "limit_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "limit_id",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "QuotaSnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "available_limits": {
+              "items": {
+                "$ref": "#/$defs/QuotaLimit"
+              },
+              "type": "array"
+            },
+            "connection_epoch": {
+              "type": "string"
+            },
+            "error_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fetched_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_attempt_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quota_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "selected_limit_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "state": {
+              "$ref": "#/$defs/QuotaState"
+            },
+            "windows": {
+              "items": {
+                "$ref": "#/$defs/QuotaWindow"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "connection_epoch",
+            "quota_revision",
+            "state",
+            "selected_limit_id",
+            "available_limits",
+            "fetched_at_ms",
+            "last_attempt_at_ms",
+            "windows",
+            "error_code"
+          ],
+          "type": "object"
+        },
+        "QuotaState": {
+          "enum": [
+            "disconnected",
+            "connecting",
+            "authorization_required",
+            "unsupported",
+            "ready",
+            "stale",
+            "error"
+          ],
+          "type": "string"
+        },
+        "QuotaWindow": {
+          "additionalProperties": false,
+          "properties": {
+            "duration_mins": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "remaining_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "resets_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "used_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "window_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "window_id",
+            "duration_mins",
+            "used_percent",
+            "remaining_percent",
+            "resets_at_ms"
+          ],
+          "type": "object"
+        },
+        "ScopeStart": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "fixed",
+                  "type": "string"
+                },
+                "start_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "kind",
+                "start_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "SnapshotMeta": {
+          "additionalProperties": false,
+          "properties": {
+            "accounting_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "data_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "display_timezone": {
+              "type": "string"
+            },
+            "generated_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "parser_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "price_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "snapshot_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "data_revision",
+            "price_revision",
+            "generated_at_ms",
+            "parser_versions",
+            "accounting_versions",
+            "display_timezone"
+          ],
+          "type": "object"
+        },
+        "SourceIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "last_success_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "code",
+            "last_success_ms"
+          ],
+          "type": "object"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "TokenTotals": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "input_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "noncached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "output_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reasoning_output": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reliable_turn_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliable_turns_complete": {
+              "type": "boolean"
+            },
+            "session_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "usage_event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "total_tokens",
+            "input_total",
+            "cached_input",
+            "noncached_input",
+            "output_total",
+            "reasoning_output",
+            "session_count",
+            "usage_event_count",
+            "reliable_turn_count",
+            "reliable_turns_complete"
+          ],
+          "type": "object"
+        },
+        "UnpricedReason": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "code",
+            "total_tokens",
+            "event_count"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "mini_scope": {
+          "$ref": "#/$defs/MiniScope"
+        },
+        "pricing": {
+          "$ref": "#/$defs/PricingSummary"
+        },
+        "privacy": {
+          "type": "boolean"
+        },
+        "quota": {
+          "$ref": "#/$defs/QuotaSnapshot"
+        },
+        "scope_display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usage": {
+          "$ref": "#/$defs/TokenTotals"
+        },
+        "usage_last_success_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usage_meta": {
+          "$ref": "#/$defs/SnapshotMeta"
+        }
+      },
+      "required": [
+        "usage_meta",
+        "mini_scope",
+        "scope_display_name",
+        "usage",
+        "pricing",
+        "coverage",
+        "quota",
+        "privacy",
+        "usage_last_success_ms"
+      ],
+      "title": "MiniSnapshot",
+      "type": "object"
+    },
+    "PriceBasis": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "event_time",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "const": "specified_time",
+              "type": "string"
+            },
+            "specified_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            }
+          },
+          "required": [
+            "mode",
+            "specified_at_ms"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PriceBasis"
+    },
+    "PricingSummary": {
+      "$defs": {
+        "CurrencyEstimate": {
+          "additionalProperties": false,
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "estimated_cost": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalMoney"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "priced_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "currency",
+            "estimated_cost",
+            "priced_total_tokens"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "UnpricedReason": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "code",
+            "total_tokens",
+            "event_count"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/PriceBasis"
+        },
+        "calculating": {
+          "type": "boolean"
+        },
+        "currencies": {
+          "items": {
+            "$ref": "#/$defs/CurrencyEstimate"
+          },
+          "type": "array"
+        },
+        "priced_total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/UnpricedReason"
+          },
+          "type": "array"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "unpriced_total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "redacted",
+        "basis",
+        "currencies",
+        "priced_total_tokens",
+        "unpriced_total_tokens",
+        "reasons",
+        "calculating"
+      ],
+      "title": "PricingSummary",
+      "type": "object"
+    },
+    "QuotaLimit": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "limit_id",
+        "display_name"
+      ],
+      "title": "QuotaLimit",
+      "type": "object"
+    },
+    "QuotaSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "QuotaLimit": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "limit_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "limit_id",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "QuotaState": {
+          "enum": [
+            "disconnected",
+            "connecting",
+            "authorization_required",
+            "unsupported",
+            "ready",
+            "stale",
+            "error"
+          ],
+          "type": "string"
+        },
+        "QuotaWindow": {
+          "additionalProperties": false,
+          "properties": {
+            "duration_mins": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "remaining_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "resets_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "used_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "window_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "window_id",
+            "duration_mins",
+            "used_percent",
+            "remaining_percent",
+            "resets_at_ms"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "available_limits": {
+          "items": {
+            "$ref": "#/$defs/QuotaLimit"
+          },
+          "type": "array"
+        },
+        "connection_epoch": {
+          "type": "string"
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fetched_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_attempt_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quota_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "selected_limit_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/QuotaState"
+        },
+        "windows": {
+          "items": {
+            "$ref": "#/$defs/QuotaWindow"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "connection_epoch",
+        "quota_revision",
+        "state",
+        "selected_limit_id",
+        "available_limits",
+        "fetched_at_ms",
+        "last_attempt_at_ms",
+        "windows",
+        "error_code"
+      ],
+      "title": "QuotaSnapshot",
+      "type": "object"
+    },
+    "QuotaState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "disconnected",
+        "connecting",
+        "authorization_required",
+        "unsupported",
+        "ready",
+        "stale",
+        "error"
+      ],
+      "title": "QuotaState",
+      "type": "string"
+    },
+    "QuotaWindow": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "duration_mins": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "remaining_percent": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "resets_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "used_percent": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "window_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "duration_mins",
+        "used_percent",
+        "remaining_percent",
+        "resets_at_ms"
+      ],
+      "title": "QuotaWindow",
+      "type": "object"
+    },
+    "ScopeStart": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "today",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            }
+          },
+          "required": [
+            "kind",
+            "start_ms"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "ScopeStart"
+    },
+    "ServiceState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "not_configured",
+        "not_implemented",
+        "ready"
+      ],
+      "title": "ServiceState",
+      "type": "string"
+    },
+    "SnapshotMeta": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accounting_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "data_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "display_timezone": {
+          "type": "string"
+        },
+        "generated_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "parser_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "data_revision",
+        "price_revision",
+        "generated_at_ms",
+        "parser_versions",
+        "accounting_versions",
+        "display_timezone"
+      ],
+      "title": "SnapshotMeta",
+      "type": "object"
+    },
+    "SourceIssue": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "last_success_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "code",
+        "last_success_ms"
+      ],
+      "title": "SourceIssue",
+      "type": "object"
+    },
+    "TokenMeasure": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "covered_total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "covered_total_tokens",
+        "complete"
+      ],
+      "title": "TokenMeasure",
+      "type": "object"
+    },
+    "TokenTotals": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cached_input": {
+          "$ref": "#/$defs/TokenMeasure"
+        },
+        "input_total": {
+          "$ref": "#/$defs/TokenMeasure"
+        },
+        "noncached_input": {
+          "$ref": "#/$defs/TokenMeasure"
+        },
+        "output_total": {
+          "$ref": "#/$defs/TokenMeasure"
+        },
+        "reasoning_output": {
+          "$ref": "#/$defs/TokenMeasure"
+        },
+        "reliable_turn_count": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reliable_turns_complete": {
+          "type": "boolean"
+        },
+        "session_count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "usage_event_count": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "total_tokens",
+        "input_total",
+        "cached_input",
+        "noncached_input",
+        "output_total",
+        "reasoning_output",
+        "session_count",
+        "usage_event_count",
+        "reliable_turn_count",
+        "reliable_turns_complete"
+      ],
+      "title": "TokenTotals",
+      "type": "object"
+    },
+    "UnpricedReason": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "event_count": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "total_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "code",
+        "total_tokens",
+        "event_count"
+      ],
+      "title": "UnpricedReason",
+      "type": "object"
+    },
+    "UsageFilter": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DimensionSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "include_unknown": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "ids",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids",
+                "include_unknown"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "$ref": "#/$defs/DimensionSelection"
+        },
+        "projects": {
+          "$ref": "#/$defs/DimensionSelection"
+        },
+        "range": {
+          "$ref": "#/$defs/DateRange"
+        },
+        "sessions": {
+          "$ref": "#/$defs/DimensionSelection"
+        },
+        "sources": {
+          "$ref": "#/$defs/DimensionSelection"
+        }
+      },
+      "required": [
+        "range",
+        "sources",
+        "models",
+        "projects",
+        "sessions"
+      ],
+      "title": "UsageFilter",
+      "type": "object"
+    },
+    "WindowAction": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "open_stats",
+        "hide_main",
+        "quit"
+      ],
+      "title": "WindowAction",
+      "type": "string"
+    }
+  }
+}
