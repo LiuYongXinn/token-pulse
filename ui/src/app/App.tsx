@@ -3,6 +3,7 @@ import { getAppStatus, windowAction } from '../shared/runtime';
 import type { AppStatus } from '../shared/runtime';
 import { SourcesPanel } from './SourcesPanel';
 import { JobsPanel } from './JobsPanel';
+import { PriceRulesPanel } from './PriceRulesPanel';
 
 const pages = [
   ['overview', '总览', '在同一统计快照中查看本地消费'],
@@ -42,7 +43,7 @@ export function App() {
       {status?.storage_error && <div role="alert" className="notice">本地数据库无法使用（{status.storage_error}）。已保留数据库文件，采集尚未启动。请查看采集诊断。</div>}
       {page === 'settings' ? <>
         <div className="tabs" role="tablist" aria-label="设置分类">{['数据来源', '显示与窗口', '任务栏显示', '价格规则', '数据与备份'].map(t => <button role="tab" aria-selected={tab === t} key={t} onClick={() => setTab(t)}>{t}</button>)}</div>
-        {tab === '数据来源' ? <SourcesPanel onChanged={() => void refresh()} /> : <section className="panel" role="tabpanel"><h2>{tab}</h2><p className="muted">此模块正在实施，完成后可在此配置。</p>{tab === '数据与备份' && status && <dl><dt>数据目录</dt><dd>{status.data_directory}</dd><dt>运行版本</dt><dd>{status.version}{status.development ? ' · 开发版（数据隔离）' : ''}</dd></dl>}</section>}
+        {tab === '数据来源' ? <SourcesPanel onChanged={() => void refresh()} /> : tab === '价格规则' ? <PriceRulesPanel onChanged={() => void refresh()} /> : <section className="panel" role="tabpanel"><h2>{tab}</h2><p className="muted">此模块正在实施，完成后可在此配置。</p>{tab === '数据与备份' && status && <dl><dt>数据目录</dt><dd>{status.data_directory}</dd><dt>运行版本</dt><dd>{status.version}{status.development ? ' · 开发版（数据隔离）' : ''}</dd></dl>}</section>}
       </> : page === 'diagnostics' ? <><section className="panel"><h2>运行状态</h2><dl><dt>桌面运行壳</dt><dd>{status ? '已连接' : loading ? '正在连接' : '未连接'}</dd><dt>采集服务</dt><dd>{status?.collector==='ready'?'正在采集':status?.collector==='error'?'采集需要处理':status?'尚未配置来源':'未连接'}</dd><dt>本地数据库</dt><dd>{status?.storage === 'ready' ? '已就绪' : status?.storage_error ?? '未连接'}</dd><dt>核算服务</dt><dd>已接入采集与必要观察重放</dd><dt>账户额度</dt><dd>未连接</dd><dt>任务栏显示</dt><dd>正在实施 · 默认关闭</dd></dl></section><JobsPanel /></> : <section className="empty panel"><div className="empty-symbol">▥</div><h2>{loading ? '正在连接桌面服务' : '开始记录本地用量'}</h2><p>添加 Codex 数据来源后，可信 Token、费用估算和来源覆盖会显示在这里。</p><p className="support-note">采集与核算已接入本地账本，统计查询与页面正在实施。</p><button className="primary" onClick={() => { setPage('settings'); setTab('数据来源'); }}>查看数据来源</button></section>}
       <footer><span>{status?.development ? '开发版 · 独立数据目录' : 'TokenPulse'}</span><span>账户额度与本地消费分别计算</span></footer>
     </main>
