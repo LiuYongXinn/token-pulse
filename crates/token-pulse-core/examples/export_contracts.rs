@@ -2,6 +2,7 @@ use schemars::{JsonSchema, generate::SchemaSettings};
 use std::{collections::BTreeMap, fs, path::PathBuf};
 use token_pulse_core::calendar::{CalendarBucket, Grain};
 use token_pulse_core::jobs::*;
+use token_pulse_core::pricing::{ModelAlias, PriceOrigin, PriceOutcome, PriceRule, UnpricedCode};
 use token_pulse_core::query::{GroupDimension, GroupSort, GroupedUsage};
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -53,6 +54,11 @@ fn main() {
         CurrencyEstimate,
         UnpricedReason,
         PricingSummary,
+        PriceOrigin,
+        PriceRule,
+        ModelAlias,
+        UnpricedCode,
+        PriceOutcome,
         CoverageState,
         SourceIssue,
         FormatIssue,

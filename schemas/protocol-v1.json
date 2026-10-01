@@ -2122,6 +2122,54 @@
       "title": "MiniSnapshot",
       "type": "object"
     },
+    "ModelAlias": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "type": "string"
+        },
+        "alias_id": {
+          "type": "string"
+        },
+        "canonical_model": {
+          "type": "string"
+        },
+        "introduced_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "retired_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "alias_id",
+        "provider",
+        "alias",
+        "canonical_model",
+        "introduced_revision",
+        "retired_revision"
+      ],
+      "title": "ModelAlias",
+      "type": "object"
+    },
     "PriceBasis": {
       "$defs": {
         "EpochMs": {
@@ -2164,6 +2212,210 @@
         }
       ],
       "title": "PriceBasis"
+    },
+    "PriceOrigin": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "custom",
+        "offline"
+      ],
+      "title": "PriceOrigin",
+      "type": "string"
+    },
+    "PriceOutcome": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DecimalMoney": {
+          "maxLength": 40,
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+          "type": "string"
+        },
+        "UnpricedCode": {
+          "enum": [
+            "unknown_model",
+            "missing_rule",
+            "ambiguous_rule",
+            "insufficient_usage",
+            "overflow"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cost_atoms": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "estimated_cost": {
+              "$ref": "#/$defs/DecimalMoney"
+            },
+            "rule_id": {
+              "type": "string"
+            },
+            "status": {
+              "const": "priced",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "rule_id",
+            "currency",
+            "cost_atoms",
+            "estimated_cost"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/UnpricedCode"
+            },
+            "status": {
+              "const": "unpriced",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PriceOutcome"
+    },
+    "PriceRule": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "PriceOrigin": {
+          "enum": [
+            "custom",
+            "offline"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cached_rate_atoms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "effective_from_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "effective_to_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_rate_atoms": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "introduced_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "model_exact": {
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/PriceOrigin"
+        },
+        "origin_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_rate_atoms": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "priority": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "retired_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "rule_id",
+        "introduced_revision",
+        "retired_revision",
+        "provider",
+        "model_exact",
+        "source_id",
+        "currency",
+        "effective_from_ms",
+        "effective_to_ms",
+        "priority",
+        "input_rate_atoms",
+        "cached_rate_atoms",
+        "output_rate_atoms",
+        "origin",
+        "origin_reference",
+        "created_at_ms"
+      ],
+      "title": "PriceRule",
+      "type": "object"
     },
     "PricingSummary": {
       "$defs": {
@@ -3297,6 +3549,18 @@
       ],
       "title": "TokenTotals",
       "type": "object"
+    },
+    "UnpricedCode": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "unknown_model",
+        "missing_rule",
+        "ambiguous_rule",
+        "insufficient_usage",
+        "overflow"
+      ],
+      "title": "UnpricedCode",
+      "type": "string"
     },
     "UnpricedReason": {
       "$defs": {

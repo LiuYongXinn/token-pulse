@@ -46,6 +46,16 @@ export type UnpricedReason = { code: string, total_tokens: DecimalInt, event_cou
 
 export type PricingSummary = { redacted: boolean, basis: PriceBasis, currencies: Array<CurrencyEstimate>, priced_total_tokens: DecimalInt, unpriced_total_tokens: DecimalInt, reasons: Array<UnpricedReason>, calculating: boolean, };
 
+export type PriceOrigin = "custom" | "offline";
+
+export type PriceRule = { rule_id: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin: PriceOrigin, origin_reference: string | null, created_at_ms: EpochMs, };
+
+export type ModelAlias = { alias_id: string, provider: string, alias: string, canonical_model: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, };
+
+export type UnpricedCode = "unknown_model" | "missing_rule" | "ambiguous_rule" | "insufficient_usage" | "overflow";
+
+export type PriceOutcome = { "status": "priced", rule_id: string, currency: string, cost_atoms: DecimalInt, estimated_cost: DecimalMoney, } | { "status": "unpriced", reason: UnpricedCode, };
+
 export type CoverageState = "complete" | "partial" | "unknown";
 
 export type SourceIssue = { source_id: string, code: string, last_success_ms: EpochMs | null, };

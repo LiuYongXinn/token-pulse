@@ -10,6 +10,7 @@ pub mod domain;
 pub mod error;
 pub mod jobs;
 pub mod numeric;
+pub mod pricing;
 pub mod protocol;
 pub mod query;
 pub mod reader;
