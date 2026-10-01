@@ -10,7 +10,7 @@ use token_pulse_core::query::{
     CloseQuerySnapshotRequest, DashboardBundle, DashboardRequest, FacetDimension, FilterOption,
     FilterOptionsPage, FilterOptionsQuery, FilterOptionsRequest, GroupDimension, GroupSort,
     GroupedUsage, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession,
-    UsageSeriesBucket,
+    SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest, UsageSeriesBucket,
 };
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -67,6 +67,11 @@ fn main() {
         FilterOptionsRequest,
         FilterOption,
         FilterOptionsPage,
+        SessionRow,
+        SessionSort,
+        SessionsQuery,
+        SessionsRequest,
+        SessionsPage,
         CloseQuerySnapshotRequest,
         DashboardRequest,
         UsageSeriesBucket,

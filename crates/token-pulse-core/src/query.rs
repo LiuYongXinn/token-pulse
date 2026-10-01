@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use ts_rs::TS;
 
+mod sessions;
+pub use sessions::{SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest};
+
 pub fn model_key(provider: Option<&str>, model: Option<&str>) -> Option<String> {
     model.map(|name| {
         // JSON encodes null and component boundaries without separator ambiguity.
@@ -169,11 +172,19 @@ pub struct FilterOptionsPage {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CloseQuerySnapshotRequest {
     FilterOptions { request: FilterOptionsRequest },
+    Sessions { request: SessionsRequest },
 }
 impl CloseQuerySnapshotRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         match self {
             Self::FilterOptions { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
+            Self::Sessions { request } => {
                 request.validate()?;
                 if request.cursor.is_none() {
                     return Err(crate::error::ErrorCode::InvalidQuery);

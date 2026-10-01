@@ -112,6 +112,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let invalidRange=false;
                 try {await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard-invalid',request:{...request,heatmap_range:{...request.heatmap_range,timezone:'Asia/Shanghai'}}});} catch(error) {invalidRange=error.code==='INVALID_QUERY';}
                 ok=ok && invalidRange;
+                const sessionsRequest={query:{filter:request.filter,price_basis:request.price_basis,sort:'latest_desc',page_size:200},cursor:null};
+                const sessions=await invoke('query_sessions',{requestId:'native-smoke-sessions',request:sessionsRequest});
+                ok=ok && sessions.api_version===1 && sessions.request_id==='native-smoke-sessions'
+                    && sessions.data.meta.snapshot_id.startsWith('query-') && sessions.data.meta.price_revision==='3'
+                    && sessions.data.summary.total_tokens==='0' && sessions.data.summary.input_total.value===null
+                    && sessions.data.sessions.length===0 && sessions.data.next_cursor===null;
+                for(const [suffix,bad,code] of [['size',{...sessionsRequest,query:{...sessionsRequest.query,page_size:201}},'INVALID_QUERY'],['cursor',{...sessionsRequest,cursor:'a'.repeat(151)},'CURSOR_INVALID']]) {
+                    let rejected=false;
+                    try {await invoke('query_sessions',{requestId:`native-smoke-sessions-${suffix}`,request:bad});} catch(error) {rejected=error.code===code;}
+                    ok=ok && rejected;
+                }
                 for(const dimension of ['models','projects']) {
                     const groupedRequest={filter:request.filter,price_basis:request.price_basis,dimension,sort:'total_desc',limit:200};
                     const grouped=await invoke('get_grouped_usage',{requestId:`native-smoke-groups-${dimension}`,request:groupedRequest});

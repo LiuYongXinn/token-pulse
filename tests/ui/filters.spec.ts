@@ -107,7 +107,7 @@ test('expired continuation never appends a new snapshot and requery replaces old
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await page.evaluate(() => (window as unknown as { __expireFacet: () => void }).__expireFacet());
   await page.getByRole('button', { name: '加载下一页' }).click();
-  await expect(page.getByRole('alert')).toHaveText('候选快照已过期，请重新查询。');
+  await expect(page.getByRole('alert')).toHaveText('查询快照已过期，请重新查询。');
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await expect(page.getByRole('option', { name: /Synthetic Beta/ })).toHaveCount(0);
   await page.getByRole('button', { name: '重新查询', exact: true }).click();

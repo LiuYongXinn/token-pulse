@@ -17,6 +17,7 @@ pub mod dashboard;
 pub mod facets;
 pub mod groups;
 pub mod pricing;
+pub mod sessions;
 
 pub struct BucketTotals {
     pub bucket: CalendarBucket,

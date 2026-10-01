@@ -361,4 +361,12 @@ CSV 将可能被表格解释为公式的用户标签转为安全文本，数值�
 
 `get_filter_options` 的正式 request 为 `{ query, cursor }`。query 包含 filter、dimension（sources / models / projects / sessions）、search（最多 256 个 Unicode 码点）与 page_size（1–200）；cursor 首次为 null，续页必须保留整个 query。FilterOptionsPage 返回 meta、dimension、options（key|null、display_name、十进制可信用量事件 count）和 next_cursor|null；选项上限 200。facet_filter 仅忽略本维度选择，其他条件仍生效。候选 count 不是完整导入证明，缺口继续由统计 Coverage 表达。游标固定 151 字符，形状检查不替代 MAC / 窗口绑定 / 实际租约与服务器登记位置验证。
 
-候选租约按稳定 key / null 首位分页，最后一页自动关闭；候选框关闭、换搜索或换筛选时调用 `close_query_snapshot`，正式 `CloseQuerySnapshotRequest` 当前支持 `{ kind: "filter_options", request: { query, cursor } }`。cursor 必须是该完整 query 与可信窗口已签发的非 null 游标，响应 data 为 null。MAC / 绑定先校验；已过期或重复关闭同一合法能力幂等成功，伪造、跨窗口或改查询仍拒绝。该命令预留后续分页租约类型，不把可见 snapshot_id 字符串当关闭权限。主窗口独占这两个命令的 capability，后台再次校验 label；其他窗口不直接枚举来源 / 模型 / 项目 / 会话。
+候选租约按稳定 key / null 首位分页，最后一页自动关闭；候选框关闭、换搜索或换筛选时调用 `close_query_snapshot`，正式 `CloseQuerySnapshotRequest` 支持 `{ kind: "filter_options", request: { query, cursor } }` 与 `{ kind: "sessions", request: { query, cursor } }`。cursor 必须是该完整 query 与可信窗口已签发的非 null 游标，响应 data 为 null。MAC / 绑定先校验；已过期或重复关闭同一合法能力幂等成功，伪造、跨窗口或改查询仍拒绝。该命令预留后续分页租约类型，不把可见 snapshot_id 字符串当关闭权限。主窗口独占这些命令的 capability，后台再次校验 label；其他窗口不直接枚举来源 / 模型 / 项目 / 会话。
+
+### 已实现会话分页的正式 DTO
+
+`query_sessions` 接收 `SessionsRequest { query: { filter, price_basis, sort, page_size }, cursor }`。sort 为 latest_desc / total_desc，page_size 1–200；cursor=null 在命令内取得真实租约并原子读取第一页，续页使用同 query 的已签发游标。对前端合并了“打开租约 / 读第一页”步骤，保留 §2.2 的真实只读事务、窗口绑定、TTL / WAL 保护；无需前端拿可见 snapshot_id 当授权句柄。终页释放租约，已取得 DTO 可继续显示。
+
+`SessionsPage` 同时返回 meta、整个 filter 的 summary / pricing / coverage、sessions 和 next_cursor；不能把每页消费当总范围消费。每行包含范围内最新可信事件的时间 / 模型 / 项目、消费 / 费用 / 覆盖，以及独立的 latest_context。父会话 key / 显示名只使用已解析关系；未解析 parent_provider_id 保留，不猜测关联。child_count 为跨日期已登记、已解析的非镜像子会话数量，与选定范围的消费会话数不同。关系本身不证明继承扣除已经确认，继承依据后续由详情模块提供。
+
+latest_desc 以最新选定事件时间降序、session_key BINARY 升序；total_desc 以精确非负十进制总量降序、session_key BINARY 升序。总量先补至相同 39 位文本宽度比较，不转 SQLite REAL 或限制为 i64；游标位置由后端登记。所有页的 facts、价格规则版本、项目标签、父子关系和最近上下文均来自同一事务，首请求 generated_at_ms 保持不变。排序 / 页长 / 范围 / 价格依据 / 窗口改变均不能重绑旧游标。

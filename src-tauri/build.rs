@@ -14,6 +14,7 @@ fn main() {
             "get_dashboard_bundle",
             "get_grouped_usage",
             "get_filter_options",
+            "query_sessions",
             "close_query_snapshot",
             "get_price_rules",
             "save_price_rule",

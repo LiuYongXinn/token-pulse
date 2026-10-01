@@ -31,12 +31,26 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateGroups({ ...grouped, total_group_count: undefined })).toBe(false);
   expect(validateGroups({ ...grouped, groups: [{ ...group, pricing: undefined }] })).toBe(false);
   expect(validateGroups({ ...grouped, groups: Array(201).fill(group) })).toBe(false);
+  const session = { session_key: 'synthetic', display_name: 'Synthetic', latest_at_ms: 1000, latest_model: null, latest_project_id: null, latest_project_name: null, parent_key: null, parent_display_name: null, parent_provider_id: null, child_count: '0', summary: totals, pricing: fixture.pricing, coverage, latest_context: { context_tokens: '9007199254740993', model_context_window: null, percentage: null, observed_at_ms: 12000, quality: 'confirmed' } };
+  const sessionPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, sessions: [session], next_cursor: null };
+  const validateSessions = ajv.compile(protocol.schemas.SessionsPage);
+  expect(validateSessions(sessionPage)).toBe(true);
+  expect(validateSessions({ ...sessionPage, sessions: [{ ...session, latest_context: undefined }] })).toBe(false);
+  expect(validateSessions({ ...sessionPage, sessions: [{ ...session, summary: { ...totals, reliable_turn_count: 1 } }] })).toBe(false);
+  expect(validateSessions({ ...sessionPage, sessions: [{ ...session, messages: ['private chat'] }] })).toBe(false);
+  expect(validateSessions({ ...sessionPage, sessions: Array(201).fill(session) })).toBe(false);
   const validateGroupRequest = ajv.compile(protocol.schemas.GroupedUsageRequest);
   const all = { kind: 'all' };
   const groupRequest = { filter: { range: { start_ms: 0, end_ms: 1000, timezone: 'UTC' }, sources: all, models: all, projects: all, sessions: all }, price_basis: { mode: 'event_time' }, dimension: 'models', sort: 'total_desc', limit: 200 };
   expect(validateGroupRequest(groupRequest)).toBe(true);
   expect(validateGroupRequest({ ...groupRequest, limit: 201 })).toBe(false);
   expect(validateGroupRequest({ ...groupRequest, limit: 0 })).toBe(false);
+  const validateSessionRequest = ajv.compile(protocol.schemas.SessionsRequest);
+  const sessionRequest = { query: { filter: groupRequest.filter, price_basis: groupRequest.price_basis, sort: 'latest_desc', page_size: 200 }, cursor: null };
+  expect(validateSessionRequest(sessionRequest)).toBe(true);
+  expect(validateSessionRequest({ ...sessionRequest, query: { ...sessionRequest.query, page_size: 201 } })).toBe(false);
+  expect(validateSessionRequest({ ...sessionRequest, query: { ...sessionRequest.query, sort: 'unsupported' } })).toBe(false);
+  expect(validateSessionRequest({ ...sessionRequest, cursor: 'a'.repeat(150) })).toBe(false);
 });
 test('Rust schema and TS preserve nullable fields and exact decimal strings', () => {
   const validate = ajv.compile(protocol.schemas.TokenMeasure);

@@ -60,7 +60,29 @@ count: DecimalInt, };
 
 export type FilterOptionsPage = { meta: SnapshotMeta, dimension: FacetDimension, options: Array<FilterOption>, next_cursor: string | null, };
 
-export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, };
+export type SessionRow = { session_key: string, display_name: string,
+/**
+ * Latest selected usage event, not lifetime activity or latest context time.
+ */
+latest_at_ms: EpochMs, latest_model: string | null, latest_project_id: string | null, latest_project_name: string | null, parent_key: string | null, parent_display_name: string | null, parent_provider_id: string | null,
+/**
+ * Registered resolved children across dates, not inferred from request counts.
+ */
+child_count: DecimalInt, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, latest_context: ContextSnapshot, };
+
+export type SessionSort = "latest_desc" | "total_desc";
+
+export type SessionsQuery = { filter: UsageFilter, price_basis: PriceBasis, sort: SessionSort, page_size: number, };
+
+export type SessionsRequest = { query: SessionsQuery, cursor: string | null, };
+
+export type SessionsPage = { meta: SnapshotMeta,
+/**
+ * Whole filter totals, independent of the current page.
+ */
+summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, sessions: Array<SessionRow>, next_cursor: string | null, };
+
+export type CloseQuerySnapshotRequest = { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, };
 
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 
