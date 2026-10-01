@@ -35,7 +35,7 @@ fn fixture() -> (
     // Seed an earlier engine database only while the app is closed. This
     // test connection never accesses source logs or a production directory.
     let fixture_conn = token_pulse_store::rusqlite::Connection::open(owned_fixture_path).unwrap();
-    fixture_conn.execute_batch("UPDATE ledger_generations SET accounting_version='previous-engine'; UPDATE stream_states SET baseline_json='{}';").unwrap();
+    fixture_conn.execute_batch("UPDATE ledger_generations SET accounting_version='accounting-v1'; UPDATE stream_states SET baseline_json='{}';").unwrap();
     drop(fixture_conn);
     let db = Database::open(data.path()).unwrap();
     (data, logs, db, path, bytes)
@@ -98,4 +98,75 @@ fn failed_prefix_verification_keeps_old_pointer_facts_and_checkpoint() {
     assert_eq!(db.get_job(&job.job_id).unwrap().job.state, JobState::Failed);
     assert_eq!(facts(&db), old);
     assert_eq!(fs::read(&path).unwrap(), bytes);
+}
+
+#[test]
+fn legacy_contradictory_partial_event_is_reclassified_only_after_candidate_publication() {
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    fs::create_dir_all(logs.path().join("sessions")).unwrap();
+    let db = Database::open(data.path()).unwrap();
+    db.add_source(SourceRecord {
+        source_id: "local".into(),
+        root_path: logs.path().to_str().unwrap().into(),
+        directory_identity: None,
+        kind: "local".into(),
+        enabled: true,
+        created_at_ms: 1,
+    })
+    .unwrap();
+    let path = logs.path().join("sessions/partial.jsonl");
+    let partial = serde_json::json!({"input_tokens":100,"cached_input_tokens":60,"reasoning_output_tokens":8,"total_tokens":10});
+    let bytes=serde_json::json!({"type":"session_meta","payload":{"id":"legacy-partial"},"timestamp":"1970-01-01T00:00:00Z"}).to_string()+"\n"+&serde_json::json!({"type":"event_msg","timestamp":"1970-01-01T00:00:01Z","payload":{"type":"token_count","info":{"last_token_usage":partial,"total_token_usage":partial}}}).to_string()+"\n";
+    fs::write(&path, &bytes).unwrap();
+    collect_file(&db, "local", &path, 1000).unwrap();
+    let owned_fixture_path = db.path().to_owned();
+    drop(db);
+    let conn = token_pulse_store::rusqlite::Connection::open(&owned_fixture_path).unwrap();
+    conn.execute_batch("UPDATE ledger_generations SET accounting_version='accounting-v1'; DELETE FROM pending_usage; INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,episode_id,input_tokens_total,cached_input_tokens,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json) SELECT 'legacy-event',s.active_ledger_id,o.observation_id,1000,'legacy-episode',100,60,8,10,10,'last_new_stream','[\"confirmed\"]' FROM observations o JOIN sessions s ON s.session_key=o.session_key WHERE o.kind='usage'; INSERT INTO event_provenance SELECT 'legacy-event',origin_observation_id,'origin' FROM usage_events WHERE event_id='legacy-event';").unwrap();
+    drop(conn);
+    let db = Database::open(data.path()).unwrap();
+    let all = token_pulse_core::protocol::DimensionSelection::All {};
+    let filter = token_pulse_core::protocol::UsageFilter {
+        range: token_pulse_core::protocol::DateRange {
+            start_ms: token_pulse_core::numeric::EpochMs::new(0).unwrap(),
+            end_ms: token_pulse_core::numeric::EpochMs::new(5000).unwrap(),
+            timezone: "UTC".into(),
+        },
+        sources: all.clone(),
+        models: all.clone(),
+        projects: all.clone(),
+        sessions: all,
+    };
+    assert_eq!(
+        db.usage_totals(&filter).unwrap().total_tokens.as_str(),
+        "10"
+    );
+    let job = db.enqueue_accounting_upgrade(2000).unwrap().unwrap();
+    db.snapshot(|tx, _| {
+        let old = token_pulse_store::query::totals(tx, &filter)?;
+        execute_rebuild(&db, &job.job_id, || false, || 3000)?;
+        assert_eq!(
+            token_pulse_store::query::totals(tx, &filter)?.total_tokens,
+            old.total_tokens
+        );
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(db.usage_totals(&filter).unwrap().total_tokens.as_str(), "0");
+    assert_eq!(
+        db.get_job(&job.job_id).unwrap().job.state,
+        JobState::Succeeded
+    );
+    db.snapshot(|tx,_| {
+        let (kind,reason,vector):(String,String,String)=tx.query_row("SELECT p.kind,p.reason_code,p.vector_json FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
+        assert_eq!(kind,"pending");assert_eq!(reason,"invalid_usage");
+        let usage:token_pulse_core::domain::UsageVector=serde_json::from_str(&vector)?;
+        assert_eq!(usage.output_total,None);assert_eq!(usage.reported_total,Some(10));
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM active_usage_events",[],|r|r.get::<_,i64>(0))?,0);
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM usage_events WHERE event_id='legacy-event'",[],|r|r.get::<_,i64>(0))?,1);
+        assert_eq!(tx.query_row("SELECT committed_offset FROM file_generations WHERE state='current'",[],|r|r.get::<_,i64>(0))?,bytes.len() as i64);
+        Ok(())
+    }).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), bytes);
 }

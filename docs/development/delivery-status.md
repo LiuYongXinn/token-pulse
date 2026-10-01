@@ -523,3 +523,13 @@ session accounting 读取及实时提交事务均再次校验活跃账本的 par
 解析器版本变化必须重新解析原始必要数据；该路径尚未实现。自动核算升级跳过 parser 不匹配组，prepare_rebuild 也在候选创建前拒绝旧 parser 为 UNSUPPORTED_FORMAT，防止手动或 proof 重放把旧解析结果无条件标为当前版本。
 
 2026-10-02 00:35 新增三项存储 / 两项采集集成及完整 workspace 215 项普通 Rust 测试、workspace Clippy 通过。检查旧版本拒绝读取 / 预制 batch 原子回滚但总量保留、不同 parser 候选零写入、部分文件上界升级 / busy / 取消 / 来源状态变化、三次过时重试界限；真正关闭应用后在隔离 fixture 库植入旧版本和损坏基线，再启动后台 worker 从必要观察生成新基线，原子发布后继续读取已追加原始日志，消费从 120 到 130；修改原始前缀导致重建失败，旧指针 / 总量 / committed offset 全不变，原始文件均未被应用写入。本模块尚未改变 ACCOUNTING_VERSION 或部分向量规则，下一步同时更新规则和旧版本读取兼容。
+
+## M05c：部分向量下界与 accounting-v2
+
+修正缺失父项时 known input / cache 与 known output / reasoning 可证明的下界大于 reported_total 却被接受的边界；比较用 i128，两侧父子只取一次下界，不叠加缓存或推理。未知字段 / 总量保持原 null。ACCOUNTING_VERSION 更新 accounting-v2；新观察核算、写入事件 / 基线 / 候选均严格执行新规则。
+
+已发布事实使用明确只读 published_total(accounting_version)；v1 保留已发布规则，v2 严格规则，未知版本 UNSUPPORTED_FORMAT。原始统计 / 缓存混合查询从当前真实事务内的每个 ledger 取对应版本，UTC 预聚合也保持账本版本；价格读取不因旧部分向量使整个页面失败，此类缺分项费用仍未计价。候选成功前旧 v1 结果与旧真实读取事务不变；新候选把矛盾向量分类 pending、保留原向量 / null / invalid_usage 依据，切换后从可信消费中排除，旧事件留在历史账本。自动升级进一步限定已知 v1 前驱；未知 / 未来核算版本及旧 parser 不降级重放。
+
+2026-10-02 00:45 新增六项多场景、完整 workspace 221 项普通 Rust 测试、workspace Clippy、契约差异检查通过。三项核心测试独立枚举 1,280 个 nullable 小向量的所有具体完整补全，检查包含关系 / 总量约束；另列 i64::MAX + 子项 / 零 reported / 仅子项有值 / 全字段包含案例，last 或 cumulative 无效不推进状态，合法 last 上下文独立保留。两项存储验证新无效 batch 全事务回滚、旧 v1 矛盾事实原始 / UTC 缓存 / 真实旧快照可读、新版本正确结果可见、未知未来版本拒绝且不启动升级。新增实际 SQLite / 合成原始日志集成从离线 v1 矛盾事件重建，发布前旧读取见 10、发布后可信消费 0 / 一条 invalid_usage pending / 旧事件仍保留 / 检查点及原始日志不变；既有启动 worker 升级后消费 120 → 130 与前缀失败保留继续通过。
+
+同时间 Win10 随机隔离库独立应用 native probe 继续通过实际价格 / 候选 / 总览 / 分组 / context / 高级筛选焦点与关闭 / 原生路由，退出 0，仍有 class unregister 1412 提示；原生 probe 的库为空，不当作实际旧 Codex 数据升级验收。未重新运行 30 万性能，原先性能未达标仍待优化；旧规则读取新增版本查询的性能也未单独验收。

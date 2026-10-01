@@ -275,8 +275,8 @@ impl Database {
             if closure.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
             let mut files=BTreeMap::new();let mut ledgers=vec![];
             for key in closure {
-                let parser:String=tx.query_row("SELECT l.parser_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&key],|r|r.get(0))?;
-                if parser!=PARSER_VERSION {return Err(ErrorCode::UnsupportedFormat.into());}
+                let (parser,accounting):(String,String)=tx.query_row("SELECT l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&key],|r|Ok((r.get(0)?,r.get(1)?)))?;
+                if parser!=PARSER_VERSION || (accounting!=ACCOUNTING_VERSION && !token_pulse_core::domain::can_upgrade_accounting_version(&accounting)) {return Err(ErrorCode::UnsupportedFormat.into());}
                 if tx.query_row("SELECT EXISTS(SELECT 1 FROM ledger_generations WHERE session_key=?1 AND state='candidate')",[&key],|r|r.get::<_,bool>(0))? {return Err(ErrorCode::RevisionConflict.into());}
                 let candidate=format!("candidate-{:x}",Sha256::digest(serde_json::to_vec(&(&job_id,&key))?));
                 for generation in ids(&tx,"SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1",&key)? {files.insert(generation.clone(),input_file(&tx,&generation)?);}

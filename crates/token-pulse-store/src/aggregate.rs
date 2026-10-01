@@ -21,7 +21,9 @@ pub(crate) struct VectorAccumulator {
     known: [u64; 5],
     events: u64,
 }
-struct VectorSum;
+struct VectorSum {
+    versioned: bool,
+}
 #[derive(Default)]
 pub(crate) struct ProjectionAccumulator {
     total: i128,
@@ -123,7 +125,12 @@ impl Aggregate<VectorAccumulator, String> for VectorSum {
             reasoning_output: ctx.get(3)?,
             reported_total: Some(ctx.get(4)?),
         };
-        acc.add(vector).map_err(function_error)
+        if self.versioned {
+            let version: String = ctx.get(5)?;
+            acc.add_published(vector, &version).map_err(function_error)
+        } else {
+            acc.add(vector).map_err(function_error)
+        }
     }
     fn finalize(&self, _: &mut Context<'_>, acc: Option<VectorAccumulator>) -> Result<String> {
         let sums = acc.unwrap_or_default().finish().map_err(function_error)?;
@@ -137,6 +144,25 @@ impl VectorAccumulator {
     }
     pub fn add(&mut self, vector: UsageVector) -> std::result::Result<(), ErrorCode> {
         let total = i128::from(vector.validated_total()?.ok_or(ErrorCode::InvalidUsage)?);
+        self.add_validated(vector, total)
+    }
+    pub fn add_published(
+        &mut self,
+        vector: UsageVector,
+        version: &str,
+    ) -> std::result::Result<(), ErrorCode> {
+        let total = i128::from(
+            vector
+                .published_total(version)?
+                .ok_or(ErrorCode::InvalidUsage)?,
+        );
+        self.add_validated(vector, total)
+    }
+    fn add_validated(
+        &mut self,
+        vector: UsageVector,
+        total: i128,
+    ) -> std::result::Result<(), ErrorCode> {
         self.total = self
             .total
             .checked_add(total)
@@ -148,7 +174,10 @@ impl VectorAccumulator {
         let values = [
             vector.input_total,
             vector.cached_input,
-            vector.noncached_input()?,
+            match (vector.input_total, vector.cached_input) {
+                (Some(input), Some(cached)) => Some(input - cached),
+                _ => None,
+            },
             vector.output_total,
             vector.reasoning_output,
         ];
@@ -221,7 +250,18 @@ impl Aggregate<Option<i128>, Option<String>> for ExactSum {
 }
 pub fn register(connection: &Connection) -> Result<()> {
     let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    connection.create_aggregate_function("sum_usage_vector", 5, flags, VectorSum)?;
+    connection.create_aggregate_function(
+        "sum_usage_vector",
+        5,
+        flags,
+        VectorSum { versioned: false },
+    )?;
+    connection.create_aggregate_function(
+        "sum_published_usage_vector",
+        6,
+        flags,
+        VectorSum { versioned: true },
+    )?;
     connection.create_aggregate_function("sum_usage_projection", 2, flags, ProjectionSum)?;
     connection.create_scalar_function("usage_model_key", 2, flags, |ctx| {
         let provider: Option<String> = ctx.get(0)?;

@@ -201,7 +201,7 @@ fn prepare(tx: &Transaction<'_>, ledger: &str, stop: &AtomicBool) -> StoreResult
             reasoning_output: row.get(8)?,
             reported_total: Some(row.get(9)?),
         };
-        group.sum.add(usage)?;
+        group.sum.add_published(usage, &input.accounting)?;
         if let Some(turn) = row.get::<_, Option<String>>(4)?.filter(|s| !s.is_empty()) {
             group.known_turn_events = group
                 .known_turn_events

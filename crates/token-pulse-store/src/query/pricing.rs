@@ -33,7 +33,7 @@ pub fn visit(
     // it never silently drops a source from rule matching. Mirrors are DISTINCT.
     let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY LIMIT 33))";
     let sql = format!(
-        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources} FROM {FROM} WHERE {}",
+        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id) FROM {FROM} WHERE {}",
         p.sql
     );
     let mut statement = tx.prepare(&sql)?;
@@ -50,7 +50,15 @@ pub fn visit(
             reasoning_output: row.get(10)?,
             reported_total: Some(total),
         };
-        if usage.validated_total().map_err(|_| ErrorCode::DbCorrupt)? != Some(total) {
+        let version: String = row.get(13)?;
+        if usage.published_total(&version).map_err(|error| {
+            if error == ErrorCode::UnsupportedFormat {
+                error
+            } else {
+                ErrorCode::DbCorrupt
+            }
+        })? != Some(total)
+        {
             return Err(ErrorCode::DbCorrupt.into());
         }
         let sources: Vec<String> =

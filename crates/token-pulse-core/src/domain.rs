@@ -2,7 +2,12 @@ use crate::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 
 pub const PARSER_VERSION: &str = "codex-rollout-v1";
-pub const ACCOUNTING_VERSION: &str = "accounting-v1";
+pub const ACCOUNTING_VERSION: &str = "accounting-v2";
+pub const LEGACY_ACCOUNTING_VERSION: &str = "accounting-v1";
+
+pub fn can_upgrade_accounting_version(version: &str) -> bool {
+    version == LEGACY_ACCOUNTING_VERSION
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -15,6 +20,30 @@ pub struct UsageVector {
 }
 impl UsageVector {
     pub fn validated_total(&self) -> Result<Option<i64>, ErrorCode> {
+        let total = self.validated_total_v1()?;
+        // Cache belongs to input and reasoning belongs to output. A known
+        // child is a lower bound for its unknown parent, never an extra term
+        // added beside that parent. These temporary zero bounds do not fill
+        // any missing field or manufacture a calculated total.
+        let input_min = self.input_total.or(self.cached_input).unwrap_or(0);
+        let output_min = self.output_total.or(self.reasoning_output).unwrap_or(0);
+        if self.reported_total.is_some_and(|reported| {
+            i128::from(input_min) + i128::from(output_min) > i128::from(reported)
+        }) {
+            return Err(ErrorCode::InvalidUsage);
+        }
+        Ok(total)
+    }
+    /// Read already published facts under their immutable rule version only.
+    /// Incoming observations, events, baselines and candidates use validated_total.
+    pub fn published_total(&self, accounting_version: &str) -> Result<Option<i64>, ErrorCode> {
+        match accounting_version {
+            ACCOUNTING_VERSION => self.validated_total(),
+            LEGACY_ACCOUNTING_VERSION => self.validated_total_v1(),
+            _ => Err(ErrorCode::UnsupportedFormat),
+        }
+    }
+    fn validated_total_v1(&self) -> Result<Option<i64>, ErrorCode> {
         if [
             self.input_total,
             self.cached_input,

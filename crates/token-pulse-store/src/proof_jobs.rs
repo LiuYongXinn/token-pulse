@@ -6,7 +6,10 @@ use crate::{
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use token_pulse_core::{
-    domain::{ACCOUNTING_VERSION, PARSER_VERSION},
+    domain::{
+        ACCOUNTING_VERSION, LEGACY_ACCOUNTING_VERSION, PARSER_VERSION,
+        can_upgrade_accounting_version,
+    },
     jobs::{JobRequest, JobScope},
     numeric::EpochMs,
     protocol::{Job, JobKind, JobState},
@@ -32,8 +35,8 @@ fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String
         Trigger::AccountingUpgrade => {
             // Parser upgrades need a separately verified reparse. Stored
             // observations may be replayed only under their current parser.
-            let mut q=tx.prepare("SELECT s.session_key FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE l.state='active' AND l.parser_version=?1 AND l.accounting_version<>?2 AND s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) ORDER BY s.session_key LIMIT 32768")?;
-            q.query_map([PARSER_VERSION, ACCOUNTING_VERSION], |r| {
+            let mut q=tx.prepare("SELECT s.session_key FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE l.state='active' AND l.parser_version=?1 AND l.accounting_version=?2 AND s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) ORDER BY s.session_key LIMIT 32768")?;
+            q.query_map([PARSER_VERSION, LEGACY_ACCOUNTING_VERSION], |r| {
                 r.get::<_, String>(0)
             })?
             .collect::<crate::rusqlite::Result<Vec<_>>>()?
@@ -61,7 +64,10 @@ fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String
             hash.update(serde_json::to_vec(&(&session, identity))?);
             if matches!(trigger, Trigger::AccountingUpgrade) {
                 let ledger:(String,String,String)=tx.query_row("SELECT l.ledger_id,l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&session],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
-                if ledger.1 != PARSER_VERSION {
+                if ledger.1 != PARSER_VERSION
+                    || (ledger.2 != ACCOUNTING_VERSION
+                        && !can_upgrade_accounting_version(&ledger.2))
+                {
                     complete_parser = false;
                 }
                 hash.update(serde_json::to_vec(&ledger)?);
@@ -160,7 +166,7 @@ impl Database {
                 let mut outdated=false;
                 for session in group {
                     let (parser,accounting):(String,String)=tx.query_row("SELECT l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[session],|r|Ok((r.get(0)?,r.get(1)?)))?;
-                    if parser!=PARSER_VERSION {return Ok(None);}
+                    if parser!=PARSER_VERSION || (accounting!=ACCOUNTING_VERSION && !can_upgrade_accounting_version(&accounting)) {return Ok(None);}
                     outdated|=accounting!=ACCOUNTING_VERSION;
                 }
                 if !outdated {return Ok(None);}
