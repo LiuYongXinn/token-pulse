@@ -442,7 +442,7 @@ get_mini_usage 返回 MiniUsageSnapshot { meta, settings_revision, mini_scope, s
 
 ### 2.17 独立悬浮窗操作
 
-WindowAction 增加 show_mini，由主窗口 perform_window_action 异步创建 / 显示独立 mini；托盘调用同一创建 / 恢复实现。MiniWindowAction 为 read / set_expanded { expanded } / set_pinned { pinned } / drag / hide，返回 MiniWindowState { expanded, pinned }，纯原生交互无敏感显示字段。只允许 mini；尺寸固定两组 DIP，无任意窗口标签 / 路径 / 外部 URL / 穿透参数。当前交互状态只在进程内保留，跨启动持久化后续实现。
+WindowAction 增加 show_mini，由主窗口 perform_window_action 异步创建 / 显示独立 mini；托盘调用同一创建 / 恢复实现。MiniWindowAction 为 read / set_expanded { expanded } / set_pinned { pinned } / drag / hide，返回 MiniWindowState { expanded, pinned }，纯原生交互无敏感显示字段。只允许 mini；尺寸固定两组 DIP，无任意窗口标签 / 路径 / 外部 URL / 穿透参数。展开 / 置顶 / 位置现已持久化，见 2.20。
 
 mini capability 允许 get_mini_scope / get_mini_usage / set_mini_scope / get_display_settings / set_display_privacy；后两项共享隐私协调与最新出口。主题 / 时区写入继续仅 main。小窗 frontend 采用相同显示 epoch / 延迟响应门禁、共享主题，完整 MiniUsageSnapshot 单体更新；隐藏不关闭后台采集。账户区当前明确未连接，没有本地推测的额度值。
 
@@ -460,3 +460,11 @@ query_mini_sessions 允许 main / mini，接收 MiniSessionsRequest { query: { s
 游标仍为 151 字符的已认证能力，绑定可信窗口标签 / mini_sessions 域 / 完整 query。末页、失败、取消、搜索改变和迟到响应清理租约；过期不自动混入新快照。close_query_snapshot 增加 mini_sessions 变体；mini 只能关闭该变体，其他统计查询仍只允许 main。名称通过最新 PrivateResponse 脱敏，稳定 key / meta / cursor 不改变。前端显示策略变化关闭编辑器并清理候选和搜索缓存；旧策略迟到页使用原 query 和返回游标释放。
 
 小窗范围编辑器打开时保存 expected_settings_revision；后台刷新不重设未保存草稿的 CAS 基线。固定起点使用明确 UTC 毫秒输入，严格校验日历与未来时刻；今日模式按已保存统计时区零点推进。冲突保留草稿并提示取消后重新打开。主窗口详情可以明确固定该会话到今日或所选范围的精确起点，提交后显示小窗，不改变主筛选或账户服务。账户额度仍属于账户范围。
+
+### 2.20 小窗原生偏好与位置恢复
+
+现有 MiniWindowAction / State 不增加任意几何或屏幕写入能力；原生宿主采集工作区相对 DIP 偏移与可选 monitor 标识，仅在应用自有 SQLite settings payload 的 mini_window 保存 MiniWindowPreferences。每次内部修改只更新 placement / expanded / pinned 之一，读取最新 payload 并与全局 settings_revision 同事务提交，保留主题、隐私、时区和范围。同值不递增；错误 / 未支持版本不写默认配置。偏好变化发 settings_changed，小窗原生按钮成功后重读真实快照，避免沿用变化前范围 CAS 修订。
+
+新建窗口从已保存偏好恢复两组固定 DIP 与置顶，按目标屏幕当前工作区 / 缩放换算位置；找不到原 monitor 时选择主屏，夹紧相对偏移。隐藏窗口的 Win32 中间客户区尺寸不作为新建位置计算依据；使用已确定的产品尺寸。已显示窗口展开后按实际区域校正。Moved / ScaleFactorChanged / WM_DISPLAYCHANGE 只调度一个合并 worker，250 ms 静止后采集当前位置，避免每个鼠标事件创建线程；新建 / 展开 / 隐藏 / 关闭隐藏 / 退出前同时保存最后位置。原生尺寸 / 置顶操作后 Writer 失败则撤销该操作，返回原错误，保持已确认状态。
+
+位置 / monitor 标识不是前端 DTO，不开放任意路径、窗口标签或 native handle。实际多屏拖动 / 断屏 / 跨屏 DPI、完整进程冷启动和主窗口位置恢复仍需后续验收；自动布局预期、实际 WebView 重建与 SQLite 重开证据在交付记录分别列出。透明度、恢复快捷键、穿透尚未开放。

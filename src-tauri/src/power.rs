@@ -5,8 +5,8 @@ use windows_sys::Win32::{
     UI::{
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
-            PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, WM_NCDESTROY,
-            WM_POWERBROADCAST,
+            PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, WM_DISPLAYCHANGE,
+            WM_NCDESTROY, WM_POWERBROADCAST,
         },
     },
 };
@@ -44,6 +44,10 @@ unsafe extern "system" fn power_message(
     _id: usize,
     data: usize,
 ) -> LRESULT {
+    if message == WM_DISPLAYCHANGE {
+        let app = unsafe { &*(data as *const tauri::AppHandle) };
+        super::mini_window::schedule_placement(app);
+    }
     if message == WM_POWERBROADCAST {
         // The only writer of dwRefData is install above; no message payload is dereferenced.
         let app = unsafe { &*(data as *const tauri::AppHandle) };

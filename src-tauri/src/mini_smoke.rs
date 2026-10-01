@@ -169,8 +169,155 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     )?;
     verify_scope_editor(app, &main, &mini)?;
     verify_stats_navigation(app, &main, &mini)?;
+    verify_placement_restore(app, &mini)?;
     println!(
         "NATIVE_MINI_OK: two real WebViews, 280x220/360x380 DIP, native topmost, constrained IPC, shared theme/privacy, independent main filter, hide/restore/close"
+    );
+    Ok(())
+}
+
+fn verify_placement_restore(app: &tauri::AppHandle, mini: &WebviewWindow) -> Result<(), String> {
+    use token_pulse_core::{
+        numeric::EpochMs,
+        placement::{MiniPreferenceChange, WindowPlacement},
+    };
+    super::mini_window::show(app)?;
+    let monitor = mini
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("native monitor missing")?;
+    let work = monitor.work_area();
+    let x = work.position.x + (80.0 * monitor.scale_factor()).round() as i32;
+    let y = work.position.y + (90.0 * monitor.scale_factor()).round() as i32;
+    mini.set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    super::mini_window::save_current_placement(mini).map_err(|e| e.to_string())?;
+    evaluate(
+        app,
+        mini,
+        r#"
+      await invoke('mini_window_action',{requestId:'mini-restore-expanded',request:{kind:'set_expanded',expanded:true}});
+      await invoke('mini_window_action',{requestId:'mini-restore-pinned',request:{kind:'set_pinned',pinned:false}});
+    "#,
+    )?;
+    let runtime = app.state::<super::RuntimeState>();
+    let db = runtime.database.as_ref().map_err(|e| e.to_string())?;
+    let saved = db.mini_window_preferences().map_err(|e| e.to_string())?;
+    if !saved.interaction.expanded
+        || saved.interaction.pinned
+        || saved.placement.as_ref().is_none_or(|p| {
+            (p.offset_x_dip - 80.0).abs() > 1.0 || (p.offset_y_dip - 90.0).abs() > 1.0
+        })
+    {
+        return Err("native preferences not saved".into());
+    }
+    mini.destroy().map_err(|e| e.to_string())?;
+    for _ in 0..100 {
+        if app.get_webview_window("mini").is_none() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(30));
+    }
+    *runtime
+        .mini_window
+        .lock()
+        .map_err(|_| "probe state lock failed")? = Default::default();
+    super::mini_window::show(app)?;
+    let restored = app
+        .get_webview_window("mini")
+        .ok_or("restored mini missing")?;
+    size(&restored, 360.0, 380.0)?;
+    let position = restored.outer_position().map_err(|e| e.to_string())?;
+    if (position.x - x).abs() > 1 || (position.y - y).abs() > 1 {
+        return Err("native restored placement differs".into());
+    }
+    evaluate(
+        app,
+        &restored,
+        r#"
+      await wait(()=>document.querySelector('button[aria-label="收起小窗"]'));
+      await wait(()=>document.querySelector('button[aria-label="小窗置顶"]')?.getAttribute('aria-pressed')==='false');
+    "#,
+    )?;
+    // This debug-only probe owns an isolated UUID directory. Inject the fault through a
+    // separate SQLite test connection, without exposing the private Writer to application code.
+    let fault =
+        token_pulse_store::rusqlite::Connection::open(db.path()).map_err(|e| e.to_string())?;
+    fault
+        .busy_timeout(Duration::from_secs(2))
+        .map_err(|e| e.to_string())?;
+    fault.execute_batch("CREATE TRIGGER reject_native_mini_revision BEFORE UPDATE OF settings_revision ON app_state BEGIN SELECT RAISE(ABORT,'native probe failure'); END;").map_err(|e|e.to_string())?;
+    let check = evaluate(
+        app,
+        &restored,
+        r#"
+      let rejected=false;try{await invoke('mini_window_action',{requestId:'mini-failed-pin',request:{kind:'set_pinned',pinned:true}});}catch(error){rejected=error.code==='DB_WRITE_FAILED';}
+      const state=await invoke('mini_window_action',{requestId:'mini-failed-pin-read',request:{kind:'read'}});
+      if(!rejected || state.data.pinned)throw new Error('FAILED_NATIVE_PIN_NOT_ROLLED_BACK');
+    "#,
+    );
+    fault
+        .execute_batch("DROP TRIGGER reject_native_mini_revision;")
+        .map_err(|e| e.to_string())?;
+    check?;
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_TOPMOST,
+        };
+        let style = unsafe {
+            GetWindowLongPtrW(
+                restored.hwnd().map_err(|e| e.to_string())?.0 as _,
+                GWL_EXSTYLE,
+            )
+        };
+        if style & WS_EX_TOPMOST as isize != 0 {
+            return Err("failed pin left native topmost enabled".into());
+        }
+    }
+    db.update_mini_window_preferences(
+        MiniPreferenceChange::Placement(WindowPlacement {
+            monitor: Some("disconnected-probe-monitor".into()),
+            offset_x_dip: 100_000.0,
+            offset_y_dip: 100_000.0,
+        }),
+        EpochMs::new(token_pulse_collector::jobs::now_ms().map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    restored.destroy().map_err(|e| e.to_string())?;
+    for _ in 0..100 {
+        if app.get_webview_window("mini").is_none() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(30));
+    }
+    super::mini_window::show(app)?;
+    let fallback = app
+        .get_webview_window("mini")
+        .ok_or("fallback mini missing")?;
+    let position = fallback.outer_position().map_err(|e| e.to_string())?;
+    let monitor = fallback
+        .current_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("fallback monitor missing")?;
+    let work = monitor.work_area();
+    let actual = fallback.inner_size().map_err(|e| e.to_string())?;
+    if position.x < work.position.x
+        || position.y < work.position.y
+        || i64::from(position.x) + i64::from(actual.width)
+            > i64::from(work.position.x) + i64::from(work.size.width)
+        || i64::from(position.y) + i64::from(actual.height)
+            > i64::from(work.position.y) + i64::from(work.size.height)
+    {
+        return Err(format!(
+            "fallback mini is outside actual working area: position={position:?} size={actual:?} work={work:?} scale={}",
+            monitor.scale_factor()
+        ));
+    }
+    fallback.hide().map_err(|e| e.to_string())?;
+    println!(
+        "NATIVE_MINI_PLACEMENT_OK: actual persisted position/expanded/pin, recreated WebView, missing-monitor work-area clamp, failed SQLite write rolls back Win32 topmost"
     );
     Ok(())
 }

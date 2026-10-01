@@ -39,6 +39,10 @@ pub(crate) fn read_stored(
                             .as_str()
                             .is_some_and(|s| matches!(s, "dark" | "light" | "system")),
                         "privacy" | "taskbar_enabled" | "startup_enabled" => field.is_boolean(),
+                        "mini_window" => serde_json::from_value::<
+                            token_pulse_core::placement::MiniWindowPreferences,
+                        >(field.clone())
+                        .is_ok_and(|value| value.validate().is_ok()),
                         "mini_scope" => serde_json::from_value::<
                             token_pulse_core::protocol::MiniScope,
                         >(field.clone())
@@ -91,6 +95,43 @@ fn read(tx: &Transaction<'_>, revision: i64) -> StoreResult<DisplaySettingsSnaps
     Ok(read_stored(tx, revision)?.0)
 }
 impl Database {
+    pub fn mini_window_preferences(
+        &self,
+    ) -> StoreResult<token_pulse_core::placement::MiniWindowPreferences> {
+        self.snapshot(|tx, revision| {
+            let (_, payload) = read_stored(tx, revision.settings)?;
+            payload
+                .get("mini_window")
+                .map(|value| {
+                    serde_json::from_value(value.clone()).map_err(|_| ErrorCode::DbCorrupt.into())
+                })
+                .unwrap_or_else(|| Ok(Default::default()))
+        })
+    }
+    pub fn update_mini_window_preferences(
+        &self,
+        change: token_pulse_core::placement::MiniPreferenceChange,
+        at: EpochMs,
+    ) -> StoreResult<(DecimalInt, bool)> {
+        use token_pulse_core::placement::*;
+        if let MiniPreferenceChange::Placement(value) = &change {
+            value.validate()?;
+        }
+        self.write(move|conn| {
+            let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let revision:i64=tx.query_row("SELECT settings_revision FROM app_state WHERE singleton=1",[],|r|r.get(0))?;
+            let (_,mut payload)=read_stored(&tx,revision)?;
+            let mut value:MiniWindowPreferences=payload.get("mini_window").map(|v|serde_json::from_value(v.clone())).transpose()?.unwrap_or_default();
+            let original=value.clone();
+            match change {MiniPreferenceChange::Expanded(expanded)=>value.interaction.expanded=expanded,MiniPreferenceChange::Pinned(pinned)=>value.interaction.pinned=pinned,MiniPreferenceChange::Placement(placement)=>value.placement=Some(placement)}
+            if value==original {tx.commit()?;return Ok((DecimalInt::from_nonnegative(revision.into())?,false));}
+            let next=revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
+            payload.insert("mini_window".into(),serde_json::to_value(value)?);
+            tx.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,?1,?2,?3) ON CONFLICT(singleton) DO UPDATE SET settings_version=excluded.settings_version,payload_json=excluded.payload_json,updated_at_ms=excluded.updated_at_ms",params![SETTINGS_VERSION,serde_json::to_string(&payload)?,at.value()])?;
+            tx.execute("UPDATE app_state SET settings_revision=?1 WHERE singleton=1",[next])?;
+            tx.commit()?;Ok((DecimalInt::from_nonnegative(next.into())?,true))
+        })
+    }
     pub fn mutate_display_theme(
         &self,
         mutation: DisplayThemeMutation,
@@ -169,3 +210,5 @@ impl Database {
 }
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod window_tests;

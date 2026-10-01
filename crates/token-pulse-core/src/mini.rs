@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// Native window interaction state. Cursor pass-through is not available before recovery is implemented.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct MiniWindowState {
     pub expanded: bool,

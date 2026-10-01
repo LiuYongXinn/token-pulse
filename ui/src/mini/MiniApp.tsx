@@ -54,7 +54,7 @@ export function MiniApp() {
   const nativeAction = async (request: MiniWindowAction) => {
     if (acting.current) return;
     acting.current = true; setBusy(true);
-    try { const value = await miniWindowAction(request); if (mounted.current) { setInteraction(value); if (!value.expanded) setEditing(false); setError(null); } }
+    try { const value = await miniWindowAction(request); if (mounted.current) { setInteraction(value); if (!value.expanded) setEditing(false); setError(null); if (request.kind === 'set_expanded' || request.kind === 'set_pinned') await refresh(); } }
     catch (e) { if (mounted.current) setError(runtimeError(e)); }
     finally { acting.current = false; if (mounted.current) setBusy(false); }
   };

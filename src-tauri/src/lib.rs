@@ -17,6 +17,8 @@ struct RuntimeState {
     mini_stats_request: std::sync::Mutex<Option<token_pulse_core::mini::MiniStatsRequest>>,
     privacy: PrivacyState,
     mini_creation: std::sync::Mutex<()>,
+    mini_geometry_sequence: std::sync::atomic::AtomicU64,
+    mini_geometry_worker: std::sync::atomic::AtomicBool,
     mini_window: std::sync::Mutex<token_pulse_core::mini::MiniWindowState>,
     selections: std::sync::Arc<std::sync::Mutex<token_pulse_core::selections::DirectorySelections>>,
     data_directory: PathBuf,
@@ -162,7 +164,7 @@ pub fn run() {
             let theme = database.as_ref().ok().and_then(|db| db.display_settings().ok()).map(|s| s.preferences.theme).unwrap_or_default();
             settings_commands::apply_native_theme(app.handle(), theme);
             let privacy = initial_privacy(&database);
-            app.manage(RuntimeState { #[cfg(debug_assertions)] native_dashboard_request: Default::default(), mini_stats_request: Default::default(), mini_creation: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            app.manage(RuntimeState { #[cfg(debug_assertions)] native_dashboard_request: Default::default(), mini_stats_request: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
@@ -193,8 +195,10 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label()=="mini" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { mini_window::schedule_placement(window.app_handle()); }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label()=="mini" {if let Some(mini)=window.app_handle().get_webview_window("mini") {if mini_window::save_current_placement(&mini).is_err() {eprintln!("MINI_PLACEMENT_SAVE_FAILED");}}}
                 let _ = window.hide();
             }
         })
@@ -220,6 +224,11 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
                 if let Some(state) = app.try_state::<RuntimeState>() {
+                    if let Some(mini) = app.get_webview_window("mini") {
+                        if mini_window::save_current_placement(&mini).is_err() {
+                            eprintln!("MINI_PLACEMENT_SAVE_FAILED");
+                        }
+                    }
                     if let Ok(rollups) = &state.rollups {
                         rollups.shutdown();
                     }
