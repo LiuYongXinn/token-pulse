@@ -1,4 +1,5 @@
 //! Candidates stay invisible until a validated dependency group is published in one transaction.
+mod canonical;
 use crate::{
     Database, ErrorCode, StoreResult,
     batch::{
@@ -7,6 +8,7 @@ use crate::{
     jobs,
     rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params},
 };
+pub use canonical::{CanonicalReplayPlan, PhysicalReplaySequence};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};

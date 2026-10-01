@@ -148,7 +148,11 @@ fn same_session(tx: &Transaction<'_>, ledger: &str, observation: &str) -> StoreR
         [observation],
         |r| r.get(0),
     )?;
-    if session != session_for_ledger(tx, ledger)? {
+    let owner = session_for_ledger(tx, ledger)?;
+    if session != owner && !tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM candidate_session_aliases a JOIN jobs j ON j.job_id=a.job_id JOIN ledger_generations l ON l.ledger_id=?1 JOIN json_each(j.resume_json,'$.candidate_ledger_ids') owned ON owned.value=l.ledger_id WHERE a.alias_session_key=?2 AND a.canonical_session_key=?3 AND j.state='running' AND l.state='candidate' AND l.session_key=a.canonical_session_key)",
+        params![ledger, session, owner], |r|r.get::<_,bool>(0),
+    )? {
         return Err(ErrorCode::CheckpointConflict.into());
     }
     Ok(())
