@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { compactTokens, fullTokens, money, percentage } from './format';
+import { compactTokens, fullTokens, money, percentage, rawTokens } from './format';
 
 test('large tokens remain exact and unknown values remain distinct from zero', () => {
   expect(fullTokens('9007199254740993')).toBe('9,007,199,254,740,993');
@@ -14,4 +14,12 @@ test('money is rounded once with carry, without a floating point conversion', ()
   expect(money('0')).toBe('0.00'); expect(money(null)).toBe('—');
   expect(money('1.500000000000001', 0)).toBe('2'); expect(money('1.000000000000001', 15)).toBe('1.000000000000001');
   for (const invalid of ['1e3', '-1', '01', 'NaN', '1.0000000000000001']) expect(() => money(invalid)).toThrow();
+});
+
+test('diagnostic counters retain signed raw evidence without allowing malformed or oversized values', () => {
+  expect(rawTokens('-9223372036854775808')).toBe('-9,223,372,036,854,775,808');
+  expect(rawTokens('9223372036854775807')).toBe('9,223,372,036,854,775,807');
+  expect(rawTokens('9007199254740993')).toBe('9,007,199,254,740,993');
+  expect(rawTokens('-1')).toBe('-1'); expect(rawTokens('0')).toBe('0'); expect(rawTokens(null)).toBe('—');
+  for (const invalid of ['-0','01','1e3','9223372036854775808','-9223372036854775809']) expect(() => rawTokens(invalid)).toThrow();
 });

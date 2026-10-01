@@ -1,0 +1,99 @@
+import { expect, test } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => {
+  // Explicit synthetic IPC QA data; not imported by the desktop application.
+  await page.addInitScript(() => {
+    type Query = { filter: { range: { start_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; sort: string; page_size: number };
+    let serial = 0, bad: 'expired' | 'mismatch' | null = null, revision = '3', amount = '9.007199254740993', callbackId = 0, eventId = 0;
+    const calls: { command: string; request: unknown }[] = [];
+    const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
+    const callbacks = new Map<number,(event: unknown) => void>(); const listeners = new Map<number,{ event: string; handler: number }>();
+    const measure = { value: null, covered_total_tokens: '0', complete: false };
+    const tokens = (total: string, events = '53') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: events === '0' ? '0' : '1', usage_event_count: events, reliable_turn_count: null, reliable_turns_complete: false });
+    const coverage = { state: 'unknown', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
+    const price = (total: string) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: total === '0' ? [] : [{ currency: 'USD', estimated_cost: amount, priced_total_tokens: String(BigInt(total)-1n) }, { currency: 'EUR', estimated_cost: '0.000000000000000', priced_total_tokens: '0' }], priced_total_tokens: total === '0' ? '0' : String(BigInt(total)-1n), unpriced_total_tokens: total === '0' ? '0' : '1', reasons: total === '0' ? [] : [{ code: 'unknown_model', total_tokens: '1', event_count: '1' }], calculating: false });
+    Object.assign(window, { isTauri: true,
+      __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } },
+      __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
+        calls.push({ command, request: args.request }); const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+        if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
+        if (command === 'plugin:event|unlisten') return null;
+        if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
+        if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
+        if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies events only');
+        if (command === 'get_price_rules') return response({ price_revision: revision, rules: [], aliases: [] });
+        if (command === 'close_query_snapshot') return response(null);
+        if (command === 'query_sessions') { const query = (args.request as { query: Query }).query; return response({ meta: { snapshot_id: 'synthetic-drill', data_revision: '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: [], accounting_versions: [], display_timezone: query.filter.range.timezone }, summary: tokens('0','0'), pricing: price('0'), coverage, sessions: [], next_cursor: null }); }
+        if (command === 'query_usage_events') {
+          const { query, cursor } = args.request as { query: Query; cursor: string | null };
+          if (cursor && bad === 'expired') throw { code: 'SNAPSHOT_EXPIRED' };
+          const saved = cursor ? cursors.get(cursor) : null;
+          if (cursor && (!saved || saved.query !== JSON.stringify(query))) throw { code: 'CURSOR_INVALID' };
+          const snapshot = saved?.snapshot ?? `synthetic-events-${++serial}`; const offset = saved?.offset ?? 0;
+          const events = Array.from({ length: 53 }, (_, index) => {
+            const total = index === 0 ? '9007199254740993' : index === 1 ? '0' : '1';
+            const vector = { input_total: index === 2 ? null : total, cached_input: index === 2 ? null : '0', output_total: index === 2 ? null : '0', reasoning_output: null, reported_total: total };
+            return { event_id: `synthetic-event-${index}`, session_key: 'synthetic-session', session_display_name: 'Synthetic 会话', occurred_at_ms: query.filter.range.start_ms+(53-index)*1000, model: index === 2 ? null : index === 0 ? 'Synthetic Model' : index === 1 ? 'Synthetic EUR Model' : 'Synthetic Zero Rate Model', provider: index === 2 ? null : 'Synthetic Provider', project_id: index === 2 ? null : 'project', project_display_name: index === 2 ? null : 'Synthetic Project', source_ids: ['synthetic-source','synthetic-mirror'], turn_id: null, total_tokens: total, usage: vector, raw_last: index === 0 ? { ...vector, input_total: '-1' } : null, raw_cumulative: index === 0 ? { ...vector, input_total: '9007199254741093', reported_total: '9007199254741093' } : null, calculation_method: 'last_with_baseline', quality_flags: ['confirmed'], price: index === 2 ? { status: 'unpriced', reason: 'unknown_model' } : { status: 'priced', rule_id: index === 0 ? 'synthetic-rule' : index === 1 ? 'synthetic-eur-rule' : 'synthetic-zero-rate-rule', currency: index === 1 ? 'EUR' : 'USD', cost_atoms: index === 0 ? revision === '3' ? '9007199254740993' : '18014398509481986' : '0', estimated_cost: index === 0 ? amount : '0.000000000000000' }, parser_version: 'synthetic-parser', accounting_version: 'synthetic-accounting' };
+          });
+          const next = offset+query.page_size < events.length ? String(++serial).padStart(151,'a') : null;
+          if (next) cursors.set(next, { query: JSON.stringify(query), offset: offset+query.page_size, snapshot });
+          return response({ meta: { snapshot_id: snapshot, data_revision: cursor && bad === 'mismatch' ? '8' : '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: ['synthetic-parser'], accounting_versions: ['synthetic-accounting'], display_timezone: query.filter.range.timezone }, summary: tokens('9007199254741044'), pricing: price('9007199254741044'), coverage, events: events.slice(offset,offset+query.page_size), next_cursor: next });
+        }
+        throw new Error(`Unexpected synthetic command ${command}`);
+      } }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => listeners.size,
+      __emitEventPriceChange: () => { revision = '4'; amount = '18.014398509481986'; for (const [id,listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: revision, all_models: true } }); } });
+  });
+  await page.goto('/');
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '明细', exact: true }).click();
+});
+
+test('events retain precise vectors, unknown values, true zero price and stable pagination', async ({ page }) => {
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await expect(page.locator('.event-table>tbody>tr').first().locator('td[title="9,007,199,254,740,993"]')).toBeVisible();
+  await expect(page.locator('.event-table>tbody>tr').nth(1).getByText('EUR 0.00', { exact: true })).toBeVisible();
+  await expect(page.locator('.event-table>tbody>tr').nth(2)).toContainText('未知项目');
+  await expect(page.locator('.event-table>tbody>tr').nth(2).getByText('未计价', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/events-1280.png' });
+  await page.getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
+  const evidence = page.getByLabel('synthetic-event-0 核算依据', { exact: true });
+  await expect(evidence).toBeVisible(); await expect(evidence.locator('.raw-negative')).toHaveText('-1');
+  await expect(evidence).toContainText('9,007,199,254,741,093'); await expect(evidence).toContainText('9007199254740993（10⁻¹⁵）');
+  await expect(evidence).toContainText('synthetic-rule'); await expect(evidence).toContainText('最后用量（累计基线已核对）');
+  await page.screenshot({ path: 'test-results/event-evidence-1280.png' });
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(3); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '上一页', exact: true }).click();
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(51); // Cached expanded evidence is the same page.
+  await page.setViewportSize({ width: 960, height: 680 }); await page.getByRole('heading', { name: '明细', exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/events-960.png' }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('.event-table>tbody>tr').first().getByRole('button', { name: 'Synthetic 会话', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '会话', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('Synthetic 会话');
+});
+
+test('expired or mismatched continuations never append fresh data to a frozen event page', async ({ page }) => {
+  type Bridge = { __badEventPage: (value: 'expired' | 'mismatch' | null) => void };
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await page.evaluate(() => (window as unknown as Bridge).__badEventPage('mismatch'));
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('明细分页快照不一致');
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
+  await page.evaluate(() => (window as unknown as Bridge).__badEventPage(null)); await page.getByRole('button', { name: '重新查询', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as Bridge).__badEventPage('expired')); await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('查询快照已过期'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+});
+
+test('price notification replaces the entire event snapshot and navigation cleans up listeners and capabilities', async ({ page }) => {
+  type Bridge = { __eventListenerCount: () => number; __emitEventPriceChange: () => void; __eventCalls: () => { command: string; request: { kind?: string; query?: { sort: string } } }[] };
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(1);
+  await page.evaluate(() => (window as unknown as Bridge).__emitEventPriceChange());
+  await expect(page.locator('.event-table>tbody>tr').first().getByText('$18.01', { exact: true })).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('.group-footnote')).toContainText('价格修订 4');
+  await page.getByLabel('明细排序').selectOption('total_desc'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(0);
+  const calls = await page.evaluate(() => (window as unknown as Bridge).__eventCalls());
+  expect(calls.filter(c => c.command === 'close_query_snapshot' && c.request.kind === 'usage_events').length).toBeGreaterThanOrEqual(3);
+});

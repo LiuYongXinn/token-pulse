@@ -7,6 +7,14 @@ function integer(value: DecimalInt): bigint {
 export function fullTokens(value: DecimalInt | null): string {
   return value === null ? '—' : integer(value).toLocaleString('zh-CN');
 }
+/** Original diagnostic vectors can retain invalid negative i64 counters. */
+export function rawTokens(value: string | null): string {
+  if (value === null) return '—';
+  if (!/^(0|-?[1-9][0-9]*)$/.test(value)) throw new Error('INVALID_RAW_COUNTER');
+  const count = BigInt(value);
+  if (count < -9223372036854775808n || count > 9223372036854775807n) throw new Error('INVALID_RAW_COUNTER');
+  return count.toLocaleString('zh-CN');
+}
 export function compactTokens(value: DecimalInt | null): string {
   if (value === null) return '—';
   const n = integer(value);
