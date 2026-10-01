@@ -34,6 +34,12 @@ export type TokenMeasure = { value: DecimalInt | null, covered_total_tokens: Dec
 
 export type TokenTotals = { total_tokens: DecimalInt, input_total: TokenMeasure, cached_input: TokenMeasure, noncached_input: TokenMeasure, output_total: TokenMeasure, reasoning_output: TokenMeasure, session_count: DecimalInt, usage_event_count: DecimalInt, reliable_turn_count: DecimalInt | null, reliable_turns_complete: boolean, };
 
+export type GroupDimension = "models" | "projects";
+
+export type GroupSort = "total_desc" | "name_asc";
+
+export type GroupedUsage = { key: string | null, display_name: string, totals: TokenTotals, };
+
 export type CurrencyEstimate = { currency: string, estimated_cost: DecimalMoney | null, priced_total_tokens: DecimalInt, };
 
 export type UnpricedReason = { code: string, total_tokens: DecimalInt, event_count: DecimalInt, };

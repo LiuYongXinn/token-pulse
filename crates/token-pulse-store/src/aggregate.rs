@@ -38,6 +38,14 @@ impl Aggregate<Option<i128>, Option<String>> for ExactSum {
 }
 pub fn register(connection: &Connection) -> Result<()> {
     let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    connection.create_scalar_function("usage_model_key", 2, flags, |ctx| {
+        let provider: Option<String> = ctx.get(0)?;
+        let model: Option<String> = ctx.get(1)?;
+        Ok(token_pulse_core::query::model_key(
+            provider.as_deref(),
+            model.as_deref(),
+        ))
+    })?;
     connection.create_aggregate_function(
         "sum_token_decimal",
         1,

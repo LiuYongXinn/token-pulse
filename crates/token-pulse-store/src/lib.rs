@@ -10,6 +10,7 @@ mod database;
 pub mod jobs;
 mod migration;
 mod proof_jobs;
+pub mod query;
 pub mod rebuild;
 mod registration;
 pub mod source_management;

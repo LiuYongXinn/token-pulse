@@ -785,6 +785,138 @@
       "title": "Grain",
       "type": "string"
     },
+    "GroupDimension": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "models",
+        "projects"
+      ],
+      "title": "GroupDimension",
+      "type": "string"
+    },
+    "GroupSort": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "total_desc",
+        "name_asc"
+      ],
+      "title": "GroupSort",
+      "type": "string"
+    },
+    "GroupedUsage": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "TokenMeasure": {
+          "additionalProperties": false,
+          "properties": {
+            "complete": {
+              "type": "boolean"
+            },
+            "covered_total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "covered_total_tokens",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "TokenTotals": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "input_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "noncached_input": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "output_total": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reasoning_output": {
+              "$ref": "#/$defs/TokenMeasure"
+            },
+            "reliable_turn_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliable_turns_complete": {
+              "type": "boolean"
+            },
+            "session_count": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "usage_event_count": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "total_tokens",
+            "input_total",
+            "cached_input",
+            "noncached_input",
+            "output_total",
+            "reasoning_output",
+            "session_count",
+            "usage_event_count",
+            "reliable_turn_count",
+            "reliable_turns_complete"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string"
+        },
+        "key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "totals": {
+          "$ref": "#/$defs/TokenTotals"
+        }
+      },
+      "required": [
+        "key",
+        "display_name",
+        "totals"
+      ],
+      "title": "GroupedUsage",
+      "type": "object"
+    },
     "Job": {
       "$defs": {
         "AppError": {

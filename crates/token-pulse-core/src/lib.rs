@@ -11,6 +11,7 @@ pub mod error;
 pub mod jobs;
 pub mod numeric;
 pub mod protocol;
+pub mod query;
 pub mod reader;
 pub mod scheduling;
 pub mod selections;
