@@ -109,6 +109,69 @@ fn combined_vector_aggregate_preserves_exact_zero_null_and_validation() {
         Ok(())
     }).unwrap();
 }
+
+#[test]
+fn projected_vectors_merge_without_turning_unknown_fields_into_zero() {
+    use token_pulse_store::rusqlite::params;
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    db.snapshot(|tx,_| {
+        let known:String=tx.query_row("SELECT sum_usage_vector(100,60,10,2,110)",[],|r|r.get(0))?;
+        let unknown:String=tx.query_row("SELECT sum_usage_vector(NULL,NULL,NULL,NULL,7)",[],|r|r.get(0))?;
+        let empty:String=tx.query_row("SELECT sum_usage_vector(1,0,0,0,1) WHERE 0",[],|r|r.get(0))?;
+        let value:String=tx.query_row("SELECT sum_usage_projection(s,n) FROM (SELECT ?1 AS s,1 AS n UNION ALL SELECT ?2,1 UNION ALL SELECT ?3,0)",params![known,unknown,empty],|r|r.get(0))?;
+        let value:serde_json::Value=serde_json::from_str(&value)?;
+        assert_eq!(value["total"],"117");
+        for (index,expected) in ["100","60","40","10","2"].into_iter().enumerate() {
+            assert_eq!(value["measures"][index]["value"],expected);
+            assert_eq!(value["measures"][index]["covered_total_tokens"],"110");
+            assert_eq!(value["measures"][index]["complete"],false);
+        }
+        let value:String=tx.query_row("SELECT sum_usage_projection(?1,1)",[unknown],|r|r.get(0))?;
+        let value:serde_json::Value=serde_json::from_str(&value)?;
+        assert_eq!(value["measures"][0]["value"],serde_json::Value::Null);
+        let value:String=tx.query_row("SELECT sum_usage_projection(?1,1)",[known],|r|r.get(0))?;
+        let value:serde_json::Value=serde_json::from_str(&value)?;
+        assert_eq!(value["measures"][0]["complete"],true);
+        Ok(())
+    }).unwrap();
+}
+
+#[test]
+fn projected_vectors_preserve_large_sums_and_reject_corrupt_coverage() {
+    use token_pulse_store::rusqlite::params;
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    db.snapshot(|tx,_| {
+        let huge:String=tx.query_row("SELECT sum_usage_vector(9223372036854775807,0,0,0,9223372036854775807)",[],|r|r.get(0))?;
+        let value:String=tx.query_row("SELECT sum_usage_projection(s,n) FROM (SELECT ?1 AS s,1 AS n UNION ALL SELECT ?1,1)",[&huge],|r|r.get(0))?;
+        let value:serde_json::Value=serde_json::from_str(&value)?;
+        assert_eq!(value["total"],"18446744073709551614");
+        assert_eq!(value["measures"][1]["value"],"0");
+        assert_eq!(value["measures"][1]["complete"],true);
+        let mut invalid:serde_json::Value=serde_json::from_str(&huge)?;
+        invalid["measures"][0]["covered_total_tokens"]=serde_json::json!("9223372036854775808");
+        assert!(tx.query_row("SELECT sum_usage_projection(?1,1)",[invalid.to_string()],|r|r.get::<_,String>(0)).is_err());
+        invalid=serde_json::from_str(&huge)?;invalid["measures"][0]["value"]=serde_json::Value::Null;
+        assert!(tx.query_row("SELECT sum_usage_projection(?1,1)",[invalid.to_string()],|r|r.get::<_,String>(0)).is_err());
+        assert!(tx.query_row("SELECT sum_usage_projection(?1,0)",[&huge],|r|r.get::<_,String>(0)).is_err());
+        assert!(tx.query_row("SELECT sum_usage_projection(?1,-1)",[&huge],|r|r.get::<_,String>(0)).is_err());
+        assert!(tx.query_row("SELECT sum_usage_projection(?1,1)",["{}"],|r|r.get::<_,String>(0)).is_err());
+        invalid=serde_json::from_str(&huge)?;
+        invalid["total"]=serde_json::json!("170141183460469231731687303715884105727");
+        for measure in invalid["measures"].as_array_mut().unwrap() {
+            measure["value"]=serde_json::Value::Null;
+            measure["covered_total_tokens"]=serde_json::json!("0");
+            measure["complete"]=serde_json::json!(false);
+        }
+        let encoded=invalid.to_string();
+        let overflow=tx.query_row("SELECT sum_usage_projection(s,n) FROM (SELECT ?1 AS s,1 AS n UNION ALL SELECT ?1,1)",params![encoded],|r|r.get::<_,String>(0)).unwrap_err();
+        assert_eq!(token_pulse_store::StoreError::from(overflow).code,ErrorCode::NumericOverflow);
+        let ordinary=tx.prepare("SELECT missing_column FROM nonexistent_table").unwrap_err();
+        assert_eq!(token_pulse_store::StoreError::from(ordinary).code,ErrorCode::DbWriteFailed);
+        Ok(())
+    }).unwrap();
+}
 #[test]
 fn unknown_newer_schema_and_corruption_do_not_create_fresh_history() {
     let dir = tempfile::tempdir().unwrap();

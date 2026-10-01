@@ -54,6 +54,14 @@ impl From<rusqlite::Error> for StoreError {
             rusqlite::Error::UserFunctionError(e) if e.downcast_ref::<ErrorCode>().is_some() => {
                 *e.downcast_ref::<ErrorCode>().unwrap()
             }
+            // SQLite callbacks serialize user-function errors through sqlite3_result_error;
+            // the outer statement receives SQLITE_ERROR and an exact controlled code.
+            rusqlite::Error::SqliteFailure(e, Some(message))
+                if e.code == SqliteCode::Unknown && e.extended_code == 1 =>
+            {
+                serde_json::from_value::<ErrorCode>(serde_json::Value::String(message))
+                    .unwrap_or(ErrorCode::DbWriteFailed)
+            }
             _ => ErrorCode::DbWriteFailed,
         };
         Self { code }

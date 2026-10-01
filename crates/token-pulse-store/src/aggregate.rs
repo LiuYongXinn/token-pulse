@@ -7,6 +7,7 @@ use token_pulse_core::{
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TokenSums {
     pub total: DecimalInt,
     pub measures: [TokenMeasure; 5],
@@ -21,6 +22,92 @@ pub(crate) struct VectorAccumulator {
     events: u64,
 }
 struct VectorSum;
+#[derive(Default)]
+pub(crate) struct ProjectionAccumulator {
+    total: i128,
+    values: [Option<i128>; 5],
+    covered: [i128; 5],
+    incomplete: [bool; 5],
+    events: i128,
+}
+impl ProjectionAccumulator {
+    pub fn add(&mut self, sums: &TokenSums, events: i128) -> std::result::Result<(), ErrorCode> {
+        if events < 0
+            || (events == 0
+                && (sums.total.value() != 0
+                    || sums.measures.iter().any(|m| {
+                        m.value.is_some() || m.complete || m.covered_total_tokens.value() != 0
+                    })))
+        {
+            return Err(ErrorCode::InvalidUsage);
+        }
+        if events == 0 {
+            return Ok(());
+        }
+        self.total = self
+            .total
+            .checked_add(sums.total.value())
+            .ok_or(ErrorCode::NumericOverflow)?;
+        self.events = self
+            .events
+            .checked_add(events)
+            .ok_or(ErrorCode::NumericOverflow)?;
+        for (i, m) in sums.measures.iter().enumerate() {
+            if m.covered_total_tokens.value() > sums.total.value()
+                || (m.value.is_none() && (m.complete || m.covered_total_tokens.value() != 0))
+                || (m.complete && m.covered_total_tokens.value() != sums.total.value())
+            {
+                return Err(ErrorCode::InvalidUsage);
+            }
+            self.covered[i] = self.covered[i]
+                .checked_add(m.covered_total_tokens.value())
+                .ok_or(ErrorCode::NumericOverflow)?;
+            self.incomplete[i] |= !m.complete;
+            if let Some(value) = &m.value {
+                self.values[i] = Some(
+                    self.values[i]
+                        .unwrap_or(0)
+                        .checked_add(value.value())
+                        .ok_or(ErrorCode::NumericOverflow)?,
+                );
+            }
+        }
+        Ok(())
+    }
+    pub fn finish(&self) -> std::result::Result<TokenSums, ErrorCode> {
+        let mut measures = Vec::with_capacity(5);
+        for i in 0..5 {
+            measures.push(TokenMeasure {
+                value: self.values[i]
+                    .map(DecimalInt::from_nonnegative)
+                    .transpose()?,
+                covered_total_tokens: DecimalInt::from_nonnegative(self.covered[i])?,
+                complete: self.events > 0 && !self.incomplete[i],
+            });
+        }
+        Ok(TokenSums {
+            total: DecimalInt::from_nonnegative(self.total)?,
+            measures: measures.try_into().map_err(|_| ErrorCode::DbCorrupt)?,
+        })
+    }
+}
+struct ProjectionSum;
+impl Aggregate<ProjectionAccumulator, String> for ProjectionSum {
+    fn init(&self, _: &mut Context<'_>) -> Result<ProjectionAccumulator> {
+        Ok(ProjectionAccumulator::default())
+    }
+    fn step(&self, ctx: &mut Context<'_>, acc: &mut ProjectionAccumulator) -> Result<()> {
+        let encoded: String = ctx.get(0)?;
+        let sums: TokenSums =
+            serde_json::from_str(&encoded).map_err(|_| function_error(ErrorCode::DbCorrupt))?;
+        let events: i64 = ctx.get(1)?;
+        acc.add(&sums, events.into()).map_err(function_error)
+    }
+    fn finalize(&self, _: &mut Context<'_>, acc: Option<ProjectionAccumulator>) -> Result<String> {
+        let sums = acc.unwrap_or_default().finish().map_err(function_error)?;
+        serde_json::to_string(&sums).map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))
+    }
+}
 fn function_error(error: ErrorCode) -> rusqlite::Error {
     rusqlite::Error::UserFunctionError(Box::new(error))
 }
@@ -135,6 +222,7 @@ impl Aggregate<Option<i128>, Option<String>> for ExactSum {
 pub fn register(connection: &Connection) -> Result<()> {
     let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
     connection.create_aggregate_function("sum_usage_vector", 5, flags, VectorSum)?;
+    connection.create_aggregate_function("sum_usage_projection", 2, flags, ProjectionSum)?;
     connection.create_scalar_function("usage_model_key", 2, flags, |ctx| {
         let provider: Option<String> = ctx.get(0)?;
         let model: Option<String> = ctx.get(1)?;
