@@ -1,5 +1,7 @@
 # 账户额度显示设计
 
+实施入口：[详细开发设计](development-design.md)，实际 DTO、连接 epoch 与权限见 [IPC 契约](ipc-contracts.md)。
+
 本设计补充[完整设计方案](token-pulse-design.md)与 [UI 设计](token-pulse-ui.md)。根据新增需求，在悬浮窗与任务栏中展示当前连接账户的剩余额度百分比、周期重置时间和倒计时。原方案的日志采集与费用估算继续使用本地用量账本；账户额度由独立的数据源提供。
 
 ## 显示内容

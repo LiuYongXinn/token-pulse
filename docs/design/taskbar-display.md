@@ -1,5 +1,7 @@
 # Windows 任务栏显示模式
 
+实施入口：[详细开发设计](development-design.md)，宿主帧协议、隐私与命令权限见 [IPC 契约](ipc-contracts.md)。
+
 本设计补充[完整设计方案](token-pulse-design.md)、[UI 设计](token-pulse-ui.md)和[账户额度设计](account-quota.md)。新增类似 TrafficMonitor 的任务栏内显示模式，与统计主窗口、桌面悬浮窗共享后台快照。任务栏与悬浮窗可独立开启，也可同时显示。
 
 当前交付为 [HTML 交互原型](../../prototypes/token-pulse-ui.html)与原生接入设计，尚未实现 Windows 任务栏嵌入。浏览器底部的 Windows 任务栏为示意区域，全部数值为演示数据。
