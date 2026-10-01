@@ -89,3 +89,73 @@ pub struct SessionsPage {
     #[schemars(length(min = 151, max = 151))]
     pub next_cursor: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SessionBundleRequest {
+    #[schemars(length(min = 1, max = 256))]
+    pub session_key: String,
+    pub filter: UsageFilter,
+    pub price_basis: PriceBasis,
+}
+impl SessionBundleRequest {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        self.filter.validate()?;
+        crate::protocol::DimensionSelection::Ids {
+            ids: vec![self.session_key.clone()],
+            include_unknown: false,
+        }
+        .validate()
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SessionIdentity {
+    pub session_key: String,
+    pub display_name: String,
+    pub parent_key: Option<String>,
+    pub parent_display_name: Option<String>,
+    pub parent_provider_id: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SessionActivity {
+    pub occurred_at_ms: EpochMs,
+    pub model: Option<String>,
+    pub project_id: Option<String>,
+    pub project_display_name: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassificationKind {
+    Pending,
+    Inherited,
+    Duplicate,
+    Unattributed,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SessionClassification {
+    pub kind: ClassificationKind,
+    #[schemars(length(min = 1, max = 128))]
+    pub reason_code: String,
+    /// Observation classifications across the active ledger, never consumption.
+    pub observation_count: DecimalInt,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SessionBundle {
+    pub meta: SnapshotMeta,
+    pub identity: SessionIdentity,
+    pub summary: TokenTotals,
+    pub pricing: PricingSummary,
+    pub coverage: Coverage,
+    pub latest_selected_activity: Option<SessionActivity>,
+    pub latest_context: ContextSnapshot,
+    pub child_count: DecimalInt,
+    #[schemars(length(max = 100))]
+    pub children: Vec<SessionIdentity>,
+    pub children_truncated: bool,
+    #[schemars(length(max = 64))]
+    pub classifications: Vec<SessionClassification>,
+}

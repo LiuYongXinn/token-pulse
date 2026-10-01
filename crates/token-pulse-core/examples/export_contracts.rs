@@ -7,14 +7,15 @@ use token_pulse_core::pricing::{
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{
+    ClassificationKind, RawTokenCount, RawUsageVector, SessionActivity, SessionBundle,
+    SessionBundleRequest, SessionClassification, SessionIdentity, UsageEventRow, UsageEventSort,
+    UsageEventsPage, UsageEventsQuery, UsageEventsRequest,
+};
+use token_pulse_core::query::{
     CloseQuerySnapshotRequest, DashboardBundle, DashboardRequest, FacetDimension, FilterOption,
     FilterOptionsPage, FilterOptionsQuery, FilterOptionsRequest, GroupDimension, GroupSort,
     GroupedUsage, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession,
     SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest, UsageSeriesBucket,
-};
-use token_pulse_core::query::{
-    RawTokenCount, RawUsageVector, UsageEventRow, UsageEventSort, UsageEventsPage,
-    UsageEventsQuery, UsageEventsRequest,
 };
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -76,6 +77,12 @@ fn main() {
         SessionsQuery,
         SessionsRequest,
         SessionsPage,
+        SessionBundleRequest,
+        SessionBundle,
+        SessionIdentity,
+        SessionActivity,
+        SessionClassification,
+        ClassificationKind,
         RawTokenCount,
         RawUsageVector,
         UsageEventSort,

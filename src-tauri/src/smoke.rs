@@ -113,6 +113,15 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 try {await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard-invalid',request:{...request,heatmap_range:{...request.heatmap_range,timezone:'Asia/Shanghai'}}});} catch(error) {invalidRange=error.code==='INVALID_QUERY';}
                 ok=ok && invalidRange;
                 const sessionsRequest={query:{filter:request.filter,price_basis:request.price_basis,sort:'latest_desc',page_size:200},cursor:null};
+                const detail=await invoke('get_session_bundle',{requestId:'native-smoke-detail',request:{session_key:'native-probe-context',filter:request.filter,price_basis:request.price_basis}});
+                ok=ok && detail.api_version===1 && detail.request_id==='native-smoke-detail'
+                    && detail.data.identity.session_key==='native-probe-context' && detail.data.meta.price_revision==='3'
+                    && detail.data.summary.total_tokens==='0' && detail.data.latest_selected_activity===null
+                    && detail.data.latest_context.context_tokens===null && detail.data.children.length===0
+                    && detail.data.child_count==='0' && !detail.data.children_truncated && detail.data.classifications.length===0;
+                let missingDetail=false;
+                try {await invoke('get_session_bundle',{requestId:'native-smoke-detail-missing',request:{session_key:'missing-detail',filter:request.filter,price_basis:request.price_basis}});} catch(error) {missingDetail=error.code==='INVALID_QUERY';}
+                ok=ok && missingDetail;
                 const sessions=await invoke('query_sessions',{requestId:'native-smoke-sessions',request:sessionsRequest});
                 ok=ok && sessions.api_version===1 && sessions.request_id==='native-smoke-sessions'
                     && sessions.data.meta.snapshot_id.startsWith('query-') && sessions.data.meta.price_revision==='3'

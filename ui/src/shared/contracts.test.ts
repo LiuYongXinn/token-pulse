@@ -49,6 +49,14 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateSessions({ ...sessionPage, sessions: [{ ...session, summary: { ...totals, reliable_turn_count: 1 } }] })).toBe(false);
   expect(validateSessions({ ...sessionPage, sessions: [{ ...session, messages: ['private chat'] }] })).toBe(false);
   expect(validateSessions({ ...sessionPage, sessions: Array(201).fill(session) })).toBe(false);
+  const identity = { session_key: session.session_key, display_name: session.display_name, parent_key: null, parent_display_name: null, parent_provider_id: null };
+  const detail = { meta: fixture.meta, identity, summary: totals, pricing: fixture.pricing, coverage, latest_selected_activity: null, latest_context: session.latest_context, child_count: '1', children: [identity], children_truncated: false, classifications: [{ kind: 'inherited', reason_code: 'inherited_prefix', observation_count: '9007199254740993' }] };
+  const validateDetail = ajv.compile(protocol.schemas.SessionBundle);
+  expect(validateDetail(detail)).toBe(true);
+  expect(validateDetail({ ...detail, latest_selected_activity: undefined })).toBe(false);
+  expect(validateDetail({ ...detail, children: Array(101).fill(identity) })).toBe(false);
+  expect(validateDetail({ ...detail, classifications: Array(65).fill(detail.classifications[0]) })).toBe(false);
+  expect(validateDetail({ ...detail, classifications: [{ ...detail.classifications[0], evidence_json: '{}' }] })).toBe(false);
   const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', reported_total: '110' };
   const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
   const eventPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, events: [event], next_cursor: null };

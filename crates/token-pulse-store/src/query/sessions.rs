@@ -2,10 +2,7 @@
 use super::{
     aggregate_sql, context, coverage, dashboard, fact_from, predicate, pricing, read_totals, totals,
 };
-use crate::{
-    Database, ErrorCode, Revision, StoreResult,
-    leases::{LeaseHandle, cursor::QueryBinding},
-};
+use crate::{Database, ErrorCode, Revision, StoreResult, leases::cursor::QueryBinding};
 use rusqlite::{Transaction, params_from_iter, types::Value};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -15,6 +12,7 @@ use token_pulse_core::{
     protocol::{DimensionSelection, PricingSummary, SnapshotMeta, TokenTotals},
     query::{SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest},
 };
+mod bundle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,7 +41,7 @@ fn check_price(totals: &TokenTotals, price: &PricingSummary) -> StoreResult<()> 
 fn rows(
     tx: &Transaction<'_>,
     revision: Revision,
-    handle: LeaseHandle,
+    snapshot_id: String,
     query: &SessionsQuery,
     last: Option<&Position>,
     at: EpochMs,
@@ -149,16 +147,11 @@ fn rows(
     let pricing = overall.summary(false)?;
     check_price(&summary, &pricing)?;
     let (parser_versions, accounting_versions) = dashboard::versions(tx, filter, filter)?;
-    let id = handle
-        .snapshot_id
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
     Ok(Page {
         more,
         data: SessionsPage {
             meta: SnapshotMeta {
-                snapshot_id: format!("query-{id}"),
+                snapshot_id,
                 data_revision: DecimalInt::from_nonnegative(revision.data.into())?,
                 price_revision: DecimalInt::from_nonnegative(revision.price.into())?,
                 generated_at_ms: last.map_or(at, |p| p.generated_at_ms),
@@ -206,8 +199,16 @@ impl Database {
             None => (self.leases().open(&binding)?, None),
         };
         let query = request.query.clone();
+        let snapshot_id = format!(
+            "query-{}",
+            handle
+                .snapshot_id
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        );
         let page = self.leases().read(&handle, &binding, move |tx, revision| {
-            rows(tx, revision, handle, &query, last.as_ref(), at)
+            rows(tx, revision, snapshot_id, &query, last.as_ref(), at)
         });
         let mut page = match page {
             Ok(page) => page,

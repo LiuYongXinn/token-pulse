@@ -82,6 +82,22 @@ export type SessionsPage = { meta: SnapshotMeta,
  */
 summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, sessions: Array<SessionRow>, next_cursor: string | null, };
 
+export type SessionBundleRequest = { session_key: string, filter: UsageFilter, price_basis: PriceBasis, };
+
+export type SessionBundle = { meta: SnapshotMeta, identity: SessionIdentity, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, latest_selected_activity: SessionActivity | null, latest_context: ContextSnapshot, child_count: DecimalInt, children: Array<SessionIdentity>, children_truncated: boolean, classifications: Array<SessionClassification>, };
+
+export type SessionIdentity = { session_key: string, display_name: string, parent_key: string | null, parent_display_name: string | null, parent_provider_id: string | null, };
+
+export type SessionActivity = { occurred_at_ms: EpochMs, model: string | null, project_id: string | null, project_display_name: string | null, };
+
+export type SessionClassification = { kind: ClassificationKind, reason_code: string,
+/**
+ * Observation classifications across the active ledger, never consumption.
+ */
+observation_count: DecimalInt, };
+
+export type ClassificationKind = "pending" | "inherited" | "duplicate" | "unattributed";
+
 export type RawTokenCount = string;
 
 export type RawUsageVector = { input_total: RawTokenCount | null, cached_input: RawTokenCount | null, output_total: RawTokenCount | null, reasoning_output: RawTokenCount | null, reported_total: RawTokenCount | null, };

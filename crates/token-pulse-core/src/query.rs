@@ -12,7 +12,11 @@ use sha2::{Digest, Sha256};
 use ts_rs::TS;
 
 mod sessions;
-pub use sessions::{SessionRow, SessionSort, SessionsPage, SessionsQuery, SessionsRequest};
+pub use sessions::{
+    ClassificationKind, SessionActivity, SessionBundle, SessionBundleRequest,
+    SessionClassification, SessionIdentity, SessionRow, SessionSort, SessionsPage, SessionsQuery,
+    SessionsRequest,
+};
 mod events;
 pub use events::{
     RawTokenCount, RawUsageVector, UsageEventRow, UsageEventSort, UsageEventsPage,

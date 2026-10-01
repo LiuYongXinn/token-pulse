@@ -378,3 +378,11 @@ latest_desc 以最新选定事件时间降序、session_key BINARY 升序；tota
 `UsageEventsPage` 返回整个范围的 summary / pricing / coverage、meta、events 与 next_cursor。行包含消费精确分项、总量、时间、会话 / 项目 / 实际模型 / 提供方、不同物理来源 ID、可靠 turn_id（可空）、calculation_method、quality_flags、parser / accounting 版本及同 price_revision 的 PriceOutcome（规则 ID / 分币种精确金额，或明确未计价原因）。来源以事件 provenance 去重，选择某个镜像来源不改变事实或价格身份。
 
 原始 last / cumulative 只从必要观察的白名单向量提取，缺失保留 null；不向前端返回 normalized_json、正文、路径或任意原始 JSON。`RawUsageVector` 使用 RawTokenCount：原始 i64 经精确十进制字符串传输，允许诊断中的原始负数，Rust 拒绝越界、非规范字符串和 JSON number。这是原始证据的传输类型；已发布消费仍按对应 accounting_version 验证为非负，total_tokens 使用 DecimalInt。原始 last 无效但独立累计向量合法时，不用 null 掩盖无效原始值，也不把该负数纳入消费求和。
+
+### 2.8 已实现的会话详情 bundle
+
+get_session_bundle 接收 SessionBundleRequest（session_key、完整 filter、price_basis），在一笔真实 SQLite 只读事务返回 SessionBundle。目标 session_key 与 filter.sessions 取交集，并在事务中解析镜像别名；不扩大来源 / 模型 / 项目 / 日期选择。不存在的会话为 INVALID_QUERY；已登记但范围内无事件时返回零总量、未知分项、latest_selected_activity=null，仍可返回独立的最近上下文和关系。
+
+meta、identity、summary、pricing、coverage、latest_selected_activity、latest_context、child_count、children、children_truncated、classifications 属于同一事务。identity 与 children 的父关系只使用已经解析的 canonical key，未解析 parent_provider_id 保留。children 跨日期，按 canonical session_key 排序，排除镜像别名，最多 100 个；child_count 是全部已解析子关系数，超过上限显式 children_truncated=true。
+
+classifications 是当前 active ledger 的跨日期观察分类，按 kind / reason_code 汇总 COUNT(DISTINCT observation_id)，最多 64 组；kind 限 pending / inherited / duplicate / unattributed。它表示已保存的分类证据数，不是消费 Token、回合或完整继承证明。不同分类的数量不假定互斥，不能相加作为全部观察数。不发送 vector_json、evidence_json 或日志内容，不能把原始累计证据重新加到可信消费。该接口的详情独立获得新快照，UI 必须整体替换详情而非将其字段补到旧列表快照。

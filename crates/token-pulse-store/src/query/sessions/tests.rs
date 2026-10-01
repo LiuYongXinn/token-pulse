@@ -25,7 +25,7 @@ fn fetch(db: &Database, req: &SessionsRequest) -> SessionsPage {
     db.query_sessions("main", req, EpochMs::new(1234).unwrap())
         .unwrap()
 }
-fn session(db: &Database, key: &str, parent: Option<&str>) {
+pub(super) fn session(db: &Database, key: &str, parent: Option<&str>) {
     db.ensure_session(SessionRegistration {
         session_key: key.into(),
         provider_session_id: Some(format!("Name-{key}")),
@@ -37,7 +37,7 @@ fn session(db: &Database, key: &str, parent: Option<&str>) {
     })
     .unwrap();
 }
-fn event(db: &Database, id: &str, key: &str, time: i64, total: i64) {
+pub(super) fn event(db: &Database, id: &str, key: &str, time: i64, total: i64) {
     extra(
         db,
         id,
@@ -56,7 +56,7 @@ fn event(db: &Database, id: &str, key: &str, time: i64, total: i64) {
         Ok(())
     }).unwrap();
 }
-fn install(db: &Database, rate: i128) {
+pub(super) fn install(db: &Database, rate: i128) {
     db.mutate_price_rule(
         PriceRuleMutation::Create {
             draft: PriceRuleDraft {
