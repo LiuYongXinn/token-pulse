@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-display-privacy"
+description = "Enables the set_display_privacy command without any pre-configured scope."
+commands.allow = ["set_display_privacy"]
+
+[[permission]]
+identifier = "deny-set-display-privacy"
+description = "Denies the set_display_privacy command without any pre-configured scope."
+commands.deny = ["set_display_privacy"]

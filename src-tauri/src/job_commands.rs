@@ -2,7 +2,8 @@ use tauri::{State, WebviewWindow};
 use token_pulse_core::{
     error::{AppError, ErrorCode},
     jobs::{CancelJobResult, JobRequest},
-    protocol::{Job, JobKind, Response, validate_request_id},
+    privacy::PrivateResponse,
+    protocol::{Job, JobKind, validate_request_id},
 };
 fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
     validate_request_id(id)
@@ -40,7 +41,7 @@ pub async fn start_job(
     state: State<'_, super::RuntimeState>,
     mut request: JobRequest,
     request_id: String,
-) -> Result<Response<Job>, Box<AppError>> {
+) -> Result<PrivateResponse<Job>, Box<AppError>> {
     authorized(&window, &request_id)?;
     request
         .validate()
@@ -64,7 +65,7 @@ pub async fn start_job(
     if let Ok(service) = &state.jobs {
         service.wake();
     }
-    Ok(Response::new(request_id, job))
+    Ok(PrivateResponse::new(request_id, job, state.privacy.clone()))
 }
 #[tauri::command]
 pub async fn list_jobs(
@@ -72,11 +73,15 @@ pub async fn list_jobs(
     state: State<'_, super::RuntimeState>,
     limit: u32,
     request_id: String,
-) -> Result<Response<Vec<Job>>, Box<AppError>> {
+) -> Result<PrivateResponse<Vec<Job>>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let db = db(&state, &request_id)?;
     let jobs = blocking(&request_id, move || db.list_jobs(limit)).await?;
-    Ok(Response::new(request_id, jobs))
+    Ok(PrivateResponse::new(
+        request_id,
+        jobs,
+        state.privacy.clone(),
+    ))
 }
 #[tauri::command]
 pub async fn get_job(
@@ -84,11 +89,11 @@ pub async fn get_job(
     state: State<'_, super::RuntimeState>,
     job_id: String,
     request_id: String,
-) -> Result<Response<Job>, Box<AppError>> {
+) -> Result<PrivateResponse<Job>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let db = db(&state, &request_id)?;
     let job = blocking(&request_id, move || db.get_job(&job_id).map(|s| s.job)).await?;
-    Ok(Response::new(request_id, job))
+    Ok(PrivateResponse::new(request_id, job, state.privacy.clone()))
 }
 #[tauri::command]
 pub async fn cancel_job(
@@ -96,7 +101,7 @@ pub async fn cancel_job(
     state: State<'_, super::RuntimeState>,
     job_id: String,
     request_id: String,
-) -> Result<Response<CancelJobResult>, Box<AppError>> {
+) -> Result<PrivateResponse<CancelJobResult>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let db = db(&state, &request_id)?;
     let result = blocking(&request_id, move || {
@@ -106,5 +111,9 @@ pub async fn cancel_job(
     if let Ok(service) = &state.jobs {
         service.wake();
     }
-    Ok(Response::new(request_id, result))
+    Ok(PrivateResponse::new(
+        request_id,
+        result,
+        state.privacy.clone(),
+    ))
 }

@@ -8,7 +8,8 @@ use tauri_plugin_dialog::DialogExt;
 use token_pulse_core::{
     error::{AppError, ErrorCode},
     numeric::DecimalInt,
-    protocol::{Response, validate_request_id},
+    privacy::PrivateResponse,
+    protocol::validate_request_id,
     selections::SelectedDirectory,
     sources::*,
 };
@@ -30,7 +31,7 @@ pub async fn get_sources(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,
     request_id: String,
-) -> Result<Response<SourcesSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<SourcesSnapshot>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let db = state
         .database
@@ -41,7 +42,11 @@ pub async fn get_sources(
         .await
         .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
         .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
-    Ok(Response::new(request_id, snapshot))
+    Ok(PrivateResponse::new(
+        request_id,
+        snapshot,
+        state.privacy.clone(),
+    ))
 }
 #[tauri::command]
 pub async fn choose_source_directory(
@@ -50,8 +55,19 @@ pub async fn choose_source_directory(
     state: State<'_, super::RuntimeState>,
     kind: SourceDirectoryKind,
     request_id: String,
-) -> Result<Response<Option<SourceDirectorySelection>>, Box<AppError>> {
+) -> Result<PrivateResponse<Option<SourceDirectorySelection>>, Box<AppError>> {
     authorized(&window, &request_id)?;
+    if state
+        .privacy
+        .current()
+        .map_err(|e| Box::new(AppError::new(e, request_id.clone())))?
+        .privacy
+    {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
     let selections = Arc::clone(&state.selections);
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<Option<SourceDirectorySelection>, ErrorCode> {
@@ -105,7 +121,11 @@ pub async fn choose_source_directory(
         ))
     })?
     .map_err(|code| Box::new(AppError::new(code, request_id.clone())))?;
-    Ok(Response::new(request_id, result))
+    Ok(PrivateResponse::new(
+        request_id,
+        result,
+        state.privacy.clone(),
+    ))
 }
 fn displayable_path(path: PathBuf, origin: SourceOrigin) -> Result<PathBuf, ErrorCode> {
     let text = path.to_str().ok_or(ErrorCode::InvalidQuery)?;
@@ -127,7 +147,7 @@ pub async fn manage_source(
     action: ManageSourceAction,
     expected_settings_revision: DecimalInt,
     request_id: String,
-) -> Result<Response<SourcesSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<SourcesSnapshot>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let db = state
         .database
@@ -184,5 +204,9 @@ pub async fn manage_source(
             collector.reconcile();
         }
     }
-    Ok(Response::new(request_id, result))
+    Ok(PrivateResponse::new(
+        request_id,
+        result,
+        state.privacy.clone(),
+    ))
 }

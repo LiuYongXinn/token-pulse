@@ -2,6 +2,7 @@ use tauri::{State, WebviewWindow};
 use token_pulse_core::{
     calendar::{CalendarSelectionRequest, CalendarSelectionResult},
     error::{AppError, ErrorCode},
+    privacy::PrivateResponse,
     protocol::{ContextSnapshot, Response, validate_request_id},
     query::{
         CloseQuerySnapshotRequest, DashboardBundle, DashboardRequest, FilterOptionsPage,
@@ -40,7 +41,7 @@ pub async fn query_turns(
     state: State<'_, super::RuntimeState>,
     request: TurnsRequest,
     request_id: String,
-) -> Result<Response<TurnsPage>, Box<AppError>> {
+) -> Result<PrivateResponse<TurnsPage>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -67,7 +68,11 @@ pub async fn query_turns(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -76,7 +81,7 @@ pub async fn get_session_bundle(
     state: State<'_, super::RuntimeState>,
     request: SessionBundleRequest,
     request_id: String,
-) -> Result<Response<SessionBundle>, Box<AppError>> {
+) -> Result<PrivateResponse<SessionBundle>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -103,7 +108,11 @@ pub async fn get_session_bundle(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -112,7 +121,7 @@ pub async fn query_usage_events(
     state: State<'_, super::RuntimeState>,
     request: UsageEventsRequest,
     request_id: String,
-) -> Result<Response<UsageEventsPage>, Box<AppError>> {
+) -> Result<PrivateResponse<UsageEventsPage>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -139,7 +148,11 @@ pub async fn query_usage_events(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -148,7 +161,7 @@ pub async fn query_sessions(
     state: State<'_, super::RuntimeState>,
     request: SessionsRequest,
     request_id: String,
-) -> Result<Response<SessionsPage>, Box<AppError>> {
+) -> Result<PrivateResponse<SessionsPage>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -175,7 +188,11 @@ pub async fn query_sessions(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -184,7 +201,7 @@ pub async fn get_filter_options(
     state: State<'_, super::RuntimeState>,
     request: FilterOptionsRequest,
     request_id: String,
-) -> Result<Response<FilterOptionsPage>, Box<AppError>> {
+) -> Result<PrivateResponse<FilterOptionsPage>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -211,7 +228,11 @@ pub async fn get_filter_options(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -220,7 +241,7 @@ pub async fn close_query_snapshot(
     state: State<'_, super::RuntimeState>,
     request: CloseQuerySnapshotRequest,
     request_id: String,
-) -> Result<Response<()>, Box<AppError>> {
+) -> Result<PrivateResponse<()>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -253,7 +274,7 @@ pub async fn close_query_snapshot(
     .await
     .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
     .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
-    Ok(Response::new(request_id, ()))
+    Ok(PrivateResponse::new(request_id, (), state.privacy.clone()))
 }
 
 #[tauri::command]
@@ -262,7 +283,7 @@ pub async fn get_grouped_usage(
     state: State<'_, super::RuntimeState>,
     request: GroupedUsageRequest,
     request_id: String,
-) -> Result<Response<GroupedUsageBundle>, Box<AppError>> {
+) -> Result<PrivateResponse<GroupedUsageBundle>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -280,6 +301,7 @@ pub async fn get_grouped_usage(
         .cloned()
         .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
     let snapshot_id = request_id.clone();
+    let dimension = request.dimension;
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
         database.grouped_usage_bundle(&request, at, &snapshot_id)
@@ -289,7 +311,12 @@ pub async fn get_grouped_usage(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::groups(
+        request_id,
+        data,
+        state.privacy.clone(),
+        dimension,
+    ))
 }
 
 #[tauri::command]
@@ -298,7 +325,7 @@ pub async fn get_dashboard_bundle(
     state: State<'_, super::RuntimeState>,
     request: DashboardRequest,
     request_id: String,
-) -> Result<Response<DashboardBundle>, Box<AppError>> {
+) -> Result<PrivateResponse<DashboardBundle>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -325,7 +352,11 @@ pub async fn get_dashboard_bundle(
     .map_err(|e: token_pulse_store::StoreError| {
         Box::new(AppError::new(e.code, request_id.clone()))
     })?;
-    Ok(Response::new(request_id, data))
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]
@@ -334,7 +365,7 @@ pub async fn get_context_snapshot(
     state: State<'_, super::RuntimeState>,
     session_key: String,
     request_id: String,
-) -> Result<Response<ContextSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<ContextSnapshot>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -353,5 +384,9 @@ pub async fn get_context_snapshot(
             .await
             .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
             .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
-    Ok(Response::new(request_id, context))
+    Ok(PrivateResponse::new(
+        request_id,
+        context,
+        state.privacy.clone(),
+    ))
 }

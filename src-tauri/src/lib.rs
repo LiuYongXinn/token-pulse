@@ -7,10 +7,12 @@ use tauri::{
 use token_pulse_core::{
     ServiceState,
     error::{AppError, ErrorCode},
+    privacy::{DisplayPolicyStamp, PrivacyState, PrivateResponse},
     protocol::{AppStatus, Response, WindowAction, validate_request_id},
 };
 
 struct RuntimeState {
+    privacy: PrivacyState,
     selections: std::sync::Arc<std::sync::Mutex<token_pulse_core::selections::DirectorySelections>>,
     data_directory: PathBuf,
     database: token_pulse_store::StoreResult<token_pulse_store::Database>,
@@ -26,7 +28,7 @@ fn get_app_status(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, RuntimeState>,
     request_id: String,
-) -> Result<Response<AppStatus>, Box<AppError>> {
+) -> Result<PrivateResponse<AppStatus>, Box<AppError>> {
     validate_request_id(&request_id)
         .map_err(|code| AppError::new(code, "invalid-request".into()))?;
     if window.label() != "main" {
@@ -35,7 +37,7 @@ fn get_app_status(
             request_id,
         )));
     }
-    Ok(Response::new(
+    Ok(PrivateResponse::new(
         request_id,
         AppStatus {
             version: env!("CARGO_PKG_VERSION").into(),
@@ -63,6 +65,7 @@ fn get_app_status(
             quota: ServiceState::NotConfigured,
             taskbar: ServiceState::NotImplemented,
         },
+        state.privacy.clone(),
     ))
 }
 
@@ -100,6 +103,26 @@ fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
     window.set_focus().map_err(|e| e.to_string())
 }
 
+// Unreadable/future configuration must never expose identifying fields via a default-off policy.
+fn initial_privacy(
+    database: &token_pulse_store::StoreResult<token_pulse_store::Database>,
+) -> PrivacyState {
+    let stamp = database
+        .as_ref()
+        .ok()
+        .and_then(|db| db.display_settings().ok())
+        .map(|snapshot| DisplayPolicyStamp {
+            settings_revision: snapshot.settings_revision,
+            privacy: snapshot.preferences.privacy,
+        })
+        .unwrap_or(DisplayPolicyStamp {
+            settings_revision: token_pulse_core::numeric::DecimalInt::parse("0")
+                .expect("literal revision"),
+            privacy: true,
+        });
+    PrivacyState::new(stamp)
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| { let _ = show_main(app); }))
@@ -125,7 +148,8 @@ pub fn run() {
                 token_pulse_collector::jobs::JobService::start_with_notify(database.clone(),notify)
             },Err(error)=>Err(error.code.into())};
             let rollups=match &database {Ok(database)=>token_pulse_store::rollup_service::RollupService::start(database.clone()),Err(error)=>Err(error.code.into())};
-            app.manage(RuntimeState { data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            let privacy = initial_privacy(&database);
+            app.manage(RuntimeState { privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
@@ -159,7 +183,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {

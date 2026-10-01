@@ -66,9 +66,13 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let price_listener = app.listen("price_rules_changed", move |event| {
         let _ = price_sender.try_send(event.payload().to_owned());
     });
-    let (settings_sender, settings_receiver) = std::sync::mpsc::sync_channel(4);
+    let (settings_sender, settings_receiver) = std::sync::mpsc::sync_channel(8);
     let settings_listener = app.listen("settings_changed", move |event| {
         let _ = settings_sender.try_send(event.payload().to_owned());
+    });
+    let (policy_sender, policy_receiver) = std::sync::mpsc::sync_channel(4);
+    let policy_listener = app.listen("display_policy_changed", move |event| {
+        let _ = policy_sender.try_send(event.payload().to_owned());
     });
     window
         .eval(
@@ -304,9 +308,31 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='项目')?.click();
                 await waitFor(()=>document.querySelector('section[aria-label="项目统计汇总"]'));
                 ok=ok && document.querySelector('.price-instant-label')?.textContent==='2024-02-29T00:00:00.123Z';
+                const enabledPrivacy=await invoke('set_display_privacy',{requestId:'native-smoke-privacy-on',request:{privacy:true,expected_settings_revision:'4'}});
+                ok=ok && enabledPrivacy.data.preferences.privacy===true && enabledPrivacy.data.settings_revision==='5'
+                    && enabledPrivacy.display_policy.privacy===true && enabledPrivacy.display_policy.settings_revision==='5';
+                const privateStatus=await invoke('get_app_status',{requestId:'native-smoke-private-status'});
+                ok=ok && privateStatus.data.data_directory==='应用数据目录（已隐藏）' && privateStatus.display_policy.privacy===true;
+                const privateDashboard=await invoke('get_dashboard_bundle',{requestId:'native-smoke-private-dashboard',request});
+                const privateDetail=await invoke('get_session_bundle',{requestId:'native-smoke-private-detail',request:{session_key:'native-probe-context',filter:request.filter,price_basis:request.price_basis}});
+                const privateHistory=await invoke('get_price_rules',{requestId:'native-smoke-private-price-history',revision:'1'});
+                ok=ok && privateDashboard.data.pricing.redacted===true && privateDashboard.data.pricing.reasons.length===0
+                    && privateDashboard.data.summary.total_tokens==='0' && privateDashboard.data.meta.price_revision==='3'
+                    && privateDetail.data.identity.session_key==='native-probe-context' && privateDetail.data.pricing.redacted===true
+                    && privateHistory.data.rules.length===0 && privateHistory.data.aliases.length===0 && privateHistory.display_policy.privacy===true;
+                const privacyNoop=await invoke('set_display_privacy',{requestId:'native-smoke-privacy-noop',request:{privacy:true,expected_settings_revision:'5'}});
+                let privatePickerBlocked=false, privacyConflict=false;
+                try {await invoke('choose_source_directory',{requestId:'native-smoke-private-picker',kind:'local'});} catch(error) {privatePickerBlocked=error.code==='PERMISSION_DENIED';}
+                try {await invoke('set_display_privacy',{requestId:'native-smoke-privacy-conflict',request:{privacy:false,expected_settings_revision:'4'}});} catch(error) {privacyConflict=error.code==='REVISION_CONFLICT';}
+                ok=ok && privacyNoop.data.settings_revision==='5' && privatePickerBlocked && privacyConflict;
+                const disabledPrivacy=await invoke('set_display_privacy',{requestId:'native-smoke-privacy-off',request:{privacy:false,expected_settings_revision:'5'}});
+                const restoredHistory=await invoke('get_price_rules',{requestId:'native-smoke-price-restored',revision:'1'});
+                const restoredStatus=await invoke('get_app_status',{requestId:'native-smoke-status-restored'});
+                ok=ok && disabledPrivacy.data.settings_revision==='6' && disabledPrivacy.display_policy.privacy===false
+                    && restoredHistory.data.rules.length===1 && restoredHistory.data.rules[0].input_rate_atoms==='1'
+                    && restoredStatus.data.data_directory===r.data.data_directory && restoredStatus.display_policy.settings_revision==='6';
 
-
-            } catch (_) {}
+            } catch (error) { console.error('Native IPC check:', error); }
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
     "#,
@@ -316,18 +342,30 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     app.unlisten(listener);
     app.unlisten(price_listener);
     app.unlisten(settings_listener);
+    app.unlisten(policy_listener);
     if ipc.as_deref() != Ok("true") {
         return Err("WebView get_app_status IPC failed".into());
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
-    if settings_events.len() != 3 {
-        return Err("timezone changes did not emit exactly three settings notifications".into());
+    if settings_events.len() != 5 {
+        return Err("display changes did not emit exactly five settings notifications".into());
     }
-    for (payload, revision) in settings_events.iter().zip(["2", "3", "4"]) {
+    for (payload, revision) in settings_events.iter().zip(["2", "3", "4", "5", "6"]) {
         let event: token_pulse_core::settings::SettingsChanged =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if event.settings_revision.as_str() != revision {
             return Err("settings notification revision is incorrect".into());
+        }
+    }
+    let policy_events = policy_receiver.try_iter().collect::<Vec<_>>();
+    if policy_events.len() != 2 {
+        return Err("privacy changes did not emit exactly two policy notifications".into());
+    }
+    for (payload, (revision, privacy)) in policy_events.iter().zip([("5", true), ("6", false)]) {
+        let stamp: token_pulse_core::privacy::DisplayPolicyStamp =
+            serde_json::from_str(payload).map_err(|e| e.to_string())?;
+        if stamp.settings_revision.as_str() != revision || stamp.privacy != privacy {
+            return Err("privacy notification revision or value is incorrect".into());
         }
     }
     let price_events = price_receiver.try_iter().collect::<Vec<_>>();

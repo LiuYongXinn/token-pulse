@@ -674,3 +674,10 @@ Win10 独立应用在模型页实际选择指定时刻、编辑 2024-02-29T00:00
 DisplayPreferences 正式公开 privacy，缺少该字段的旧 v1 配置按既有默认关闭读取，已有 true 原样保留；非法类型 / null / 未来版本拒绝而不重写。DisplayPrivacyMutation 必须携带精确全局 settings revision。独立隐私写入只修改 privacy 字段，配置 payload / 时间 / revision 同事务发布，同值无写入；不改变数据和价格 revision。
 
 新增四项 SQLite 多场景检查通过（全部十项 settings 测试通过），覆盖持久化 / 重启 / 同值 / 关闭、保留主题 / 时区 / 小窗范围 / 原生偏好、真实旧读取事务的 DTO 仍按最新 PrivacyState 脱敏且来源表不改、配置冲突 / 强制 Writer 失败保持原策略和数据库、未来版本 / 损坏类型 / revision 溢出无写入。契约生成、TS 类型和 22 项 Vitest 通过。实际 Tauri 出口和前端切换仍待下一个模块；未执行性能测试。
+## M15c3：正式 IPC 最新隐私出口与切换协调
+
+实际 Tauri 的统计 / 分页 / 会话 / 来源 / 目录选择结果 / 应用路径 / 价格规则 / 作业及显示设置全部改用 PrivateResponse；模型 / 项目分组明确携带维度。独立日历转换和纯窗口动作没有敏感数据，保留普通响应。启动策略从持久设置读取，数据库或配置不可用时先隐藏；错误读取仍明确报错，不覆写配置。set_display_privacy 主窗口权限列入 manifest / capability，后台通用协调函数在策略锁内完成 Writer 提交，再通知 display_policy_changed 和 settings_changed，同值不通知。已开启时拒绝打开带路径的系统目录选择器；选择中途切换时返回值在序列化出口脱敏。
+
+workspace Clippy / fmt 和实际 Win10 独立 WebView 验证通过，原生探针新增开启 / 关闭及 no-op / 旧 revision 冲突检查：策略修订 5 true / 6 false，恰好两条策略事件、合计五条显示设置事件 2 / 3 / 4 / 5 / 6。实际 IPC 开启后应用目录已隐藏，历史价格规则 / 别名为空且带策略戳，总览和会话价格 redacted，Token / meta 不变；目录选择被拒绝，关闭后新响应恢复真实隔离目录和测试历史规则。初次探针误用隐藏文案和目录 kind custom（正式枚举为 local / wsl），按已有契约修正后通过，未改产品绕开失败。既有单实例 / 托盘 / 休眠消息 / 关闭隐藏等原生检查通过退出 0，仍有 class unregister 1412 提示。
+
+原生库仅有合成身份和价格规则，不含用量或用户日志；非空金额 / 名称脱敏为核心和 SQLite 合成证据。前端全局门禁、已显示 DOM / 分页缓存清除和实际开关 UI 尚待完成，此模块仅证明后台出口；小窗 / 任务栏权限和宿主共用协调在对应模块继续。未执行性能测试。

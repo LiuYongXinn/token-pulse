@@ -3,7 +3,8 @@ use token_pulse_core::{
     error::{AppError, ErrorCode},
     numeric::DecimalInt,
     pricing::{PriceChanged, PriceRuleMutation, PriceRulesSnapshot},
-    protocol::{Response, validate_request_id},
+    privacy::{PrivacyState, PrivateResponse},
+    protocol::validate_request_id,
 };
 
 fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
@@ -49,7 +50,7 @@ pub async fn get_price_rules(
     state: State<'_, super::RuntimeState>,
     revision: Option<String>,
     request_id: String,
-) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<PriceRulesSnapshot>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let requested = revision
         .as_deref()
@@ -57,7 +58,11 @@ pub async fn get_price_rules(
         .transpose()?;
     let db = database(&state, &request_id)?;
     let snapshot = blocking(&request_id, move || db.price_rules_at(requested)).await?;
-    Ok(Response::new(request_id, snapshot))
+    Ok(PrivateResponse::new(
+        request_id,
+        snapshot,
+        state.privacy.clone(),
+    ))
 }
 
 async fn mutate(
@@ -66,7 +71,8 @@ async fn mutate(
     mutation: PriceRuleMutation,
     expected: i64,
     id: String,
-) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+    policy: PrivacyState,
+) -> Result<PrivateResponse<PriceRulesSnapshot>, Box<AppError>> {
     let snapshot = blocking(&id, move || {
         db.mutate_price_rule_snapshot(mutation, expected, token_pulse_collector::jobs::now_ms()?)
     })
@@ -79,7 +85,7 @@ async fn mutate(
             all_models: true,
         },
     );
-    Ok(Response::new(id, snapshot))
+    Ok(PrivateResponse::new(id, snapshot, policy))
 }
 
 #[tauri::command]
@@ -90,7 +96,7 @@ pub async fn save_price_rule(
     request: PriceRuleMutation,
     expected_price_revision: String,
     request_id: String,
-) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<PriceRulesSnapshot>, Box<AppError>> {
     authorized(&window, &request_id)?;
     if matches!(request, PriceRuleMutation::Retire { .. }) {
         return Err(Box::new(AppError::new(ErrorCode::InvalidQuery, request_id)));
@@ -102,6 +108,7 @@ pub async fn save_price_rule(
         request,
         expected,
         request_id,
+        state.privacy.clone(),
     )
     .await
 }
@@ -114,7 +121,7 @@ pub async fn retire_price_rule(
     rule_id: String,
     expected_price_revision: String,
     request_id: String,
-) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+) -> Result<PrivateResponse<PriceRulesSnapshot>, Box<AppError>> {
     authorized(&window, &request_id)?;
     let expected = revision(&expected_price_revision, &request_id)?;
     mutate(
@@ -123,6 +130,7 @@ pub async fn retire_price_rule(
         PriceRuleMutation::Retire { rule_id },
         expected,
         request_id,
+        state.privacy.clone(),
     )
     .await
 }

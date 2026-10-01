@@ -414,3 +414,9 @@ Response 增加可选 display_policy：DisplayPolicyStamp 包含 settings_revisi
 PrivacyRedact 对每种公开 DTO 显式实现，不允许一个默认放行的泛型实现。会话 / 项目 / 来源使用稳定标识的 SHA-256 短替代标签，稳定 key / 精确 Token / 覆盖 / null / cursor / 账本 meta 不变；同标识跨列表、详情、子关系、明细保持同替代标签。PricingSummary.redacted=true，金额 null、费用原因清空；UsageEventRow.price 新增只用于显示的 redacted 标签，移除规则 / 金额 / 原子字段，不把隐私视为未计价或零金额。计价聚合拒绝 redacted 输入。
 
 GroupedUsageBundle 没有 dimension 字段，必须使用携带可信请求 GroupDimension 的 PrivateResponse::groups；模型标签可保留，项目标签替换。缺少分组上下文时走保守替换，避免旧响应在策略切换后泄漏项目名。价格规则配置响应在隐私处理时移除 rules / aliases，策略戳明确表示显示限制；后续 UI 管理入口需按策略隐藏配置内容，而不能将其显示成无规则。开启后清旧敏感缓存 / 拒绝旧世代、关闭后重新查询，以及小窗 / 原生宿主同步仍在后续实施。
+
+### 2.13 已接入的隐私 IPC
+
+DisplayPreferences 公开 privacy；DisplayPrivacyMutation { privacy, expected_settings_revision } 使用十进制字符串 CAS，全局设置冲突与同值行为同 timezone。set_display_privacy 已注册主窗口权限；小窗权限随其实际实现增加。RuntimeState 初始化已保存策略，不可读配置先隐藏。通用 update_privacy 协调函数在 PrivacyState.commit_update 内提交数据库并发布策略，之后先发 display_policy_changed { settings_revision, privacy }，再发 settings_changed。同值 / 冲突不通知。
+
+实际统计、来源、应用目录、价格规则、作业、显示设置出口均使用最新 PrivateResponse；GroupedUsage 明确传入模型 / 项目上下文。目录选择在已启用时拒绝，选择中途变化的返回结果仍由发送时策略处理。前端必须监听策略、丢弃旧缓存和迟到响应，并在关闭后重新查询；后台出口不能清除已经进入 WebView 的旧字段，该客户端门禁为后续必需实现。
