@@ -1,7 +1,9 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
 
 import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle, GroupedUsageRequest, GroupedUsageBundle } from './generated/contracts';
+import type { PriceChanged } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
 async function request<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -12,6 +14,12 @@ async function request<T>(command: string, args: Record<string, unknown> = {}): 
   return response.data;
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
+/** An invalidation only; values always come from a new complete query response. */
+export async function onPriceRulesChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen<PriceChanged>('price_rules_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 export function getSources(): Promise<SourcesSnapshot> { return request('get_sources'); }
 export function chooseSourceDirectory(kind: SourceDirectoryKind): Promise<SourceDirectorySelection | null> { return request('choose_source_directory', { kind }); }
 export function manageSource(action: ManageSourceAction, expectedSettingsRevision: string): Promise<SourcesSnapshot> { return request('manage_source', { action, expectedSettingsRevision }); }

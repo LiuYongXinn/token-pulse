@@ -5,6 +5,14 @@ import type { TokenMeasure, MiniScope, DecimalInt, DashboardBundle } from './gen
 
 const ajv = new Ajv({ strict: false });
 
+test('price invalidation carries exact revision and a whole-model marker without private data', () => {
+  const validate = ajv.compile(protocol.schemas.PriceChanged);
+  expect(validate({ price_revision: '9007199254740993', all_models: true })).toBe(true);
+  expect(validate({ price_revision: '3' })).toBe(false);
+  expect(validate({ price_revision: 3, all_models: true })).toBe(false);
+  expect(validate({ price_revision: '3', all_models: true, root_path: 'private' })).toBe(false);
+});
+
 test('dashboard contract requires one complete bundle with null metrics and real metadata', () => {
   const measure = { value: null, covered_total_tokens: '0', complete: false };
   const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };

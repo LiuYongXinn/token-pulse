@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { runtimeError } from '../shared/runtime';
+import { onPriceRulesChanged, runtimeError } from '../shared/runtime';
 
 /** Keeps a complete response together and never relabels it with another scope. */
 export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision: number, read: (request: Query) => Promise<Bundle>) {
@@ -23,7 +23,13 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
     const interval = setInterval(() => { if (!document.hidden) void refresh(); }, 10_000);
     const visible = () => { if (!document.hidden) void refresh(); };
     document.addEventListener('visibilitychange', visible);
-    return () => { active = false; ++sequence.current; clearInterval(interval); document.removeEventListener('visibilitychange', visible); };
+    let stopPriceListener: (() => void) | null = null;
+    // A missing event channel still has polling and visibility recovery. StrictMode
+    // can dispose this effect before listen resolves, so release that late handle.
+    void onPriceRulesChanged(() => { if (active && !document.hidden) void refresh(); })
+      .then(stop => { if (active) stopPriceListener = stop; else stop(); })
+      .catch(() => {});
+    return () => { active = false; ++sequence.current; stopPriceListener?.(); clearInterval(interval); document.removeEventListener('visibilitychange', visible); };
   }, [filterKey, refreshRevision, read]);
   // Also guard the frame before the new filter's effect starts its request.
   return { bundle: result?.key === filterKey ? result.bundle : null, error: failure?.key === filterKey ? failure.message : null, loading: loading || lastFilter.current !== filterKey };

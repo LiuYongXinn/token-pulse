@@ -86,7 +86,7 @@ export type PriceRuleMutation = { "kind": "create", draft: PriceRuleDraft, } | {
 
 export type PriceRulesSnapshot = { price_revision: DecimalInt, rules: Array<PriceRule>, aliases: Array<ModelAlias>, };
 
-export type PriceChanged = { price_revision: DecimalInt, };
+export type PriceChanged = { price_revision: DecimalInt, all_models: boolean, };
 
 export type ModelAlias = { alias_id: string, provider: string, alias: string, canonical_model: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, };
 

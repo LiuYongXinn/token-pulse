@@ -73,9 +73,10 @@ async fn mutate(
     .await?;
     // A dropped notification never rolls back a published price revision.
     let _ = app.emit(
-        "price_changed",
+        "price_rules_changed",
         PriceChanged {
             price_revision: snapshot.price_revision.clone(),
+            all_models: true,
         },
     );
     Ok(Response::new(id, snapshot))

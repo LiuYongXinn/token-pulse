@@ -4,19 +4,27 @@ test.beforeEach(async ({ page }) => {
   // Explicit synthetic UI DTO bridge. No fixture is imported into production.
   await page.addInitScript(() => {
     let fail = false, deferNext = false, release: (() => void) | null = null;
+    let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
+    let callbackId = 0, eventId = 0;
+    const callbacks = new Map<number, (event: unknown) => void>();
+    const listeners = new Map<number, { event: string; handler: number }>();
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
     const sources = ['a', 'b'].map(id => ({ source_id: `synthetic-${id}`, root_path: `E:\\synthetic-qa-${id}\\.codex`, origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null }));
     const complete = (n: number, total: number) => ({ value: String(n), covered_total_tokens: String(total), complete: true });
     const unknown = { value: null, covered_total_tokens: '0', complete: false };
     const tokens = (partial = false) => ({ total_tokens: partial ? '17' : '683067', input_total: partial ? unknown : complete(630630, 683067), cached_input: partial ? unknown : complete(429566, 683067), noncached_input: partial ? unknown : complete(201064, 683067), output_total: partial ? unknown : complete(52437, 683067), reasoning_output: partial ? unknown : complete(19926, 683067), session_count: '1', usage_event_count: partial ? '1' : '5', reliable_turn_count: null, reliable_turns_complete: false });
     const coverage = { state: 'partial', pending_observation_count: '2', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '1', source_issues: [{ source_id: 'synthetic-a', code: 'scan_evidence_missing', last_success_ms: 1000 }], format_issues: [], breakdown_complete: true };
     const empty = { total_tokens: '0', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
-    const price = (partial: boolean) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: '0.871234567890123', priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
-    Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
+    const price = (partial: boolean) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
+    Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
+      if (command === 'plugin:event|unlisten') return null;
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'get_dashboard_bundle') {
+        ++reads;
         if (fail) throw new Error('synthetic refresh failure');
         const r = args.request as { filter: { sources: { ids?: string[] }; range: { start_ms: number; end_ms: number; timezone: string } }; grain: string; heatmap_range: { start_ms: number; end_ms: number } };
         const partial = r.filter.sources.ids?.includes('synthetic-b') ?? false;
@@ -28,12 +36,15 @@ test.beforeEach(async ({ page }) => {
           return { start_ms: start, end_ms: Math.min(start + step, r.filter.range.end_ms), display_label: new Date(start).toISOString().slice(0, 16), utc_offset: '+08:00', totals: count, coverage: { ...coverage, breakdown_complete: i === 0 && !partial } };
         });
         const heatmap = Array.from({ length: 182 }, (_, i) => ({ start_ms: r.heatmap_range.start_ms + i * 86_400_000, end_ms: r.heatmap_range.start_ms + (i + 1) * 86_400_000, display_label: `synthetic-day-${i + 1}`, utc_offset: '+08:00', totals: i % 5 === 0 ? tokens(partial) : empty, coverage: { ...coverage, breakdown_complete: !partial && i % 5 === 0 } }));
-        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: '3', generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
+        const data = { meta: { snapshot_id: String(args.requestId), data_revision: '7', price_revision: priceRevision, generated_at_ms: r.filter.range.start_ms + 1000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(partial), pricing: price(partial), coverage: { ...coverage, breakdown_complete: !partial }, series, heatmap, recent_sessions: [{ session_key: 'synthetic-session', display_name: 'synthetic-ui-session', latest_at_ms: r.filter.range.start_ms + 1000, latest_model: 'synthetic-model', latest_project_id: 'synthetic-project', latest_project_name: 'Synthetic QA Project', summary: tokens(partial), pricing: price(partial) }] };
         if (deferNext) { deferNext = false; await new Promise<void>(resolve => { release = resolve; }); }
         return response(data);
       }
       throw new Error(`unexpected synthetic command ${command}`);
-    } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; } });
+    } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
+    __syntheticPriceState: () => ({ reads, listeners: listeners.size }),
+    __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
+    __emitSyntheticPriceChange: () => { priceRevision = String(Number(priceRevision) + 1); cost = '1.231234567890123'; for (const [id, listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: priceRevision, all_models: true } }); } });
   });
   await page.goto('/');
 });
@@ -97,4 +108,33 @@ test('same-filter refresh retains prior values on error and older-filter replies
   await page.evaluate(() => (window as unknown as { __releaseSyntheticDashboard: () => void }).__releaseSyntheticDashboard());
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect(page.getByLabel('683,067 Token', { exact: true })).toHaveCount(0);
+});
+
+test('price notifications refresh whole bundles, recover on visibility and release listeners across scopes', async ({ page }) => {
+  type Bridge = { __syntheticPriceState: () => { reads: number; listeners: number }; __emitSyntheticPriceChange: () => void; __setSyntheticHidden: (v: boolean) => void };
+  const state = () => page.evaluate(() => (window as unknown as Bridge).__syntheticPriceState());
+  await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await state()).listeners).toBe(1);
+  const before = (await state()).reads;
+  await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
+  await expect(page.getByText('$1.23', { exact: true })).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('.overview-details')).toContainText('7 / 4');
+  expect((await state()).reads).toBe(before + 1);
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(true));
+  const hiddenReads = (await state()).reads;
+  await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
+  await page.waitForTimeout(150);
+  expect((await state()).reads).toBe(hiddenReads);
+  await expect(page.locator('.overview-details')).toContainText('7 / 4');
+  await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(false));
+  await expect(page.locator('.overview-details')).toContainText('7 / 5');
+  await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
+  await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await state()).listeners).toBe(1);
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect.poll(async () => (await state()).listeners).toBe(0);
+  const unmountedReads = (await state()).reads;
+  await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
+  expect((await state()).reads).toBe(unmountedReads);
 });

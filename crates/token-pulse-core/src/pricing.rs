@@ -130,6 +130,7 @@ pub struct PriceRulesSnapshot {
 #[serde(deny_unknown_fields)]
 pub struct PriceChanged {
     pub price_revision: DecimalInt,
+    pub all_models: bool,
 }
 
 fn key(value: &str) -> bool {

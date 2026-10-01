@@ -19,6 +19,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2.7.3"
 uuid = { version = "1", features = ["v4"] }
 serde.workspace = true
+serde_json.workspace = true
 token-pulse-core.workspace = true
 token-pulse-store.workspace = true
 token-pulse-collector.workspace = true

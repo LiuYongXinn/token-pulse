@@ -62,6 +62,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let listener = app.listen("native-smoke-ipc", move |event| {
         let _ = sender.try_send(event.payload().to_owned());
     });
+    let (price_sender, price_receiver) = std::sync::mpsc::sync_channel(4);
+    let price_listener = app.listen("price_rules_changed", move |event| {
+        let _ = price_sender.try_send(event.payload().to_owned());
+    });
     window
         .eval(
             r#"
@@ -174,8 +178,22 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let ipc = receiver.recv_timeout(Duration::from_secs(10));
     app.unlisten(listener);
+    app.unlisten(price_listener);
     if ipc.as_deref() != Ok("true") {
         return Err("WebView get_app_status IPC failed".into());
+    }
+    let price_events = price_receiver.try_iter().collect::<Vec<_>>();
+    if price_events.len() != 3 {
+        return Err(
+            "successful price publications did not emit exactly three notifications".into(),
+        );
+    }
+    for (payload, revision) in price_events.iter().zip(["1", "2", "3"]) {
+        let event: token_pulse_core::pricing::PriceChanged =
+            serde_json::from_str(payload).map_err(|e| e.to_string())?;
+        if event.price_revision.as_str() != revision || !event.all_models {
+            return Err("price notification revision or whole-model marker is incorrect".into());
+        }
     }
     if !window.is_visible().map_err(|e| e.to_string())? {
         return Err("cold start window is hidden".into());

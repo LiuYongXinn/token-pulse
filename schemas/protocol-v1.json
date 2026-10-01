@@ -4149,12 +4149,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "all_models": {
+          "type": "boolean"
+        },
         "price_revision": {
           "$ref": "#/$defs/DecimalInt"
         }
       },
       "required": [
-        "price_revision"
+        "price_revision",
+        "all_models"
       ],
       "title": "PriceChanged",
       "type": "object"
