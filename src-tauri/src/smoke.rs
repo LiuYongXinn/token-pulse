@@ -147,14 +147,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 ok=ok && invalidDate;
                 const initialDisplay=await invoke('get_display_settings',{requestId:'native-smoke-display'});
                 ok=ok && initialDisplay.api_version===1 && initialDisplay.request_id==='native-smoke-display'
-                    && initialDisplay.data.preferences.display_timezone===null && initialDisplay.data.settings_revision==='0';
+                    && initialDisplay.data.preferences.display_timezone===Intl.DateTimeFormat().resolvedOptions().timeZone && initialDisplay.data.settings_revision==='1';
                 const initializedDisplay=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-init',request:{kind:'initialize',system_timezone:'America/New_York'}});
-                ok=ok && initializedDisplay.data.preferences.display_timezone==='America/New_York' && initializedDisplay.data.settings_revision==='1';
-                const changedDisplay=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-set',request:{kind:'set',display_timezone:'UTC',expected_settings_revision:'1'}});
-                ok=ok && changedDisplay.data.preferences.display_timezone==='UTC' && changedDisplay.data.settings_revision==='2';
-                for (const [suffix,change] of [['init',{kind:'initialize',system_timezone:'Asia/Shanghai'}],['noop',{kind:'set',display_timezone:'UTC',expected_settings_revision:'2'}]]) {
+                ok=ok && initializedDisplay.data.preferences.display_timezone===initialDisplay.data.preferences.display_timezone && initializedDisplay.data.settings_revision==='1';
+                const firstZone=initialDisplay.data.preferences.display_timezone==='America/New_York'?'Asia/Shanghai':'America/New_York';
+                const firstChange=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-first-change',request:{kind:'set',display_timezone:firstZone,expected_settings_revision:'1'}});
+                ok=ok && firstChange.data.preferences.display_timezone===firstZone && firstChange.data.settings_revision==='2';
+                const changedDisplay=await invoke('set_display_timezone',{requestId:'native-smoke-timezone-set',request:{kind:'set',display_timezone:'UTC',expected_settings_revision:'2'}});
+                ok=ok && changedDisplay.data.preferences.display_timezone==='UTC' && changedDisplay.data.settings_revision==='3';
+                for (const [suffix,change] of [['init',{kind:'initialize',system_timezone:'Asia/Shanghai'}],['noop',{kind:'set',display_timezone:'UTC',expected_settings_revision:'3'}]]) {
                     const kept=await invoke('set_display_timezone',{requestId:`native-smoke-timezone-${suffix}`,request:change});
-                    ok=ok && kept.data.preferences.display_timezone==='UTC' && kept.data.settings_revision==='2';
+                    ok=ok && kept.data.preferences.display_timezone==='UTC' && kept.data.settings_revision==='3';
                 }
                 let timezoneConflict=false;
                 try {await invoke('set_display_timezone',{requestId:'native-smoke-timezone-stale',request:{kind:'set',display_timezone:'Asia/Shanghai',expected_settings_revision:'1'}});} catch(error) {timezoneConflict=error.code==='REVISION_CONFLICT';}
@@ -256,8 +259,21 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                         ok=ok && sort.value==='total_desc' && size.value==='100';
                     }
                 }
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
+                [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
+                await waitFor(()=>document.querySelector('input[aria-label="统计时区"]')?.value==='UTC');
+                const timezoneInput=document.querySelector('input[aria-label="统计时区"]');
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(timezoneInput,'Asia/Tokyo');
+                timezoneInput.dispatchEvent(new Event('input',{bubbles:true}));
+                await waitFor(()=>!document.querySelector('.display-setting-actions button[type="submit"]')?.disabled);
+                document.querySelector('.display-setting-actions button[type="submit"]').click();
+                await waitFor(()=>document.querySelector('.display-notice')?.textContent.includes('已保存时区 Asia/Tokyo'));
+                const savedByUI=await invoke('get_display_settings',{requestId:'native-smoke-display-ui'});
+                ok=ok && savedByUI.data.preferences.display_timezone==='Asia/Tokyo' && savedByUI.data.settings_revision==='4';
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='总览')?.click();
                 await waitFor(()=>document.querySelector('main .empty h2')?.textContent==='添加 Codex 数据来源');
+                ok=ok && document.querySelector('.filters')?.textContent.includes('Asia/Tokyo');
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
@@ -272,10 +288,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("WebView get_app_status IPC failed".into());
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
-    if settings_events.len() != 2 {
-        return Err("timezone changes did not emit exactly two settings notifications".into());
+    if settings_events.len() != 3 {
+        return Err("timezone changes did not emit exactly three settings notifications".into());
     }
-    for (payload, revision) in settings_events.iter().zip(["1", "2"]) {
+    for (payload, revision) in settings_events.iter().zip(["2", "3", "4"]) {
         let event: token_pulse_core::settings::SettingsChanged =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if event.settings_revision.as_str() != revision {

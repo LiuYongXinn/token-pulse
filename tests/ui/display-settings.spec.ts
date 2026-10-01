@@ -1,0 +1,105 @@
+import { expect, test } from '@playwright/test';
+test.use({ timezoneId: 'UTC' });
+
+test.beforeEach(async ({ page }) => {
+  // This isolated browser bridge models DTO and conflict behavior; production imports none of it.
+  await page.addInitScript(() => {
+    let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
+    const calls: { command: string; request: unknown }[] = [];
+    let callbackId = 0, eventId = 0;
+    const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
+    const snapshot = () => ({ settings_version: 1, settings_revision: revision, preferences: { display_timezone: timezone } });
+    const notify = () => { for (const [id, listener] of listeners) if (listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: revision } }); };
+    const measure = { value: null, covered_total_tokens: '0', complete: false };
+    const summary = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
+    const coverage = { state: 'unknown', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
+    const pricing = { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false };
+    Object.assign(window, { isTauri: true,
+      __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } },
+      __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
+        calls.push({ command, request: args.request }); const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+        if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
+        if (command === 'plugin:event|unlisten') return null;
+        if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
+        if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
+        if (command === 'get_display_settings') { if (failRead) throw { code: 'UNSUPPORTED_SETTINGS_VERSION' }; return response(snapshot()); }
+        if (command === 'set_display_timezone') {
+          const r = args.request as { kind: string; system_timezone?: string; display_timezone?: string; expected_settings_revision?: string };
+          const value = r.kind === 'initialize' ? r.system_timezone! : r.display_timezone!;
+          if (!['UTC', 'Asia/Shanghai', 'America/New_York'].includes(value)) throw { code: 'INVALID_QUERY' };
+          if (r.kind === 'set' && r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
+          if ((r.kind === 'initialize' && timezone === null) || (r.kind === 'set' && timezone !== value)) { timezone = value; revision = String(BigInt(revision) + 1n); notify(); }
+          return response(snapshot());
+        }
+        if (command === 'resolve_calendar_selection') {
+          if (badCalendar) throw { code: 'INVALID_QUERY' };
+          const r = args.request as { timezone: string; selection: { kind: string } };
+          // Fixed QA dates independently expected below; the Rust resolver covers calendar conversion.
+          const offset = r.timezone === 'Asia/Shanghai' ? -8 : r.timezone === 'America/New_York' ? 4 : 0;
+          const end = Date.parse('2026-11-02T00:00:00Z') + (r.timezone === 'America/New_York' ? 5 : offset) * 3_600_000;
+          const start = Date.parse('2026-11-01T00:00:00Z') + offset * 3_600_000 - (r.selection.kind === 'last7' ? 6 : r.selection.kind === 'last30' ? 29 : 0) * 86_400_000;
+          return response({ range: { start_ms: start, end_ms: end, timezone: r.timezone }, heatmap_range: { start_ms: Date.parse('2026-05-04T04:00:00Z'), end_ms: end, timezone: r.timezone }, local_today: '2026-11-01' });
+        }
+        if (command === 'get_grouped_usage' || command === 'get_dashboard_bundle') {
+          const r = args.request as { filter: { range: { timezone: string } }; dimension?: string };
+          const common = { meta: { snapshot_id: String(args.requestId), data_revision: '0', price_revision: '0', generated_at_ms: 1, parser_versions: [], accounting_versions: [], display_timezone: r.filter.range.timezone }, summary, coverage, pricing };
+          return response(command === 'get_grouped_usage' ? { ...common, dimension: r.dimension, groups: [], total_group_count: '0', truncated: false } : { ...common, series: [], heatmap: [], recent_sessions: [] });
+        }
+        throw new Error(`Unexpected synthetic command ${command}`);
+      } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
+  });
+});
+type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
+async function openSettings(page: import('@playwright/test').Page) { await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click(); }
+
+test('saved timezone drives all pages, exact revisions and backend DST boundaries', async ({ page }) => {
+  await page.goto('/'); await expect(page.locator('.filters')).toContainText('Asia/Shanghai');
+  await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
+  await page.getByLabel('统计时区').fill('America/New_York'); await page.getByRole('button', { name: '保存统计时区' }).click();
+  await expect(page.getByRole('status')).toContainText('已保存时区 America/New_York');
+  await expect(page.getByText('当前配置版本 1 · 修订 9007199254740994')).toBeVisible();
+  await page.screenshot({ path: 'test-results/display-timezone-1280.png', fullPage: true });
+  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
+  const call = await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1));
+  expect(call?.request).toMatchObject({ filter: { range: { start_ms: Date.parse('2026-11-01T04:00:00Z'), end_ms: Date.parse('2026-11-02T05:00:00Z'), timezone: 'America/New_York' } } });
+  await page.getByLabel('日期范围').selectOption('last7'); await expect(page.locator('.filters')).toContainText('America/New_York');
+  await expect.poll(async () => page.evaluate(() => { const r = (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1)?.request as { filter: { range: { start_ms: number } } } | undefined; return r?.filter.range.start_ms; })).toBe(Date.parse('2026-10-26T04:00:00Z'));
+  await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(1);
+  await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/display-timezone-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('conflicts preserve draft and original revision until explicit reset, invalid timezone preserves stored state', async ({ page }) => {
+  await page.goto('/'); await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
+  await page.getByLabel('统计时区').fill('America/New_York'); await page.evaluate(() => (window as unknown as QA).__calendarQA.externalChange());
+  await expect(page.getByText(/当前配置版本 1 · 修订 9007199254740994/)).toBeVisible();
+  await page.getByRole('button', { name: '刷新显示设置' }).click(); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
+  await page.getByRole('button', { name: '保存统计时区' }).click(); await expect(page.getByRole('alert')).toContainText('已发生变化');
+  expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).preferences.display_timezone).toBe('UTC');
+  await page.getByRole('button', { name: '重置为当前值' }).click(); await expect(page.getByLabel('统计时区')).toHaveValue('UTC');
+  await page.getByLabel('统计时区').fill('Invalid/Zone'); await page.getByRole('button', { name: '保存统计时区' }).click();
+  await expect(page.getByRole('alert')).toContainText('请求参数'); await expect(page.getByLabel('统计时区')).toHaveValue('Invalid/Zone');
+  expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).settings_revision).toBe('9007199254740994');
+});
+
+test('unreadable settings issue no guessed statistics queries and recover explicitly', async ({ page }) => {
+  await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => (window as unknown as QA).__calendarQA.failRead(true)); });
+  await page.goto('/'); await expect(page.getByRole('heading', { name: '统计日期尚未就绪' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('已有配置已保留');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'resolve_calendar_selection' || v.command === 'get_dashboard_bundle'))).toEqual([]);
+  await page.evaluate(() => (window as unknown as QA).__calendarQA.failRead(false)); await page.getByRole('button', { name: '重新读取' }).click();
+  await expect(page.getByRole('heading', { name: '添加 Codex 数据来源' })).toBeVisible();
+});
+
+test('first start initializes system timezone once and failed new calendar clears prior scope', async ({ page }) => {
+  await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => (window as unknown as QA).__calendarQA.reset()); });
+  // Explicit browser system zone; it is validated and stored by the synthetic bridge.
+  await page.goto('/'); await expect(page.locator('.filters')).toContainText('UTC');
+  const calls = await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_display_timezone'));
+  expect(calls).toHaveLength(1); expect(calls[0].request).toEqual({ kind: 'initialize', system_timezone: 'UTC' });
+  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__calendarQA.badCalendar(true)); await page.getByLabel('日期范围').selectOption('last7');
+  await expect(page.getByRole('heading', { name: '统计日期尚未就绪' })).toBeVisible(); await expect(page.getByLabel('模型统计汇总')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toContainText('统计日期解析失败');
+});

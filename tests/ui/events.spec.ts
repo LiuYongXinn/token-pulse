@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic IPC QA data; not imported by the desktop application.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; sort: string; page_size: number };
     let serial = 0, bad: 'expired' | 'mismatch' | null = null, revision = '3', amount = '9.007199254740993', callbackId = 0, eventId = 0;
@@ -16,6 +18,7 @@ test.beforeEach(async ({ page }) => {
       __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } },
       __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
         calls.push({ command, request: args.request }); const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
         if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
         if (command === 'plugin:event|unlisten') return null;
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
@@ -40,7 +43,7 @@ test.beforeEach(async ({ page }) => {
           return response({ meta: { snapshot_id: snapshot, data_revision: cursor && bad === 'mismatch' ? '8' : '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: ['synthetic-parser'], accounting_versions: ['synthetic-accounting'], display_timezone: query.filter.range.timezone }, summary: tokens('9007199254741044'), pricing: price('9007199254741044'), coverage, events: events.slice(offset,offset+query.page_size), next_cursor: next });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => listeners.size,
+      } }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length,
       __emitEventPriceChange: () => { revision = '4'; amount = '18.014398509481986'; for (const [id,listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: revision, all_models: true } }); } });
   });
   await page.goto('/');

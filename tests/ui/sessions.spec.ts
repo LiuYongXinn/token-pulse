@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic DTO bridge, never loaded by production code.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; end_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; price_basis: unknown; sort: string; page_size: number };
     let id = 0, expired = false, defer = false, release: (() => void) | null = null;
@@ -18,6 +20,7 @@ test.beforeEach(async ({ page }) => {
     Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
       calls.push({ command, args });
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'empty', root_path: 'Synthetic Empty Source', origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null }] });
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies sessions only');

@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic DTO bridge, confined to browser QA. Never a production fallback.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let many = false, redacted = false;
     const measure = (value: string | null, total: string, complete: boolean) => ({ value, covered_total_tokens: value === null ? '0' : total, complete });
@@ -11,6 +13,7 @@ test.beforeEach(async ({ page }) => {
     const huge = '9007199254740993';
     Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: ['a','b'].map(id => ({ source_id: `synthetic-${id}`, root_path: `E:\\synthetic-qa-${id}\\.codex`, origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null })) });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });

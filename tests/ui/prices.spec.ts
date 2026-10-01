@@ -1,13 +1,16 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic native bridge for UI tests only; never included in a production build.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let revision = 0, nextId = 0;
     let rules: Record<string, unknown>[] = [];
     const history = new Map<number, Record<string, unknown>[]>([[0, []]]);
     Object.assign(window, { isTauri: true, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       const current = () => ({ price_revision: String(revision), rules: structuredClone(rules), aliases: [] });
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });

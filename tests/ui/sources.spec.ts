@@ -1,13 +1,16 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test('source settings use explicitly mocked DTOs and preserve disabled and unknown states', async ({ page }) => {
   // Test-only native bridge. This fixture is never imported by the production application.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     Object.defineProperty(window, 'isTauri', { value: true });
     let revision = 1;
     const source = { source_id: 'synthetic-source', root_path: 'E:\\synthetic-fixture\\.codex', origin: 'custom', enabled: true, removed: false, readability: 'awaiting_directory', capabilities: { physical_identity: 'not_probed', byte_seek: 'not_probed', watcher: 'unavailable', polling_required: true }, last_scan_at_ms: null, last_success_at_ms: null, error: null };
     Object.defineProperty(window, '__TAURI_INTERNALS__', { value: { invoke: async (command: string, args: Record<string, unknown>) => {
       let data: unknown;
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return { api_version: 1, request_id: args.requestId, data: window.__syntheticCalendar(command, args) };
       if (command === 'get_app_status') data = { version: 'synthetic-test', development: true, data_directory: 'E:\\synthetic-test-data', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' };
       else if (command === 'get_sources') data = { settings_revision: String(revision), sources: [{ ...source }] };
       else if (command === 'manage_source') {

@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic browser QA bridge. No production demo fallback.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     const calls: { command: string; request: unknown }[] = [];
     let serial = 0, expired = false, deferSlow = false, releaseSlow: (() => void) | null = null;
@@ -12,6 +14,7 @@ test.beforeEach(async ({ page }) => {
     const pricing = { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false };
     Object.assign(window, { isTauri: true, __facetCalls: calls, __expireFacet: () => { expired = true; }, __deferFacet: () => { deferSlow = true; }, __releaseFacet: () => { releaseSlow?.(); }, __TAURI_INTERNALS__: { invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
       const meta = { snapshot_id: String(args.requestId), data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' };

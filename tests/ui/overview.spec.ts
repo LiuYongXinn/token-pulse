@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { installSyntheticCalendar } from './calendar-bridge';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic UI DTO bridge. No fixture is imported into production.
+  await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
@@ -18,6 +20,7 @@ test.beforeEach(async ({ page }) => {
     const price = (partial: boolean) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, data });
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
       if (command === 'plugin:event|unlisten') return null;
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
@@ -42,7 +45,7 @@ test.beforeEach(async ({ page }) => {
       }
       throw new Error(`unexpected synthetic command ${command}`);
     } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
-    __syntheticPriceState: () => ({ reads, listeners: listeners.size }),
+    __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
     __emitSyntheticPriceChange: () => { priceRevision = String(Number(priceRevision) + 1); cost = '1.231234567890123'; for (const [id, listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: priceRevision, all_models: true } }); } });
   });
