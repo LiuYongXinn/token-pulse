@@ -363,3 +363,47 @@ fn active_rule_limit_is_explicit_and_replacement_does_not_exceed_the_bound() {
     );
     assert_eq!(db.price_rules().unwrap().rules.len(), 4096);
 }
+
+#[test]
+fn mutation_returns_its_own_transaction_snapshot_and_historical_requests_are_bounded() {
+    let (_dir, db) = setup();
+    let response = db
+        .mutate_price_rule_snapshot(PriceRuleMutation::Create { draft: draft() }, 0, 1)
+        .unwrap();
+    assert_eq!(response.price_revision.as_str(), "1");
+    assert_eq!(response.rules[0].input_rate_atoms.as_str(), "10");
+    let id = response.rules[0].rule_id.clone();
+    let mut next = draft();
+    next.input_rate_atoms = n(1000);
+    db.mutate_price_rule_snapshot(
+        PriceRuleMutation::Replace {
+            rule_id: id,
+            draft: next,
+        },
+        1,
+        2,
+    )
+    .unwrap();
+    assert_eq!(response.price_revision.as_str(), "1");
+    assert_eq!(response.rules[0].input_rate_atoms.as_str(), "10");
+    assert!(response.rules[0].retired_revision.is_none());
+    assert_eq!(
+        db.price_rules_at(None).unwrap().price_revision.as_str(),
+        "2"
+    );
+    assert_eq!(
+        db.price_rules_at(Some(1)).unwrap().rules[0]
+            .input_rate_atoms
+            .as_str(),
+        "10"
+    );
+    assert!(db.price_rules_at(Some(0)).unwrap().rules.is_empty());
+    assert_eq!(
+        db.price_rules_at(Some(3)).unwrap_err().code,
+        ErrorCode::InvalidQuery
+    );
+    assert_eq!(
+        db.price_rules_at(Some(-1)).unwrap_err().code,
+        ErrorCode::InvalidQuery
+    );
+}

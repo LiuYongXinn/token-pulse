@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 use token_pulse_core::calendar::{CalendarBucket, Grain};
 use token_pulse_core::jobs::*;
 use token_pulse_core::pricing::{
-    ModelAlias, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft, PriceRuleMutation,
-    PriceRulesSnapshot, UnpricedCode,
+    ModelAlias, PriceChanged, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft,
+    PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{GroupDimension, GroupSort, GroupedUsage};
 use token_pulse_core::sources::*;
@@ -62,6 +62,7 @@ fn main() {
         PriceRuleDraft,
         PriceRuleMutation,
         PriceRulesSnapshot,
+        PriceChanged,
         ModelAlias,
         UnpricedCode,
         PriceOutcome,

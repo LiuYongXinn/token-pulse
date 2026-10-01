@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-retire-price-rule"
+description = "Enables the retire_price_rule command without any pre-configured scope."
+commands.allow = ["retire_price_rule"]
+
+[[permission]]
+identifier = "deny-retire-price-rule"
+description = "Denies the retire_price_rule command without any pre-configured scope."
+commands.deny = ["retire_price_rule"]

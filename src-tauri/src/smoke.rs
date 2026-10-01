@@ -82,6 +82,19 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 ok=ok && context.api_version===1 && context.request_id==='native-smoke-context'
                     && context.data.context_tokens===null && context.data.model_context_window===null
                     && context.data.percentage===null && context.data.observed_at_ms===null && context.data.quality==='unknown';
+                const prices=await invoke('get_price_rules',{requestId:'native-smoke-prices',revision:null});
+                ok=ok && prices.data.price_revision==='0' && prices.data.rules.length===0;
+                const draft={provider:'native-fixture',model_exact:'native-fixture',source_id:null,currency:'USD',effective_from_ms:0,effective_to_ms:null,priority:0,input_rate_atoms:'1',cached_rate_atoms:null,output_rate_atoms:'2',origin_reference:'native smoke synthetic fixture'};
+                const saved=await invoke('save_price_rule',{requestId:'native-smoke-price-create',request:{kind:'create',draft},expectedPriceRevision:'0'});
+                ok=ok && saved.request_id==='native-smoke-price-create' && saved.data.price_revision==='1' && saved.data.rules.length===1 && saved.data.rules[0].origin==='custom';
+                let conflict=false;
+                try {await invoke('save_price_rule',{requestId:'native-smoke-price-conflict',request:{kind:'create',draft},expectedPriceRevision:'1'});} catch(error) {conflict=error.code==='PRICE_RULE_CONFLICT';}
+                ok=ok && conflict;
+                const replaced=await invoke('save_price_rule',{requestId:'native-smoke-price-replace',request:{kind:'replace',rule_id:saved.data.rules[0].rule_id,draft:{...draft,input_rate_atoms:'3'}},expectedPriceRevision:'1'});
+                const historical=await invoke('get_price_rules',{requestId:'native-smoke-price-history',revision:'1'});
+                ok=ok && replaced.data.price_revision==='2' && replaced.data.rules[0].input_rate_atoms==='3' && historical.data.rules[0].input_rate_atoms==='1';
+                const retired=await invoke('retire_price_rule',{requestId:'native-smoke-price-retire',ruleId:replaced.data.rules[0].rule_id,expectedPriceRevision:'2'});
+                ok=ok && retired.data.price_revision==='3' && retired.data.rules.length===0;
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();

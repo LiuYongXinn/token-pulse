@@ -147,6 +147,30 @@ impl Database {
     pub fn price_rules(&self) -> StoreResult<PriceRulesSnapshot> {
         self.snapshot(|tx, revision| rules_at(tx, revision.price))
     }
+    pub fn price_rules_at(&self, requested: Option<i64>) -> StoreResult<PriceRulesSnapshot> {
+        self.snapshot(|tx, current| {
+            let revision = requested.unwrap_or(current.price);
+            if revision < 0 || revision > current.price {
+                return Err(ErrorCode::InvalidQuery.into());
+            }
+            rules_at(tx, revision)
+        })
+    }
+    pub fn mutate_price_rule_snapshot(
+        &self,
+        mutation: PriceRuleMutation,
+        expected_revision: i64,
+        at_ms: i64,
+    ) -> StoreResult<PriceRulesSnapshot> {
+        let at = EpochMs::new(at_ms)?;
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let revision = apply(&tx, mutation, expected_revision, at)?;
+            let result = rules_at(&tx, revision)?;
+            tx.commit()?;
+            Ok(result)
+        })
+    }
     pub fn mutate_price_rule(
         &self,
         mutation: PriceRuleMutation,

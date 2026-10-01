@@ -349,3 +349,11 @@ Rust 命令在主窗口权限清单和调用 label 双重限制，阻塞查询�
 七项存储测试通过：替换保留原费率及真实旧读取快照 / 在新事务按旧 revision 复算 900 原子、当前 revision 40500 原子；重叠 / 邻接 / 来源 / 优先级；验证失败、SQL 插入失败与 COMMIT 前受控错误一起回滚退休和价格修订；两线程编辑 CAS 仅一个成功；退休 / 过期请求；i64 修订溢出 / 损坏货币；旧别名版本与 4096 活跃规则上限 / 满额替换。
 
 完整存储层回归、fmt / workspace Clippy 通过；新增专用冲突码后七项价格场景再次通过。TS 类型和七项 Vitest 契约测试通过，验证草稿不能冒充 offline / 指定 introduced revision、不能给退休动作附草稿、priority 范围受控。累计普通 Rust 场景 164 项，没有新增系统验收，测试价格始终为明确的合成夹具。
+
+## M09b2：正式价格命令与事务内发布响应
+
+get_price_rules / save_price_rule / retire_price_rule 已加入主窗口 capability 与命令 label 检查。读取支持当前或不晚于当前的历史 price revision；保存仅接受 create / replace，退休使用独立受限命令。修订以十进制字符串传输并检查 i64 边界，阻塞任务移出 WebView 线程。保存返回发布事务中取得的规则配置快照，避免成功写入后另读一个并发版本；提交后发送只含 price revision 的 PriceChanged 事件，通知失败不回滚配置。
+
+新增存储场景验证响应保留自身发布状态、随后替换不改变响应中的规则 / 修订、合法历史 revision 与非法未来 / 负 revision。八项价格存储测试、workspace Clippy、TS 类型 / 七项 Vitest 与 DTO 生成通过，累计普通 Rust 场景 165 项。
+
+2026-10-01 21:20 Windows 10 独立 native probe 在随机隔离库中通过真实 WebView 的空规则读取、明确合成价格创建、重叠 PRICE_RULE_CONFLICT、替换、按旧 revision 读取原费率、退休为空，以及既有上下文 / 启动 / 电源消息 / 托盘 / 关闭隐藏 / 单实例 / 退出检查，返回 0。合成规则没有写入生产目录，未读取真实来源 / 账户；仍有既有 class unregister 1412 提示。价格设置 UI、规则别名写入 / 离线目录、消费定价汇总和重估仍待接入。

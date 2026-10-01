@@ -11,6 +11,9 @@ fn main() {
             "list_jobs",
             "cancel_job",
             "get_context_snapshot",
+            "get_price_rules",
+            "save_price_rule",
+            "retire_price_rule",
         ]),
     ))
     .expect("failed to build desktop resources");

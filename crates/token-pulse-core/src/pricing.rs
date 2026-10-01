@@ -120,6 +120,12 @@ pub struct PriceRulesSnapshot {
     pub aliases: Vec<ModelAlias>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct PriceChanged {
+    pub price_revision: DecimalInt,
+}
+
 fn key(value: &str) -> bool {
     !value.is_empty() && value.len() <= 256 && !value.chars().any(char::is_control)
 }

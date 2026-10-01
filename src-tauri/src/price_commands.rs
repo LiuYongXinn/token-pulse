@@ -1,0 +1,127 @@
+use tauri::{Emitter, State, WebviewWindow};
+use token_pulse_core::{
+    error::{AppError, ErrorCode},
+    numeric::DecimalInt,
+    pricing::{PriceChanged, PriceRuleMutation, PriceRulesSnapshot},
+    protocol::{Response, validate_request_id},
+};
+
+fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
+    validate_request_id(id)
+        .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
+    if window.label() != "main" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            id.into(),
+        )));
+    }
+    Ok(())
+}
+fn revision(value: &str, id: &str) -> Result<i64, Box<AppError>> {
+    let value =
+        DecimalInt::parse(value).map_err(|code| Box::new(AppError::new(code, id.into())))?;
+    i64::try_from(value.value())
+        .map_err(|_| Box::new(AppError::new(ErrorCode::NumericOverflow, id.into())))
+}
+fn database(
+    state: &State<'_, super::RuntimeState>,
+    id: &str,
+) -> Result<token_pulse_store::Database, Box<AppError>> {
+    state
+        .database
+        .as_ref()
+        .cloned()
+        .map_err(|e| Box::new(AppError::new(e.code, id.into())))
+}
+async fn blocking<T: Send + 'static>(
+    id: &str,
+    task: impl FnOnce() -> token_pulse_store::StoreResult<T> + Send + 'static,
+) -> Result<T, Box<AppError>> {
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, id.into())))?
+        .map_err(|e| Box::new(AppError::new(e.code, id.into())))
+}
+
+#[tauri::command]
+pub async fn get_price_rules(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    revision: Option<String>,
+    request_id: String,
+) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    let requested = revision
+        .as_deref()
+        .map(|v| self::revision(v, &request_id))
+        .transpose()?;
+    let db = database(&state, &request_id)?;
+    let snapshot = blocking(&request_id, move || db.price_rules_at(requested)).await?;
+    Ok(Response::new(request_id, snapshot))
+}
+
+async fn mutate(
+    app: &tauri::AppHandle,
+    db: token_pulse_store::Database,
+    mutation: PriceRuleMutation,
+    expected: i64,
+    id: String,
+) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+    let snapshot = blocking(&id, move || {
+        db.mutate_price_rule_snapshot(mutation, expected, token_pulse_collector::jobs::now_ms()?)
+    })
+    .await?;
+    // A dropped notification never rolls back a published price revision.
+    let _ = app.emit(
+        "price_changed",
+        PriceChanged {
+            price_revision: snapshot.price_revision.clone(),
+        },
+    );
+    Ok(Response::new(id, snapshot))
+}
+
+#[tauri::command]
+pub async fn save_price_rule(
+    window: WebviewWindow,
+    app: tauri::AppHandle,
+    state: State<'_, super::RuntimeState>,
+    request: PriceRuleMutation,
+    expected_price_revision: String,
+    request_id: String,
+) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    if matches!(request, PriceRuleMutation::Retire { .. }) {
+        return Err(Box::new(AppError::new(ErrorCode::InvalidQuery, request_id)));
+    }
+    let expected = revision(&expected_price_revision, &request_id)?;
+    mutate(
+        &app,
+        database(&state, &request_id)?,
+        request,
+        expected,
+        request_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn retire_price_rule(
+    window: WebviewWindow,
+    app: tauri::AppHandle,
+    state: State<'_, super::RuntimeState>,
+    rule_id: String,
+    expected_price_revision: String,
+    request_id: String,
+) -> Result<Response<PriceRulesSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    let expected = revision(&expected_price_revision, &request_id)?;
+    mutate(
+        &app,
+        database(&state, &request_id)?,
+        PriceRuleMutation::Retire { rule_id },
+        expected,
+        request_id,
+    )
+    .await
+}
