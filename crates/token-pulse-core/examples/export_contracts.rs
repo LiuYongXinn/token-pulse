@@ -52,6 +52,7 @@ fn main() {
         DecimalMoney,
         EpochMs,
         ServiceState,
+        token_pulse_core::privacy::DisplayPolicyStamp,
         DisplayPreferences,
         DisplaySettingsSnapshot,
         TimezoneMutation,

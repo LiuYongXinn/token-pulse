@@ -406,3 +406,11 @@ get_display_settings / set_display_timezone 仅允许主窗口。DisplaySettings
 修改在 Writer 的同一事务中保存 payload_json / updated_at_ms 与 revision；相同值不递增，不触发通知。成功实际变更提交后发送 settings_changed，仅携带 settings_revision；失败 / 无变化 / 重复初始化不发送。读取旧真实 SQLite 事务仍看到旧配置，但该历史配置不得用于覆盖后续的最新隐私策略。
 
 设置表已经包含主题、旧 privacy、小窗范围、任务栏和启动偏好。时区修改保留这些已识别版本 1 字段，只改 display_timezone，不用公开的 DisplayPreferences DTO 覆盖整个 payload。字段类型 / 时区损坏返回 DB_CORRUPT；不支持的 settings_version 返回 UNSUPPORTED_SETTINGS_VERSION，保留原配置，不写默认值。主题 / 隐私 / 小窗的实际应用仍由后续相应模块实现，此接口不会自行开启这些功能。
+
+### 2.12 最新隐私响应出口（领域实现，实际 IPC 接入继续实施）
+
+Response 增加可选 display_policy：DisplayPolicyStamp 包含 settings_revision / privacy。PrivateResponse 在实际 Serialize 时从共享 PrivacyState 读取最新策略，并在同一锁内序列化策略戳与经处理 DTO；不能在旧查询事务中固定隐私。commit_update 为持久设置事务提供同锁协调入口：失败不替换现有策略，已声称提交却返回倒退或同修订冲突策略时关闭显示发布，序列化只返回 DISPLAY_POLICY_UNAVAILABLE。普通迟到 publish 被拒绝，不改变当前策略。实际 Tauri 出口和前端世代门禁必须接入后才能把此领域能力视为隐私功能已交付。
+
+PrivacyRedact 对每种公开 DTO 显式实现，不允许一个默认放行的泛型实现。会话 / 项目 / 来源使用稳定标识的 SHA-256 短替代标签，稳定 key / 精确 Token / 覆盖 / null / cursor / 账本 meta 不变；同标识跨列表、详情、子关系、明细保持同替代标签。PricingSummary.redacted=true，金额 null、费用原因清空；UsageEventRow.price 新增只用于显示的 redacted 标签，移除规则 / 金额 / 原子字段，不把隐私视为未计价或零金额。计价聚合拒绝 redacted 输入。
+
+GroupedUsageBundle 没有 dimension 字段，必须使用携带可信请求 GroupDimension 的 PrivateResponse::groups；模型标签可保留，项目标签替换。缺少分组上下文时走保守替换，避免旧响应在策略切换后泄漏项目名。价格规则配置响应在隐私处理时移除 rules / aliases，策略戳明确表示显示限制；后续 UI 管理入口需按策略隐藏配置内容，而不能将其显示成无规则。开启后清旧敏感缓存 / 拒绝旧世代、关闭后重新查询，以及小窗 / 原生宿主同步仍在后续实施。

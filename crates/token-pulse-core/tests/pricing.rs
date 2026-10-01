@@ -66,6 +66,7 @@ fn atoms(outcome: PriceOutcome) -> (String, String, String) {
             cost_atoms.as_str().into(),
             estimated_cost.as_str().into(),
         ),
+        PriceOutcome::Redacted {} => panic!("engine returned display-only redaction"),
         PriceOutcome::Unpriced { reason } => panic!("unexpected {reason:?}"),
     }
 }

@@ -8,6 +8,8 @@ export type EpochMs = number;
 
 export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
+export type DisplayPolicyStamp = { settings_revision: DecimalInt, privacy: boolean, };
+
 export type DisplayPreferences = {
 /**
  * None means not initialized, never an implicit UTC/system fallback.
@@ -182,7 +184,7 @@ export type ModelAlias = { alias_id: string, provider: string, alias: string, ca
 
 export type UnpricedCode = "unknown_model" | "missing_rule" | "ambiguous_rule" | "insufficient_usage" | "overflow";
 
-export type PriceOutcome = { "status": "priced", rule_id: string, currency: string, cost_atoms: DecimalInt, estimated_cost: DecimalMoney, } | { "status": "unpriced", reason: UnpricedCode, };
+export type PriceOutcome = { "status": "redacted", } | { "status": "priced", rule_id: string, currency: string, cost_atoms: DecimalInt, estimated_cost: DecimalMoney, } | { "status": "unpriced", reason: UnpricedCode, };
 
 export type CoverageState = "complete" | "partial" | "unknown";
 
@@ -240,4 +242,4 @@ export type SourcesSnapshot = { settings_revision: DecimalInt, sources: Array<So
 
 export type ManageSourceAction = { "kind": "add", selection_handle: string, } | { "kind": "pause", source_id: string, } | { "kind": "resume", source_id: string, } | { "kind": "detect", } | { "kind": "retain_remove", source_id: string, };
 
-export type Response<T> = { api_version: 1, request_id: string, data: T, };
+export type Response<T> = { api_version: 1, request_id: string, data: T, display_policy?: DisplayPolicyStamp, };

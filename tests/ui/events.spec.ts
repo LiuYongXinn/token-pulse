@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; sort: string; page_size: number };
+    let redacted = false;
     let serial = 0, bad: 'expired' | 'mismatch' | null = null, revision = '3', amount = '9.007199254740993', callbackId = 0, eventId = 0;
     const calls: { command: string; request: unknown }[] = [];
     const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
@@ -40,10 +41,13 @@ test.beforeEach(async ({ page }) => {
           });
           const next = offset+query.page_size < events.length ? String(++serial).padStart(151,'a') : null;
           if (next) cursors.set(next, { query: JSON.stringify(query), offset: offset+query.page_size, snapshot });
-          return response({ meta: { snapshot_id: snapshot, data_revision: cursor && bad === 'mismatch' ? '8' : '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: ['synthetic-parser'], accounting_versions: ['synthetic-accounting'], display_timezone: query.filter.range.timezone }, summary: tokens('9007199254741044'), pricing: price('9007199254741044'), coverage, events: events.slice(offset,offset+query.page_size), next_cursor: next });
+          if (redacted) for (const event of events) event.price = { status: 'redacted' } as typeof event.price;
+          const summaryPrice = price('9007199254741044');
+          if (redacted) { summaryPrice.redacted = true; summaryPrice.currencies = summaryPrice.currencies.map(value => ({ ...value, estimated_cost: null as unknown as string })); summaryPrice.reasons = []; }
+          return response({ meta: { snapshot_id: snapshot, data_revision: cursor && bad === 'mismatch' ? '8' : '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: ['synthetic-parser'], accounting_versions: ['synthetic-accounting'], display_timezone: query.filter.range.timezone }, summary: tokens('9007199254741044'), pricing: summaryPrice, coverage, events: events.slice(offset,offset+query.page_size), next_cursor: next });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length,
+      } }, __redactEventPrices: () => { redacted = true; }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length,
       __emitEventPriceChange: () => { revision = '4'; amount = '18.014398509481986'; for (const [id,listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: revision, all_models: true } }); } });
   });
   await page.goto('/');
@@ -99,4 +103,17 @@ test('price notification replaces the entire event snapshot and navigation clean
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(0);
   const calls = await page.evaluate(() => (window as unknown as Bridge).__eventCalls());
   expect(calls.filter(c => c.command === 'close_query_snapshot' && c.request.kind === 'usage_events').length).toBeGreaterThanOrEqual(3);
+});
+
+test('display-only redacted price hides values, rules and tooltip amounts while preserving exact tokens', async ({ page }) => {
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await page.evaluate(() => (window as unknown as { __redactEventPrices: () => void }).__redactEventPrices());
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.locator('.event-table>tbody>tr').first()).toContainText('已隐藏');
+  await expect(page.locator('.event-table>tbody>tr').first().locator('td[title="9,007,199,254,740,993"]')).toBeVisible();
+  await page.locator('.event-table>tbody>tr').first().getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
+  await expect(page.locator('.event-evidence')).toContainText('已隐藏');
+  await expect(page.locator('.event-evidence')).not.toContainText('synthetic-rule');
+  await expect(page.locator('.event-evidence')).not.toContainText('9.007199254740993');
+  expect(await page.locator('[title*="9.007199254740993"]').count()).toBe(0);
 });

@@ -45,6 +45,7 @@ impl PricingAccumulator {
         }
         let tokens = i128::from(total);
         match outcome {
+            PriceOutcome::Redacted {} => return Err(ErrorCode::InvalidQuery),
             PriceOutcome::Priced {
                 currency,
                 cost_atoms,

@@ -248,6 +248,27 @@
           ],
           "type": "object"
         },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DisplayPolicyStamp": {
+          "additionalProperties": false,
+          "properties": {
+            "privacy": {
+              "type": "boolean"
+            },
+            "settings_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "settings_revision",
+            "privacy"
+          ],
+          "type": "object"
+        },
         "ErrorCode": {
           "enum": [
             "INVALID_QUERY",
@@ -305,6 +326,16 @@
         },
         "data": {
           "$ref": "#/$defs/AppStatus"
+        },
+        "display_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DisplayPolicyStamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "request_id": {
           "type": "string"
@@ -2000,6 +2031,31 @@
         }
       ],
       "title": "DimensionSelection"
+    },
+    "DisplayPolicyStamp": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "privacy": {
+          "type": "boolean"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "settings_revision",
+        "privacy"
+      ],
+      "title": "DisplayPolicyStamp",
+      "type": "object"
     },
     "DisplayPreferences": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4736,6 +4792,20 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Transport-only display state; the price engine never creates this outcome.",
+          "properties": {
+            "status": {
+              "const": "redacted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "properties": {
@@ -10613,6 +10683,20 @@
           "oneOf": [
             {
               "additionalProperties": false,
+              "description": "Transport-only display state; the price engine never creates this outcome.",
+              "properties": {
+                "status": {
+                  "const": "redacted",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
               "properties": {
                 "cost_atoms": {
                   "$ref": "#/$defs/DecimalInt"
@@ -11027,6 +11111,20 @@
         },
         "PriceOutcome": {
           "oneOf": [
+            {
+              "additionalProperties": false,
+              "description": "Transport-only display state; the price engine never creates this outcome.",
+              "properties": {
+                "status": {
+                  "const": "redacted",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status"
+              ],
+              "type": "object"
+            },
             {
               "additionalProperties": false,
               "properties": {

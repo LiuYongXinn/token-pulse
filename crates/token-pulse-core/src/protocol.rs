@@ -30,6 +30,9 @@ pub struct Response<T> {
     pub api_version: u32,
     pub request_id: String,
     pub data: T,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub display_policy: Option<crate::privacy::DisplayPolicyStamp>,
 }
 impl<T> Response<T> {
     pub fn new(request_id: String, data: T) -> Self {
@@ -37,6 +40,7 @@ impl<T> Response<T> {
             api_version: crate::API_VERSION,
             request_id,
             data,
+            display_policy: None,
         }
     }
 }

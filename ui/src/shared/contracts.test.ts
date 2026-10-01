@@ -159,6 +159,9 @@ test('tagged DTO variants do not accept fields from other variants', () => {
 test('price DTOs keep exact atoms and distinguish an unpriced outcome from zero cost', () => {
   const outcome = ajv.compile(protocol.schemas.PriceOutcome);
   expect(outcome({ status: 'unpriced', reason: 'missing_rule' })).toBe(true);
+  expect(outcome({ status: 'redacted' })).toBe(true);
+  expect(outcome({ status: 'redacted', estimated_cost: '0.000000000000000' })).toBe(false);
+  expect(outcome({ status: 'redacted', rule_id: 'private-rule' })).toBe(false);
   expect(outcome({ status: 'unpriced', reason: 'missing_rule', estimated_cost: '0' })).toBe(false);
   expect(outcome({ status: 'priced', rule_id: 'fixture', currency: 'USD', cost_atoms: '1', estimated_cost: '0.000000000000001' })).toBe(true);
   expect(outcome({ status: 'priced', rule_id: 'fixture', currency: 'USD', cost_atoms: 1, estimated_cost: 0.000000000000001 })).toBe(false);

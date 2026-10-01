@@ -11,6 +11,7 @@ pub mod error;
 pub mod jobs;
 pub mod numeric;
 pub mod pricing;
+pub mod privacy;
 pub mod protocol;
 pub mod query;
 pub mod reader;
