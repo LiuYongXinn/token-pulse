@@ -1,4 +1,5 @@
 //! A single Writer publishes configuration and its revision atomically.
+mod shortcuts;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use token_pulse_core::{
@@ -39,6 +40,10 @@ pub(crate) fn read_stored(
                             .as_str()
                             .is_some_and(|s| matches!(s, "dark" | "light" | "system")),
                         "privacy" | "taskbar_enabled" | "startup_enabled" => field.is_boolean(),
+                        "recovery_shortcut" => serde_json::from_value::<
+                            token_pulse_core::shortcuts::RecoveryShortcut,
+                        >(field.clone())
+                        .is_ok_and(|key| key.virtual_key().is_ok()),
                         "mini_window" => serde_json::from_value::<
                             token_pulse_core::placement::MiniWindowPreferences,
                         >(field.clone())

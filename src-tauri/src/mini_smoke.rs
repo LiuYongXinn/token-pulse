@@ -2,7 +2,11 @@
 use std::{thread, time::Duration};
 use tauri::{Listener, Manager, WebviewWindow};
 
-fn evaluate(app: &tauri::AppHandle, window: &WebviewWindow, script: &str) -> Result<(), String> {
+pub(super) fn evaluate(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+    script: &str,
+) -> Result<(), String> {
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     let event = format!("native-mini-probe-{}", uuid::Uuid::new_v4());
     let listener = app.listen(event.clone(), move |e| {

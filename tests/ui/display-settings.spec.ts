@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
+type ShortcutQA = { __shortcutQA: { conflict: (value: boolean) => void; status: (value: string) => void; read: () => { control: boolean; alt: boolean; shift: boolean; key: string } } };
 test.use({ timezoneId: 'UTC' });
 
 test.beforeEach(async ({ page }) => {
   // This isolated browser bridge models DTO and conflict behavior; production imports none of it.
   await page.addInitScript(() => {
     let theme = sessionStorage.getItem('synthetic-theme') ?? 'dark', rejectTheme = false;
+    let shortcut = { control: true, alt: true, shift: true, key: 'T' }, shortcutStatus = 'ready', shortcutConflict = false;
     let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
@@ -23,6 +25,14 @@ test.beforeEach(async ({ page }) => {
         if (command === 'plugin:event|unlisten') return null;
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
+        if (command === 'get_recovery_shortcut') return response({ shortcut, registration: shortcutStatus, settings_revision: revision });
+        if (command === 'set_recovery_shortcut') {
+          const r = args.request as { shortcut: typeof shortcut; expected_settings_revision: string };
+          if (r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
+          if (shortcutConflict) throw { code: 'SHORTCUT_CONFLICT' };
+          if (JSON.stringify(r.shortcut) !== JSON.stringify(shortcut)) { shortcut = r.shortcut; revision = String(BigInt(revision) + 1n); notify(); }
+          shortcutStatus = 'ready'; return response({ shortcut, registration: shortcutStatus, settings_revision: revision });
+        }
         if (command === 'get_display_settings') { if (failRead) throw { code: 'UNSUPPORTED_SETTINGS_VERSION' }; return response(snapshot()); }
         if (command === 'set_display_theme') {
           const r = args.request as { theme: string; expected_settings_revision: string };
@@ -56,7 +66,7 @@ test.beforeEach(async ({ page }) => {
           return response(command === 'get_grouped_usage' ? { ...common, dimension: r.dimension, groups: [], total_group_count: '0', truncated: false } : { ...common, series: [], heatmap: [], recent_sessions: [] });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
+      } }, __shortcutQA: { conflict: (value: boolean) => { shortcutConflict = value; }, status: (value: string) => { shortcutStatus = value; notify(); }, read: () => shortcut }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
   });
 });
 type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { theme: 'dark', privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
@@ -66,16 +76,17 @@ test('saved timezone drives all pages, exact revisions and backend DST boundarie
   await page.goto('/'); await expect(page.locator('.filters')).toContainText('Asia/Shanghai');
   await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
   await page.getByLabel('统计时区').fill('America/New_York'); await page.getByRole('button', { name: '保存统计时区' }).click();
-  await expect(page.getByRole('status')).toContainText('已保存时区 America/New_York');
+  await expect(page.locator('.display-notice[role="status"]')).toContainText('已保存时区 America/New_York');
   await expect(page.getByText('当前配置版本 1 · 修订 9007199254740994')).toBeVisible();
   await page.screenshot({ path: 'test-results/display-timezone-1280.png', fullPage: true });
   await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(1);
   const call = await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1));
   expect(call?.request).toMatchObject({ filter: { range: { start_ms: Date.parse('2026-11-01T04:00:00Z'), end_ms: Date.parse('2026-11-02T05:00:00Z'), timezone: 'America/New_York' } } });
   await page.getByLabel('日期范围').selectOption('last7'); await expect(page.locator('.filters')).toContainText('America/New_York');
   await expect.poll(async () => page.evaluate(() => { const r = (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1)?.request as { filter: { range: { start_ms: number } } } | undefined; return r?.filter.range.start_ms; })).toBe(Date.parse('2026-10-26T04:00:00Z'));
   await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
-  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(1);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(2);
   await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/display-timezone-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -166,4 +177,43 @@ test('theme save failure preserves confirmed theme and stored configuration', as
   await page.getByLabel('应用主题').selectOption('light'); await expect(page.getByRole('alert')).toContainText('已发生变化');
   await expect(page.getByLabel('应用主题')).toHaveValue('dark'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).settings_revision).toBe('9007199254740993');
+});
+
+test('recovery shortcut uses exact CAS, native conflict keeps the old key and settings refresh retains a draft', async ({ page }) => {
+  await page.goto('/'); await openSettings(page);
+  const panel = page.getByRole('region', { name: '恢复快捷键设置' });
+  await expect(panel).toContainText('恢复快捷键已注册');
+  await page.getByLabel('恢复快捷键按键').selectOption('U');
+  await page.getByRole('button', { name: '保存恢复快捷键' }).click();
+  expect(await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.read())).toEqual({ control: true, alt: true, shift: true, key: 'U' });
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_recovery_shortcut').at(-1)?.request)).toEqual({ shortcut: { control: true, alt: true, shift: true, key: 'U' }, expected_settings_revision: '9007199254740993' });
+  await page.getByLabel('恢复快捷键按键').selectOption('V');
+  await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.conflict(true));
+  await page.getByRole('button', { name: '保存恢复快捷键' }).click();
+  await expect(panel.getByRole('alert')).toContainText('其他应用占用');
+  await expect(page.getByLabel('恢复快捷键按键')).toHaveValue('V');
+  expect((await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.read())).key).toBe('U');
+  await page.evaluate(() => { (window as unknown as ShortcutQA).__shortcutQA.conflict(false); (window as unknown as QA).__calendarQA.externalChange(); });
+  await page.getByRole('button', { name: '刷新快捷键状态' }).click();
+  await page.getByRole('button', { name: '保存恢复快捷键' }).click();
+  await expect(panel.getByRole('alert')).toContainText('已发生变化');
+  await expect(page.getByLabel('恢复快捷键按键')).toHaveValue('V');
+  await page.getByRole('button', { name: '重置快捷键草稿' }).click();
+  await expect(page.getByLabel('恢复快捷键按键')).toHaveValue('U');
+  await page.setViewportSize({ width: 960, height: 680 });
+  await panel.scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test-results/recovery-shortcut-settings-960.png' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('recovery registration can retry a conflict without changing its desired key and invalid modifier issues no IPC', async ({ page }) => {
+  await page.goto('/'); await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.status('conflict')); await openSettings(page);
+  await expect(page.getByRole('button', { name: '重新注册恢复快捷键' })).toBeEnabled();
+  await page.getByRole('button', { name: '重新注册恢复快捷键' }).click();
+  await expect(page.getByRole('region', { name: '恢复快捷键设置' })).toContainText('恢复快捷键已注册');
+  const before = await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_recovery_shortcut').length);
+  await page.getByLabel('恢复快捷键 Ctrl').uncheck(); await page.getByLabel('恢复快捷键 Alt').uncheck();
+  await page.getByRole('button', { name: '保存恢复快捷键' }).click();
+  await expect(page.getByRole('region', { name: '恢复快捷键设置' }).getByRole('alert')).toContainText('至少需要 Ctrl 或 Alt');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_recovery_shortcut').length)).toBe(before);
+  expect(await page.getByLabel('恢复快捷键按键').locator('option').allTextContents()).not.toContain('F12');
 });

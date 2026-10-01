@@ -4,6 +4,7 @@ import type { AppTheme, DisplaySettingsSnapshot } from '../shared/generated/cont
 import { runtimeError, setDisplayPrivacy, setDisplayTheme, setDisplayTimezone } from '../shared/runtime';
 import './display-settings.css';
 import { displayPolicy } from '../shared/display-policy';
+import { RecoveryShortcutPanel } from './RecoveryShortcutPanel';
 
 export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChanged }: { snapshot: DisplaySettingsSnapshot | null; loadingError: string | null; onRefresh: () => void; onChanged: (value: DisplaySettingsSnapshot) => void }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
@@ -49,6 +50,6 @@ export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChan
       <div className="display-setting-actions"><button type="submit" className="primary" disabled={busy || !draft || !snapshot}>{busy ? '正在保存…' : '保存统计时区'}</button><button type="button" disabled={busy || !draft || !snapshot} onClick={() => { setDraft(null); setError(null); setNotice(null); }}>重置为当前值</button></div>
       <p className="chart-caption">{snapshot ? `当前配置版本 ${snapshot.settings_version} · 修订 ${snapshot.settings_revision}` : '正在读取显示设置…'}{draft ? `；本次编辑基于修订 ${draft.revision}，刷新不会覆盖未保存输入。` : ''}</p>
     </form>
-    <p className="muted">小窗、位置与快捷键控制仍在实施；既有设置保持保留。</p>
+    <RecoveryShortcutPanel />
   </section>;
 }

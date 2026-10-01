@@ -464,6 +464,8 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     }
     super::mini_smoke::verify(app)?;
     #[cfg(windows)]
+    super::shortcuts_smoke::verify(app)?;
+    #[cfg(windows)]
     {
         use windows_sys::Win32::{
             Foundation::HWND,

@@ -21,6 +21,7 @@ pub mod scheduling;
 pub mod selections;
 pub mod sequence;
 pub mod settings;
+pub mod shortcuts;
 pub mod sources;
 
 #[derive(

@@ -38,6 +38,14 @@ export type MiniWindowState = { expanded: boolean, pinned: boolean, };
 
 export type MiniWindowAction = { "kind": "read", } | { "kind": "set_expanded", expanded: boolean, } | { "kind": "set_pinned", pinned: boolean, } | { "kind": "drag", } | { "kind": "hide", };
 
+export type RecoveryShortcut = { control: boolean, alt: boolean, shift: boolean, key: string, };
+
+export type ShortcutRegistration = "ready" | "conflict" | "unsupported" | "unavailable";
+
+export type RecoveryShortcutSnapshot = { shortcut: RecoveryShortcut, registration: ShortcutRegistration, settings_revision: DecimalInt, };
+
+export type RecoveryShortcutMutation = { shortcut: RecoveryShortcut, expected_settings_revision: DecimalInt, };
+
 export type MiniStatsRequest = { request_id: string, mini_scope: MiniScope, calendar: CalendarSelectionResult, };
 
 export type MiniStatsOpenRequest = { expected_settings_revision: DecimalInt, };
@@ -50,7 +58,7 @@ export type MiniSessionOption = { session_key: string, display_name: string, };
 
 export type MiniSessionsPage = { meta: SnapshotMeta, options: Array<MiniSessionOption>, next_cursor: string | null, };
 
-export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
+export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE" | "SHORTCUT_CONFLICT" | "SHORTCUT_UNAVAILABLE";
 
 export type ErrorDetail = string | number | boolean | null;
 

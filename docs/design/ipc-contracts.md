@@ -468,3 +468,11 @@ query_mini_sessions 允许 main / mini，接收 MiniSessionsRequest { query: { s
 新建窗口从已保存偏好恢复两组固定 DIP 与置顶，按目标屏幕当前工作区 / 缩放换算位置；找不到原 monitor 时选择主屏，夹紧相对偏移。隐藏窗口的 Win32 中间客户区尺寸不作为新建位置计算依据；使用已确定的产品尺寸。已显示窗口展开后按实际区域校正。Moved / ScaleFactorChanged / WM_DISPLAYCHANGE 只调度一个合并 worker，250 ms 静止后采集当前位置，避免每个鼠标事件创建线程；新建 / 展开 / 隐藏 / 关闭隐藏 / 退出前同时保存最后位置。原生尺寸 / 置顶操作后 Writer 失败则撤销该操作，返回原错误，保持已确认状态。
 
 位置 / monitor 标识不是前端 DTO，不开放任意路径、窗口标签或 native handle。实际多屏拖动 / 断屏 / 跨屏 DPI、完整进程冷启动和主窗口位置恢复仍需后续验收；自动布局预期、实际 WebView 重建与 SQLite 重开证据在交付记录分别列出。透明度、恢复快捷键、穿透尚未开放。
+
+### 2.21 已实现的恢复快捷键
+
+RecoveryShortcut 包含 control / alt / shift 和 canonical key（A–Z、0–9、F1–F11），至少有 Ctrl 或 Alt；默认 Ctrl+Alt+Shift+T。Windows 键组合、F12、非规范 / 任意数值键拒绝，遵循 [RegisterHotKey 官方规则](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)。RecoveryShortcutMutation 带精确 expected_settings_revision，Writer 单字段更新 recovery_shortcut 与全局修订，保留其他配置；同值不写，但可明确重试原生注册。
+
+get_recovery_shortcut 允许 main / mini；set_recovery_shortcut 只允许 main。返回 RecoveryShortcutSnapshot { shortcut, registration, settings_revision }；registration 为 ready / conflict / unsupported / unavailable，持久配置不等于注册成功。DTO 只有控制配置与状态，使用普通 Response，无账户 / 路径 / 消费数据。未知或不可读配置报错，不伪造默认已注册。
+
+原生注册在主 HWND 所属线程执行，使用两个自有 ID 与 MOD_NOREPEAT。更换先在空闲 ID 注册新组合，Writer 成功后释放旧 ID；冲突不写，Writer 失败释放候选、保留旧注册。启动读取保存键，冲突不终止应用；WM_HOTKEY 按自有 ID / 实际修饰键 / key 校验后异步显示小窗并解除鼠标忽略，不在 UI 消息回调创建 WebView。WM_NCDESTROY 注销自有 ID。设置页显示实际状态、修改 / 重试、CAS 冲突保留草稿与明确重置；订阅卸载与 StrictMode 清理已验证。透明度和正式穿透入口继续实施，不能把原生 probe 的鼠标忽略注入当作已交付穿透功能。

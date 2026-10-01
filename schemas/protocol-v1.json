@@ -35,7 +35,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },
@@ -137,7 +139,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },
@@ -301,7 +305,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },
@@ -2326,7 +2332,9 @@
         "NUMERIC_OVERFLOW",
         "PERMISSION_DENIED",
         "INVALID_USAGE",
-        "WINDOW_UNAVAILABLE"
+        "WINDOW_UNAVAILABLE",
+        "SHORTCUT_CONFLICT",
+        "SHORTCUT_UNAVAILABLE"
       ],
       "title": "ErrorCode",
       "type": "string"
@@ -3684,7 +3692,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },
@@ -7826,6 +7836,152 @@
       "title": "RecentSession",
       "type": "object"
     },
+    "RecoveryShortcut": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "alt": {
+          "type": "boolean"
+        },
+        "control": {
+          "type": "boolean"
+        },
+        "key": {
+          "maxLength": 3,
+          "minLength": 1,
+          "pattern": "^(?:[A-Z0-9]|F(?:[1-9]|10|11))$",
+          "type": "string"
+        },
+        "shift": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "control",
+        "alt",
+        "shift",
+        "key"
+      ],
+      "title": "RecoveryShortcut",
+      "type": "object"
+    },
+    "RecoveryShortcutMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "RecoveryShortcut": {
+          "additionalProperties": false,
+          "properties": {
+            "alt": {
+              "type": "boolean"
+            },
+            "control": {
+              "type": "boolean"
+            },
+            "key": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^(?:[A-Z0-9]|F(?:[1-9]|10|11))$",
+              "type": "string"
+            },
+            "shift": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "control",
+            "alt",
+            "shift",
+            "key"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "shortcut": {
+          "$ref": "#/$defs/RecoveryShortcut"
+        }
+      },
+      "required": [
+        "shortcut",
+        "expected_settings_revision"
+      ],
+      "title": "RecoveryShortcutMutation",
+      "type": "object"
+    },
+    "RecoveryShortcutSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "RecoveryShortcut": {
+          "additionalProperties": false,
+          "properties": {
+            "alt": {
+              "type": "boolean"
+            },
+            "control": {
+              "type": "boolean"
+            },
+            "key": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^(?:[A-Z0-9]|F(?:[1-9]|10|11))$",
+              "type": "string"
+            },
+            "shift": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "control",
+            "alt",
+            "shift",
+            "key"
+          ],
+          "type": "object"
+        },
+        "ShortcutRegistration": {
+          "enum": [
+            "ready",
+            "conflict",
+            "unsupported",
+            "unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "registration": {
+          "$ref": "#/$defs/ShortcutRegistration"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "shortcut": {
+          "$ref": "#/$defs/RecoveryShortcut"
+        }
+      },
+      "required": [
+        "shortcut",
+        "registration",
+        "settings_revision"
+      ],
+      "title": "RecoveryShortcutSnapshot",
+      "type": "object"
+    },
     "ScopeStart": {
       "$defs": {
         "EpochMs": {
@@ -10148,6 +10304,17 @@
       "title": "SettingsChanged",
       "type": "object"
     },
+    "ShortcutRegistration": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "ready",
+        "conflict",
+        "unsupported",
+        "unavailable"
+      ],
+      "title": "ShortcutRegistration",
+      "type": "string"
+    },
     "SnapshotMeta": {
       "$defs": {
         "DecimalInt": {
@@ -10392,7 +10559,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },
@@ -10566,7 +10735,9 @@
             "NUMERIC_OVERFLOW",
             "PERMISSION_DENIED",
             "INVALID_USAGE",
-            "WINDOW_UNAVAILABLE"
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
           ],
           "type": "string"
         },

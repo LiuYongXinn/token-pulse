@@ -15,7 +15,7 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
+const plainCommands = new Set(['get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
@@ -62,6 +62,8 @@ export async function onDisplayPolicyChanged(): Promise<() => void> {
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
 export function getDisplaySettings(): Promise<DisplaySettingsSnapshot> { return request('get_display_settings'); }
+export function getRecoveryShortcut(): Promise<import('./generated/contracts').RecoveryShortcutSnapshot> { return request('get_recovery_shortcut'); }
+export function setRecoveryShortcut(mutation: import('./generated/contracts').RecoveryShortcutMutation): Promise<import('./generated/contracts').RecoveryShortcutSnapshot> { return request('set_recovery_shortcut', { request: mutation }); }
 export function setDisplayTheme(mutation: DisplayThemeMutation): Promise<DisplaySettingsSnapshot> { return request('set_display_theme', { request: mutation }); }
 export function setDisplayTimezone(mutation: TimezoneMutation): Promise<DisplaySettingsSnapshot> { return request('set_display_timezone', { request: mutation }); }
 export async function onSettingsChanged(refresh: () => void): Promise<() => void> {
@@ -100,7 +102,7 @@ export function runtimeError(error: unknown): string {
     const code = String(error.code);
     if (code === 'SNAPSHOT_EXPIRED') return '查询快照已过期，请重新查询。';
     if (code === 'CURSOR_INVALID') return '分页条件或游标已失效，请重新查询。';
-    const descriptions: Record<string, string> = { UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '目录选择已过期，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
+    const descriptions: Record<string, string> = { SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '目录选择已过期，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
     return descriptions[code] ?? `操作失败（${code}），请查看采集诊断。`;
   }
   return '桌面服务未能完成操作，请重试。';

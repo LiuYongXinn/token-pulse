@@ -6,7 +6,7 @@ use windows_sys::Win32::{
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
             PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, WM_DISPLAYCHANGE,
-            WM_NCDESTROY, WM_POWERBROADCAST,
+            WM_HOTKEY, WM_NCDESTROY, WM_POWERBROADCAST,
         },
     },
 };
@@ -44,6 +44,10 @@ unsafe extern "system" fn power_message(
     _id: usize,
     data: usize,
 ) -> LRESULT {
+    if message == WM_HOTKEY {
+        let app = unsafe { &*(data as *const tauri::AppHandle) };
+        super::shortcuts::dispatch(app, wparam, lparam);
+    }
     if message == WM_DISPLAYCHANGE {
         let app = unsafe { &*(data as *const tauri::AppHandle) };
         super::mini_window::schedule_placement(app);
@@ -62,6 +66,11 @@ unsafe extern "system" fn power_message(
         }
     }
     if message == WM_NCDESTROY {
+        for id in super::shortcuts::SLOTS {
+            unsafe {
+                windows_sys::Win32::UI::Input::KeyboardAndMouse::UnregisterHotKey(hwnd, id);
+            }
+        }
         unsafe {
             RemoveWindowSubclass(hwnd, Some(power_message), SUBCLASS_ID);
             drop(Box::from_raw(data as *mut tauri::AppHandle));

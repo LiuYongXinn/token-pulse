@@ -37,6 +37,8 @@ pub enum ErrorCode {
     PermissionDenied,
     InvalidUsage,
     WindowUnavailable,
+    ShortcutConflict,
+    ShortcutUnavailable,
 }
 
 impl std::fmt::Display for ErrorCode {
