@@ -92,6 +92,10 @@ pub struct ReaderContext {
     pub metadata: EffectiveMetadata,
     #[serde(default)]
     pub oversized_line: Option<OversizedLineState>,
+    #[serde(default)]
+    pub independent_head_available: bool,
+    #[serde(default)]
+    pub requires_sequence_rebuild: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

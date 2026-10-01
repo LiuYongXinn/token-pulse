@@ -5,7 +5,7 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{File, Metadata},
+    fs::{File, Metadata, OpenOptions},
     io::{Read, Seek, SeekFrom},
     path::Path,
     time::SystemTime,
@@ -98,7 +98,7 @@ pub fn read_batch(
     {
         return Err(ReadError::InvalidLimits);
     }
-    let mut file = File::open(path).map_err(|_| ReadError::Io)?;
+    let mut file = open_read_only(path)?;
     let metadata = file.metadata().map_err(|_| ReadError::Io)?;
     let identity = file_identity(&file, &metadata)?;
     let upper = metadata.len();
@@ -237,7 +237,7 @@ pub fn read_batch(
         }
     }
     // A renamed/replaced path may leave our original handle valid; do not publish it as the new path.
-    let current = File::open(path).map_err(|_| ReadError::InvalidGeneration)?;
+    let current = open_read_only(path).map_err(|_| ReadError::InvalidGeneration)?;
     if file_identity(&current, &current.metadata().map_err(|_| ReadError::Io)?)? != identity {
         return Err(ReadError::InvalidGeneration);
     }
@@ -252,6 +252,38 @@ pub fn read_batch(
         oversized_line: skipping,
         has_more: position < upper,
     })
+}
+
+fn open_read_only(path: &Path) -> Result<File, ReadError> {
+    if std::fs::symlink_metadata(path)
+        .map_err(|_| ReadError::Io)?
+        .file_type()
+        .is_symlink()
+    {
+        return Err(ReadError::InvalidPath);
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path).map_err(|_| ReadError::Io)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if file
+            .metadata()
+            .map_err(|_| ReadError::Io)?
+            .file_attributes()
+            & 0x400
+            != 0
+        {
+            return Err(ReadError::InvalidPath);
+        }
+    }
+    Ok(file)
 }
 
 fn hash_range(file: &mut File, offset: u64, length: u64) -> Result<String, ReadError> {

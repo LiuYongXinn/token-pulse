@@ -4,6 +4,7 @@ use std::{io, path::Path};
 
 pub mod aggregate;
 pub mod batch;
+pub mod collection;
 mod database;
 mod migration;
 mod registration;
