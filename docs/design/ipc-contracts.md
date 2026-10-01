@@ -337,6 +337,7 @@ action: open_float | open_stats | open_taskbar_settings | set_privacy | disable_
 |SNAPSHOT_EXPIRED / CURSOR_INVALID|租约 / 游标无效|重新取第一页，说明列表已刷新|
 |REVISION_CONFLICT / STALE_CONFIRMATION|配置或删除范围已变化|重新读取差异，再评估操作|
 |REQUEST_KEY_CONFLICT|幂等 key 复用不同请求|拒绝操作，不启动第二任务|
+|PRICE_RULE_CONFLICT|同范围 / 同优先级规则有效时间重叠|保留旧规则，调整有效时间或优先级后重试|
 |JOB_CANCELLED / JOB_INTERRUPTED|安全取消 / 重启中断|展示实际状态，提供可支持的恢复|
 |QUOTA_DISCONNECTED / QUOTA_UNSUPPORTED|额度连接缺失 / 不支持|未知剩余，提供连接或能力说明|
 |QUOTA_TIMEOUT / QUOTA_AUTH_REQUIRED|额度服务失败|保留同账户旧快照 / 引导授权|

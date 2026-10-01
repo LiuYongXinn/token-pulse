@@ -22,6 +22,7 @@ pub enum ErrorCode {
     RevisionConflict,
     StaleConfirmation,
     RequestKeyConflict,
+    PriceRuleConflict,
     JobCancelled,
     JobInterrupted,
     QuotaDisconnected,

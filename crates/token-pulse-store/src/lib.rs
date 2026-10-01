@@ -9,6 +9,7 @@ pub mod collection;
 mod database;
 pub mod jobs;
 mod migration;
+pub mod pricing;
 mod proof_jobs;
 pub mod query;
 pub mod rebuild;

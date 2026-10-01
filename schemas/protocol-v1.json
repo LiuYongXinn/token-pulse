@@ -21,6 +21,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",
@@ -121,6 +122,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",
@@ -262,6 +264,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",
@@ -714,6 +717,7 @@
         "REVISION_CONFLICT",
         "STALE_CONFIRMATION",
         "REQUEST_KEY_CONFLICT",
+        "PRICE_RULE_CONFLICT",
         "JOB_CANCELLED",
         "JOB_INTERRUPTED",
         "QUOTA_DISCONNECTED",
@@ -992,6 +996,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",
@@ -2371,6 +2376,8 @@
         },
         "priority": {
           "format": "int32",
+          "maximum": 10000,
+          "minimum": 0,
           "type": "integer"
         },
         "provider": {
@@ -2415,6 +2422,431 @@
         "created_at_ms"
       ],
       "title": "PriceRule",
+      "type": "object"
+    },
+    "PriceRuleDraft": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cached_rate_atoms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "effective_from_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "effective_to_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_rate_atoms": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "model_exact": {
+          "type": "string"
+        },
+        "origin_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_rate_atoms": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "priority": {
+          "format": "int32",
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "model_exact",
+        "source_id",
+        "currency",
+        "effective_from_ms",
+        "effective_to_ms",
+        "priority",
+        "input_rate_atoms",
+        "cached_rate_atoms",
+        "output_rate_atoms",
+        "origin_reference"
+      ],
+      "title": "PriceRuleDraft",
+      "type": "object"
+    },
+    "PriceRuleMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "PriceRuleDraft": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_rate_atoms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "currency": {
+              "type": "string"
+            },
+            "effective_from_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "effective_to_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "input_rate_atoms": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "model_exact": {
+              "type": "string"
+            },
+            "origin_reference": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "output_rate_atoms": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "priority": {
+              "format": "int32",
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "provider",
+            "model_exact",
+            "source_id",
+            "currency",
+            "effective_from_ms",
+            "effective_to_ms",
+            "priority",
+            "input_rate_atoms",
+            "cached_rate_atoms",
+            "output_rate_atoms",
+            "origin_reference"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/PriceRuleDraft"
+            },
+            "kind": {
+              "const": "create",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/PriceRuleDraft"
+            },
+            "kind": {
+              "const": "replace",
+              "type": "string"
+            },
+            "rule_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "rule_id",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "retire",
+              "type": "string"
+            },
+            "rule_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "rule_id"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PriceRuleMutation"
+    },
+    "PriceRulesSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ModelAlias": {
+          "additionalProperties": false,
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "alias_id": {
+              "type": "string"
+            },
+            "canonical_model": {
+              "type": "string"
+            },
+            "introduced_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "retired_revision": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "alias_id",
+            "provider",
+            "alias",
+            "canonical_model",
+            "introduced_revision",
+            "retired_revision"
+          ],
+          "type": "object"
+        },
+        "PriceOrigin": {
+          "enum": [
+            "custom",
+            "offline"
+          ],
+          "type": "string"
+        },
+        "PriceRule": {
+          "additionalProperties": false,
+          "properties": {
+            "cached_rate_atoms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "created_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "effective_from_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "effective_to_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "input_rate_atoms": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "introduced_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "model_exact": {
+              "type": "string"
+            },
+            "origin": {
+              "$ref": "#/$defs/PriceOrigin"
+            },
+            "origin_reference": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "output_rate_atoms": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "priority": {
+              "format": "int32",
+              "maximum": 10000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "retired_revision": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rule_id": {
+              "type": "string"
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "rule_id",
+            "introduced_revision",
+            "retired_revision",
+            "provider",
+            "model_exact",
+            "source_id",
+            "currency",
+            "effective_from_ms",
+            "effective_to_ms",
+            "priority",
+            "input_rate_atoms",
+            "cached_rate_atoms",
+            "output_rate_atoms",
+            "origin",
+            "origin_reference",
+            "created_at_ms"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "items": {
+            "$ref": "#/$defs/ModelAlias"
+          },
+          "type": "array"
+        },
+        "price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/PriceRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "price_revision",
+        "rules",
+        "aliases"
+      ],
+      "title": "PriceRulesSnapshot",
       "type": "object"
     },
     "PricingSummary": {
@@ -3098,6 +3530,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",
@@ -3270,6 +3703,7 @@
             "REVISION_CONFLICT",
             "STALE_CONFIRMATION",
             "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
             "JOB_CANCELLED",
             "JOB_INTERRUPTED",
             "QUOTA_DISCONNECTED",

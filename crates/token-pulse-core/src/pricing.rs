@@ -29,6 +29,7 @@ pub struct PriceRule {
     pub currency: String,
     pub effective_from_ms: EpochMs,
     pub effective_to_ms: Option<EpochMs>,
+    #[schemars(range(min = 0, max = 10000))]
     pub priority: i32,
     pub input_rate_atoms: DecimalInt,
     pub cached_rate_atoms: Option<DecimalInt>,
@@ -47,6 +48,76 @@ pub struct ModelAlias {
     pub canonical_model: String,
     pub introduced_revision: DecimalInt,
     pub retired_revision: Option<DecimalInt>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct PriceRuleDraft {
+    pub provider: String,
+    pub model_exact: String,
+    pub source_id: Option<String>,
+    pub currency: String,
+    pub effective_from_ms: EpochMs,
+    pub effective_to_ms: Option<EpochMs>,
+    #[schemars(range(min = 0, max = 10000))]
+    pub priority: i32,
+    pub input_rate_atoms: DecimalInt,
+    pub cached_rate_atoms: Option<DecimalInt>,
+    pub output_rate_atoms: DecimalInt,
+    pub origin_reference: Option<String>,
+}
+impl PriceRuleDraft {
+    pub fn into_rule(self, id: String, revision: DecimalInt, at: EpochMs) -> PriceRule {
+        PriceRule {
+            rule_id: id,
+            introduced_revision: revision,
+            retired_revision: None,
+            provider: self.provider,
+            model_exact: self.model_exact,
+            source_id: self.source_id,
+            currency: self.currency,
+            effective_from_ms: self.effective_from_ms,
+            effective_to_ms: self.effective_to_ms,
+            priority: self.priority,
+            input_rate_atoms: self.input_rate_atoms,
+            cached_rate_atoms: self.cached_rate_atoms,
+            output_rate_atoms: self.output_rate_atoms,
+            origin: PriceOrigin::Custom,
+            origin_reference: self.origin_reference,
+            created_at_ms: at,
+        }
+    }
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        self.clone()
+            .into_rule(
+                "validation".into(),
+                DecimalInt::from_nonnegative(0)?,
+                EpochMs::new(0)?,
+            )
+            .validate()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PriceRuleMutation {
+    Create {
+        draft: PriceRuleDraft,
+    },
+    Replace {
+        rule_id: String,
+        draft: PriceRuleDraft,
+    },
+    Retire {
+        rule_id: String,
+    },
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct PriceRulesSnapshot {
+    pub price_revision: DecimalInt,
+    pub rules: Vec<PriceRule>,
+    pub aliases: Vec<ModelAlias>,
 }
 
 fn key(value: &str) -> bool {

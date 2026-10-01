@@ -8,7 +8,7 @@ export type EpochMs = number;
 
 export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
-export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
+export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
 
 export type ErrorDetail = string | number | boolean | null;
 
@@ -49,6 +49,12 @@ export type PricingSummary = { redacted: boolean, basis: PriceBasis, currencies:
 export type PriceOrigin = "custom" | "offline";
 
 export type PriceRule = { rule_id: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin: PriceOrigin, origin_reference: string | null, created_at_ms: EpochMs, };
+
+export type PriceRuleDraft = { provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin_reference: string | null, };
+
+export type PriceRuleMutation = { "kind": "create", draft: PriceRuleDraft, } | { "kind": "replace", rule_id: string, draft: PriceRuleDraft, } | { "kind": "retire", rule_id: string, };
+
+export type PriceRulesSnapshot = { price_revision: DecimalInt, rules: Array<PriceRule>, aliases: Array<ModelAlias>, };
 
 export type ModelAlias = { alias_id: string, provider: string, alias: string, canonical_model: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, };
 

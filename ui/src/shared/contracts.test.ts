@@ -32,3 +32,13 @@ test('price DTOs keep exact atoms and distinguish an unpriced outcome from zero 
   expect(outcome({ status: 'priced', rule_id: 'fixture', currency: 'USD', cost_atoms: 1, estimated_cost: 0.000000000000001 })).toBe(false);
   expect(outcome({ status: 'priced', rule_id: 'fixture', currency: 'USD', cost_atoms: '9007199254740993', estimated_cost: '9.007199254740993' })).toBe(true);
 });
+
+test('price writes cannot impersonate an offline rule or supply publication revisions', () => {
+  const mutation = ajv.compile(protocol.schemas.PriceRuleMutation);
+  const draft = { provider: 'fixture', model_exact: 'fixture', source_id: null, currency: 'USD', effective_from_ms: 0, effective_to_ms: null, priority: 0, input_rate_atoms: '1', cached_rate_atoms: null, output_rate_atoms: '2', origin_reference: null };
+  expect(mutation({ kind: 'create', draft })).toBe(true);
+  expect(mutation({ kind: 'create', draft: { ...draft, origin: 'offline' } })).toBe(false);
+  expect(mutation({ kind: 'create', draft: { ...draft, introduced_revision: '12' } })).toBe(false);
+  expect(mutation({ kind: 'create', draft: { ...draft, priority: -1 } })).toBe(false);
+  expect(mutation({ kind: 'retire', rule_id: 'fixture', draft })).toBe(false);
+});
