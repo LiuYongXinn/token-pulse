@@ -6,7 +6,7 @@ use windows_sys::Win32::{
     Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, GetLastError},
     UI::Input::KeyboardAndMouse::*,
 };
-struct ReservedKey {
+pub(super) struct ReservedKey {
     stop: Option<mpsc::Sender<()>>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -20,7 +20,7 @@ impl Drop for ReservedKey {
         }
     }
 }
-fn reserve(key: RecoveryShortcut) -> Result<ReservedKey, String> {
+pub(super) fn reserve(key: RecoveryShortcut) -> Result<ReservedKey, String> {
     let (ready, read) = mpsc::sync_channel(1);
     let (stop, wait) = mpsc::channel();
     let worker = thread::spawn(move || {
@@ -57,7 +57,7 @@ fn reserve(key: RecoveryShortcut) -> Result<ReservedKey, String> {
         worker: Some(worker),
     })
 }
-fn send_key(key: &RecoveryShortcut) -> Result<(), String> {
+pub(super) fn send_key(key: &RecoveryShortcut) -> Result<(), String> {
     let mut codes = Vec::new();
     if key.control {
         codes.push(VK_CONTROL);

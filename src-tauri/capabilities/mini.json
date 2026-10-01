@@ -17,6 +17,7 @@
     "allow-set-display-privacy",
     "allow-mini-window-action",
     "allow-get-recovery-shortcut",
-    "allow-get-mini-opacity"
+    "allow-get-mini-opacity",
+    "allow-get-mini-passthrough"
   ]
 }

@@ -15,7 +15,7 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
+const plainCommands = new Set(['get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
@@ -63,6 +63,13 @@ export async function onDisplayPolicyChanged(): Promise<() => void> {
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
 export function getDisplaySettings(): Promise<DisplaySettingsSnapshot> { return request('get_display_settings'); }
 export function getMiniOpacity(): Promise<import('./generated/contracts').MiniOpacitySnapshot> { return request('get_mini_opacity'); }
+export function getMiniPassthrough(): Promise<import('./generated/contracts').MiniPassthroughSnapshot> { return request('get_mini_passthrough'); }
+export function setMiniPassthrough(mutation: import('./generated/contracts').MiniPassthroughMutation): Promise<import('./generated/contracts').MiniPassthroughSnapshot> { return request('set_mini_passthrough', { request: mutation }); }
+export async function onMiniInteractionChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen('mini_interaction_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 export function setMiniOpacity(mutation: import('./generated/contracts').MiniOpacityMutation): Promise<import('./generated/contracts').MiniOpacitySnapshot> { return request('set_mini_opacity', { request: mutation }); }
 export function getRecoveryShortcut(): Promise<import('./generated/contracts').RecoveryShortcutSnapshot> { return request('get_recovery_shortcut'); }
 export function setRecoveryShortcut(mutation: import('./generated/contracts').RecoveryShortcutMutation): Promise<import('./generated/contracts').RecoveryShortcutSnapshot> { return request('set_recovery_shortcut', { request: mutation }); }

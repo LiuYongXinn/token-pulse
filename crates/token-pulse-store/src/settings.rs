@@ -1,5 +1,6 @@
 //! A single Writer publishes configuration and its revision atomically.
 mod opacity;
+mod passthrough;
 mod shortcuts;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
@@ -129,7 +130,7 @@ impl Database {
             let (_,mut payload)=read_stored(&tx,revision)?;
             let mut value:MiniWindowPreferences=payload.get("mini_window").map(|v|serde_json::from_value(v.clone())).transpose()?.unwrap_or_default();
             let original=value.clone();
-            match change {MiniPreferenceChange::Expanded(expanded)=>value.interaction.expanded=expanded,MiniPreferenceChange::Pinned(pinned)=>value.interaction.pinned=pinned,MiniPreferenceChange::Placement(placement)=>value.placement=Some(placement)}
+            match change {MiniPreferenceChange::Passthrough(enabled)=>value.passthrough=enabled,MiniPreferenceChange::Expanded(expanded)=>value.interaction.expanded=expanded,MiniPreferenceChange::Pinned(pinned)=>value.interaction.pinned=pinned,MiniPreferenceChange::Placement(placement)=>value.placement=Some(placement)}
             if value==original {tx.commit()?;return Ok((DecimalInt::from_nonnegative(revision.into())?,false));}
             let next=revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
             payload.insert("mini_window".into(),serde_json::to_value(value)?);

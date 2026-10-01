@@ -14,7 +14,9 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
         .lock()
         .map_err(|_| "WINDOW_STATE_UNAVAILABLE")?;
     let window = if let Some(window) = app.get_webview_window("mini") {
-        fit_current(&window)?;
+        if fit_current(&window).is_err() {
+            eprintln!("MINI_PLACEMENT_UNAVAILABLE");
+        }
         window
     } else {
         let state = app.state::<super::RuntimeState>();
@@ -65,20 +67,11 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
         }
         window
     };
-    // Tray entry restores interaction even if a future integration has hidden/disabled the surface.
-    window
-        .set_ignore_cursor_events(false)
-        .map_err(|e| e.to_string())?;
-    // Tauri's cursor-ignore reset changes WS_EX_LAYERED. Reapply the saved native alpha.
-    let opacity = runtime
-        .database
-        .as_ref()
-        .map_err(|e| e.code.to_string())?
-        .mini_window_preferences()
-        .map_err(|e| e.code.to_string())?
-        .opacity_percent;
-    super::mini_opacity::apply(&window, opacity).map_err(|e| e.to_string())?;
-    save_current_placement(&window).map_err(|e| e.to_string())?;
+    // Explicit show, tray and recovery key all restore interaction, including when saving fails.
+    super::mini_passthrough::recover(&window).map_err(|e| e.to_string())?;
+    if save_current_placement(&window).is_err() {
+        eprintln!("MINI_PLACEMENT_SAVE_FAILED");
+    }
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())
 }

@@ -337,7 +337,7 @@ fn verify_scope_editor(
         mini,
         r#"
       document.querySelector('button[aria-label="展开小窗"]').click();
-      await wait(()=>document.querySelector('button[aria-label="选择小窗会话与起点"]'));
+      await wait(()=>document.querySelector('button[aria-label="选择小窗会话与起点"]:not(:disabled)'));
       document.querySelector('button[aria-label="选择小窗会话与起点"]').click();
       await wait(()=>document.querySelector('.mini-options button'));
       const option=[...document.querySelectorAll('.mini-options button')].find(b=>b.textContent.includes('native-probe-context'));

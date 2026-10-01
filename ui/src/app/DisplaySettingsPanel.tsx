@@ -6,6 +6,7 @@ import './display-settings.css';
 import { displayPolicy } from '../shared/display-policy';
 import { RecoveryShortcutPanel } from './RecoveryShortcutPanel';
 import { MiniOpacityPanel } from './MiniOpacityPanel';
+import { MiniPassthroughPanel } from './MiniPassthroughPanel';
 
 export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChanged }: { snapshot: DisplaySettingsSnapshot | null; loadingError: string | null; onRefresh: () => void; onChanged: (value: DisplaySettingsSnapshot) => void }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
@@ -53,5 +54,6 @@ export function DisplaySettingsPanel({ snapshot, loadingError, onRefresh, onChan
     </form>
     <RecoveryShortcutPanel />
     <MiniOpacityPanel revision={snapshot?.settings_revision ?? null} />
+    <MiniPassthroughPanel revision={snapshot?.settings_revision ?? null} />
   </section>;
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-mini-passthrough"
+description = "Enables the get_mini_passthrough command without any pre-configured scope."
+commands.allow = ["get_mini_passthrough"]
+
+[[permission]]
+identifier = "deny-get-mini-passthrough"
+description = "Denies the get_mini_passthrough command without any pre-configured scope."
+commands.deny = ["get_mini_passthrough"]

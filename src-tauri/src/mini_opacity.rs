@@ -38,7 +38,7 @@ unsafe extern "system" fn retain_layered_style(
 }
 
 #[cfg(windows)]
-fn apply_owned(window: &WebviewWindow, percent: u8) -> Result<(), ErrorCode> {
+pub(super) fn apply_owned(window: &WebviewWindow, percent: u8) -> Result<(), ErrorCode> {
     use windows_sys::Win32::{
         Foundation::{GetLastError, SetLastError},
         UI::Shell::{GetWindowSubclass, RemoveWindowSubclass, SetWindowSubclass},
@@ -92,7 +92,7 @@ fn apply_owned(window: &WebviewWindow, percent: u8) -> Result<(), ErrorCode> {
     Ok(())
 }
 #[cfg(not(windows))]
-fn apply_owned(_window: &WebviewWindow, percent: u8) -> Result<(), ErrorCode> {
+pub(super) fn apply_owned(_window: &WebviewWindow, percent: u8) -> Result<(), ErrorCode> {
     if percent == 100 {
         Ok(())
     } else {

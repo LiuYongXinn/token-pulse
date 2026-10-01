@@ -12,7 +12,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Native window interaction state. Cursor pass-through is not available before recovery is implemented.
+/// Geometry and pin state. Cursor pass-through has a separate recovery-bound contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct MiniWindowState {

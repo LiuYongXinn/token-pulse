@@ -3,6 +3,8 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
             "get_mini_opacity",
+            "get_mini_passthrough",
+            "set_mini_passthrough",
             "set_mini_opacity",
             "get_recovery_shortcut",
             "set_recovery_shortcut",

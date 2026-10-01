@@ -4146,6 +4146,150 @@
       "title": "MiniOpacitySnapshot",
       "type": "object"
     },
+    "MiniPassthroughMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "RecoveryShortcut": {
+          "additionalProperties": false,
+          "properties": {
+            "alt": {
+              "type": "boolean"
+            },
+            "control": {
+              "type": "boolean"
+            },
+            "key": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^(?:[A-Z0-9]|F(?:[1-9]|10|11))$",
+              "type": "string"
+            },
+            "shift": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "control",
+            "alt",
+            "shift",
+            "key"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "acknowledged_recovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecoveryShortcut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "enabled",
+        "acknowledged_recovery",
+        "expected_settings_revision"
+      ],
+      "title": "MiniPassthroughMutation",
+      "type": "object"
+    },
+    "MiniPassthroughSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "RecoveryShortcut": {
+          "additionalProperties": false,
+          "properties": {
+            "alt": {
+              "type": "boolean"
+            },
+            "control": {
+              "type": "boolean"
+            },
+            "key": {
+              "maxLength": 3,
+              "minLength": 1,
+              "pattern": "^(?:[A-Z0-9]|F(?:[1-9]|10|11))$",
+              "type": "string"
+            },
+            "shift": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "control",
+            "alt",
+            "shift",
+            "key"
+          ],
+          "type": "object"
+        },
+        "ShortcutRegistration": {
+          "enum": [
+            "ready",
+            "conflict",
+            "unsupported",
+            "unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "persisted_enabled": {
+          "type": "boolean"
+        },
+        "recovery_registration": {
+          "$ref": "#/$defs/ShortcutRegistration"
+        },
+        "recovery_shortcut": {
+          "$ref": "#/$defs/RecoveryShortcut"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "window_present": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "persisted_enabled",
+        "window_present",
+        "supported",
+        "recovery_shortcut",
+        "recovery_registration",
+        "settings_revision"
+      ],
+      "title": "MiniPassthroughSnapshot",
+      "type": "object"
+    },
     "MiniScope": {
       "$defs": {
         "EpochMs": {
@@ -6011,7 +6155,7 @@
     "MiniWindowState": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "Native window interaction state. Cursor pass-through is not available before recovery is implemented.",
+      "description": "Geometry and pin state. Cursor pass-through has a separate recovery-bound contract.",
       "properties": {
         "expanded": {
           "type": "boolean"

@@ -42,6 +42,10 @@ export type MiniOpacitySnapshot = { opacity_percent: number, supported: boolean,
 
 export type MiniOpacityMutation = { opacity_percent: number, expected_settings_revision: DecimalInt, };
 
+export type MiniPassthroughSnapshot = { enabled: boolean, persisted_enabled: boolean, window_present: boolean, supported: boolean, recovery_shortcut: RecoveryShortcut, recovery_registration: ShortcutRegistration, settings_revision: DecimalInt, };
+
+export type MiniPassthroughMutation = { enabled: boolean, acknowledged_recovery: RecoveryShortcut | null, expected_settings_revision: DecimalInt, };
+
 export type RecoveryShortcut = { control: boolean, alt: boolean, shift: boolean, key: string, };
 
 export type ShortcutRegistration = "ready" | "conflict" | "unsupported" | "unavailable";

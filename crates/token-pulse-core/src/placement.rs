@@ -29,6 +29,8 @@ pub struct MiniWindowPreferences {
     pub placement: Option<WindowPlacement>,
     #[serde(default = "crate::mini_opacity::default_opacity")]
     pub opacity_percent: u8,
+    #[serde(default)]
+    pub passthrough: bool,
 }
 impl Default for MiniWindowPreferences {
     fn default() -> Self {
@@ -36,6 +38,7 @@ impl Default for MiniWindowPreferences {
             interaction: Default::default(),
             placement: None,
             opacity_percent: 100,
+            passthrough: false,
         }
     }
 }
@@ -49,6 +52,7 @@ impl MiniWindowPreferences {
 }
 /// Internal native updates change one field and preserve the latest unrelated configuration.
 pub enum MiniPreferenceChange {
+    Passthrough(bool),
     Expanded(bool),
     Pinned(bool),
     Placement(WindowPlacement),

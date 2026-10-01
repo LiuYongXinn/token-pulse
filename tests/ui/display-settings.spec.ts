@@ -1,7 +1,45 @@
 import { expect, test } from '@playwright/test';
 type OpacityQA = { __opacityQA: { reject: (value: boolean) => void; unsupported: () => void; read: () => number } };
 type ShortcutQA = { __shortcutQA: { conflict: (value: boolean) => void; status: (value: string) => void; read: () => { control: boolean; alt: boolean; shift: boolean; key: string } } };
+type PassQA = { __passQA: { reject: (value: boolean) => void; mismatch: () => void; read: () => boolean; listeners: () => number } };
 test.use({ timezoneId: 'UTC' });
+
+test('passthrough needs the real window and explicit acknowledged recovery, uses exact revision and restores', async ({ page }) => {
+  await page.goto('/'); await openSettings(page);
+  const region = page.getByRole('region', { name: '鼠标穿透设置' });
+  await expect(region.getByRole('button', { name: '开启鼠标穿透' })).toBeDisabled();
+  await region.getByRole('button', { name: '显示小窗并恢复交互' }).click();
+  await expect(region.getByRole('checkbox')).toBeEnabled(); await region.getByRole('checkbox').check();
+  await region.getByRole('button', { name: '开启鼠标穿透' }).click(); await expect(region.getByRole('status')).toContainText('穿透已开启');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_mini_passthrough').at(-1)?.request)).toEqual({ enabled: true, acknowledged_recovery: { control: true, alt: true, shift: true, key: 'T' }, expected_settings_revision: '9007199254740993' });
+  await region.getByRole('button', { name: '显示小窗并恢复交互' }).click(); await expect(region.getByRole('status')).toContainText('穿透已关闭');
+  await page.getByRole('button', { name: '模型', exact: true }).click();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as PassQA).__passQA.listeners())).toBe(0);
+});
+
+test('unregistered recovery gates enable and revisions retain acknowledged draft on conflict', async ({ page }) => {
+  await page.goto('/'); await openSettings(page); const region = page.getByRole('region', { name: '鼠标穿透设置' });
+  await region.getByRole('button', { name: '显示小窗并恢复交互' }).click();
+  await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.status('conflict')); await region.getByRole('button', { name: '刷新穿透状态' }).click();
+  await expect(region.getByRole('checkbox')).toBeDisabled(); await expect(region.getByRole('button', { name: '开启鼠标穿透' })).toBeDisabled();
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_mini_passthrough'))).toEqual([]);
+  await page.evaluate(() => (window as unknown as ShortcutQA).__shortcutQA.status('ready')); await region.getByRole('button', { name: '刷新穿透状态' }).click();
+  await region.getByRole('checkbox').check(); await page.evaluate(() => (window as unknown as QA).__calendarQA.externalChange());
+  await region.getByRole('button', { name: '刷新穿透状态' }).click(); await region.getByRole('button', { name: '开启鼠标穿透' }).click();
+  await expect(region.getByRole('alert')).toContainText('已发生变化'); await expect(region.getByRole('checkbox')).toBeChecked();
+  expect(await page.evaluate(() => (window as unknown as PassQA).__passQA.read())).toBe(false);
+});
+
+test('failed recovery persistence exposes native off and pending saved state with an accessible retry', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 900 }); await page.goto('/'); await openSettings(page);
+  const region = page.getByRole('region', { name: '鼠标穿透设置' });
+  await page.evaluate(() => { (window as unknown as PassQA).__passQA.mismatch(); (window as unknown as PassQA).__passQA.reject(true); });
+  await region.getByRole('button', { name: '刷新穿透状态' }).click(); await expect(region.getByRole('status')).toContainText('保存状态尚未同步');
+  await region.getByRole('button', { name: '关闭鼠标穿透' }).click(); await expect(region.getByRole('alert')).toContainText('写入失败'); await expect(region.getByRole('status')).toContainText('穿透已关闭');
+  await page.evaluate(() => (window as unknown as PassQA).__passQA.reject(false)); await region.getByRole('button', { name: '关闭鼠标穿透' }).click();
+  await expect(region.getByRole('status')).not.toContainText('尚未同步'); await region.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/mini-passthrough-settings-960.png' }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 
 test('native opacity keeps exact revision and explicit drafts across conflict and writer rejection', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 900 }); await page.goto('/');
@@ -38,6 +76,7 @@ test.beforeEach(async ({ page }) => {
     let theme = sessionStorage.getItem('synthetic-theme') ?? 'dark', rejectTheme = false;
     let shortcut = { control: true, alt: true, shift: true, key: 'T' }, shortcutStatus = 'ready', shortcutConflict = false;
     let opacity = 100, opacitySupported = true, rejectOpacity = false;
+    let pass = false, persistedPass = false, miniPresent = false, rejectPass = false;
     let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
@@ -56,6 +95,17 @@ test.beforeEach(async ({ page }) => {
         if (command === 'plugin:event|unlisten') return null;
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
+        if (command === 'get_mini_passthrough') return response({ enabled: pass, persisted_enabled: persistedPass, window_present: miniPresent, supported: true, recovery_shortcut: shortcut, recovery_registration: shortcutStatus, settings_revision: revision });
+        if (command === 'perform_window_action') { miniPresent = true; pass = false; if (!rejectPass && persistedPass) { persistedPass = false; revision = String(BigInt(revision) + 1n); notify(); } for (const [id, listener] of listeners) if (listener.event === 'mini_interaction_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null }); return response(null); }
+        if (command === 'set_mini_passthrough') {
+          const r = args.request as { enabled: boolean; acknowledged_recovery: typeof shortcut | null; expected_settings_revision: string };
+          if (r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
+          if (r.enabled && (shortcutStatus !== 'ready' || !miniPresent || JSON.stringify(r.acknowledged_recovery) !== JSON.stringify(shortcut))) throw { code: 'SHORTCUT_UNAVAILABLE' };
+          if (!r.enabled) pass = false;
+          if (rejectPass) throw { code: 'DB_WRITE_FAILED' };
+          pass = r.enabled; if (persistedPass !== pass) { persistedPass = pass; revision = String(BigInt(revision) + 1n); notify(); }
+          return response({ enabled: pass, persisted_enabled: persistedPass, window_present: miniPresent, supported: true, recovery_shortcut: shortcut, recovery_registration: shortcutStatus, settings_revision: revision });
+        }
         if (command === 'get_mini_opacity') return response({ opacity_percent: opacity, supported: opacitySupported, settings_revision: revision });
         if (command === 'set_mini_opacity') {
           const r = args.request as { opacity_percent: number; expected_settings_revision: string };
@@ -106,7 +156,7 @@ test.beforeEach(async ({ page }) => {
           return response(command === 'get_grouped_usage' ? { ...common, dimension: r.dimension, groups: [], total_group_count: '0', truncated: false } : { ...common, series: [], heatmap: [], recent_sessions: [] });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __opacityQA: { reject: (value: boolean) => { rejectOpacity = value; }, unsupported: () => { opacitySupported = false; notify(); }, read: () => opacity }, __shortcutQA: { conflict: (value: boolean) => { shortcutConflict = value; }, status: (value: string) => { shortcutStatus = value; notify(); }, read: () => shortcut }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
+      } }, __passQA: { reject: (value: boolean) => { rejectPass = value; }, mismatch: () => { miniPresent = true; pass = false; persistedPass = true; notify(); }, read: () => pass, listeners: () => [...listeners.values()].filter(v => v.event === 'mini_interaction_changed').length }, __opacityQA: { reject: (value: boolean) => { rejectOpacity = value; }, unsupported: () => { opacitySupported = false; notify(); }, read: () => opacity }, __shortcutQA: { conflict: (value: boolean) => { shortcutConflict = value; }, status: (value: string) => { shortcutStatus = value; notify(); }, read: () => shortcut }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
   });
 });
 type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { theme: 'dark', privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };

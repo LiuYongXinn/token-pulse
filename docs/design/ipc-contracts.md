@@ -484,3 +484,15 @@ get_mini_opacity 允许 main / mini，返回 MiniOpacitySnapshot { opacity_perce
 内部 MiniWindowPreferences 增加可选兼容的 opacity_percent，只有旧配置缺少此字段才补 100；null、非整数、越界或未知字段拒绝。Writer 从最新配置窄更新透明度与全局 settings_revision，同事务提交，保留位置 / 置顶 / 展开 / 范围 / 主题 / 隐私 / 时区；同值不写，但仍校验 CAS。主设置页滑块与明确保存接实际 DTO，刷新不覆盖草稿，失败保留输入，明确重置使用最新确认值。
 
 Windows 使用 [SetLayeredWindowAttributes 的整窗 alpha](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setlayeredwindowattributes)，百分比四舍五入转换到 BYTE；全部 Win32 修改在 HWND 所属线程。应用创建锁序列化透明度修改与小窗显示；先应用、后 Writer CAS，提交失败恢复旧透明度。无窗口时保存偏好，下次创建应用。Tao 会在隐藏 / 显示 / 置顶等操作重建扩展样式，原生小窗 subclass 在 [WM_STYLECHANGING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-stylechanging) 保留自有 WS_EX_LAYERED，其他样式仍交给原窗口管理；WM_NCDESTROY 移除 subclass。恢复交互入口解除 cursor-ignore 后重新应用持久 alpha。此模块不开放正式穿透；其授权与恢复校验继续实施。
+
+### 2.23 已实现的受控鼠标穿透
+
+get_mini_passthrough 允许 main / mini，返回 MiniPassthroughSnapshot { enabled, persisted_enabled, window_present, supported, recovery_shortcut, recovery_registration, settings_revision }。enabled 从真实 HWND 读取，persisted_enabled 是当前设置偏好，两者分开：无窗口意味着原生穿透未生效；原生读取失败报错，不返回假状态。恢复键与偏好 / 修订在同一 SQLite 读事务获取，实际注册匹配由原生线程的 RecoveryRuntime 校验。此 DTO 为不含路径 / 账户 / 金额的普通控制响应。
+
+set_mini_passthrough 只允许 main，MiniPassthroughMutation { enabled, acknowledged_recovery, expected_settings_revision }。开启必须携带用户已明确确认的受限恢复键；关闭必须 acknowledged_recovery=null。后端重新验证全局修订、当前保存键和实际自有注册，未注册 / 冲突 / 不支持拒绝开启；不能只信前端 ready。未创建小窗时先通过正式显示动作创建，再确认开启。设置页说明鼠标将传给下方窗口，并展示实际恢复组合和托盘入口；确认绑定当时的 key / revision，刷新不重写，键变化要求重新确认。
+
+mini_window 偏好新增 passthrough，旧配置缺字段默认 false，null / 非布尔拒绝。Writer 只改此字段与全局修订，同事务 CAS，保留所有其他配置；同值仍检查修订。创建锁串行化显示、透明度和穿透，实际鼠标忽略 / alpha 操作在 HWND 所属线程执行；恢复键锁只在原生线程持有，不由等待该线程的 worker 持有。开启先应用 native，再 Writer；提交失败撤销新穿透，异常回滚尝试恢复鼠标并返回受控错误。
+
+关闭和恢复入口优先恢复鼠标：存储失败不会重新开启穿透。快捷键、托盘「显示悬浮窗 / 恢复交互」、正式显示动作均先解除 native ignore，再保存关闭偏好；已有小窗的坏配置 / 位置保存失败也不能阻止该恢复。透明度重设失败不阻止鼠标恢复；无可靠配置时保留当前 native alpha，记录错误，不伪造新的偏好。读取能区分已关闭但保存仍为 true，设置页允许重试保存。原生交互变化发 mini_interaction_changed 空载荷失效通知，成功持久变化另发 settings_changed；UI 重新读取实际状态，通知不携带统计值。
+
+每次明确重新显示会关闭穿透；保存 true 不会绕过确认并自动开启新窗口。登录启动 / 自动显示偏好尚未交付，不能把本节作为完整启动恢复验收。任务栏后续复用该恢复入口，不开放任意 HWND / 原生消息 / 快捷键代码。
