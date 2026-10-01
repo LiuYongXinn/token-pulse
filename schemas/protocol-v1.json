@@ -1418,6 +1418,465 @@
       ],
       "title": "ErrorDetail"
     },
+    "FacetDimension": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "sources",
+        "models",
+        "projects",
+        "sessions"
+      ],
+      "title": "FacetDimension",
+      "type": "string"
+    },
+    "FilterOption": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/DecimalInt",
+          "description": "Confirmed selected usage events, not an import-completeness assertion."
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "display_name",
+        "count"
+      ],
+      "title": "FilterOption",
+      "type": "object"
+    },
+    "FilterOptionsPage": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FacetDimension": {
+          "enum": [
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "string"
+        },
+        "FilterOption": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "$ref": "#/$defs/DecimalInt",
+              "description": "Confirmed selected usage events, not an import-completeness assertion."
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "key",
+            "display_name",
+            "count"
+          ],
+          "type": "object"
+        },
+        "SnapshotMeta": {
+          "additionalProperties": false,
+          "properties": {
+            "accounting_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "data_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "display_timezone": {
+              "type": "string"
+            },
+            "generated_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "parser_versions": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "price_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "snapshot_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "data_revision",
+            "price_revision",
+            "generated_at_ms",
+            "parser_versions",
+            "accounting_versions",
+            "display_timezone"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "$ref": "#/$defs/FacetDimension"
+        },
+        "meta": {
+          "$ref": "#/$defs/SnapshotMeta"
+        },
+        "next_cursor": {
+          "maxLength": 151,
+          "minLength": 151,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/FilterOption"
+          },
+          "maxItems": 200,
+          "type": "array"
+        }
+      },
+      "required": [
+        "meta",
+        "dimension",
+        "options",
+        "next_cursor"
+      ],
+      "title": "FilterOptionsPage",
+      "type": "object"
+    },
+    "FilterOptionsQuery": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DimensionSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "include_unknown": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "ids",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids",
+                "include_unknown"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FacetDimension": {
+          "enum": [
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "string"
+        },
+        "UsageFilter": {
+          "additionalProperties": false,
+          "properties": {
+            "models": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "projects": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "sessions": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "sources": {
+              "$ref": "#/$defs/DimensionSelection"
+            }
+          },
+          "required": [
+            "range",
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "$ref": "#/$defs/FacetDimension"
+        },
+        "filter": {
+          "$ref": "#/$defs/UsageFilter"
+        },
+        "page_size": {
+          "format": "uint16",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "search": {
+          "maxLength": 256,
+          "type": "string"
+        }
+      },
+      "required": [
+        "filter",
+        "dimension",
+        "search",
+        "page_size"
+      ],
+      "title": "FilterOptionsQuery",
+      "type": "object"
+    },
+    "FilterOptionsRequest": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DimensionSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "include_unknown": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "ids",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids",
+                "include_unknown"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "FacetDimension": {
+          "enum": [
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "string"
+        },
+        "FilterOptionsQuery": {
+          "additionalProperties": false,
+          "properties": {
+            "dimension": {
+              "$ref": "#/$defs/FacetDimension"
+            },
+            "filter": {
+              "$ref": "#/$defs/UsageFilter"
+            },
+            "page_size": {
+              "format": "uint16",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "search": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "filter",
+            "dimension",
+            "search",
+            "page_size"
+          ],
+          "type": "object"
+        },
+        "UsageFilter": {
+          "additionalProperties": false,
+          "properties": {
+            "models": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "projects": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "sessions": {
+              "$ref": "#/$defs/DimensionSelection"
+            },
+            "sources": {
+              "$ref": "#/$defs/DimensionSelection"
+            }
+          },
+          "required": [
+            "range",
+            "sources",
+            "models",
+            "projects",
+            "sessions"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "maxLength": 151,
+          "minLength": 151,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/FilterOptionsQuery"
+        }
+      },
+      "required": [
+        "query",
+        "cursor"
+      ],
+      "title": "FilterOptionsRequest",
+      "type": "object"
+    },
     "FormatIssue": {
       "$defs": {
         "DecimalInt": {

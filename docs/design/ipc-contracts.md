@@ -358,3 +358,5 @@ CSV 将可能被表格解释为公式的用户标签转为安全文本，数值�
 契约检查：DTO schema round-trip、超大整数、非法区间 / 枚举 / 游标、窗口越权、序号乱序、通知丢失、快照过期、幂等 key 冲突、费用空值、额度 epoch 变化、隐私宿主断连与安全导出。主页面同快照和分页租约需使用真实并发写入验证，不能只断言几个 revision 字符串相同。
 
 `get_grouped_usage` 的正式请求将 filter、price_basis、dimension（models / projects）、sort（total_desc / name_asc）及 limit（1–200）放在 request 对象内。响应为 GroupedUsageBundle：完整筛选 summary / pricing / coverage / meta，加 groups（每组 key|null、display_name、totals、pricing、coverage）、含未知分类的 total_group_count 和 truncated。limit 仅限制显示行，不改变整体汇总；同事务规则与全部来源证据用于估价，来源筛选不缩小规则匹配证据。模型 key 当前基于实际 provider / model，版本化别名规范化需在后续接口统一。
+
+`get_filter_options` 的正式 request 为 `{ query, cursor }`。query 包含 filter、dimension（sources / models / projects / sessions）、search（最多 256 个 Unicode 码点）与 page_size（1–200）；cursor 首次为 null，续页必须保留整个 query。FilterOptionsPage 返回 meta、dimension、options（key|null、display_name、十进制可信用量事件 count）和 next_cursor|null；选项上限 200。facet_filter 仅忽略本维度选择，其他条件仍生效。候选 count 不是完整导入证明，缺口继续由统计 Coverage 表达。游标固定 151 字符，形状检查不替代 MAC / 窗口绑定 / 实际租约与服务器登记位置验证。

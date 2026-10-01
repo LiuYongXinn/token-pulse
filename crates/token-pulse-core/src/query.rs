@@ -82,6 +82,89 @@ pub struct GroupedUsageBundle {
     pub groups: Vec<PricedUsageGroup>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum FacetDimension {
+    Sources,
+    Models,
+    Projects,
+    Sessions,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FilterOptionsQuery {
+    pub filter: UsageFilter,
+    pub dimension: FacetDimension,
+    #[schemars(length(max = 256))]
+    pub search: String,
+    #[schemars(range(min = 1, max = 200))]
+    pub page_size: u16,
+}
+impl FilterOptionsQuery {
+    pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
+        self.filter.validate()?;
+        if self.search.chars().count() > 256
+            || self.search.chars().any(char::is_control)
+            || !(1..=200).contains(&self.page_size)
+        {
+            return Err(crate::error::ErrorCode::InvalidQuery);
+        }
+        Ok(())
+    }
+    pub fn facet_filter(&self) -> Result<UsageFilter, crate::error::ErrorCode> {
+        self.validate()?;
+        let mut filter = self.filter.clone();
+        let all = crate::protocol::DimensionSelection::All {};
+        match self.dimension {
+            FacetDimension::Sources => filter.sources = all,
+            FacetDimension::Models => filter.models = all,
+            FacetDimension::Projects => filter.projects = all,
+            FacetDimension::Sessions => filter.sessions = all,
+        }
+        Ok(filter)
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FilterOptionsRequest {
+    pub query: FilterOptionsQuery,
+    #[schemars(length(min = 151, max = 151))]
+    pub cursor: Option<String>,
+}
+impl FilterOptionsRequest {
+    pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
+        self.query.validate()?;
+        if let Some(cursor) = &self.cursor {
+            if cursor.len() != 151
+                || !cursor
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            {
+                return Err(crate::error::ErrorCode::CursorInvalid);
+            }
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FilterOption {
+    pub key: Option<String>,
+    pub display_name: String,
+    /// Confirmed selected usage events, not an import-completeness assertion.
+    pub count: crate::numeric::DecimalInt,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct FilterOptionsPage {
+    pub meta: SnapshotMeta,
+    pub dimension: FacetDimension,
+    #[schemars(length(max = 200))]
+    pub options: Vec<FilterOption>,
+    #[schemars(length(min = 151, max = 151))]
+    pub next_cursor: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct DashboardRequest {

@@ -46,6 +46,20 @@ export type PricedUsageGroup = { key: string | null, display_name: string, total
 
 export type GroupedUsageBundle = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, total_group_count: DecimalInt, truncated: boolean, groups: Array<PricedUsageGroup>, };
 
+export type FacetDimension = "sources" | "models" | "projects" | "sessions";
+
+export type FilterOptionsQuery = { filter: UsageFilter, dimension: FacetDimension, search: string, page_size: number, };
+
+export type FilterOptionsRequest = { query: FilterOptionsQuery, cursor: string | null, };
+
+export type FilterOption = { key: string | null, display_name: string,
+/**
+ * Confirmed selected usage events, not an import-completeness assertion.
+ */
+count: DecimalInt, };
+
+export type FilterOptionsPage = { meta: SnapshotMeta, dimension: FacetDimension, options: Array<FilterOption>, next_cursor: string | null, };
+
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 
 export type UsageSeriesBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, totals: TokenTotals, coverage: Coverage, };

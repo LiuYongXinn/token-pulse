@@ -39,6 +39,22 @@ test('Rust schema and TS preserve nullable fields and exact decimal strings', ()
   expect(validate({ covered_total_tokens: '0', complete: false })).toBe(false);
   expect(validate({ ...fixture, messages: ['chat'] })).toBe(false);
 });
+
+test('facet pages preserve null categories, exact counts, bounded queries and signed cursor shape', () => {
+  const all = { kind: 'all' };
+  const query = { filter: { range: { start_ms: 0, end_ms: 1000, timezone: 'UTC' }, sources: all, models: all, projects: all, sessions: all }, dimension: 'models', search: '中'.repeat(256), page_size: 200 };
+  const validateRequest = ajv.compile(protocol.schemas.FilterOptionsRequest);
+  expect(validateRequest({ query, cursor: null })).toBe(true);
+  expect(validateRequest({ query: { ...query, page_size: 201 }, cursor: null })).toBe(false);
+  expect(validateRequest({ query: { ...query, search: '中'.repeat(257) }, cursor: null })).toBe(false);
+  expect(validateRequest({ query, cursor: 'a'.repeat(150) })).toBe(false);
+  const page = { meta: { snapshot_id: 'synthetic-facet', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' }, dimension: 'models', options: [{ key: null, display_name: '未知模型', count: '9007199254740993' }], next_cursor: null };
+  const validatePage = ajv.compile(protocol.schemas.FilterOptionsPage);
+  expect(validatePage(page)).toBe(true);
+  expect(validatePage({ ...page, options: [{ ...page.options[0], count: 9007199254740992 }] })).toBe(false);
+  expect(validatePage({ ...page, options: Array(201).fill(page.options[0]) })).toBe(false);
+  expect(validatePage({ ...page, next_cursor: undefined })).toBe(false);
+});
 test('tagged DTO variants do not accept fields from other variants', () => {
   const validate = ajv.compile(protocol.schemas.MiniScope);
   const scope: MiniScope = { kind: 'today_all_sources' };

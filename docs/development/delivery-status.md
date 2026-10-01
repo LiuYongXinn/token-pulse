@@ -481,3 +481,11 @@ LeaseService 新增 issue_cursor / resolve_cursor：签发前从实际 actor 核
 每个位置序列化限制 1 KiB，每租约最多 4096 个不同位置（两租约）；重复位置不再分配。达到上限明确 SNAPSHOT_EXPIRED 并释放事务，过期 / 释放后登记随租约清理；这不替代导出的一致副本作业。没有把最后标签 / 路径 / 消费数字编码给前端。
 
 2026-10-01 23:43 三项新增自动场景和共九项租约测试 / workspace Clippy 通过，累计普通 Rust 场景 202：超过 2^53 最后 tuple、Writer 改变 data / price revision 后重复 resume 仍读旧状态、释放后明确失效、有效签名但未登记位置 / 伪修订 / 跨窗口 / 不匹配 tuple 类型拒绝、已签名不存在快照过期、实际登记 4096 个位置 / 重复不扩展 / 第 4097 个触发释放 / 新租约可用。此模块没有新生产 IPC 或原生检查；候选 / 会话 / 明细的 keyset SQL、DTO、命令和 UI 仍待接入。
+
+## M08i1：正式筛选候选分页契约
+
+新增 FacetDimension、FilterOptionsQuery / Request、FilterOption 与 FilterOptionsPage，生成 TS / Schema。query 包含完整 UsageFilter、四维度、可搜索文本和 1–200 page_size；cursor 单独放在 request，不进入稳定查询身份。页面返回实际 SnapshotMeta、候选 key|null / display_name / 十进制 count 与 next_cursor|null。count 定义为所选可信用量事件数，不代表导入完整性；未知分类的 key 保留 null。
+
+facet_filter 只重置本维度为 All，来源 / 模型 / 项目 / 会话之外的原选择、半开日期和时区保持一致，原 filter 不改写。搜索限制 256 个 Unicode 码点并拒绝控制字符，Rust 与 JSON Schema 均允许 256 个中文字符；cursor 先验证固定 151 字符 / base64url 字符集，MAC / 登记 / 租约仍由存储层验证，形状合法不授予权限。
+
+2026-10-01 23:51 两项核心多场景、契约差异、workspace Clippy、TS 类型与 13 项 Vitest 通过，累计普通 Rust 场景 204：逐一验证四个 facet 只忽略自身 / 原选择保留、页边界 / 中文上限 / 控制字符 / 非法日期、cursor 长度 / 字符、未知候选和超过 2^53 count 保真、候选上限与必填 next_cursor。尚无候选 SQL / IPC / 页面，没有新增原生验收；下一个模块接入实际来源 / 模型 / 项目 / 会话搜索与同快照 keyset 分页。

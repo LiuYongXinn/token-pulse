@@ -7,8 +7,9 @@ use token_pulse_core::pricing::{
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{
-    DashboardBundle, DashboardRequest, GroupDimension, GroupSort, GroupedUsage, GroupedUsageBundle,
-    GroupedUsageRequest, PricedUsageGroup, RecentSession, UsageSeriesBucket,
+    DashboardBundle, DashboardRequest, FacetDimension, FilterOption, FilterOptionsPage,
+    FilterOptionsQuery, FilterOptionsRequest, GroupDimension, GroupSort, GroupedUsage,
+    GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, RecentSession, UsageSeriesBucket,
 };
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -60,6 +61,11 @@ fn main() {
         GroupedUsageRequest,
         PricedUsageGroup,
         GroupedUsageBundle,
+        FacetDimension,
+        FilterOptionsQuery,
+        FilterOptionsRequest,
+        FilterOption,
+        FilterOptionsPage,
         DashboardRequest,
         UsageSeriesBucket,
         RecentSession,
@@ -119,6 +125,9 @@ fn main() {
     ts.push_str("export ");
     ts.push_str(&Response::<AppStatus>::decl(&Config::default()));
     ts.push('\n');
+    // Field documentation can make ts-rs emit spaces before a line break.
+    // Keep generated artifacts clean without hand-editing the TypeScript file.
+    let ts = ts.lines().map(str::trim_end).collect::<Vec<_>>().join("\n") + "\n";
     let json =
         serde_json::to_string_pretty(&serde_json::json!({"api_version":1,"schemas":schemas}))
             .unwrap()
