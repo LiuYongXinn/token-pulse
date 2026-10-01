@@ -489,3 +489,11 @@ LeaseService 新增 issue_cursor / resolve_cursor：签发前从实际 actor 核
 facet_filter 只重置本维度为 All，来源 / 模型 / 项目 / 会话之外的原选择、半开日期和时区保持一致，原 filter 不改写。搜索限制 256 个 Unicode 码点并拒绝控制字符，Rust 与 JSON Schema 均允许 256 个中文字符；cursor 先验证固定 151 字符 / base64url 字符集，MAC / 登记 / 租约仍由存储层验证，形状合法不授予权限。
 
 2026-10-01 23:51 两项核心多场景、契约差异、workspace Clippy、TS 类型与 13 项 Vitest 通过，累计普通 Rust 场景 204：逐一验证四个 facet 只忽略自身 / 原选择保留、页边界 / 中文上限 / 控制字符 / 非法日期、cursor 长度 / 字符、未知候选和超过 2^53 count 保真、候选上限与必填 next_cursor。尚无候选 SQL / IPC / 页面，没有新增原生验收；下一个模块接入实际来源 / 模型 / 项目 / 会话搜索与同快照 keyset 分页。
+
+## M08i2：同租约的真实候选搜索与 keyset 分页
+
+存储层 filter_options 使用已验证的完整查询 / owner 绑定与真实 SQLite 租约；模型按实际 provider / model 分开，项目取当前快照内别名，会话取 canonical key 与 provider session id。只忽略正在选择的维度，其他筛选及半开日期继续限制可信事件计数。来源候选包含已登记但当前范围零事件的来源、暂停标识；COUNT DISTINCT event_id 防止同一来源多条镜像证据放大计数。
+
+搜索为 Unicode 小写后的字面子串，不把 % / _ 当通配符，不拼接输入为 SQL；参数绑定。分页按稳定 opaque key 的 BINARY 顺序、null 首位，使用最后 key 而非 OFFSET / 可变显示名。同租约保留事实、标签、修订和首请求生成时间；最后一页立即释放事务，先前游标随后明确 SNAPSHOT_EXPIRED。失败也释放租约。元数据版本表示 facet_filter 的候选范围，没有把搜索结果数宣称为导入完整性。
+
+2026-10-02 00:06 五项新增多场景、完整存储层 121 项普通测试（106 内部 + 15 集成，30 万性能 benchmark ignored）与 workspace Clippy 通过，累计普通 Rust 场景 209：未知候选 / 同名不同 provider / 多事件计数、多页身份不变与终页槽重用、中文 / ASCII 大小写 / SQL 字面搜索、自身选择忽略而其他筛选保留、日期右端排除、真实项目别名 / 会话名、零及暂停来源 / 同来源镜像去重、Writer 更新事实及价格修订后旧页不变 / 新页可见、跨窗口 / 搜索 / 页长 / 来源重绑拒绝、伪游标 / 超长存储 key 错误不泄漏槽。尚无生产候选 IPC / 页面及新原生验收，继续接入命令与高级筛选。

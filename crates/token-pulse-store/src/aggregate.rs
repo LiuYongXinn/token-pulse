@@ -231,6 +231,11 @@ pub fn register(connection: &Connection) -> Result<()> {
             model.as_deref(),
         ))
     })?;
+    connection.create_scalar_function("usage_search_contains", 2, flags, |ctx| {
+        let text: String = ctx.get(0)?;
+        let search: String = ctx.get(1)?;
+        Ok(text.to_lowercase().contains(&search.to_lowercase()))
+    })?;
     connection.create_scalar_function("usage_vector_total", 1, flags, |ctx| {
         let json: Option<String> = ctx.get(0)?;
         let Some(json) = json else {
