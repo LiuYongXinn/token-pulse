@@ -60,6 +60,14 @@ pub struct CandidateBatch {
     pub pending: Vec<PendingWrite>,
     pub contexts: Vec<ContextWrite>,
 }
+pub struct ReplayRecord {
+    pub observation_id: String,
+    pub record: token_pulse_core::domain::NormalizedObservation,
+}
+pub struct ReplayPath {
+    pub path: String,
+    pub source_root: String,
+}
 fn json<T: serde::de::DeserializeOwned>(s: &str) -> StoreResult<T> {
     serde_json::from_str(s).map_err(|_| ErrorCode::DbCorrupt.into())
 }
@@ -193,6 +201,40 @@ fn require_state(tx: &Transaction<'_>, id: &str, expected: JobState) -> StoreRes
     Ok(())
 }
 impl Database {
+    pub fn rebuild_file_path(&self, file_id: &str) -> StoreResult<ReplayPath> {
+        self.snapshot(|tx,_|Ok(tx.query_row("SELECT f.canonical_path,s.root_path FROM source_files f JOIN sources s ON s.source_id=f.source_id WHERE f.file_id=?1",[file_id],|r|Ok(ReplayPath{path:r.get(0)?,source_root:r.get(1)?}))?))
+    }
+    pub fn replay_records(
+        &self,
+        job_id: &str,
+        session: &str,
+        after: Option<(&str, i64)>,
+    ) -> StoreResult<Vec<ReplayRecord>> {
+        self.snapshot(|tx,_| {
+            let m=manifest(tx,job_id)?;fresh(tx,&m)?;
+            if !m.ledgers.iter().any(|l|l.session_key==session) {return Err(ErrorCode::InvalidQuery.into());}
+            let (generation,offset)=after.unwrap_or(("",-1));
+            let mut s=tx.prepare("SELECT observation_id,normalized_json,file_generation_id,byte_end FROM observations WHERE session_key=?1 AND (file_generation_id>?2 OR (file_generation_id=?2 AND byte_offset>?3)) ORDER BY file_generation_id,byte_offset LIMIT 256")?;
+            let mut rows=s.query(params![session,generation,offset])?;let mut result=vec![];let mut size=0usize;
+            while let Some(row)=rows.next()? {
+                let encoded:String=row.get(1)?;let next=size.checked_add(encoded.len()).ok_or(ErrorCode::NumericOverflow)?;
+                if next>16*1024*1024 {if result.is_empty() {return Err(ErrorCode::InvalidQuery.into());}break;}
+                let generation_id:String=row.get(2)?;let end:i64=row.get(3)?;
+                if !m.files.iter().any(|f|f.generation_id==generation_id && end<=f.committed_offset) {return Err(ErrorCode::CandidateObsolete.into());}
+                result.push(ReplayRecord{observation_id:row.get(0)?,record:json(&encoded)?});size=next;
+            }
+            Ok(result)
+        })
+    }
+    pub fn active_session_event_count(&self, session: &str) -> StoreResult<i64> {
+        self.snapshot(|tx, _| {
+            Ok(tx.query_row(
+                "SELECT COUNT(*) FROM active_usage_events WHERE session_key=?1",
+                [session],
+                |r| r.get(0),
+            )?)
+        })
+    }
     pub fn prepare_rebuild(&self, job_id: String, at_ms: i64) -> StoreResult<RebuildManifest> {
         EpochMs::new(at_ms)?;
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
