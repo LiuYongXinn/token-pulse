@@ -108,6 +108,11 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let invalidRange=false;
                 try {await invoke('get_dashboard_bundle',{requestId:'native-smoke-dashboard-invalid',request:{...request,heatmap_range:{...request.heatmap_range,timezone:'Asia/Shanghai'}}});} catch(error) {invalidRange=error.code==='INVALID_QUERY';}
                 ok=ok && invalidRange;
+                const guide=document.querySelector('main .empty h2');
+                ok=ok && guide?.textContent==='添加 Codex 数据来源'
+                    && document.querySelectorAll('nav[aria-label="主导航"] button').length===7
+                    && document.querySelector('select[aria-label="日期范围"]')?.value==='today'
+                    && !document.querySelector('.total-number');
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
