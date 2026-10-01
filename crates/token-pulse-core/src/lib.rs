@@ -15,4 +15,5 @@ pub enum ServiceState {
     NotConfigured,
     NotImplemented,
     Ready,
+    Error,
 }

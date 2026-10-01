@@ -6,7 +6,7 @@ export type DecimalMoney = string;
 
 export type EpochMs = number;
 
-export type ServiceState = "not_configured" | "not_implemented" | "ready";
+export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
 export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
 
@@ -14,7 +14,7 @@ export type ErrorDetail = string | number | boolean | null;
 
 export type AppError = { code: ErrorCode, message_key: string, retryable: boolean, correlation_id: string, source_id: string | null, job_id: string | null, details: { [key in string]: ErrorDetail }, };
 
-export type AppStatus = { version: string, development: boolean, data_directory: string, collector: ServiceState, storage: ServiceState, quota: ServiceState, taskbar: ServiceState, };
+export type AppStatus = { version: string, development: boolean, data_directory: string, collector: ServiceState, storage: ServiceState, storage_error: ErrorCode | null, quota: ServiceState, taskbar: ServiceState, };
 
 export type SnapshotMeta = { snapshot_id: string, data_revision: DecimalInt, price_revision: DecimalInt, generated_at_ms: EpochMs, parser_versions: Array<string>, accounting_versions: Array<string>, display_timezone: string, };
 

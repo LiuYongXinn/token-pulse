@@ -84,6 +84,22 @@ pub struct EffectiveMetadata {
     pub parent_provider_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReaderContext {
+    pub provider_session_id: Option<String>,
+    pub session_key: Option<String>,
+    pub metadata: EffectiveMetadata,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContentAnchor {
+    pub byte_offset: u64,
+    pub byte_length: u32,
+    pub sha256: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerifiedRequestIdentity {

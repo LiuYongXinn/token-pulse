@@ -3,9 +3,12 @@
 use std::{io, path::Path};
 
 pub mod aggregate;
+pub mod batch;
 mod database;
 mod migration;
+mod registration;
 pub use database::{Database, Revision, SourceRecord};
+pub use registration::{FileRegistration, SessionRegistration};
 pub use rusqlite;
 pub use token_pulse_core::error::ErrorCode;
 

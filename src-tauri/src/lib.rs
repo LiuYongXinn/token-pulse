@@ -12,6 +12,7 @@ use token_pulse_core::{
 
 struct RuntimeState {
     data_directory: PathBuf,
+    database: token_pulse_store::StoreResult<token_pulse_store::Database>,
 }
 
 #[tauri::command]
@@ -35,7 +36,12 @@ fn get_app_status(
             development: cfg!(debug_assertions),
             data_directory: state.data_directory.to_string_lossy().into_owned(),
             collector: ServiceState::NotConfigured,
-            storage: ServiceState::NotImplemented,
+            storage: if state.database.is_ok() {
+                ServiceState::Ready
+            } else {
+                ServiceState::Error
+            },
+            storage_error: state.database.as_ref().err().map(|e| e.code),
             quota: ServiceState::NotConfigured,
             taskbar: ServiceState::NotImplemented,
         },
@@ -86,7 +92,8 @@ pub fn run() {
             }
             let data_directory = app.path().app_local_data_dir()?;
             token_pulse_store::prepare_data_directory(&data_directory)?;
-            app.manage(RuntimeState { data_directory });
+            let database = token_pulse_store::Database::open(&data_directory);
+            app.manage(RuntimeState { data_directory, database });
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出 TokenPulse", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;

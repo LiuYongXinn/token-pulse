@@ -28,7 +28,14 @@ pub fn migrate(connection: &mut Connection) -> StoreResult<()> {
         transaction.execute_batch(INITIAL)?;
         transaction.execute_batch("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL); PRAGMA user_version=1;")?;
         transaction.execute("INSERT INTO schema_migrations VALUES (1, ?1)", [&checksum])?;
-        transaction.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,1,?1,0)", [r#"{"theme":"dark","privacy":false,"mini_scope":{"kind":"today_all_sources"},"taskbar_enabled":false,"startup_enabled":false}"#])?;
+        let initialized_at = i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| ErrorCode::InvalidQuery)?
+                .as_millis(),
+        )
+        .map_err(|_| ErrorCode::NumericOverflow)?;
+        transaction.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,1,?1,?2)", params![r#"{"theme":"dark","privacy":false,"mini_scope":{"kind":"today_all_sources"},"taskbar_enabled":false,"startup_enabled":false}"#,initialized_at])?;
         transaction.commit()?;
     } else {
         let stored: String = connection.query_row(

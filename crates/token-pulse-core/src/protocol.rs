@@ -16,6 +16,7 @@ pub struct AppStatus {
     pub data_directory: String,
     pub collector: ServiceState,
     pub storage: ServiceState,
+    pub storage_error: Option<ErrorCode>,
     pub quota: ServiceState,
     pub taskbar: ServiceState,
 }

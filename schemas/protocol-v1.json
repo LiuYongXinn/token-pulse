@@ -102,11 +102,45 @@
     },
     "AppStatus": {
       "$defs": {
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
         "ServiceState": {
           "enum": [
             "not_configured",
             "not_implemented",
-            "ready"
+            "ready",
+            "error"
           ],
           "type": "string"
         }
@@ -129,6 +163,16 @@
         "storage": {
           "$ref": "#/$defs/ServiceState"
         },
+        "storage_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "taskbar": {
           "$ref": "#/$defs/ServiceState"
         },
@@ -142,6 +186,7 @@
         "data_directory",
         "collector",
         "storage",
+        "storage_error",
         "quota",
         "taskbar"
       ],
@@ -168,6 +213,16 @@
             "storage": {
               "$ref": "#/$defs/ServiceState"
             },
+            "storage_error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorCode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "taskbar": {
               "$ref": "#/$defs/ServiceState"
             },
@@ -181,16 +236,51 @@
             "data_directory",
             "collector",
             "storage",
+            "storage_error",
             "quota",
             "taskbar"
           ],
           "type": "object"
         },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
         "ServiceState": {
           "enum": [
             "not_configured",
             "not_implemented",
-            "ready"
+            "ready",
+            "error"
           ],
           "type": "string"
         }
@@ -2080,7 +2170,8 @@
       "enum": [
         "not_configured",
         "not_implemented",
-        "ready"
+        "ready",
+        "error"
       ],
       "title": "ServiceState",
       "type": "string"

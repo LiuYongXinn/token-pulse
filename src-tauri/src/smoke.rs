@@ -53,7 +53,8 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
             try {
                 const r = await invoke('get_app_status', { requestId: 'native-smoke' });
                 ok = r.api_version === 1 && r.request_id === 'native-smoke'
-                    && r.data.development === true && r.data.collector === 'not_configured';
+                    && r.data.development === true && r.data.collector === 'not_configured'
+                    && r.data.storage === 'ready' && r.data.storage_error === null;
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
