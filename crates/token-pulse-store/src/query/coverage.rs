@@ -165,5 +165,122 @@ impl Database {
         self.snapshot(|tx, _| coverage(tx, filter, &super::totals(tx, filter)?))
     }
 }
+
+#[derive(Default, Clone, Copy)]
+struct BucketGaps {
+    pending: i128,
+    unattributed: i128,
+    known_tokens: i128,
+    missing: bool,
+}
+impl BucketGaps {
+    fn add(&mut self, kind: &str, total: Option<i64>) -> StoreResult<()> {
+        let count = if kind == "pending" {
+            &mut self.pending
+        } else {
+            &mut self.unattributed
+        };
+        *count = count.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
+        if kind == "unattributed" {
+            match total {
+                Some(value) => {
+                    self.known_tokens = self
+                        .known_tokens
+                        .checked_add(i128::from(value))
+                        .ok_or(ErrorCode::NumericOverflow)?
+                }
+                None => self.missing = true,
+            }
+        }
+        Ok(())
+    }
+    fn merged(self, unknown_time: Self) -> StoreResult<Self> {
+        let sum = |a: i128, b: i128| a.checked_add(b).ok_or(ErrorCode::NumericOverflow);
+        Ok(Self {
+            pending: sum(self.pending, unknown_time.pending)?,
+            unattributed: sum(self.unattributed, unknown_time.unattributed)?,
+            known_tokens: sum(self.known_tokens, unknown_time.known_tokens)?,
+            missing: self.missing || unknown_time.missing,
+        })
+    }
+}
+
+/// One pending scan for every calendar bucket. Unknown-time gaps apply to each
+/// bucket; known-time gaps apply only to their real UTC interval.
+pub fn series_coverage(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    buckets: &[super::BucketTotals],
+) -> StoreResult<Vec<Coverage>> {
+    if buckets.is_empty()
+        || buckets.len() > token_pulse_core::calendar::MAX_BUCKETS
+        || buckets[0].bucket.start_ms != filter.range.start_ms
+        || buckets.last().unwrap().bucket.end_ms != filter.range.end_ms
+        || buckets.iter().any(|b| b.bucket.start_ms >= b.bucket.end_ms)
+        || buckets
+            .windows(2)
+            .any(|pair| pair[0].bucket.end_ms != pair[1].bucket.start_ms)
+    {
+        return Err(ErrorCode::InvalidQuery.into());
+    }
+    let base = coverage(tx, filter, &super::empty_totals())?;
+    let common_gap = base.pending_file_count.value() > 0
+        || !base.format_issues.is_empty()
+        || base.source_issues.iter().any(|s| {
+            matches!(
+                s.code.as_str(),
+                "source_paused" | "source_unreadable" | "source_partially_readable"
+            )
+        });
+    let p = pending_predicate(filter)?;
+    let mut statement=tx.prepare(&format!("SELECT DISTINCT p.observation_id,p.kind,o.observed_at_ms,CASE WHEN p.kind='unattributed' THEN usage_vector_total(p.vector_json) END FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')",p.sql))?;
+    let mut rows = statement.query(params_from_iter(p.values))?;
+    let mut gaps = vec![BucketGaps::default(); buckets.len()];
+    let mut unknown_time = BucketGaps::default();
+    while let Some(row) = rows.next()? {
+        let time: Option<i64> = row.get(2)?;
+        let kind: String = row.get(1)?;
+        let target = match time {
+            None => &mut unknown_time,
+            Some(time) => {
+                let index = buckets.partition_point(|b| b.bucket.end_ms.value() <= time);
+                gaps.get_mut(index).ok_or(ErrorCode::DbCorrupt)?
+            }
+        };
+        target.add(&kind, row.get(3)?)?;
+    }
+    buckets
+        .iter()
+        .zip(gaps)
+        .map(|(bucket, gap)| {
+            let gap = gap.merged(unknown_time)?;
+            let mut result = base.clone();
+            result.pending_observation_count = DecimalInt::from_nonnegative(gap.pending)?;
+            result.unattributed_observation_count = DecimalInt::from_nonnegative(gap.unattributed)?;
+            result.unattributed_total_tokens = if gap.unattributed > 0 && !gap.missing {
+                Some(DecimalInt::from_nonnegative(gap.known_tokens)?)
+            } else {
+                None
+            };
+            result.state = if common_gap || gap.pending > 0 || gap.unattributed > 0 {
+                CoverageState::Partial
+            } else {
+                CoverageState::Unknown
+            };
+            result.breakdown_complete = [
+                &bucket.totals.input_total,
+                &bucket.totals.cached_input,
+                &bucket.totals.noncached_input,
+                &bucket.totals.output_total,
+                &bucket.totals.reasoning_output,
+            ]
+            .iter()
+            .all(|m| m.complete);
+            Ok(result)
+        })
+        .collect()
+}
+#[cfg(test)]
+mod series_tests;
 #[cfg(test)]
 mod tests;

@@ -6,7 +6,13 @@ use crate::{
 use rusqlite::params;
 use token_pulse_core::domain::UsageVector;
 
-fn pending(db: &Database, id: &str, time: Option<i64>, kind: &str, vector: Option<UsageVector>) {
+pub(super) fn pending(
+    db: &Database,
+    id: &str,
+    time: Option<i64>,
+    kind: &str,
+    vector: Option<UsageVector>,
+) {
     let id = id.to_owned();
     let kind = kind.to_owned();
     db.write(move|conn| {
@@ -17,7 +23,7 @@ fn pending(db: &Database, id: &str, time: Option<i64>, kind: &str, vector: Optio
         tx.commit()?; Ok(())
     }).unwrap();
 }
-fn vector(total: i64) -> UsageVector {
+pub(super) fn vector(total: i64) -> UsageVector {
     UsageVector {
         reported_total: Some(total),
         ..Default::default()
