@@ -5454,6 +5454,104 @@
       "title": "MiniUsageSnapshot",
       "type": "object"
     },
+    "MiniWindowAction": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "read",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expanded": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "set_expanded",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "expanded"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "set_pinned",
+              "type": "string"
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "pinned"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "drag",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "hide",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "MiniWindowAction"
+    },
+    "MiniWindowState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Native window interaction state. Cursor pass-through is not available before recovery is implemented.",
+      "properties": {
+        "expanded": {
+          "type": "boolean"
+        },
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expanded",
+        "pinned"
+      ],
+      "title": "MiniWindowState",
+      "type": "object"
+    },
     "ModelAlias": {
       "$defs": {
         "DecimalInt": {
@@ -13131,6 +13229,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
         "open_stats",
+        "show_mini",
         "hide_main",
         "quit"
       ],

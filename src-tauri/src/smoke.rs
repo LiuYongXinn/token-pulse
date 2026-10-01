@@ -462,6 +462,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if !window.is_visible().map_err(|e| e.to_string())? {
         return Err("cold start window is hidden".into());
     }
+    super::mini_smoke::verify(app)?;
     #[cfg(windows)]
     {
         use windows_sys::Win32::{

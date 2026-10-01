@@ -13,6 +13,8 @@ use token_pulse_core::{
 
 struct RuntimeState {
     privacy: PrivacyState,
+    mini_creation: std::sync::Mutex<()>,
+    mini_window: std::sync::Mutex<token_pulse_core::mini::MiniWindowState>,
     selections: std::sync::Arc<std::sync::Mutex<token_pulse_core::selections::DirectorySelections>>,
     data_directory: PathBuf,
     database: token_pulse_store::StoreResult<token_pulse_store::Database>,
@@ -70,7 +72,7 @@ fn get_app_status(
 }
 
 #[tauri::command]
-fn perform_window_action(
+async fn perform_window_action(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
     action: WindowAction,
@@ -86,6 +88,12 @@ fn perform_window_action(
     }
     let result = match action {
         WindowAction::OpenStats => show_main(&app),
+        WindowAction::ShowMini => {
+            tauri::async_runtime::spawn_blocking(move || mini_window::show(&app))
+                .await
+                .map_err(|_| "WINDOW_CREATION_FAILED".to_string())
+                .and_then(|result| result)
+        }
         WindowAction::HideMain => window.hide().map_err(|e| e.to_string()),
         WindowAction::Quit => {
             app.exit(0);
@@ -151,12 +159,13 @@ pub fn run() {
             let theme = database.as_ref().ok().and_then(|db| db.display_settings().ok()).map(|s| s.preferences.theme).unwrap_or_default();
             settings_commands::apply_native_theme(app.handle(), theme);
             let privacy = initial_privacy(&database);
-            app.manage(RuntimeState { privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            app.manage(RuntimeState { mini_creation: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
+            let mini = MenuItem::with_id(app, "mini", "显示悬浮窗 / 恢复交互", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出 TokenPulse", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let menu = Menu::with_items(app, &[&open, &mini, &quit])?;
             TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().ok_or("missing application icon")?.clone())
                 .tooltip("TokenPulse · 打开统计")
@@ -164,6 +173,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => { let _ = show_main(app); },
+                    "mini" => { let app = app.clone(); tauri::async_runtime::spawn_blocking(move || { let _ = mini_window::show(&app); }); },
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -185,7 +195,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -223,6 +233,9 @@ pub fn run() {
 
 mod job_commands;
 mod mini_commands;
+#[cfg(debug_assertions)]
+mod mini_smoke;
+mod mini_window;
 #[cfg(windows)]
 mod power;
 mod price_commands;

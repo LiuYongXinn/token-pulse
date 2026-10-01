@@ -98,7 +98,7 @@ export function App() {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">▥</span>TokenPulse</div>
       <nav aria-label="主导航">{pages.map(([id, label]) => <button key={id} className={page === id ? 'active' : ''} aria-current={page === id ? 'page' : undefined} onClick={() => setPage(id)}>{label}</button>)}</nav>
-      <div className="sidebar-bottom"><span className="status-dot" />{status?.collector === 'ready' ? '正在采集本地来源' : status?.collector === 'error' ? '采集需要处理' : status ? '尚未配置来源' : '桌面连接未就绪'}<small>本地日志只读 · 账户连接可选</small></div>
+      <div className="sidebar-bottom"><span className="status-dot" />{status?.collector === 'ready' ? '正在采集本地来源' : status?.collector === 'error' ? '采集需要处理' : status ? '尚未配置来源' : '桌面连接未就绪'}<small>本地日志只读 · 账户连接可选</small><button disabled={!status} onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示悬浮窗</button></div>
     </aside>
     <main>
       <header className="heading"><div><h1>{current[1]}</h1><p>{current[2]}</p></div><div className="head-actions"><button onClick={() => void refresh()} disabled={loading}>刷新</button>{status && <button onClick={() => void windowAction('hide_main').catch(e => setError(String(e)))}>隐藏到托盘</button>}</div></header>

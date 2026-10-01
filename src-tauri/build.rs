@@ -6,6 +6,7 @@ fn main() {
             "get_mini_usage",
             "set_mini_scope",
             "perform_window_action",
+            "mini_window_action",
             "get_sources",
             "choose_source_directory",
             "manage_source",

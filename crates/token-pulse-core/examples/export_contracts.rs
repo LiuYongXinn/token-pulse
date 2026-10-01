@@ -64,6 +64,8 @@ fn main() {
         MiniScopeMutation,
         MiniScopeSnapshot,
         MiniUsageSnapshot,
+        MiniWindowState,
+        MiniWindowAction,
         ErrorCode,
         ErrorDetail,
         AppError,

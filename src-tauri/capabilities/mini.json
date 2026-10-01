@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mini",
+  "description": "Local floating display with usage, shared privacy and constrained native actions. No source, price or general query access.",
+  "windows": ["mini"],
+  "permissions": ["core:event:default", "allow-get-mini-usage", "allow-get-mini-scope", "allow-set-mini-scope", "allow-get-display-settings", "allow-set-display-privacy", "allow-mini-window-action"]
+}

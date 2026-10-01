@@ -9,7 +9,7 @@ use token_pulse_core::{
 fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
     validate_request_id(id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
-    if window.label() != "main" {
+    if !matches!(window.label(), "main" | "mini") {
         return Err(Box::new(AppError::new(
             ErrorCode::PermissionDenied,
             id.into(),

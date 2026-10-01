@@ -330,6 +330,7 @@ pub struct Job {
 #[serde(rename_all = "snake_case")]
 pub enum WindowAction {
     OpenStats,
+    ShowMini,
     HideMain,
     Quit,
 }

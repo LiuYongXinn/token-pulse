@@ -34,6 +34,10 @@ export type MiniScopeSnapshot = { settings_revision: DecimalInt, mini_scope: Min
 
 export type MiniUsageSnapshot = { meta: SnapshotMeta, settings_revision: DecimalInt, mini_scope: MiniScope, scope_display_name: string | null, range: DateRange, usage: TokenTotals, pricing: PricingSummary, coverage: Coverage, };
 
+export type MiniWindowState = { expanded: boolean, pinned: boolean, };
+
+export type MiniWindowAction = { "kind": "read", } | { "kind": "set_expanded", expanded: boolean, } | { "kind": "set_pinned", pinned: boolean, } | { "kind": "drag", } | { "kind": "hide", };
+
 export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE";
 
 export type ErrorDetail = string | number | boolean | null;
@@ -234,7 +238,7 @@ export type JobRequest = { kind: JobKind, scope: JobScope, request_key: string, 
 
 export type CancelJobResult = "accepted" | "already_finished" | "too_late";
 
-export type WindowAction = "open_stats" | "hide_main" | "quit";
+export type WindowAction = "open_stats" | "show_mini" | "hide_main" | "quit";
 
 export type SourceOrigin = "windows_default" | "environment" | "custom" | "wsl";
 

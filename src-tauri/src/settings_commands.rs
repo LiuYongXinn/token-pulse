@@ -19,13 +19,24 @@ fn authorized(window: &WebviewWindow, request_id: &str) -> Result<(), Box<AppErr
     }
     Ok(())
 }
+fn authorized_shared(window: &WebviewWindow, request_id: &str) -> Result<(), Box<AppError>> {
+    validate_request_id(request_id)
+        .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
+    if !matches!(window.label(), "main" | "mini") {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id.into(),
+        )));
+    }
+    Ok(())
+}
 #[tauri::command]
 pub async fn get_display_settings(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,
     request_id: String,
 ) -> Result<PrivateResponse<DisplaySettingsSnapshot>, Box<AppError>> {
-    authorized(&window, &request_id)?;
+    authorized_shared(&window, &request_id)?;
     let db = state
         .database
         .as_ref()
@@ -123,8 +134,8 @@ pub async fn set_display_privacy(
     request: DisplayPrivacyMutation,
     request_id: String,
 ) -> Result<PrivateResponse<DisplaySettingsSnapshot>, Box<AppError>> {
-    // Floating window capability is added together with the real window module.
-    authorized(&window, &request_id)?;
+    // All display surfaces use the same committed privacy coordinator.
+    authorized_shared(&window, &request_id)?;
     request
         .validate()
         .map_err(|e| Box::new(AppError::new(e, request_id.clone())))?;

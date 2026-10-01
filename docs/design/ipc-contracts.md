@@ -438,3 +438,10 @@ MiniScopeMutation { mini_scope, expected_settings_revision } 使用全局 CAS；
 get_mini_usage 返回 MiniUsageSnapshot { meta, settings_revision, mini_scope, scope_display_name, range, usage, pricing, coverage }，在同一个读取事务中固定配置与数据 / 价格修订。today 按已保存时区当前日零点，fixed 是明确不漂移起点；range end 是捕获毫秒 + 1（包含当前采样毫秒，保持 SQL 半开）。Token / 费用范围相同，采用 event_time，与主窗口独立筛选 / 指定估价时点分离。缺少配置时区或未来固定起点明确失败，不默认范围。响应经最新 PrivateResponse。
 
 这是完整 MiniSnapshot 的本地消费来源；账户数据由之后的独立服务快照组合，不在该 SQLite 事务内假定一致时间或计算额度。实际小窗 / 任务栏权限、原生操作和消费者随对应模块实施。
+
+
+### 2.17 独立悬浮窗操作
+
+WindowAction 增加 show_mini，由主窗口 perform_window_action 异步创建 / 显示独立 mini；托盘调用同一创建 / 恢复实现。MiniWindowAction 为 read / set_expanded { expanded } / set_pinned { pinned } / drag / hide，返回 MiniWindowState { expanded, pinned }，纯原生交互无敏感显示字段。只允许 mini；尺寸固定两组 DIP，无任意窗口标签 / 路径 / 外部 URL / 穿透参数。当前交互状态只在进程内保留，跨启动持久化后续实现。
+
+mini capability 允许 get_mini_scope / get_mini_usage / set_mini_scope / get_display_settings / set_display_privacy；后两项共享隐私协调与最新出口。主题 / 时区写入继续仅 main。小窗 frontend 采用相同显示 epoch / 延迟响应门禁、共享主题，完整 MiniUsageSnapshot 单体更新；隐藏不关闭后台采集。账户区当前明确未连接，没有本地推测的额度值。

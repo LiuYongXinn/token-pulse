@@ -12,6 +12,31 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+/// Native window interaction state. Cursor pass-through is not available before recovery is implemented.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct MiniWindowState {
+    pub expanded: bool,
+    pub pinned: bool,
+}
+impl Default for MiniWindowState {
+    fn default() -> Self {
+        Self {
+            expanded: false,
+            pinned: true,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum MiniWindowAction {
+    Read {},
+    SetExpanded { expanded: bool },
+    SetPinned { pinned: bool },
+    Drag {},
+    Hide {},
+}
+
 impl MiniScope {
     pub fn validate(&self) -> Result<(), ErrorCode> {
         match self {
