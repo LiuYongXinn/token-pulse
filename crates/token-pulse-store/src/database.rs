@@ -106,9 +106,9 @@ impl Database {
             .name("token-pulse-writer".into())
             .spawn(move || {
                 let opened = (|| -> StoreResult<Connection> {
-                    let mut conn = Connection::open(writer_path)?;
+                    let mut conn = Connection::open(&writer_path)?;
                     configure(&conn)?;
-                    migration::migrate(&mut conn)?;
+                    migration::migrate(&mut conn, &writer_path)?;
                     Ok(conn)
                 })();
                 match opened {

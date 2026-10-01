@@ -53,6 +53,8 @@ DTO 权威位于 `crates/token-pulse-core/src/protocol.rs`，`npm run contracts`
 
 ## 工程边界
 
+数据库结构当前为 v2。升级既有 v1 库前，SQLite Online Backup 保存一致副本到应用数据目录的 `migration-backups/`，同时保存数据库 SHA-256 manifest；校验通过后才在事务中升级。首次空库直接初始化到当前版本，重开当前版本不重复备份。未知版本、checksum 不符或升级失败保留原库，不创建零历史覆盖。数据恢复与备份管理页面继续在 M14 实施。
+
 `ui/` 为正式前端；`prototypes/` 保留设计原型，不进入生产包。`token-pulse-core` 无窗口依赖；`token-pulse-store` 仅写应用数据；`src-tauri` 装配生命周期与受限 IPC。主窗口自定义命令在 AppManifest 和 capability 中枚举，并在后台检查窗口 label；无通用 shell、SQL 或前端文件读写权限。
 
 关闭窗口隐藏到托盘；托盘“打开统计”恢复窗口，“退出 TokenPulse”结束进程。单实例只激活统计窗口，忽略第二实例的其他参数。

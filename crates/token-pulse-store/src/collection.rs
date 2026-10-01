@@ -102,7 +102,7 @@ impl Database {
     pub fn session_accounting(&self, session: &str) -> StoreResult<SessionAccounting> {
         self.snapshot(|tx,_| {
             let ledger_id:String=tx.query_row("SELECT active_ledger_id FROM sessions WHERE session_key=?1",[session],|r|r.get(0))?;
-            let mut statement=tx.prepare("SELECT st.stream_key,st.episode_id,st.baseline_json,st.state_revision,o.normalized_json FROM stream_states st LEFT JOIN observations o ON o.observation_id=st.last_observation_id WHERE st.ledger_id=?1 ORDER BY o.rowid")?;
+            let mut statement=tx.prepare("SELECT st.stream_key,st.episode_id,st.baseline_json,st.state_revision,o.normalized_json FROM stream_frontiers fr JOIN stream_states st ON st.ledger_id=fr.ledger_id AND st.stream_key=fr.stream_key AND st.episode_id=fr.episode_id LEFT JOIN observations o ON o.observation_id=st.last_observation_id WHERE st.ledger_id=?1 ORDER BY st.stream_key")?;
             let rows=statement.query_map([&ledger_id],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,i64>(3)?,r.get::<_,Option<String>>(4)?)))?;
             let mut state=AccountingState::new(session.into());let mut revisions=BTreeMap::new();
             for row in rows {let (key,episode,baseline,revision,record)=row?;

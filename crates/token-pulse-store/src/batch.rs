@@ -505,6 +505,7 @@ fn write_derived_with_hook(
             .checked_add(1)
             .ok_or(ErrorCode::NumericOverflow)?;
         tx.execute("INSERT INTO stream_states(ledger_id,stream_key,episode_id,baseline_json,last_observation_id,lineage_quality,state_revision) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(ledger_id,stream_key,episode_id) DO UPDATE SET baseline_json=excluded.baseline_json,last_observation_id=excluded.last_observation_id,lineage_quality=excluded.lineage_quality,state_revision=excluded.state_revision",params![stream.ledger_id,stream.stream_key,stream.episode_id,serde_json::to_string(&stream.baseline)?,stream.observation_id,serde_json::to_string(&stream.quality)?,next_revision])?;
+        tx.execute("INSERT INTO stream_frontiers(ledger_id,stream_key,episode_id) VALUES(?1,?2,?3) ON CONFLICT(ledger_id,stream_key) DO UPDATE SET episode_id=excluded.episode_id WHERE (SELECT o.rowid FROM observations o WHERE o.observation_id=?4)>=(SELECT o.rowid FROM stream_states st JOIN observations o ON o.observation_id=st.last_observation_id WHERE st.ledger_id=stream_frontiers.ledger_id AND st.stream_key=stream_frontiers.stream_key AND st.episode_id=stream_frontiers.episode_id)",params![stream.ledger_id,stream.stream_key,stream.episode_id,stream.observation_id])?;
     }
     Ok(())
 }

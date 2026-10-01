@@ -107,6 +107,48 @@ pub(crate) fn fixture() -> WriteBatch {
         diagnostics: vec![],
     }
 }
+
+#[test]
+fn current_episode_is_explicit_even_when_batch_updates_arrive_in_reverse_order() {
+    let (_dir, db) = setup();
+    let mut batch = fixture();
+    batch.next_offset = 200;
+    batch.observed_size = 200;
+    batch.streams[0].episode_id = "z-old".into();
+    let usage = UsageVector {
+        input_total: Some(10),
+        cached_input: Some(4),
+        output_total: Some(1),
+        reasoning_output: Some(0),
+        reported_total: Some(11),
+    };
+    let mut observation = batch.observations[0].clone();
+    observation.observation_id = "second".into();
+    if let NormalizedObservation::Usage(u) = &mut observation.record {
+        u.physical_position.byte_offset = 100;
+        u.physical_position.byte_end = 200;
+        u.last = Some(usage);
+        u.cumulative = Some(usage);
+    }
+    batch.observations.push(observation);
+    let mut event = batch.events[0].clone();
+    event.event_id = "reset-event".into();
+    event.origin_observation_id = "second".into();
+    event.episode_id = "a-new".into();
+    event.usage = usage;
+    event.calculation_method = "episode_reset".into();
+    batch.events.push(event);
+    let mut stream = batch.streams[0].clone();
+    stream.episode_id = "a-new".into();
+    stream.observation_id = "second".into();
+    stream.baseline = usage;
+    batch.streams.insert(0, stream);
+    db.commit(batch).unwrap();
+    let loaded = db.session_accounting("session").unwrap();
+    assert_eq!(loaded.state.streams["stream"].episode_id, "a-new");
+    assert_eq!(loaded.state.streams["stream"].cumulative, usage);
+    assert_eq!(loaded.state.streams["stream"].last_snapshot, Some(usage));
+}
 fn assert_state(db: &Database, committed: bool) {
     db.snapshot(|tx, revision| {
         assert_eq!(revision.data, i64::from(committed));
@@ -115,6 +157,7 @@ fn assert_state(db: &Database, committed: bool) {
             "usage_events",
             "stream_states",
             "event_provenance",
+            "stream_frontiers",
         ] {
             assert_eq!(
                 tx.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r
