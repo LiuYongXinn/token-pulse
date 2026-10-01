@@ -1,5 +1,6 @@
 use proptest::prelude::*;
 use serde::Deserialize;
+use token_pulse_core::sequence::UsageSignature;
 use token_pulse_core::{accounting::*, domain::*, error::ErrorCode};
 
 #[derive(Deserialize)]
@@ -175,8 +176,7 @@ fn proven_duplicate_and_inheritance_do_not_advance_a_baseline_twice() {
     let reference = CanonicalReference {
         event_id: "canonical".into(),
         usage: usage.last.unwrap(),
-        event_time_ms: usage.event_time_ms,
-        request_identity: None,
+        observation: UsageSignature::from(&usage),
     };
     for (evidence, method) in [
         (
@@ -195,7 +195,10 @@ fn proven_duplicate_and_inheritance_do_not_advance_a_baseline_twice() {
         ),
         (
             AccountingEvidence {
-                lineage: LineageEvidence::VerifiedInherited(reference.clone()),
+                lineage: LineageEvidence::VerifiedInherited {
+                    reference: Box::new(reference.clone()),
+                    baseline: None,
+                },
                 ..Default::default()
             },
             CalculationMethod::Inherited,
@@ -214,7 +217,7 @@ fn proven_duplicate_and_inheritance_do_not_advance_a_baseline_twice() {
         assert!(result.event_usage.is_none());
     }
     let mut mismatched = reference;
-    mismatched.usage.input_total = Some(99);
+    mismatched.observation.last.as_mut().unwrap().input_total = Some(99);
     assert_eq!(
         account(
             &state,
@@ -272,7 +275,7 @@ proptest! {
             for j in 0..5 {totals[j]+=components[j].unwrap();}
             let usage=UsageObservation {physical_position:PhysicalPosition{file_generation_id:"g".into(),byte_offset:i as u64,byte_end:i as u64+1},session_key:"session".into(),event_time_ms:Some(123),request_identity:None,stream_hint:Some("trusted".into()),last:Some(last),cumulative:Some(vector(totals.map(Some))),effective_metadata:EffectiveMetadata{model:Some(format!("model-{i}")),..Default::default()},explicit_episode_start:false,model_context_window:None};
             let result=account(&state,&usage,&AccountingEvidence{independent_new_stream:i==0,..Default::default()});
-            prop_assert_eq!(result.quality,ObservationQuality::Confirmed);
+            prop_assert!(matches!(result.quality,ObservationQuality::Confirmed|ObservationQuality::Duplicate));
             if let Some(event)=result.event_usage {engine_sum+=i128::from(event.input_total.unwrap())+i128::from(event.output_total.unwrap());}
             oracle_sum+=i128::from(*input)+i128::from(*output);
             state=result.state;

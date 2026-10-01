@@ -1,5 +1,5 @@
 //! Deterministic inference: callers supply verified ordering/identity evidence, never clock heuristics.
-use crate::{domain::*, error::ErrorCode};
+use crate::{domain::*, error::ErrorCode, sequence::UsageSignature};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -52,15 +52,17 @@ pub enum CalculationMethod {
 pub struct CanonicalReference {
     pub event_id: String,
     pub usage: UsageVector,
-    pub event_time_ms: Option<i64>,
-    pub request_identity: Option<VerifiedRequestIdentity>,
+    pub observation: UsageSignature,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum LineageEvidence {
     #[default]
     Independent,
     Pending,
-    VerifiedInherited(CanonicalReference),
+    VerifiedInherited {
+        reference: Box<CanonicalReference>,
+        baseline: Option<Box<StreamBaseline>>,
+    },
 }
 /// These proofs come from the physical-position index and sequence/identity verifier.
 /// Missing proof is false. A provider session ID, timestamp or model is never sufficient.
@@ -169,8 +171,31 @@ pub fn account(
             result.method = CalculationMethod::LineagePending;
             return result;
         }
-        LineageEvidence::VerifiedInherited(reference) => {
+        LineageEvidence::VerifiedInherited {
+            reference,
+            baseline,
+        } => {
             if reference_matches(reference, observation) {
+                if let Some(baseline) = baseline {
+                    if observation.cumulative != Some(baseline.cumulative)
+                        || baseline.stream_key.is_empty()
+                        || baseline.episode_id.is_empty()
+                        || baseline.cumulative.validated_total().is_err()
+                    {
+                        return result;
+                    }
+                    if !result.state.streams.contains_key(&baseline.stream_key)
+                        && result.state.streams.len() >= MAX_STREAMS
+                    {
+                        return capacity(result);
+                    }
+                    result
+                        .state
+                        .streams
+                        .insert(baseline.stream_key.clone(), (**baseline).clone());
+                    result.stream_key = Some(baseline.stream_key.clone());
+                    result.episode_id = Some(baseline.episode_id.clone());
+                }
                 result.method = CalculationMethod::Inherited;
                 result.quality = ObservationQuality::Inherited;
                 result.canonical_event_id = Some(reference.event_id.clone());
@@ -317,10 +342,13 @@ pub fn account(
 
 fn reference_matches(reference: &CanonicalReference, observation: &UsageObservation) -> bool {
     !reference.event_id.is_empty()
-        && observation.last == Some(reference.usage)
-        && match &reference.request_identity {
-            Some(identity) => observation.request_identity.as_ref() == Some(identity),
-            None => reference.event_time_ms == observation.event_time_ms,
+        && reference.usage.validated_total().is_ok_and(|t| t.is_some())
+        && match &reference.observation.request_identity {
+            Some(identity) => {
+                observation.request_identity.as_ref() == Some(identity)
+                    && observation.last == Some(reference.usage)
+            }
+            None => UsageSignature::from(observation) == reference.observation,
         }
 }
 fn capacity(mut result: AccountingResult) -> AccountingResult {

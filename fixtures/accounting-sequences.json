@@ -1,0 +1,22 @@
+{
+  "signatures": {
+    "a":{"time":1000,"last":[100,60,10,2,110],"total":[100,60,10,2,110]},
+    "b":{"time":2000,"last":[20,10,5,1,25],"total":[120,70,15,3,135]},
+    "c":{"time":3000,"last":[10,2,3,1,13],"total":[110,62,13,3,123]}
+  },
+  "mirror_cases": [
+    {"name":"full-copy","reference":["a","b"],"incoming":["a","b"],"expected":"mirror","prefix":2,"continuation":0},
+    {"name":"proved-prefix-and-unique-tail","reference":["a"],"incoming":["a","b"],"expected":"mirror","prefix":1,"continuation":1},
+    {"name":"unscanned-predecessor","reference":["a"],"incoming":["a","b"],"reference_incomplete":true,"expected":"pending_incomplete"},
+    {"name":"incompatible-same-session-id","reference":["a","b"],"incoming":["a","c"],"expected":"identity_conflict"},
+    {"name":"single-vector-without-strong-header","reference":["a"],"incoming":["a"],"unknown_creation":true,"expected":"pending_insufficient"},
+    {"name":"ordered-full-vectors-without-creation","reference":["a","b"],"incoming":["a","b"],"unknown_creation":true,"expected":"mirror","prefix":2,"continuation":0}
+  ],
+  "lineage_cases": [
+    {"name":"explicit-parent-and-prefix","parent":["a","b"],"child":["a","c"],"expected":"inherited","prefix":1,"continuation":1},
+    {"name":"all-copied-prefix","parent":["a","b"],"child":["a","b"],"expected":"inherited","prefix":2,"continuation":0},
+    {"name":"missing-parent","parent":[],"child":["a","c"],"missing_parent":true,"expected":"pending_incomplete"},
+    {"name":"ambiguous-parent","parent":["a"],"child":["a","c"],"multiple_parents":true,"expected":"pending_multiple"},
+    {"name":"no-matching-prefix","parent":["a","b"],"child":["c"],"expected":"pending_insufficient"}
+  ]
+}
