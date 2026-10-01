@@ -172,12 +172,22 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     await waitFor(()=>!document.querySelector('.facet-popup'));
                     ok=ok && document.activeElement===trigger;
                 }
-                for(const [name,label] of [['模型','模型统计汇总'],['项目','项目统计汇总']]) {
+                for(const [name,label,emptyHeading] of [['模型','模型统计汇总','当前筛选暂无可信消费'],['项目','项目统计汇总','当前筛选暂无可信消费'],['会话','会话统计汇总','当前筛选暂无消费会话']]) {
                     [...document.querySelectorAll('nav button')].find(button=>button.textContent===name)?.click();
-                    await waitFor(()=>document.querySelector(`section[aria-label="${label}"]`) && document.querySelector('.group-empty h2')?.textContent==='当前筛选暂无可信消费');
+                    await waitFor(()=>document.querySelector(`section[aria-label="${label}"]`) && document.querySelector('.group-empty h2')?.textContent===emptyHeading);
                     ok=ok && document.querySelector('h1')?.textContent===name
                         && document.querySelector('.group-total[aria-label="0 Token"]')!==null
                         && document.querySelector('.group-stat-strip .cost-number')?.textContent==='未计价';
+                    if(name==='会话') {
+                        const sort=document.querySelector('select[aria-label="会话排序"]');
+                        const size=document.querySelector('select[aria-label="会话每页数量"]');
+                        ok=ok && sort?.value==='latest_desc' && size?.value==='50'
+                            && [...document.querySelectorAll('.session-pagination button')].every(button=>button.disabled);
+                        sort.value='total_desc'; sort.dispatchEvent(new Event('change',{bubbles:true}));
+                        size.value='100'; size.dispatchEvent(new Event('change',{bubbles:true}));
+                        await waitFor(()=>document.querySelector('.group-empty h2')?.textContent===emptyHeading);
+                        ok=ok && sort.value==='total_desc' && size.value==='100';
+                    }
                 }
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='总览')?.click();
                 await waitFor(()=>document.querySelector('main .empty h2')?.textContent==='添加 Codex 数据来源');

@@ -5,7 +5,8 @@ import { useFilterOptions } from './useFilterOptions';
 import './filters.css';
 
 export type AdvancedDimension = 'models' | 'projects' | 'sessions';
-export type FilterChoices = Record<AdvancedDimension, FilterOption | null>;
+export type FilterChoice = Pick<FilterOption, 'key' | 'display_name'>;
+export type FilterChoices = Record<AdvancedDimension, FilterChoice | null>;
 const labels: Record<AdvancedDimension, string> = { models: '模型', projects: '项目', sessions: '会话' };
 const dimensions: AdvancedDimension[] = ['models', 'projects', 'sessions'];
 
