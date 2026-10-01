@@ -16,6 +16,19 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validate({ ...fixture, meta: { ...fixture.meta, price_revision: undefined } })).toBe(false);
   expect(validate({ ...fixture, series: [{ ...fixture.series[0], coverage: undefined }] })).toBe(false);
   expect(validate({ ...fixture, series: Array(2001).fill(fixture.series[0]) })).toBe(false);
+  const group = { key: null, display_name: '未知模型', totals, pricing: fixture.pricing, coverage };
+  const grouped = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, total_group_count: '1', truncated: false, groups: [group] };
+  const validateGroups = ajv.compile(protocol.schemas.GroupedUsageBundle);
+  expect(validateGroups(grouped)).toBe(true);
+  expect(validateGroups({ ...grouped, total_group_count: undefined })).toBe(false);
+  expect(validateGroups({ ...grouped, groups: [{ ...group, pricing: undefined }] })).toBe(false);
+  expect(validateGroups({ ...grouped, groups: Array(201).fill(group) })).toBe(false);
+  const validateGroupRequest = ajv.compile(protocol.schemas.GroupedUsageRequest);
+  const all = { kind: 'all' };
+  const groupRequest = { filter: { range: { start_ms: 0, end_ms: 1000, timezone: 'UTC' }, sources: all, models: all, projects: all, sessions: all }, price_basis: { mode: 'event_time' }, dimension: 'models', sort: 'total_desc', limit: 200 };
+  expect(validateGroupRequest(groupRequest)).toBe(true);
+  expect(validateGroupRequest({ ...groupRequest, limit: 201 })).toBe(false);
+  expect(validateGroupRequest({ ...groupRequest, limit: 0 })).toBe(false);
 });
 test('Rust schema and TS preserve nullable fields and exact decimal strings', () => {
   const validate = ajv.compile(protocol.schemas.TokenMeasure);

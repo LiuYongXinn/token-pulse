@@ -40,6 +40,12 @@ export type GroupSort = "total_desc" | "name_asc";
 
 export type GroupedUsage = { key: string | null, display_name: string, totals: TokenTotals, };
 
+export type GroupedUsageRequest = { filter: UsageFilter, price_basis: PriceBasis, dimension: GroupDimension, sort: GroupSort, limit: number, };
+
+export type PricedUsageGroup = { key: string | null, display_name: string, totals: TokenTotals, pricing: PricingSummary, coverage: Coverage, };
+
+export type GroupedUsageBundle = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, total_group_count: DecimalInt, truncated: boolean, groups: Array<PricedUsageGroup>, };
+
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 
 export type UsageSeriesBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, totals: TokenTotals, coverage: Coverage, };

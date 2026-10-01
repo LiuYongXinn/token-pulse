@@ -356,3 +356,5 @@ AppError 不包含完整源记录、访问令牌、未经处理的系统错误�
 CSV 将可能被表格解释为公式的用户标签转为安全文本，数值列以精确字符串输出；路径隐藏由后台执行。JSON schema 显式区分零与 null。先写临时文件、完成校验再原子发布到用户选择目标，取消 / 失败清理临时产物。
 
 契约检查：DTO schema round-trip、超大整数、非法区间 / 枚举 / 游标、窗口越权、序号乱序、通知丢失、快照过期、幂等 key 冲突、费用空值、额度 epoch 变化、隐私宿主断连与安全导出。主页面同快照和分页租约需使用真实并发写入验证，不能只断言几个 revision 字符串相同。
+
+`get_grouped_usage` 的正式请求将 filter、price_basis、dimension（models / projects）、sort（total_desc / name_asc）及 limit（1–200）放在 request 对象内。响应为 GroupedUsageBundle：完整筛选 summary / pricing / coverage / meta，加 groups（每组 key|null、display_name、totals、pricing、coverage）、含未知分类的 total_group_count 和 truncated。limit 仅限制显示行，不改变整体汇总；同事务规则与全部来源证据用于估价，来源筛选不缩小规则匹配证据。模型 key 当前基于实际 provider / model，版本化别名规范化需在后续接口统一。

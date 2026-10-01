@@ -43,6 +43,47 @@ pub struct GroupedUsage {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
+pub struct GroupedUsageRequest {
+    pub filter: UsageFilter,
+    pub price_basis: PriceBasis,
+    pub dimension: GroupDimension,
+    pub sort: GroupSort,
+    #[schemars(range(min = 1, max = 200))]
+    pub limit: u16,
+}
+impl GroupedUsageRequest {
+    pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
+        self.filter.validate()?;
+        if !(1..=200).contains(&self.limit) {
+            return Err(crate::error::ErrorCode::InvalidQuery);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct PricedUsageGroup {
+    pub key: Option<String>,
+    pub display_name: String,
+    pub totals: TokenTotals,
+    pub pricing: PricingSummary,
+    pub coverage: Coverage,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct GroupedUsageBundle {
+    pub meta: SnapshotMeta,
+    pub summary: TokenTotals,
+    pub pricing: PricingSummary,
+    pub coverage: Coverage,
+    pub total_group_count: crate::numeric::DecimalInt,
+    pub truncated: bool,
+    #[schemars(length(max = 200))]
+    pub groups: Vec<PricedUsageGroup>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
 pub struct DashboardRequest {
     pub filter: UsageFilter,
     pub price_basis: PriceBasis,

@@ -7,8 +7,8 @@ use token_pulse_core::pricing::{
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{
-    DashboardBundle, DashboardRequest, GroupDimension, GroupSort, GroupedUsage, RecentSession,
-    UsageSeriesBucket,
+    DashboardBundle, DashboardRequest, GroupDimension, GroupSort, GroupedUsage, GroupedUsageBundle,
+    GroupedUsageRequest, PricedUsageGroup, RecentSession, UsageSeriesBucket,
 };
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -57,6 +57,9 @@ fn main() {
         GroupDimension,
         GroupSort,
         GroupedUsage,
+        GroupedUsageRequest,
+        PricedUsageGroup,
+        GroupedUsageBundle,
         DashboardRequest,
         UsageSeriesBucket,
         RecentSession,
