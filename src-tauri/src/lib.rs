@@ -11,6 +11,7 @@ use token_pulse_core::{
 };
 
 struct RuntimeState {
+    selections: std::sync::Arc<std::sync::Mutex<token_pulse_core::selections::DirectorySelections>>,
     data_directory: PathBuf,
     database: token_pulse_store::StoreResult<token_pulse_store::Database>,
     collector: token_pulse_store::StoreResult<token_pulse_collector::service::CollectorService>,
@@ -98,6 +99,7 @@ fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| { let _ = show_main(app); }))
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let expected_id = if cfg!(debug_assertions) { "com.tokenpulse.desktop.dev" } else { "com.tokenpulse.desktop" };
             if app.config().identifier != expected_id {
@@ -107,7 +109,7 @@ pub fn run() {
             token_pulse_store::prepare_data_directory(&data_directory)?;
             let database = token_pulse_store::Database::open(&data_directory);
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()),Err(error)=>Err(error.code.into())};
-            app.manage(RuntimeState { data_directory, database, collector });
+            app.manage(RuntimeState { data_directory, database, collector, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
@@ -141,7 +143,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -175,3 +177,4 @@ pub fn run() {
 mod power;
 #[cfg(debug_assertions)]
 mod smoke;
+mod source_commands;

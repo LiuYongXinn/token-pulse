@@ -55,6 +55,9 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 ok = r.api_version === 1 && r.request_id === 'native-smoke'
                     && r.data.development === true && r.data.collector === 'not_configured'
                     && r.data.storage === 'ready' && r.data.storage_error === null;
+                const sources = await invoke('get_sources', { requestId: 'native-smoke-sources' });
+                ok = ok && sources.api_version === 1 && sources.request_id === 'native-smoke-sources'
+                    && Array.isArray(sources.data.sources) && typeof sources.data.settings_revision === 'string';
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();

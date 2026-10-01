@@ -38,7 +38,10 @@ impl Database {
         scan_at: Option<i64>,
         success_at: Option<i64>,
     ) -> StoreResult<()> {
-        self.write(move|conn| {conn.execute("UPDATE sources SET readability=?1,capabilities_json=?2,last_scan_at_ms=COALESCE(?3,last_scan_at_ms),last_success_at_ms=COALESCE(?4,last_success_at_ms) WHERE source_id=?5",params![serde_json::to_value(readability)?.as_str(),serde_json::to_string(&capabilities)?,scan_at,success_at,source_id])?;Ok(())})
+        self.write(move|conn| {
+            let (kind,config):(String,String)=conn.query_row("SELECT kind,capabilities_json FROM sources WHERE source_id=?1",[&source_id],|r|Ok((r.get(0)?,r.get(1)?)))?;
+            let (origin,removed,_)=crate::source_management::configuration(&config,&kind)?;
+            conn.execute("UPDATE sources SET readability=?1,capabilities_json=?2,last_scan_at_ms=COALESCE(?3,last_scan_at_ms),last_success_at_ms=COALESCE(?4,last_success_at_ms) WHERE source_id=?5",params![serde_json::to_value(readability)?.as_str(),crate::source_management::encoded(origin,removed,capabilities)?,scan_at,success_at,source_id])?;Ok(())})
     }
     pub fn enabled_source_root(&self, source_id: &str) -> StoreResult<Option<String>> {
         self.snapshot(|tx, _| {

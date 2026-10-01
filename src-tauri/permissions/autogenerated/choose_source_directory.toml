@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-source-directory"
+description = "Enables the choose_source_directory command without any pre-configured scope."
+commands.allow = ["choose_source_directory"]
+
+[[permission]]
+identifier = "deny-choose-source-directory"
+description = "Denies the choose_source_directory command without any pre-configured scope."
+commands.deny = ["choose_source_directory"]

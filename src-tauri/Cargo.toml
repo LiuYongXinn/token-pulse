@@ -16,6 +16,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2.7.3"
+uuid = { version = "1", features = ["v4"] }
 serde.workspace = true
 token-pulse-core.workspace = true
 token-pulse-store.workspace = true

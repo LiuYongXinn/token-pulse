@@ -65,7 +65,11 @@ fn main() {
         SourceReadability,
         CapabilityState,
         SourceCapabilities,
-        SourceSummary
+        SourceSummary,
+        SourceDirectoryKind,
+        SourceDirectorySelection,
+        SourcesSnapshot,
+        ManageSourceAction
     );
     // Generic response cannot be represented by a single JSON Schema. Instantiated responses can.
     schemas.insert(

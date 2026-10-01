@@ -35,6 +35,7 @@ pub enum CapabilityState {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
+#[serde(default)]
 pub struct SourceCapabilities {
     pub physical_identity: CapabilityState,
     pub byte_seek: CapabilityState,
@@ -58,11 +59,41 @@ pub struct SourceSummary {
     pub root_path: String,
     pub origin: SourceOrigin,
     pub enabled: bool,
+    pub removed: bool,
     pub readability: SourceReadability,
     pub capabilities: SourceCapabilities,
     pub last_scan_at_ms: Option<crate::numeric::EpochMs>,
     pub last_success_at_ms: Option<crate::numeric::EpochMs>,
     pub error: Option<ErrorCode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceDirectoryKind {
+    Local,
+    Wsl,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SourceDirectorySelection {
+    pub selection_handle: String,
+    pub root_path: String,
+    pub origin: SourceOrigin,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SourcesSnapshot {
+    pub settings_revision: crate::numeric::DecimalInt,
+    pub sources: Vec<SourceSummary>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ManageSourceAction {
+    Add { selection_handle: String },
+    Pause { source_id: String },
+    Resume { source_id: String },
+    Detect {},
+    RetainRemove { source_id: String },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceCandidate {

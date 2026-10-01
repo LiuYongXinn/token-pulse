@@ -10,6 +10,7 @@ pub mod numeric;
 pub mod protocol;
 pub mod reader;
 pub mod scheduling;
+pub mod selections;
 pub mod sequence;
 pub mod sources;
 

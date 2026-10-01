@@ -966,6 +966,93 @@
       "title": "JobState",
       "type": "string"
     },
+    "ManageSourceAction": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "add",
+              "type": "string"
+            },
+            "selection_handle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "selection_handle"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "pause",
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "resume",
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "detect",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "retain_remove",
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_id"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "ManageSourceAction"
+    },
     "MiniScope": {
       "$defs": {
         "EpochMs": {
@@ -2257,16 +2344,20 @@
       "additionalProperties": false,
       "properties": {
         "byte_seek": {
-          "$ref": "#/$defs/CapabilityState"
+          "$ref": "#/$defs/CapabilityState",
+          "default": "not_probed"
         },
         "physical_identity": {
-          "$ref": "#/$defs/CapabilityState"
+          "$ref": "#/$defs/CapabilityState",
+          "default": "not_probed"
         },
         "polling_required": {
+          "default": true,
           "type": "boolean"
         },
         "watcher": {
-          "$ref": "#/$defs/CapabilityState"
+          "$ref": "#/$defs/CapabilityState",
+          "default": "not_probed"
         }
       },
       "required": [
@@ -2276,6 +2367,48 @@
         "polling_required"
       ],
       "title": "SourceCapabilities",
+      "type": "object"
+    },
+    "SourceDirectoryKind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "local",
+        "wsl"
+      ],
+      "title": "SourceDirectoryKind",
+      "type": "string"
+    },
+    "SourceDirectorySelection": {
+      "$defs": {
+        "SourceOrigin": {
+          "enum": [
+            "windows_default",
+            "environment",
+            "custom",
+            "wsl"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/SourceOrigin"
+        },
+        "root_path": {
+          "type": "string"
+        },
+        "selection_handle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "selection_handle",
+        "root_path",
+        "origin"
+      ],
+      "title": "SourceDirectorySelection",
       "type": "object"
     },
     "SourceIssue": {
@@ -2389,16 +2522,20 @@
           "additionalProperties": false,
           "properties": {
             "byte_seek": {
-              "$ref": "#/$defs/CapabilityState"
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
             },
             "physical_identity": {
-              "$ref": "#/$defs/CapabilityState"
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
             },
             "polling_required": {
+              "default": true,
               "type": "boolean"
             },
             "watcher": {
-              "$ref": "#/$defs/CapabilityState"
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
             }
           },
           "required": [
@@ -2474,6 +2611,9 @@
         "readability": {
           "$ref": "#/$defs/SourceReadability"
         },
+        "removed": {
+          "type": "boolean"
+        },
         "root_path": {
           "type": "string"
         },
@@ -2486,6 +2626,7 @@
         "root_path",
         "origin",
         "enabled",
+        "removed",
         "readability",
         "capabilities",
         "last_scan_at_ms",
@@ -2493,6 +2634,196 @@
         "error"
       ],
       "title": "SourceSummary",
+      "type": "object"
+    },
+    "SourcesSnapshot": {
+      "$defs": {
+        "CapabilityState": {
+          "enum": [
+            "not_probed",
+            "available",
+            "unavailable"
+          ],
+          "type": "string"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "SourceCapabilities": {
+          "additionalProperties": false,
+          "properties": {
+            "byte_seek": {
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
+            },
+            "physical_identity": {
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
+            },
+            "polling_required": {
+              "default": true,
+              "type": "boolean"
+            },
+            "watcher": {
+              "$ref": "#/$defs/CapabilityState",
+              "default": "not_probed"
+            }
+          },
+          "required": [
+            "physical_identity",
+            "byte_seek",
+            "watcher",
+            "polling_required"
+          ],
+          "type": "object"
+        },
+        "SourceOrigin": {
+          "enum": [
+            "windows_default",
+            "environment",
+            "custom",
+            "wsl"
+          ],
+          "type": "string"
+        },
+        "SourceReadability": {
+          "enum": [
+            "awaiting_directory",
+            "readable",
+            "partially_readable",
+            "unreadable",
+            "disabled"
+          ],
+          "type": "string"
+        },
+        "SourceSummary": {
+          "additionalProperties": false,
+          "properties": {
+            "capabilities": {
+              "$ref": "#/$defs/SourceCapabilities"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorCode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_scan_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_success_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "origin": {
+              "$ref": "#/$defs/SourceOrigin"
+            },
+            "readability": {
+              "$ref": "#/$defs/SourceReadability"
+            },
+            "removed": {
+              "type": "boolean"
+            },
+            "root_path": {
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_id",
+            "root_path",
+            "origin",
+            "enabled",
+            "removed",
+            "readability",
+            "capabilities",
+            "last_scan_at_ms",
+            "last_success_at_ms",
+            "error"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "settings_revision",
+        "sources"
+      ],
+      "title": "SourcesSnapshot",
       "type": "object"
     },
     "TokenMeasure": {

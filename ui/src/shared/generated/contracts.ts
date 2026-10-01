@@ -76,6 +76,14 @@ export type CapabilityState = "not_probed" | "available" | "unavailable";
 
 export type SourceCapabilities = { physical_identity: CapabilityState, byte_seek: CapabilityState, watcher: CapabilityState, polling_required: boolean, };
 
-export type SourceSummary = { source_id: string, root_path: string, origin: SourceOrigin, enabled: boolean, readability: SourceReadability, capabilities: SourceCapabilities, last_scan_at_ms: EpochMs | null, last_success_at_ms: EpochMs | null, error: ErrorCode | null, };
+export type SourceSummary = { source_id: string, root_path: string, origin: SourceOrigin, enabled: boolean, removed: boolean, readability: SourceReadability, capabilities: SourceCapabilities, last_scan_at_ms: EpochMs | null, last_success_at_ms: EpochMs | null, error: ErrorCode | null, };
+
+export type SourceDirectoryKind = "local" | "wsl";
+
+export type SourceDirectorySelection = { selection_handle: string, root_path: string, origin: SourceOrigin, };
+
+export type SourcesSnapshot = { settings_revision: DecimalInt, sources: Array<SourceSummary>, };
+
+export type ManageSourceAction = { "kind": "add", selection_handle: string, } | { "kind": "pause", source_id: string, } | { "kind": "resume", source_id: string, } | { "kind": "detect", } | { "kind": "retain_remove", source_id: string, };
 
 export type Response<T> = { api_version: 1, request_id: string, data: T, };

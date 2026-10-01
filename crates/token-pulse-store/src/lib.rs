@@ -8,6 +8,7 @@ pub mod collection;
 mod database;
 mod migration;
 mod registration;
+pub mod source_management;
 pub use database::{Database, Revision, SourceRecord};
 pub use registration::{FileRegistration, SessionRegistration};
 pub use rusqlite;
