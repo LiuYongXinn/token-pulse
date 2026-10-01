@@ -383,7 +383,28 @@ impl Database {
         if ledger.is_empty() || ledger.len() > 256 {
             return Err(ErrorCode::InvalidQuery.into());
         }
-        let candidate = match self.snapshot(|tx, _| prepare(tx, ledger, stop))? {
+        let (prepared_input, prepared) =
+            self.snapshot(|tx, _| Ok((load_input(tx, ledger)?, prepare(tx, ledger, stop))))?;
+        let prepared = match prepared {
+            Ok(value) => value,
+            Err(error) => {
+                // A deterministic oversized / corrupt projection must not be
+                // rebuilt on every poll. New evidence gets a different key.
+                if matches!(
+                    error.code,
+                    ErrorCode::InvalidQuery | ErrorCode::DbCorrupt | ErrorCode::NumericOverflow
+                ) {
+                    let _ = self.write(move |conn| {
+                        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                        fresh(&tx,&prepared_input,false)?;
+                        tx.execute("INSERT INTO usage_rollup_sets(set_id,ledger_id,evidence_revision,cache_version,parser_version,accounting_version,state,created_at_ms) VALUES(?1,?2,?3,?4,?5,?6,'failed',?7) ON CONFLICT DO NOTHING",params![prepared_input.set_id,prepared_input.ledger_id,prepared_input.revision,CACHE_VERSION,prepared_input.parser,prepared_input.accounting,at_ms])?;
+                        tx.commit()?; Ok(())
+                    });
+                }
+                return Err(error);
+            }
+        };
+        let candidate = match prepared {
             Prepared::Ready(ready) => return Ok(ready),
             Prepared::Candidate(candidate) => candidate,
         };
@@ -519,6 +540,35 @@ impl Database {
                 "UPDATE usage_rollup_sets SET state='obsolete' WHERE state='building'",
                 [],
             )?)
+        })
+    }
+
+    /// One bounded candidate at a time. Persistent failures suppress unchanged
+    /// evidence; explicit builds can retry. Rebuild jobs have read priority.
+    pub fn next_rollup_ledger(&self) -> StoreResult<Option<String>> {
+        self.snapshot(|tx,_| {
+            Ok(tx.query_row("SELECT l.ledger_id FROM ledger_generations l JOIN sessions s ON s.active_ledger_id=l.ledger_id JOIN ledger_usage_versions v ON v.ledger_id=l.ledger_id WHERE l.state='active' AND EXISTS(SELECT 1 FROM usage_events e WHERE e.ledger_id=l.ledger_id) AND NOT EXISTS(SELECT 1 FROM jobs WHERE state IN ('queued','running','publishing')) AND NOT EXISTS(SELECT 1 FROM usage_rollup_sets r WHERE r.ledger_id=l.ledger_id AND r.evidence_revision=v.revision AND r.cache_version=?1 AND r.parser_version=l.parser_version AND r.accounting_version=l.accounting_version AND (r.state IN ('building','ready','failed') OR (r.state='obsolete' AND EXISTS(SELECT 1 FROM utc_hour_usage_rollups h WHERE h.set_id=r.set_id)))) ORDER BY s.last_activity_ms DESC,l.ledger_id COLLATE BINARY LIMIT 1",[CACHE_VERSION],|r|r.get(0)).optional()?)
+        })
+    }
+
+    /// Reclaim derived rows only, at most 500 rows per writer task. Remove turn
+    /// members before cohorts so a large FK cascade cannot monopolize Writer.
+    pub fn prune_rollups_step(&self) -> StoreResult<usize> {
+        self.write(|conn| {
+            let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current="EXISTS(SELECT 1 FROM ledger_usage_versions v JOIN ledger_generations l ON l.ledger_id=v.ledger_id JOIN sessions s ON s.active_ledger_id=l.ledger_id WHERE l.state='active' AND l.ledger_id=r.ledger_id AND v.revision=r.evidence_revision AND l.parser_version=r.parser_version AND l.accounting_version=r.accounting_version AND r.cache_version=?1)";
+            let selected:Option<String>=tx.query_row(&format!("SELECT r.set_id FROM usage_rollup_sets r WHERE r.state<>'building' AND (NOT {current} OR r.state IN ('obsolete','failed')) AND EXISTS(SELECT 1 FROM utc_hour_usage_rollups h WHERE h.set_id=r.set_id) ORDER BY r.created_at_ms,r.set_id LIMIT 1"),[CACHE_VERSION],|r|r.get(0)).optional()?;
+            let count=if let Some(set)=selected {
+                tx.execute("UPDATE usage_rollup_sets SET state='obsolete' WHERE set_id=?1 AND state='ready'",[&set])?;
+                let turns=tx.execute("DELETE FROM utc_hour_rollup_turns WHERE (set_id,hour_start_ms,cohort_key,turn_id) IN(SELECT set_id,hour_start_ms,cohort_key,turn_id FROM utc_hour_rollup_turns WHERE set_id=?1 LIMIT 500)",[&set])?;
+                if turns>0 { turns } else {
+                    tx.execute("DELETE FROM utc_hour_usage_rollups WHERE (set_id,hour_start_ms,cohort_key) IN(SELECT set_id,hour_start_ms,cohort_key FROM utc_hour_usage_rollups WHERE set_id=?1 LIMIT 500)",[&set])?
+                }
+            } else {
+                // Keep current failed metadata as the bounded retry marker.
+                tx.execute(&format!("DELETE FROM usage_rollup_sets WHERE set_id IN(SELECT r.set_id FROM usage_rollup_sets r WHERE r.state<>'building' AND NOT {current} AND NOT EXISTS(SELECT 1 FROM utc_hour_usage_rollups h WHERE h.set_id=r.set_id) LIMIT 100)"),[CACHE_VERSION])?
+            };
+            tx.commit()?; Ok(count)
         })
     }
 }

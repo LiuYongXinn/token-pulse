@@ -18,6 +18,7 @@ struct RuntimeState {
         std::sync::Arc<token_pulse_collector::service::CollectorService>,
     >,
     jobs: token_pulse_store::StoreResult<token_pulse_collector::jobs::JobService>,
+    rollups: token_pulse_store::StoreResult<token_pulse_store::rollup_service::RollupService>,
 }
 
 #[tauri::command]
@@ -123,7 +124,8 @@ pub fn run() {
                 let notify:std::sync::Arc<dyn Fn()+Send+Sync>=if let Ok(collector)=&collector {let collector=collector.clone();std::sync::Arc::new(move||collector.reconcile())} else {std::sync::Arc::new(||{})};
                 token_pulse_collector::jobs::JobService::start_with_notify(database.clone(),notify)
             },Err(error)=>Err(error.code.into())};
-            app.manage(RuntimeState { data_directory, database, collector, jobs, selections: Default::default() });
+            let rollups=match &database {Ok(database)=>token_pulse_store::rollup_service::RollupService::start(database.clone()),Err(error)=>Err(error.code.into())};
+            app.manage(RuntimeState { data_directory, database, collector, jobs, rollups, selections: Default::default() });
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
@@ -179,6 +181,9 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
                 if let Some(state) = app.try_state::<RuntimeState>() {
+                    if let Ok(rollups) = &state.rollups {
+                        rollups.shutdown();
+                    }
                     if let Ok(jobs) = &state.jobs {
                         jobs.shutdown();
                     }

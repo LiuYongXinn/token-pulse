@@ -14,6 +14,7 @@ pub mod query;
 pub mod rebuild;
 mod registration;
 pub mod rollup;
+pub mod rollup_service;
 pub mod source_management;
 pub use database::{Database, Revision, SourceRecord};
 pub use registration::{FileRegistration, SessionRegistration};
