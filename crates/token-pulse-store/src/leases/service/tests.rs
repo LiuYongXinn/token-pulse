@@ -270,3 +270,122 @@ fn an_active_sql_query_cannot_outlive_the_absolute_deadline() {
     let next = db.leases().open(&b).unwrap();
     assert_eq!(read(&db, &next, &b).unwrap(), 0);
 }
+
+#[test]
+fn issued_positions_are_retryable_and_keep_the_actual_old_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    let b = binding("main");
+    let handle = db.leases().open(&b).unwrap();
+    let tuple = ("9007199254740993".to_owned(), "opaque-session".to_owned());
+    let cursor = db.leases().issue_cursor(&handle, &b, &tuple).unwrap();
+    db.write(|conn| {
+        conn.execute("UPDATE app_state SET data_revision=1,price_revision=1", [])?;
+        Ok(())
+    })
+    .unwrap();
+    for _ in 0..3 {
+        let (resumed, last): (LeaseHandle, (String, String)) =
+            db.leases().resolve_cursor(&cursor, &b).unwrap();
+        assert_eq!(last, tuple);
+        assert_eq!(resumed.revision, handle.revision);
+        assert_eq!(read(&db, &resumed, &b).unwrap(), 0);
+    }
+    db.leases().release(&handle, &b).unwrap();
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<(String, String)>(&cursor, &b)
+            .unwrap_err()
+            .code,
+        ErrorCode::SnapshotExpired
+    );
+}
+
+#[test]
+fn valid_signatures_cannot_authorize_unissued_positions_or_forged_revisions() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    let b = binding("main");
+    let handle = db.leases().open(&b).unwrap();
+    let forged = db
+        .leases()
+        .signer()
+        .issue(&b, CursorClaims::new(handle.snapshot_id, &42).unwrap());
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<i64>(&forged, &b)
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    let bad_handle = LeaseHandle {
+        snapshot_id: handle.snapshot_id,
+        revision: Revision {
+            data: 99,
+            price: 99,
+            settings: 99,
+        },
+    };
+    assert_eq!(
+        db.leases()
+            .issue_cursor(&bad_handle, &b, &42)
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    let valid = db.leases().issue_cursor(&handle, &b, &42).unwrap();
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<i64>(&valid, &binding("mini"))
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<String>(&valid, &b)
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    let absent = db
+        .leases()
+        .signer()
+        .issue(&b, CursorClaims::new([0; 16], &42).unwrap());
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<i64>(&absent, &b)
+            .unwrap_err()
+            .code,
+        ErrorCode::SnapshotExpired
+    );
+}
+
+#[test]
+fn server_position_memory_is_bounded_and_a_limit_releases_its_real_transaction() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    let b = binding("main");
+    let handle = db.leases().open(&b).unwrap();
+    let first = db.leases().issue_cursor(&handle, &b, &0).unwrap();
+    for n in 1..MAX_POSITIONS {
+        db.leases().issue_cursor(&handle, &b, &n).unwrap();
+    }
+    assert_eq!(db.leases().issue_cursor(&handle, &b, &0).unwrap(), first);
+    assert_eq!(
+        db.leases()
+            .issue_cursor(&handle, &b, &MAX_POSITIONS)
+            .unwrap_err()
+            .code,
+        ErrorCode::SnapshotExpired
+    );
+    assert_eq!(
+        db.leases()
+            .resolve_cursor::<usize>(&first, &b)
+            .unwrap_err()
+            .code,
+        ErrorCode::SnapshotExpired
+    );
+    let fresh = db.leases().open(&b).unwrap();
+    assert_eq!(read(&db, &fresh, &b).unwrap(), 0);
+}

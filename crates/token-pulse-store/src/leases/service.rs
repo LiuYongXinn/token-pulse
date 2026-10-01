@@ -1,8 +1,10 @@
 //! Two dedicated actors keep real SQLite transactions without self references.
-use super::cursor::{CursorSigner, QueryBinding};
+use super::cursor::{CursorClaims, CursorSigner, QueryBinding};
 use crate::{ErrorCode, Revision, StoreResult};
 use rusqlite::{Connection, InterruptHandle, OpenFlags, Transaction, TransactionBehavior};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -12,6 +14,12 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
+const MAX_POSITIONS: usize = 4096;
+#[derive(Clone)]
+struct Position {
+    revision: Revision,
+    tuple: String,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct LeaseHandle {
@@ -38,6 +46,7 @@ struct Reservation {
     id: [u8; 16],
     binding: QueryBinding,
     cancelled: Arc<AtomicBool>,
+    positions: Arc<Mutex<BTreeMap<[u8; 32], Position>>>,
 }
 #[derive(Clone)]
 struct Guard {
@@ -191,6 +200,7 @@ impl LeaseService {
                 id,
                 binding: binding.clone(),
                 cancelled: Arc::new(AtomicBool::new(false)),
+                positions: Arc::new(Mutex::new(BTreeMap::new())),
             };
             *state = Some(reservation.clone());
             drop(state);
@@ -255,6 +265,78 @@ impl LeaseService {
             })
             .map_err(|_| ErrorCode::SnapshotExpired)?;
         receive.recv().map_err(|_| ErrorCode::SnapshotExpired)?
+    }
+    /// Call after the page read, never reentrantly inside an actor callback.
+    pub fn issue_cursor(
+        &self,
+        handle: &LeaseHandle,
+        binding: &QueryBinding,
+        tuple: &impl Serialize,
+    ) -> StoreResult<String> {
+        let claims = CursorClaims::new(handle.snapshot_id, tuple)?;
+        let encoded = serde_json::to_string(tuple)?;
+        let captured = self.read(handle, binding, |_, revision| Ok(revision))?;
+        if captured != handle.revision {
+            return Err(ErrorCode::CursorInvalid.into());
+        }
+        let worker = self.worker(handle, binding)?;
+        let state = worker.state.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
+        let active = state
+            .as_ref()
+            .filter(|r| r.id == handle.snapshot_id)
+            .ok_or(ErrorCode::SnapshotExpired)?;
+        let mut positions = active
+            .positions
+            .lock()
+            .map_err(|_| ErrorCode::DbWriteFailed)?;
+        if positions.len() >= MAX_POSITIONS && !positions.contains_key(&claims.position_hash) {
+            drop(positions);
+            drop(state);
+            let _ = self.release(handle, binding);
+            return Err(ErrorCode::SnapshotExpired.into());
+        }
+        positions.entry(claims.position_hash).or_insert(Position {
+            revision: captured,
+            tuple: encoded,
+        });
+        Ok(self.signer.issue(binding, claims))
+    }
+    pub fn resolve_cursor<T: DeserializeOwned>(
+        &self,
+        token: &str,
+        binding: &QueryBinding,
+    ) -> StoreResult<(LeaseHandle, T)> {
+        // Authenticate the complete token before even looking for a lease.
+        let claims = self.signer.read(token, binding)?;
+        for worker in &self.workers {
+            let state = worker.state.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
+            let Some(active) = state.as_ref().filter(|r| r.id == claims.snapshot_id) else {
+                continue;
+            };
+            if &active.binding != binding {
+                return Err(ErrorCode::CursorInvalid.into());
+            }
+            let position = active
+                .positions
+                .lock()
+                .map_err(|_| ErrorCode::DbWriteFailed)?
+                .get(&claims.position_hash)
+                .cloned()
+                .ok_or(ErrorCode::CursorInvalid)?;
+            drop(state);
+            let handle = LeaseHandle {
+                snapshot_id: claims.snapshot_id,
+                revision: position.revision,
+            };
+            let captured = self.read(&handle, binding, |_, revision| Ok(revision))?;
+            if captured != position.revision {
+                return Err(ErrorCode::CursorInvalid.into());
+            }
+            let tuple =
+                serde_json::from_str(&position.tuple).map_err(|_| ErrorCode::CursorInvalid)?;
+            return Ok((handle, tuple));
+        }
+        Err(ErrorCode::SnapshotExpired.into())
     }
     pub fn release(&self, handle: &LeaseHandle, binding: &QueryBinding) -> StoreResult<()> {
         // Prevent a reclaimed slot from starting a new transaction between

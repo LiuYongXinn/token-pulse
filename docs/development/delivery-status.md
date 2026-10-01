@@ -473,3 +473,11 @@ Writer 在空闲及持续作业之间至少按 500 ms 节奏检查物理 WAL；�
 定位原 M08h2 夹具在当前运行库上 PRAGMA 截断的 DATABASE_LOCKED：同一 Writer 是 autocommit、无活跃语句，直接 main C API 返回 SQLITE_OK 并实际回收。临时仅检查应用语句的诊断代码已撤回；没有据此宣称 SQLite 版本缺陷或修改原始日志。
 
 2026-10-01 23:37 两项自动场景通过：旧普通读取事务在 Writer 写入 100 KiB / 修订后仍读旧状态，checkpoint Deferred 不等待、WAL 不变；释放后 Complete / 0 帧 / 实际 WAL 零、新读取完整保留内容。后台低阈值仅测试配置验证实际增长 → 旧租约 SNAPSHOT_EXPIRED → 回收 → 新租约见完整新内容。完整存储层 113 项普通测试（98 内部 + 15 集成，30 万 benchmark ignored）、workspace Clippy 与 Windows 10 隔离库 native probe 通过，累计普通 Rust 场景 199 项。原生既有 UI / IPC / 系统路由退出 0，仍有 class unregister 1412；未重新压测 30 万性能，过去的性能失败仍有效待复测 / 优化。签名最后位置注册与实际候选 / 会话 / 明细分页继续待实现。
+
+## M08h4：签名游标关联真实租约及有界最后位置
+
+LeaseService 新增 issue_cursor / resolve_cursor：签发前从实际 actor 核对捕获修订，最后 tuple 留在租约的内存登记表，token 仍只包含其摘要。解析先验证 MAC / 完整请求与窗口，再查真实租约和已登记位置，读取 actor 再确认可用与旧修订；即使内部拥有有效签名，未登记位置也不能当作分页权限。重复同一游标可重试，旧页位置不会随着下一页被覆盖。API 必须在页面查询完成后调用，不在同 actor 回调里同步重入。
+
+每个位置序列化限制 1 KiB，每租约最多 4096 个不同位置（两租约）；重复位置不再分配。达到上限明确 SNAPSHOT_EXPIRED 并释放事务，过期 / 释放后登记随租约清理；这不替代导出的一致副本作业。没有把最后标签 / 路径 / 消费数字编码给前端。
+
+2026-10-01 23:43 三项新增自动场景和共九项租约测试 / workspace Clippy 通过，累计普通 Rust 场景 202：超过 2^53 最后 tuple、Writer 改变 data / price revision 后重复 resume 仍读旧状态、释放后明确失效、有效签名但未登记位置 / 伪修订 / 跨窗口 / 不匹配 tuple 类型拒绝、已签名不存在快照过期、实际登记 4096 个位置 / 重复不扩展 / 第 4097 个触发释放 / 新租约可用。此模块没有新生产 IPC 或原生检查；候选 / 会话 / 明细的 keyset SQL、DTO、命令和 UI 仍待接入。
