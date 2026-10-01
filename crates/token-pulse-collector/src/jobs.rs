@@ -6,7 +6,7 @@ use std::{
         mpsc,
     },
     thread::{self, JoinHandle},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use token_pulse_core::error::ErrorCode;
 use token_pulse_store::{Database, StoreResult};
@@ -41,7 +41,14 @@ impl JobService {
         let thread = thread::Builder::new()
             .name("tokenpulse-jobs".into())
             .spawn(move || {
+                let mut checked_upgrade: Option<Instant> = None;
                 while !stop.load(Ordering::Acquire) {
+                    if checked_upgrade.is_none_or(|at| at.elapsed() >= Duration::from_secs(10)) {
+                        if let Ok(at) = now_ms() {
+                            let _ = database.enqueue_accounting_upgrade(at);
+                        }
+                        checked_upgrade = Some(Instant::now());
+                    }
                     if let Ok(Some(job)) = database.next_queued_rebuild() {
                         let result = crate::replay::execute_rebuild_controlled(
                             &database,
@@ -56,6 +63,9 @@ impl JobService {
                             || now_ms().unwrap_or(job.updated_at_ms.value()),
                         );
                         on_finished();
+                        // Recheck after each publication so independent old
+                        // ledgers are migrated without waiting ten seconds.
+                        checked_upgrade = None;
                         if result.is_err() {
                             let _ = receiver.recv_timeout(Duration::from_millis(250));
                         }

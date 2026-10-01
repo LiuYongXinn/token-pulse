@@ -14,15 +14,31 @@ use token_pulse_core::{
 fn busy(tx: &Transaction<'_>) -> StoreResult<bool> {
     Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE state IN ('queued','running','validating','publishing','cancelling'))",[],|r|r.get(0))?)
 }
-fn request(tx: &Transaction<'_>) -> StoreResult<Option<(String, JobRequest)>> {
+#[derive(Clone, Copy)]
+enum Trigger {
+    Proof,
+    AccountingUpgrade,
+}
+fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String, JobRequest)>> {
     if busy(tx)? {
         return Ok(None);
     }
-    let mut q=tx.prepare("SELECT s.session_key FROM sessions s WHERE s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) AND EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=s.active_ledger_id AND p.kind='pending') AND (EXISTS(SELECT 1 FROM file_usage_cursors c WHERE c.ledger_id=s.active_ledger_id AND c.state='rebuild_required') OR EXISTS(SELECT 1 FROM sessions peer LEFT JOIN session_aliases a ON a.alias_session_key=peer.session_key WHERE peer.provider=s.provider AND peer.provider_session_id=s.provider_session_id AND COALESCE(a.canonical_session_key,peer.session_key)<>s.session_key) OR EXISTS(SELECT 1 FROM sessions parent WHERE parent.provider=s.provider AND (parent.session_key=s.parent_key OR parent.provider_session_id=s.parent_provider_id))) ORDER BY s.session_key LIMIT 32768")?;
-    let seeds = q
-        .query_map([], |r| r.get::<_, String>(0))?
-        .collect::<crate::rusqlite::Result<Vec<_>>>()?;
-    drop(q);
+    let seeds = match trigger {
+        Trigger::Proof => {
+            let mut q=tx.prepare("SELECT s.session_key FROM sessions s WHERE s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) AND EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=s.active_ledger_id AND p.kind='pending') AND (EXISTS(SELECT 1 FROM file_usage_cursors c WHERE c.ledger_id=s.active_ledger_id AND c.state='rebuild_required') OR EXISTS(SELECT 1 FROM sessions peer LEFT JOIN session_aliases a ON a.alias_session_key=peer.session_key WHERE peer.provider=s.provider AND peer.provider_session_id=s.provider_session_id AND COALESCE(a.canonical_session_key,peer.session_key)<>s.session_key) OR EXISTS(SELECT 1 FROM sessions parent WHERE parent.provider=s.provider AND (parent.session_key=s.parent_key OR parent.provider_session_id=s.parent_provider_id))) ORDER BY s.session_key LIMIT 32768")?;
+            q.query_map([], |r| r.get::<_, String>(0))?
+                .collect::<crate::rusqlite::Result<Vec<_>>>()?
+        }
+        Trigger::AccountingUpgrade => {
+            // Parser upgrades need a separately verified reparse. Stored
+            // observations may be replayed only under their current parser.
+            let mut q=tx.prepare("SELECT s.session_key FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE l.state='active' AND l.parser_version=?1 AND l.accounting_version<>?2 AND s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) ORDER BY s.session_key LIMIT 32768")?;
+            q.query_map([PARSER_VERSION, ACCOUNTING_VERSION], |r| {
+                r.get::<_, String>(0)
+            })?
+            .collect::<crate::rusqlite::Result<Vec<_>>>()?
+        }
+    };
     let mut handled = BTreeSet::new();
     for seed in seeds {
         if handled.contains(&seed) {
@@ -39,21 +55,34 @@ fn request(tx: &Transaction<'_>) -> StoreResult<Option<(String, JobRequest)>> {
         let mut hash = Sha256::new();
         hash.update(serde_json::to_vec(&(PARSER_VERSION, ACCOUNTING_VERSION))?);
         let mut files = BTreeSet::new();
+        let mut complete_parser = true;
         for session in closure {
             let identity:(String,Option<String>,Option<String>,Option<String>,Option<i64>)=tx.query_row("SELECT provider,provider_session_id,parent_key,parent_provider_id,created_at_ms FROM sessions WHERE session_key=?1",[&session],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)))?;
             hash.update(serde_json::to_vec(&(&session, identity))?);
+            if matches!(trigger, Trigger::AccountingUpgrade) {
+                let ledger:(String,String,String)=tx.query_row("SELECT l.ledger_id,l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&session],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
+                if ledger.1 != PARSER_VERSION {
+                    complete_parser = false;
+                }
+                hash.update(serde_json::to_vec(&ledger)?);
+            }
             let mut q=tx.prepare("SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1 ORDER BY file_generation_id")?;
             files.extend(
                 q.query_map([&session], |r| r.get::<_, String>(0))?
                     .collect::<crate::rusqlite::Result<Vec<_>>>()?,
             );
         }
-        let mut complete = !files.is_empty();
+        let mut complete =
+            complete_parser && (matches!(trigger, Trigger::AccountingUpgrade) || !files.is_empty());
         for generation in files {
             let input:(i64,i64,String,String,Option<String>)=tx.query_row("SELECT g.committed_offset,g.observed_size,g.identity_json,g.anchor_json,f.current_generation_id FROM file_generations g JOIN source_files f ON f.file_id=g.file_id WHERE g.file_generation_id=?1",[&generation],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)))?;
-            if input.0 != input.1 {
+            if matches!(trigger, Trigger::Proof) && input.0 != input.1 {
                 complete = false;
                 break;
+            }
+            if matches!(trigger, Trigger::AccountingUpgrade) {
+                let availability:(String,bool,String,String)=tx.query_row("SELECT source.source_id,source.enabled,source.root_path,f.canonical_path FROM file_generations g JOIN source_files f ON f.file_id=g.file_id JOIN sources source ON source.source_id=f.source_id WHERE g.file_generation_id=?1",[&generation],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))?;
+                hash.update(serde_json::to_vec(&availability)?);
             }
             // Empty polling commits and ledger publication are bookkeeping, not new evidence.
             hash.update(serde_json::to_vec(&(generation, input))?);
@@ -62,8 +91,12 @@ fn request(tx: &Transaction<'_>) -> StoreResult<Option<(String, JobRequest)>> {
             continue;
         }
         let fingerprint = format!("{:x}", hash.finalize());
+        let purpose = match trigger {
+            Trigger::Proof => "proof",
+            Trigger::AccountingUpgrade => "accounting-upgrade",
+        };
         for retry in 0..3 {
-            let key = format!("proof-rebuild:{fingerprint}:{retry}");
+            let key = format!("{purpose}-rebuild:{fingerprint}:{retry}");
             let existing: Option<String> = tx
                 .query_row(
                     "SELECT job_id FROM jobs WHERE request_key=?1",
@@ -92,7 +125,7 @@ fn request(tx: &Transaction<'_>) -> StoreResult<Option<(String, JobRequest)>> {
             };
             request.validate()?;
             return Ok(Some((
-                format!("auto-rebuild-{fingerprint}-{retry}"),
+                format!("auto-{purpose}-{fingerprint}-{retry}"),
                 request,
             )));
         }
@@ -101,8 +134,14 @@ fn request(tx: &Transaction<'_>) -> StoreResult<Option<(String, JobRequest)>> {
 }
 impl Database {
     pub fn enqueue_proof_rebuild(&self, at_ms: i64) -> StoreResult<Option<Job>> {
+        self.enqueue_engine_rebuild(at_ms, Trigger::Proof)
+    }
+    pub fn enqueue_accounting_upgrade(&self, at_ms: i64) -> StoreResult<Option<Job>> {
+        self.enqueue_engine_rebuild(at_ms, Trigger::AccountingUpgrade)
+    }
+    fn enqueue_engine_rebuild(&self, at_ms: i64, trigger: Trigger) -> StoreResult<Option<Job>> {
         EpochMs::new(at_ms)?;
-        let Some((id, request)) = self.snapshot(|tx, _| request(tx))? else {
+        let Some((id, request)) = self.snapshot(|tx, _| request(tx, trigger))? else {
             return Ok(None);
         };
         self.write(move |conn| {
@@ -116,9 +155,22 @@ impl Database {
             {
                 return Ok(None);
             }
+            if matches!(trigger,Trigger::AccountingUpgrade) {
+                let group=crate::rebuild::dependency_closure(&tx,&request.scope)?;
+                let mut outdated=false;
+                for session in group {
+                    let (parser,accounting):(String,String)=tx.query_row("SELECT l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[session],|r|Ok((r.get(0)?,r.get(1)?)))?;
+                    if parser!=PARSER_VERSION {return Ok(None);}
+                    outdated|=accounting!=ACCOUNTING_VERSION;
+                }
+                if !outdated {return Ok(None);}
+            }
             let job = jobs::create_in_tx(&tx, &id, &request, at_ms)?;
             tx.commit()?;
             Ok(Some(job))
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -3,8 +3,8 @@ use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Serialize;
 use token_pulse_core::domain::{
-    ContentAnchor, EffectiveMetadata, NormalizedObservation, ObservationQuality, PARSER_VERSION,
-    ReaderContext, UsageVector,
+    ACCOUNTING_VERSION, ContentAnchor, EffectiveMetadata, NormalizedObservation,
+    ObservationQuality, PARSER_VERSION, ReaderContext, UsageVector,
 };
 
 #[derive(Debug, Clone)]
@@ -257,9 +257,14 @@ fn commit_batch(
         return Err(ErrorCode::CheckpointConflict.into());
     }
     for expected in &batch.ledgers {
-        let active:Option<String>=tx.query_row("SELECT s.active_ledger_id FROM sessions s JOIN ledger_generations g ON s.active_ledger_id=g.ledger_id WHERE s.session_key=?1 AND g.state='active'", [&expected.session_key], |r|r.get(0)).optional()?;
-        if active.as_deref() != Some(expected.ledger_id.as_str()) {
+        let active:Option<(String,String,String)>=tx.query_row("SELECT s.active_ledger_id,g.parser_version,g.accounting_version FROM sessions s JOIN ledger_generations g ON s.active_ledger_id=g.ledger_id WHERE s.session_key=?1 AND g.state='active'", [&expected.session_key], |r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
+        if active.as_ref().map(|v| v.0.as_str()) != Some(expected.ledger_id.as_str()) {
             return Err(ErrorCode::CheckpointConflict.into());
+        }
+        if active.is_some_and(|(_, parser, accounting)| {
+            parser != PARSER_VERSION || accounting != ACCOUNTING_VERSION
+        }) {
+            return Err(ErrorCode::CandidateObsolete.into());
         }
     }
     if batch.observations.is_empty()
