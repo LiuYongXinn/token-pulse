@@ -10,6 +10,8 @@ use token_pulse_core::{
     query::{GroupDimension, GroupSort, GroupedUsage},
 };
 
+mod cached;
+
 pub struct BucketTotals {
     pub bucket: CalendarBucket,
     pub totals: TokenTotals,
@@ -34,7 +36,7 @@ pub(crate) struct Predicate {
     pub values: Vec<Value>,
 }
 impl Predicate {
-    fn selection(&mut self, expression: &str, selection: &DimensionSelection) {
+    pub(crate) fn selection(&mut self, expression: &str, selection: &DimensionSelection) {
         if let DimensionSelection::Ids {
             ids,
             include_unknown,
@@ -210,7 +212,7 @@ fn aggregate_sql() -> String {
     )
 }
 
-fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
+pub(crate) fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
     let sums: crate::aggregate::TokenSums =
         serde_json::from_str(&row.get::<_, String>(offset)?).map_err(|_| ErrorCode::DbCorrupt)?;
     let events: i64 = row.get(offset + 1)?;
@@ -243,6 +245,13 @@ fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
 }
 
 pub fn totals(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<TokenTotals> {
+    if let Some(totals) = cached::try_totals(tx, filter)? {
+        return Ok(totals);
+    }
+    raw_totals(tx, filter)
+}
+
+pub(crate) fn raw_totals(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<TokenTotals> {
     let p = predicate(filter)?;
     let mut statement = tx.prepare(&format!(
         "SELECT {} FROM {} WHERE {}",

@@ -11,7 +11,7 @@ use token_pulse_core::{
     query::model_key,
 };
 
-fn filter() -> UsageFilter {
+pub(crate) fn filter() -> UsageFilter {
     UsageFilter {
         range: DateRange {
             start_ms: EpochMs::new(0).unwrap(),
@@ -24,14 +24,14 @@ fn filter() -> UsageFilter {
         sessions: DimensionSelection::All {},
     }
 }
-fn ids(ids: &[&str], unknown: bool) -> DimensionSelection {
+pub(crate) fn ids(ids: &[&str], unknown: bool) -> DimensionSelection {
     DimensionSelection::Ids {
         ids: ids.iter().map(|s| s.to_string()).collect(),
         include_unknown: unknown,
     }
 }
 
-fn extra(
+pub(crate) fn extra(
     db: &Database,
     id: &str,
     time: i64,
