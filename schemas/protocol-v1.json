@@ -2069,12 +2069,41 @@
             "string",
             "null"
           ]
+        },
+        "privacy": {
+          "type": "boolean"
         }
       },
       "required": [
-        "display_timezone"
+        "display_timezone",
+        "privacy"
       ],
       "title": "DisplayPreferences",
+      "type": "object"
+    },
+    "DisplayPrivacyMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "privacy": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "privacy",
+        "expected_settings_revision"
+      ],
+      "title": "DisplayPrivacyMutation",
       "type": "object"
     },
     "DisplaySettingsSnapshot": {
@@ -2095,10 +2124,14 @@
                 "string",
                 "null"
               ]
+            },
+            "privacy": {
+              "type": "boolean"
             }
           },
           "required": [
-            "display_timezone"
+            "display_timezone",
+            "privacy"
           ],
           "type": "object"
         }

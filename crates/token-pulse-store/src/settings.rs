@@ -63,6 +63,10 @@ fn read_stored(
         }
     };
     let preferences = DisplayPreferences {
+        privacy: payload
+            .get("privacy")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
         display_timezone: payload
             .get("display_timezone")
             .and_then(|v| v.as_str())
@@ -83,6 +87,27 @@ fn read(tx: &Transaction<'_>, revision: i64) -> StoreResult<DisplaySettingsSnaps
 impl Database {
     pub fn display_settings(&self) -> StoreResult<DisplaySettingsSnapshot> {
         self.snapshot(|tx, revision| read(tx, revision.settings))
+    }
+    pub fn mutate_display_privacy(
+        &self,
+        mutation: DisplayPrivacyMutation,
+        at: EpochMs,
+    ) -> StoreResult<(DisplaySettingsSnapshot, bool)> {
+        mutation.validate()?;
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let revision: i64 = tx.query_row("SELECT settings_revision FROM app_state WHERE singleton=1", [], |r| r.get(0))?;
+            let (mut snapshot, mut payload) = read_stored(&tx, revision)?;
+            if mutation.expected_settings_revision.value() != i128::from(revision) { return Err(ErrorCode::RevisionConflict.into()); }
+            if snapshot.preferences.privacy == mutation.privacy { tx.commit()?; return Ok((snapshot, false)); }
+            let next_revision = revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
+            payload.insert("privacy".into(), mutation.privacy.into());
+            snapshot.preferences.privacy = mutation.privacy;
+            tx.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,?1,?2,?3) ON CONFLICT(singleton) DO UPDATE SET settings_version=excluded.settings_version,payload_json=excluded.payload_json,updated_at_ms=excluded.updated_at_ms", params![SETTINGS_VERSION,serde_json::to_string(&payload)?,at.value()])?;
+            tx.execute("UPDATE app_state SET settings_revision=?1 WHERE singleton=1", [next_revision])?;
+            snapshot.settings_revision = DecimalInt::from_nonnegative(next_revision.into())?;
+            tx.commit()?; Ok((snapshot, true))
+        })
     }
     pub fn mutate_display_timezone(
         &self,

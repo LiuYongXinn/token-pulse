@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
-    const snapshot = () => ({ settings_version: 1, settings_revision: revision, preferences: { display_timezone: timezone } });
+    const snapshot = () => ({ settings_version: 1, settings_revision: revision, preferences: { privacy: false, display_timezone: timezone } });
     const notify = () => { for (const [id, listener] of listeners) if (listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: revision } }); };
     const measure = { value: null, covered_total_tokens: '0', complete: false };
     const summary = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
@@ -51,7 +51,7 @@ test.beforeEach(async ({ page }) => {
       } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
   });
 });
-type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
+type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
 async function openSettings(page: import('@playwright/test').Page) { await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click(); }
 
 test('saved timezone drives all pages, exact revisions and backend DST boundaries', async ({ page }) => {

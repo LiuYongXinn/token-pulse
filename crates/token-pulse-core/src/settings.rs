@@ -16,6 +16,7 @@ pub struct DisplayPreferences {
     /// None means not initialized, never an implicit UTC/system fallback.
     #[schemars(length(min = 1, max = 128))]
     pub display_timezone: Option<String>,
+    pub privacy: bool,
 }
 impl DisplayPreferences {
     pub fn validate(&self) -> Result<(), ErrorCode> {
@@ -63,4 +64,18 @@ impl TimezoneMutation {
 #[serde(deny_unknown_fields)]
 pub struct SettingsChanged {
     pub settings_revision: DecimalInt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayPrivacyMutation {
+    pub privacy: bool,
+    pub expected_settings_revision: DecimalInt,
+}
+impl DisplayPrivacyMutation {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        i64::try_from(self.expected_settings_revision.value())
+            .map_err(|_| ErrorCode::InvalidQuery)?;
+        Ok(())
+    }
 }

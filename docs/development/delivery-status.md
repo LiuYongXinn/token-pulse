@@ -669,3 +669,8 @@ Win10 独立应用在模型页实际选择指定时刻、编辑 2024-02-29T00:00
 2026-10-02 03:56 全 workspace 255 项普通 Rust（新增七项隐私多场景）、22 项 Vitest、TS 类型、生产构建、workspace Clippy / fmt / 契约检查通过。五项集成场景验证构造时关闭 / 发送前开启、原 DTO 不被改写、金额及规则无残留、跨入口稳定标签、null / signed raw / 大整数 / cursor / meta 不变、项目分组和模型上下文、来源别名、旧修订不恢复显示、聚合拒绝已隐藏价格且累积器不变。两项领域内部检查验证 Serialize 期间锁仍持有，以及失败更新保留原策略 / 不可能提交停止发布。普通测试未启用 ignored 性能夹具。
 
 四项明细浏览器检查通过，新增明确合成 redacted DTO 场景确认正文 DOM / tooltip 没有旧金额 / 规则，而精确 Token 保留；这不是全局隐私切换或实际 Windows 隐私验收。初次新测试误用价格聚合私有模块路径与控件文本定位，按已有公开导出和 aria 名修正后通过；未改产品规则绕开失败。时区 / 主窗口现有正式 IPC 尚未换到 PrivateResponse，隐私持久设置、实际出口、前端缓存门禁、托盘 / 小窗 / 任务栏控制仍待接入，因此不能把此基础提交称为隐私完整交付。未执行性能测试。
+## M15c2：持久隐私配置与 Writer 协调
+
+DisplayPreferences 正式公开 privacy，缺少该字段的旧 v1 配置按既有默认关闭读取，已有 true 原样保留；非法类型 / null / 未来版本拒绝而不重写。DisplayPrivacyMutation 必须携带精确全局 settings revision。独立隐私写入只修改 privacy 字段，配置 payload / 时间 / revision 同事务发布，同值无写入；不改变数据和价格 revision。
+
+新增四项 SQLite 多场景检查通过（全部十项 settings 测试通过），覆盖持久化 / 重启 / 同值 / 关闭、保留主题 / 时区 / 小窗范围 / 原生偏好、真实旧读取事务的 DTO 仍按最新 PrivacyState 脱敏且来源表不改、配置冲突 / 强制 Writer 失败保持原策略和数据库、未来版本 / 损坏类型 / revision 溢出无写入。契约生成、TS 类型和 22 项 Vitest 通过。实际 Tauri 出口和前端切换仍待下一个模块；未执行性能测试。

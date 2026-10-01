@@ -4,7 +4,7 @@ declare global { interface Window { __syntheticCalendar: (command: string, args:
 export async function installSyntheticCalendar(page: Page) {
   await page.addInitScript(() => {
     window.__syntheticCalendar = (command, args) => {
-      if (command === 'get_display_settings') return { settings_version: 1, settings_revision: '1', preferences: { display_timezone: 'Asia/Shanghai' } };
+      if (command === 'get_display_settings') return { settings_version: 1, settings_revision: '1', preferences: { privacy: false, display_timezone: 'Asia/Shanghai' } };
       const request = args.request as { timezone: string; selection: { kind: 'today' | 'last7' | 'last30' | 'custom'; start_date?: string; end_date_inclusive?: string } };
       const offset = 8 * 3_600_000, day = 86_400_000;
       const local = new Date(Date.now() + offset);
