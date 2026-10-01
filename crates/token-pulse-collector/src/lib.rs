@@ -40,6 +40,15 @@ pub fn collect_file(
     path: &Path,
     observed_at_ms: i64,
 ) -> StoreResult<CollectionReceipt> {
+    collect_file_with_hook(database, source_id, path, observed_at_ms, || {})
+}
+fn collect_file_with_hook(
+    database: &Database,
+    source_id: &str,
+    path: &Path,
+    observed_at_ms: i64,
+    mut before_registration: impl FnMut(),
+) -> StoreResult<CollectionReceipt> {
     if !path.is_absolute() {
         return Err(ErrorCode::InvalidQuery.into());
     }
@@ -185,16 +194,7 @@ pub fn collect_file(
                 "session",
                 &format!("{}:{}", saved.file_id, provider_session_id),
             );
-            let related = database.related_session_exists(provider_session_id, &session)?;
-            context.requires_sequence_rebuild = related || metadata.parent_provider_id.is_some();
-            let previously_observed = database.session_has_usage(&session)?
-                || write.observations.iter().any(|o| {
-                    o.session_key.as_deref() == Some(&session)
-                        && matches!(o.record, NormalizedObservation::Usage(_))
-                });
-            context.independent_head_available =
-                !context.requires_sequence_rebuild && !previously_observed;
-            context.session_key = Some(session.clone());
+            before_registration();
             database.ensure_session(SessionRegistration {
                 session_key: session.clone(),
                 provider_session_id: Some(provider_session_id.clone()),
@@ -204,6 +204,18 @@ pub fn collect_file(
                 ledger_id: id("ledger", &session),
                 registered_at_ms: observed_at_ms,
             })?;
+            // Registration is serialized by the Writer. Query afterwards so two first imports
+            // cannot both observe an empty namespace and charge the same unproven logical stream.
+            let related = database.related_session_exists(provider_session_id, &session)?;
+            context.requires_sequence_rebuild = related || metadata.parent_provider_id.is_some();
+            let previously_observed = database.session_has_usage(&session)?
+                || write.observations.iter().any(|o| {
+                    o.session_key.as_deref() == Some(&session)
+                        && matches!(o.record, NormalizedObservation::Usage(_))
+                });
+            context.independent_head_available =
+                !context.requires_sequence_rebuild && !previously_observed;
+            context.session_key = Some(session);
         }
         let session_key = context.session_key.clone();
         if let Some(session) = &session_key {
@@ -368,6 +380,7 @@ pub fn collect_file(
         file_generation_id: saved.file_generation_id,
     })
 }
+
 fn validate_source_file(root: &Path, path: &Path) -> StoreResult<()> {
     // Check lexical location before touching a supplied path, then verify actual location after resolution.
     if ![root.join("sessions"), root.join("archived_sessions")]
@@ -409,4 +422,65 @@ fn diagnostic(write: &mut WriteBatch, source_id: &str, offset: u64, code: ErrorC
         dedup_key: key,
         observed_at_ms: at_ms,
     });
+}
+
+#[cfg(test)]
+mod concurrency_tests {
+    use super::*;
+    #[test]
+    fn simultaneous_first_imports_never_both_charge_an_unproven_shared_session() {
+        use std::sync::{Arc, Barrier};
+        for _ in 0..10 {
+            let data = tempfile::tempdir().unwrap();
+            let one = tempfile::tempdir().unwrap();
+            let two = tempfile::tempdir().unwrap();
+            let db = Database::open(data.path()).unwrap();
+            for (id, root) in [("one", one.path()), ("two", two.path())] {
+                std::fs::create_dir_all(root.join("sessions")).unwrap();
+                db.add_source(token_pulse_store::SourceRecord {
+                    source_id: id.into(),
+                    root_path: root.to_str().unwrap().into(),
+                    directory_identity: None,
+                    kind: "local".into(),
+                    enabled: true,
+                    created_at_ms: 1,
+                })
+                .unwrap();
+                std::fs::write(
+                    root.join("sessions/source.jsonl"),
+                    include_bytes!("../../../fixtures/codex-rollout-v1.jsonl"),
+                )
+                .unwrap();
+            }
+            let barrier = Arc::new(Barrier::new(2));
+            let mut threads = vec![];
+            for (source, root) in [("one", one.path()), ("two", two.path())] {
+                let db = db.clone();
+                let b = barrier.clone();
+                let path = root.join("sessions/source.jsonl");
+                threads.push(std::thread::spawn(move || {
+                    collect_file_with_hook(&db, source, &path, 5000, || {
+                        b.wait();
+                    })
+                    .unwrap()
+                }));
+            }
+            for thread in threads {
+                thread.join().unwrap();
+            }
+            db.snapshot(|tx, _| {
+                let count: i64 =
+                    tx.query_row("SELECT COUNT(*) FROM active_usage_events", [], |r| r.get(0))?;
+                let sum: Option<String> = tx.query_row(
+                    "SELECT sum_token_decimal(total_tokens) FROM active_usage_events",
+                    [],
+                    |r| r.get(0),
+                )?;
+                assert!(count <= 1);
+                assert!(sum.is_none() || sum.as_deref() == Some("120"));
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
 }
