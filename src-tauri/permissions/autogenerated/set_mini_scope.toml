@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-mini-scope"
+description = "Enables the set_mini_scope command without any pre-configured scope."
+commands.allow = ["set_mini_scope"]
+
+[[permission]]
+identifier = "deny-set-mini-scope"
+description = "Denies the set_mini_scope command without any pre-configured scope."
+commands.deny = ["set_mini_scope"]

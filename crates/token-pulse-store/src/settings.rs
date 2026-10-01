@@ -5,7 +5,7 @@ use token_pulse_core::{
     numeric::{DecimalInt, EpochMs},
     settings::*,
 };
-fn read_stored(
+pub(crate) fn read_stored(
     tx: &Transaction<'_>,
     revision: i64,
 ) -> StoreResult<(

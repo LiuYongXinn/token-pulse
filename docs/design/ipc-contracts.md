@@ -430,3 +430,11 @@ DisplayPreferences 公开 privacy；DisplayPrivacyMutation { privacy, expected_s
 ### 2.15 持久主题
 
 DisplayPreferences 增加 theme: AppTheme（dark / light / system），缺少旧字段时读取既有深色默认。DisplayThemeMutation { theme, expected_settings_revision } 按全局修订 CAS 更新单一字段；get_display_settings / set_display_theme 返回完整显示配置与最新隐私戳。主题提交后 settings_changed，同值 / 冲突不通知，不发布隐私变化。主窗口权限已登记；共享 useAppTheme 根据保存值解析 system 并监听系统媒体变化，theme 与 themePreference 明确区分。原生应用窗口通过 Tauri set_theme 同步，任务栏宿主将按其自己的系统背景设计实现。
+
+### 2.16 独立 mini 本地消费部分
+
+MiniScopeMutation { mini_scope, expected_settings_revision } 使用全局 CAS；MiniScopeSnapshot 仅包含 settings_revision / mini_scope。get_mini_scope / set_mini_scope 主窗口权限先接入，成功更新发 mini_scope_changed 与 settings_changed；不带显示名称。固定会话须存在，start 不能晚于调用时点。
+
+get_mini_usage 返回 MiniUsageSnapshot { meta, settings_revision, mini_scope, scope_display_name, range, usage, pricing, coverage }，在同一个读取事务中固定配置与数据 / 价格修订。today 按已保存时区当前日零点，fixed 是明确不漂移起点；range end 是捕获毫秒 + 1（包含当前采样毫秒，保持 SQL 半开）。Token / 费用范围相同，采用 event_time，与主窗口独立筛选 / 指定估价时点分离。缺少配置时区或未来固定起点明确失败，不默认范围。响应经最新 PrivateResponse。
+
+这是完整 MiniSnapshot 的本地消费来源；账户数据由之后的独立服务快照组合，不在该 SQLite 事务内假定一致时间或计算额度。实际小窗 / 任务栏权限、原生操作和消费者随对应模块实施。

@@ -185,7 +185,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![get_app_status, perform_window_action,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -222,6 +222,7 @@ pub fn run() {
 }
 
 mod job_commands;
+mod mini_commands;
 #[cfg(windows)]
 mod power;
 mod price_commands;

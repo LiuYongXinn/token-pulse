@@ -74,6 +74,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let policy_listener = app.listen("display_policy_changed", move |event| {
         let _ = policy_sender.try_send(event.payload().to_owned());
     });
+    let (scope_sender, scope_receiver) = std::sync::mpsc::sync_channel(4);
+    let scope_listener = app.listen("mini_scope_changed", move |event| {
+        let _ = scope_sender.try_send(event.payload().to_owned());
+    });
     window
         .eval(
             r#"
@@ -361,6 +365,30 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 try { await invoke('set_display_theme',{requestId:'native-smoke-theme-conflict',request:{theme:'light',expected_settings_revision:'8'}}); } catch(error) { themeConflict=error.code==='REVISION_CONFLICT'; }
                 const themeNoop=await invoke('set_display_theme',{requestId:'native-smoke-theme-noop',request:{theme:'dark',expected_settings_revision:'11'}});
                 ok=ok && themeConflict && themeNoop.data.settings_revision==='11';
+                const miniDefault=await invoke('get_mini_scope',{requestId:'native-smoke-mini-default'});
+                const miniUsage=await invoke('get_mini_usage',{requestId:'native-smoke-mini-usage'});
+                ok=ok && miniDefault.data.settings_revision==='11' && miniDefault.data.mini_scope.kind==='today_all_sources'
+                    && miniUsage.data.meta.snapshot_id==='native-smoke-mini-usage' && miniUsage.data.meta.display_timezone==='Asia/Tokyo'
+                    && miniUsage.data.range.end_ms===miniUsage.data.meta.generated_at_ms+1 && miniUsage.data.usage.total_tokens==='0'
+                    && miniUsage.data.usage.input_total.value===null && miniUsage.data.pricing.basis.mode==='event_time';
+                const sessionScope={kind:'session',session_key:'native-probe-context',start:{kind:'fixed',start_ms:0}};
+                const fixedMini=await invoke('set_mini_scope',{requestId:'native-smoke-mini-fixed',request:{mini_scope:sessionScope,expected_settings_revision:'11'}});
+                const fixedUsage=await invoke('get_mini_usage',{requestId:'native-smoke-mini-fixed-usage'});
+                ok=ok && fixedMini.data.settings_revision==='12' && fixedUsage.data.settings_revision==='12'
+                    && fixedUsage.data.range.start_ms===0 && fixedUsage.data.mini_scope.session_key==='native-probe-context'
+                    && fixedUsage.data.usage.total_tokens==='0';
+                const scopeNoop=await invoke('set_mini_scope',{requestId:'native-smoke-mini-noop',request:{mini_scope:sessionScope,expected_settings_revision:'12'}});
+                let scopeConflict=false, futureScope=false;
+                try { await invoke('set_mini_scope',{requestId:'native-smoke-mini-conflict',request:{mini_scope:{kind:'today_all_sources'},expected_settings_revision:'11'}}); } catch(error) { scopeConflict=error.code==='REVISION_CONFLICT'; }
+                try { await invoke('set_mini_scope',{requestId:'native-smoke-mini-future',request:{mini_scope:{...sessionScope,start:{kind:'fixed',start_ms:Date.now()+86400000}},expected_settings_revision:'12'}}); } catch(error) { futureScope=error.code==='INVALID_QUERY'; }
+                ok=ok && scopeNoop.data.settings_revision==='12' && scopeConflict && futureScope;
+                const todayMini=await invoke('set_mini_scope',{requestId:'native-smoke-mini-today',request:{mini_scope:{kind:'today_all_sources'},expected_settings_revision:'12'}});
+                ok=ok && todayMini.data.settings_revision==='13';
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='项目')?.click();
+                await waitFor(()=>document.querySelector('section[aria-label="项目统计汇总"]'));
+                ok=ok && document.querySelector('.date-range-label')?.textContent==='2024-02-28 — 2024-02-29'
+                    && document.querySelector('.price-instant-label')?.textContent==='2024-02-29T00:00:00.123Z';
+
 
 
 
@@ -375,17 +403,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     app.unlisten(price_listener);
     app.unlisten(settings_listener);
     app.unlisten(policy_listener);
+    app.unlisten(scope_listener);
     if ipc.as_deref() != Ok("true") {
         return Err("WebView get_app_status IPC failed".into());
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
-    if settings_events.len() != 10 {
-        return Err("display changes did not emit exactly ten settings notifications".into());
+    if settings_events.len() != 12 {
+        return Err("display changes did not emit exactly twelve settings notifications".into());
     }
-    for (payload, revision) in settings_events
-        .iter()
-        .zip(["2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])
-    {
+    for (payload, revision) in settings_events.iter().zip([
+        "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
+    ]) {
         let event: token_pulse_core::settings::SettingsChanged =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if event.settings_revision.as_str() != revision {
@@ -405,6 +433,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
             serde_json::from_str(payload).map_err(|e| e.to_string())?;
         if stamp.settings_revision.as_str() != revision || stamp.privacy != privacy {
             return Err("privacy notification revision or value is incorrect".into());
+        }
+    }
+    let scope_events = scope_receiver.try_iter().collect::<Vec<_>>();
+    if scope_events.len() != 2 {
+        return Err("scope changes did not emit exactly two notifications".into());
+    }
+    for (payload, revision) in scope_events.iter().zip(["12", "13"]) {
+        let scope: token_pulse_core::mini::MiniScopeSnapshot =
+            serde_json::from_str(payload).map_err(|e| e.to_string())?;
+        if scope.settings_revision.as_str() != revision {
+            return Err("scope notification revision is incorrect".into());
         }
     }
     let price_events = price_receiver.try_iter().collect::<Vec<_>>();

@@ -11,6 +11,7 @@ pub mod jobs;
 pub mod leases;
 pub mod maintenance;
 mod migration;
+pub mod mini;
 pub mod pricing;
 mod proof_jobs;
 pub mod query;

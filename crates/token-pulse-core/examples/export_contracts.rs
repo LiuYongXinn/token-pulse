@@ -4,6 +4,7 @@ use token_pulse_core::calendar::{
     CalendarBucket, CalendarSelection, CalendarSelectionRequest, CalendarSelectionResult, Grain,
 };
 use token_pulse_core::jobs::*;
+use token_pulse_core::mini::*;
 use token_pulse_core::pricing::{
     ModelAlias, PriceChanged, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft,
     PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
@@ -60,6 +61,9 @@ fn main() {
         AppTheme,
         DisplayThemeMutation,
         SettingsChanged,
+        MiniScopeMutation,
+        MiniScopeSnapshot,
+        MiniUsageSnapshot,
         ErrorCode,
         ErrorDetail,
         AppError,

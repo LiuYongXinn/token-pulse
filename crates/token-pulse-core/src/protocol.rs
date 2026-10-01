@@ -216,13 +216,13 @@ pub struct ContextSnapshot {
     pub observed_at_ms: Option<EpochMs>,
     pub quality: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ScopeStart {
     Today {},
     Fixed { start_ms: EpochMs },
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MiniScope {
     TodayAllSources {},

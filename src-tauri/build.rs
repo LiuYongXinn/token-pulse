@@ -2,6 +2,9 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_mini_scope",
+            "get_mini_usage",
+            "set_mini_scope",
             "perform_window_action",
             "get_sources",
             "choose_source_directory",

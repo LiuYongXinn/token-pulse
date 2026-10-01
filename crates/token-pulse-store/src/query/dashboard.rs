@@ -65,7 +65,7 @@ fn series_with_coverage(
         )
         .collect())
 }
-pub(super) fn versions(
+pub(crate) fn versions(
     tx: &Transaction<'_>,
     filter: &UsageFilter,
     heatmap: &UsageFilter,
