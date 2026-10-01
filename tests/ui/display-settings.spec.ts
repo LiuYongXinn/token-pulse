@@ -33,12 +33,14 @@ test.beforeEach(async ({ page }) => {
         }
         if (command === 'resolve_calendar_selection') {
           if (badCalendar) throw { code: 'INVALID_QUERY' };
-          const r = args.request as { timezone: string; selection: { kind: string } };
+          const r = args.request as { timezone: string; selection: { kind: string; start_date?: string; end_date_inclusive?: string } };
           // Fixed QA dates independently expected below; the Rust resolver covers calendar conversion.
           const offset = r.timezone === 'Asia/Shanghai' ? -8 : r.timezone === 'America/New_York' ? 4 : 0;
           const end = Date.parse('2026-11-02T00:00:00Z') + (r.timezone === 'America/New_York' ? 5 : offset) * 3_600_000;
           const start = Date.parse('2026-11-01T00:00:00Z') + offset * 3_600_000 - (r.selection.kind === 'last7' ? 6 : r.selection.kind === 'last30' ? 29 : 0) * 86_400_000;
-          return response({ range: { start_ms: start, end_ms: end, timezone: r.timezone }, heatmap_range: { start_ms: Date.parse('2026-05-04T04:00:00Z'), end_ms: end, timezone: r.timezone }, local_today: '2026-11-01' });
+          const customStart = r.selection.kind === 'custom' ? Date.parse(r.selection.start_date! + 'T00:00:00Z') + offset * 3_600_000 : start;
+          const customEnd = r.selection.kind === 'custom' ? Date.parse(r.selection.end_date_inclusive! + 'T00:00:00Z') + 86_400_000 + (r.timezone === 'America/New_York' ? 5 : offset) * 3_600_000 : end;
+          return response({ range: { start_ms: customStart, end_ms: customEnd, timezone: r.timezone }, heatmap_range: { start_ms: Date.parse('2026-05-04T04:00:00Z'), end_ms: end, timezone: r.timezone }, local_today: '2026-11-01' });
         }
         if (command === 'get_grouped_usage' || command === 'get_dashboard_bundle') {
           const r = args.request as { filter: { range: { timezone: string } }; dimension?: string };
@@ -102,4 +104,23 @@ test('first start initializes system timezone once and failed new calendar clear
   await page.evaluate(() => (window as unknown as QA).__calendarQA.badCalendar(true)); await page.getByLabel('日期范围').selectOption('last7');
   await expect(page.getByRole('heading', { name: '统计日期尚未就绪' })).toBeVisible(); await expect(page.getByLabel('模型统计汇总')).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('统计日期解析失败');
+});
+
+test('custom date draft requires explicit apply, rejects reversal, preserves scope on escape and shares inclusive backend range', async ({ page }) => {
+  await page.goto('/'); await expect(page.locator('.filters')).toContainText('Asia/Shanghai');
+  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
+  await page.getByLabel('日期范围').selectOption('custom'); await expect(page.getByRole('dialog', { name: '自定义日期' })).toBeVisible();
+  await expect(page.getByLabel('开始日期')).toBeFocused();
+  await page.getByLabel('开始日期').fill('2026-02-28'); await page.getByLabel('结束日期（包含当天）').fill('2026-02-27');
+  await page.getByRole('button', { name: '应用日期' }).click(); await expect(page.getByRole('alert')).toContainText('不能早于');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().some(v => v.command === 'resolve_calendar_selection' && (v.request as { selection: { kind: string } }).selection.kind === 'custom'))).toBe(false);
+  await page.getByLabel('开始日期').press('Escape'); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByLabel('日期范围')).toHaveValue('today');
+  await page.getByLabel('日期范围').selectOption('custom'); await page.getByLabel('开始日期').fill('2024-02-28'); await page.getByLabel('结束日期（包含当天）').fill('2024-02-29');
+  await page.screenshot({ path: 'test-results/date-picker-1280.png', fullPage: true });
+  await page.getByRole('button', { name: '应用日期' }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible(); await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(async () => page.evaluate(() => ((window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1)?.request as { filter: { range: { end_ms: number } } }).filter.range.end_ms)).toBe(Date.parse('2024-02-29T16:00:00Z'));
+  await page.getByRole('button', { name: '项目', exact: true }).click(); await expect(page.getByLabel('项目统计汇总')).toBeVisible();
+  await expect(page.getByTitle('编辑已应用日期')).toHaveText('2024-02-28 — 2024-02-29');
+  await page.getByTitle('编辑已应用日期').click(); await expect(page.getByLabel('开始日期')).toHaveValue('2024-02-28'); await page.getByRole('button', { name: '取消', exact: true }).click();
+  await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('日期范围')).toHaveValue('today');
 });

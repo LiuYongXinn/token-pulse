@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let fail = false, deferNext = false, release: (() => void) | null = null;
+    let lastDashboardRequest: unknown = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>();
@@ -27,7 +28,7 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_sources') return response({ settings_revision: '1', sources });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'get_dashboard_bundle') {
-        ++reads;
+        ++reads; lastDashboardRequest = structuredClone(args.request);
         if (fail) throw new Error('synthetic refresh failure');
         const r = args.request as { filter: { sources: { ids?: string[] }; range: { start_ms: number; end_ms: number; timezone: string } }; grain: string; heatmap_range: { start_ms: number; end_ms: number } };
         const partial = r.filter.sources.ids?.includes('synthetic-b') ?? false;
@@ -45,6 +46,7 @@ test.beforeEach(async ({ page }) => {
       }
       throw new Error(`unexpected synthetic command ${command}`);
     } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
+    __lastDashboardRequest: () => lastDashboardRequest,
     __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
     __emitSyntheticPriceChange: () => { priceRevision = String(Number(priceRevision) + 1); cost = '1.231234567890123'; for (const [id, listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: priceRevision, all_models: true } }); } });
@@ -66,7 +68,8 @@ test('overview preserves prototype layout, known breakdown and real unknown stat
   await activity.getByRole('button').nth(1).focus();
   await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-2 · 0 Token · 存在采集或解释缺口');
   await activity.getByRole('button').first().click();
-  await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-1 · 683,067 Token · 存在采集或解释缺口');
+  await expect(page.getByLabel('日期范围')).toHaveValue('custom');
+  await expect(page.getByTitle('编辑已应用日期')).toBeVisible();
   await page.screenshot({ path: 'test-results/overview-known-1280.png', fullPage: true });
   await page.getByRole('button', { name: '日', exact: true }).click();
   await expect(page.getByRole('button', { name: '日', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -140,4 +143,33 @@ test('price notifications refresh whole bundles, recover on visibility and relea
   const unmountedReads = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   expect((await state()).reads).toBe(unmountedReads);
+});
+
+test('heatmap day updates backend date selection while keeping source, grain and independent history', async ({ page }) => {
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '日', exact: true }).click();
+  await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b'); await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
+  type Bridge = { __lastDashboardRequest: () => { filter: { range: { start_ms: number; end_ms: number; timezone: string }; sources: unknown }; grain: string; heatmap_range: { start_ms: number; end_ms: number } } };
+  const before = await page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest());
+  const expectedStart = before.heatmap_range.start_ms + 3 * 86_400_000;
+  const expectedDate = new Date(expectedStart + 8 * 3_600_000).toISOString().slice(0, 10);
+  await page.getByRole('group', { name: '近 26 周每日活动' }).getByRole('button').nth(3).click();
+  await expect(page.getByLabel('日期范围')).toHaveValue('custom'); await expect(page.getByTitle('编辑已应用日期')).toHaveText(expectedDate + ' — ' + expectedDate);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest().filter.range.start_ms)).toBe(expectedStart);
+  const after = await page.evaluate(() => (window as unknown as Bridge).__lastDashboardRequest());
+  expect(after.filter.range.end_ms).toBe(expectedStart + 86_400_000); expect(after.filter.sources).toEqual(before.filter.sources);
+  expect(after.heatmap_range).toEqual(before.heatmap_range); expect(after.grain).toBe('day');
+  await page.getByTitle('编辑已应用日期').click(); await page.setViewportSize({ width: 960, height: 680 });
+  await page.screenshot({ path: 'test-results/date-picker-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+test('long custom history changes trend grain to daily without reducing the selected range', async ({ page }) => {
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await page.getByLabel('日期范围').selectOption('custom');
+  await page.getByLabel('开始日期').fill('2025-10-01'); await page.getByLabel('结束日期（包含当天）').fill('2026-09-30');
+  await page.getByRole('button', { name: '应用日期' }).click();
+  await expect(page.getByRole('button', { name: '日', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: '小时', exact: true })).toBeDisabled();
+  await expect(page.getByRole('group', { name: '各时间桶可信 Token' }).getByRole('button')).toHaveCount(365);
+  await expect(page.getByTitle('编辑已应用日期')).toHaveText('2025-10-01 — 2026-09-30');
 });

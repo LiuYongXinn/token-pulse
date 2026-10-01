@@ -274,6 +274,23 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='总览')?.click();
                 await waitFor(()=>document.querySelector('main .empty h2')?.textContent==='添加 Codex 数据来源');
                 ok=ok && document.querySelector('.filters')?.textContent.includes('Asia/Tokyo');
+                const dateSelect=document.querySelector('select[aria-label="日期范围"]');
+                dateSelect.value='custom'; dateSelect.dispatchEvent(new Event('change',{bubbles:true}));
+                await waitFor(()=>document.querySelector('form[aria-label="自定义日期"]'));
+                for(const [label,value] of [['开始日期','2024-02-28'],['结束日期（包含当天）','2024-02-29']]) {
+                    const input=document.querySelector('input[aria-label="'+label+'"]');
+                    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);
+                    input.dispatchEvent(new Event('input',{bubbles:true}));
+                    await waitFor(()=>input.value===value);
+                }
+                document.querySelector('.date-actions button[type="submit"]').click();
+                await waitFor(()=>document.querySelector('.date-range-label')?.textContent==='2024-02-28 — 2024-02-29');
+                ok=ok && dateSelect.value==='custom' && !document.querySelector('.date-popup');
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='模型')?.click();
+                await waitFor(()=>document.querySelector('section[aria-label="模型统计汇总"]'));
+                ok=ok && document.querySelector('.date-range-label')?.textContent==='2024-02-28 — 2024-02-29'
+                    && document.querySelector('.filters')?.textContent.includes('Asia/Tokyo');
+
             } catch (_) {}
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
