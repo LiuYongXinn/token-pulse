@@ -20,6 +20,10 @@ export type SnapshotMeta = { snapshot_id: string, data_revision: DecimalInt, pri
 
 export type DateRange = { start_ms: EpochMs, end_ms: EpochMs, timezone: string, };
 
+export type Grain = "hour" | "day" | "month";
+
+export type CalendarBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, };
+
 export type DimensionSelection = { "kind": "all", } | { "kind": "ids", ids: Array<string>, include_unknown: boolean, };
 
 export type UsageFilter = { range: DateRange, sources: DimensionSelection, models: DimensionSelection, projects: DimensionSelection, sessions: DimensionSelection, };

@@ -312,6 +312,39 @@
       "title": "Response",
       "type": "object"
     },
+    "CalendarBucket": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "display_label": {
+          "type": "string"
+        },
+        "end_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "start_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "utc_offset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_ms",
+        "end_ms",
+        "display_label",
+        "utc_offset"
+      ],
+      "title": "CalendarBucket",
+      "type": "object"
+    },
     "CancelJobResult": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -741,6 +774,16 @@
       ],
       "title": "FormatIssue",
       "type": "object"
+    },
+    "Grain": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "hour",
+        "day",
+        "month"
+      ],
+      "title": "Grain",
+      "type": "string"
     },
     "Job": {
       "$defs": {

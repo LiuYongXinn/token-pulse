@@ -1,5 +1,6 @@
 use schemars::{JsonSchema, generate::SchemaSettings};
 use std::{collections::BTreeMap, fs, path::PathBuf};
+use token_pulse_core::calendar::{CalendarBucket, Grain};
 use token_pulse_core::jobs::*;
 use token_pulse_core::sources::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
@@ -38,6 +39,8 @@ fn main() {
         AppStatus,
         SnapshotMeta,
         DateRange,
+        Grain,
+        CalendarBucket,
         DimensionSelection,
         UsageFilter,
         PriceBasis,
