@@ -12,6 +12,95 @@ use ts_rs::TS;
 
 pub const MAX_BUCKETS: usize = 2000;
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CalendarSelection {
+    Today {},
+    Last7 {},
+    Last30 {},
+    Custom {
+        #[schemars(length(min = 10, max = 10))]
+        start_date: String,
+        #[schemars(length(min = 10, max = 10))]
+        end_date_inclusive: String,
+    },
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarSelectionRequest {
+    #[schemars(length(min = 1, max = 128))]
+    pub timezone: String,
+    pub selection: CalendarSelection,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarSelectionResult {
+    pub range: DateRange,
+    pub heatmap_range: DateRange,
+    pub local_today: String,
+}
+fn parse_date(value: &str) -> Result<NaiveDate, ErrorCode> {
+    if value.len() != 10 {
+        return invalid();
+    }
+    let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| ErrorCode::InvalidQuery)?;
+    if date.format("%Y-%m-%d").to_string() != value {
+        return invalid();
+    }
+    Ok(date)
+}
+fn date_range(start: NaiveDate, inclusive_end: NaiveDate, tz: Tz) -> Result<DateRange, ErrorCode> {
+    if start > inclusive_end {
+        return invalid();
+    }
+    let exclusive_end = inclusive_end.succ_opt().ok_or(ErrorCode::InvalidQuery)?;
+    let bound = |date| -> Result<EpochMs, ErrorCode> {
+        let mut points = BTreeSet::new();
+        local_boundaries(midnight(date)?, tz, false, &mut points)?;
+        EpochMs::new(*points.first().ok_or(ErrorCode::InvalidQuery)?)
+    };
+    let range = DateRange {
+        start_ms: bound(start)?,
+        end_ms: bound(exclusive_end)?,
+        timezone: tz.name().into(),
+    };
+    // A fully skipped local day has no UTC interval. Do not manufacture 24 hours.
+    range.validate()?;
+    Ok(range)
+}
+pub fn resolve_selection(
+    request: &CalendarSelectionRequest,
+    at: EpochMs,
+) -> Result<CalendarSelectionResult, ErrorCode> {
+    if request.timezone.is_empty() || request.timezone.len() > 128 {
+        return invalid();
+    }
+    let tz: Tz = request
+        .timezone
+        .parse()
+        .map_err(|_| ErrorCode::InvalidQuery)?;
+    let today = utc(at.value())?.with_timezone(&tz).date_naive();
+    let earlier = |days| {
+        today
+            .checked_sub_signed(Duration::days(days))
+            .ok_or(ErrorCode::InvalidQuery)
+    };
+    let (start, end) = match &request.selection {
+        CalendarSelection::Today {} => (today, today),
+        CalendarSelection::Last7 {} => (earlier(6)?, today),
+        CalendarSelection::Last30 {} => (earlier(29)?, today),
+        CalendarSelection::Custom {
+            start_date,
+            end_date_inclusive,
+        } => (parse_date(start_date)?, parse_date(end_date_inclusive)?),
+    };
+    Ok(CalendarSelectionResult {
+        range: date_range(start, end, tz)?,
+        heatmap_range: date_range(earlier(181)?, today, tz)?,
+        local_today: today.format("%Y-%m-%d").to_string(),
+    })
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Grain {

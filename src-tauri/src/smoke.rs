@@ -132,6 +132,15 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 let badTurnCursor=false;
                 try {await invoke('query_turns',{requestId:'native-smoke-turn-cursor',request:{...turnsRequest,cursor:'a'.repeat(151)}});} catch(error) {badTurnCursor=error.code==='CURSOR_INVALID';}
                 ok=ok && badTurnCursor;
+                const calendar=await invoke('resolve_calendar_selection',{requestId:'native-smoke-calendar',request:{timezone:'America/New_York',selection:{kind:'custom',start_date:'2026-11-01',end_date_inclusive:'2026-11-01'}}});
+                ok=ok && calendar.api_version===1 && calendar.request_id==='native-smoke-calendar'
+                    && calendar.data.range.start_ms===Date.parse('2026-11-01T04:00:00Z')
+                    && calendar.data.range.end_ms===Date.parse('2026-11-02T05:00:00Z')
+                    && calendar.data.range.timezone==='America/New_York' && typeof calendar.data.local_today==='string'
+                    && calendar.data.heatmap_range.start_ms<calendar.data.heatmap_range.end_ms;
+                let invalidDate=false;
+                try {await invoke('resolve_calendar_selection',{requestId:'native-smoke-calendar-invalid',request:{timezone:'UTC',selection:{kind:'custom',start_date:'2026-02-29',end_date_inclusive:'2026-03-01'}}});} catch(error) {invalidDate=error.code==='INVALID_QUERY';}
+                ok=ok && invalidDate;
                 const sessions=await invoke('query_sessions',{requestId:'native-smoke-sessions',request:sessionsRequest});
                 ok=ok && sessions.api_version===1 && sessions.request_id==='native-smoke-sessions'
                     && sessions.data.meta.snapshot_id.startsWith('query-') && sessions.data.meta.price_revision==='3'

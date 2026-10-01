@@ -24,6 +24,12 @@ export type Grain = "hour" | "day" | "month";
 
 export type CalendarBucket = { start_ms: EpochMs, end_ms: EpochMs, display_label: string, utc_offset: string, };
 
+export type CalendarSelection = { "kind": "today", } | { "kind": "last7", } | { "kind": "last30", } | { "kind": "custom", start_date: string, end_date_inclusive: string, };
+
+export type CalendarSelectionRequest = { timezone: string, selection: CalendarSelection, };
+
+export type CalendarSelectionResult = { range: DateRange, heatmap_range: DateRange, local_today: string, };
+
 export type DimensionSelection = { "kind": "all", } | { "kind": "ids", ids: Array<string>, include_unknown: boolean, };
 
 export type UsageFilter = { range: DateRange, sources: DimensionSelection, models: DimensionSelection, projects: DimensionSelection, sessions: DimensionSelection, };

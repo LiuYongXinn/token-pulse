@@ -200,3 +200,141 @@ fn bucket_limits_and_unsupported_calendar_instants_are_rejected() {
     };
     assert!(buckets(&unsupported, Grain::Month).is_err());
 }
+
+fn selection(
+    timezone: &str,
+    choice: token_pulse_core::calendar::CalendarSelection,
+    at: &str,
+) -> Result<token_pulse_core::calendar::CalendarSelectionResult, token_pulse_core::error::ErrorCode>
+{
+    token_pulse_core::calendar::resolve_selection(
+        &token_pulse_core::calendar::CalendarSelectionRequest {
+            timezone: timezone.into(),
+            selection: choice,
+        },
+        EpochMs::new(DateTime::parse_from_rfc3339(at).unwrap().timestamp_millis()).unwrap(),
+    )
+}
+fn custom(start: &str, end: &str) -> token_pulse_core::calendar::CalendarSelection {
+    token_pulse_core::calendar::CalendarSelection::Custom {
+        start_date: start.into(),
+        end_date_inclusive: end.into(),
+    }
+}
+#[test]
+fn date_selections_use_requested_timezone_and_real_dst_day_lengths() {
+    use token_pulse_core::calendar::CalendarSelection;
+    let autumn = selection(
+        "America/New_York",
+        CalendarSelection::Today {},
+        "2026-11-01T12:00:00Z",
+    )
+    .unwrap();
+    let expected = range(
+        "2026-11-01T04:00:00Z",
+        "2026-11-02T05:00:00Z",
+        "America/New_York",
+    );
+    assert_eq!(autumn.range.start_ms, expected.start_ms);
+    assert_eq!(autumn.range.end_ms, expected.end_ms);
+    assert_eq!(autumn.local_today, "2026-11-01");
+    let seven = selection(
+        "America/New_York",
+        CalendarSelection::Last7 {},
+        "2026-11-01T12:00:00Z",
+    )
+    .unwrap();
+    assert_eq!(
+        seven.range.start_ms,
+        range(
+            "2026-10-26T04:00:00Z",
+            "2026-11-02T05:00:00Z",
+            "America/New_York"
+        )
+        .start_ms
+    );
+    assert_eq!(seven.range.end_ms, autumn.range.end_ms);
+    let spring = selection(
+        "America/New_York",
+        custom("2026-03-08", "2026-03-08"),
+        "2026-10-02T12:00:00Z",
+    )
+    .unwrap();
+    assert_eq!(
+        spring.range.end_ms.value() - spring.range.start_ms.value(),
+        23 * 3_600_000
+    );
+    assert_eq!(
+        buckets(&spring.heatmap_range, Grain::Day).unwrap().len(),
+        182
+    );
+}
+#[test]
+fn inclusive_date_selection_and_current_date_do_not_depend_on_machine_timezone() {
+    use token_pulse_core::calendar::CalendarSelection;
+    let utc = selection("UTC", CalendarSelection::Today {}, "2026-10-02T00:30:00Z").unwrap();
+    let hawaii = selection(
+        "Pacific/Honolulu",
+        CalendarSelection::Today {},
+        "2026-10-02T00:30:00Z",
+    )
+    .unwrap();
+    assert_eq!(utc.local_today, "2026-10-02");
+    assert_eq!(hawaii.local_today, "2026-10-01");
+    let leap = selection(
+        "UTC",
+        custom("2024-02-28", "2024-02-29"),
+        "2026-10-02T00:30:00Z",
+    )
+    .unwrap();
+    let expected = range("2024-02-28T00:00:00Z", "2024-03-01T00:00:00Z", "UTC");
+    assert_eq!(leap.range.start_ms, expected.start_ms);
+    assert_eq!(leap.range.end_ms, expected.end_ms);
+    assert_ne!(leap.heatmap_range.start_ms, leap.range.start_ms);
+}
+#[test]
+fn midnight_gaps_are_resolved_but_fully_skipped_dates_never_manufacture_a_day() {
+    let gap = selection(
+        "America/Sao_Paulo",
+        custom("2018-11-04", "2018-11-04"),
+        "2026-10-02T12:00:00Z",
+    )
+    .unwrap();
+    let expected = range(
+        "2018-11-04T03:00:00Z",
+        "2018-11-05T02:00:00Z",
+        "America/Sao_Paulo",
+    );
+    assert_eq!(gap.range.start_ms, expected.start_ms);
+    assert_eq!(gap.range.end_ms, expected.end_ms);
+    assert_eq!(
+        selection(
+            "Pacific/Apia",
+            custom("2011-12-30", "2011-12-30"),
+            "2026-10-02T12:00:00Z"
+        )
+        .unwrap_err(),
+        token_pulse_core::error::ErrorCode::InvalidQuery
+    );
+}
+#[test]
+fn date_selections_reject_invalid_dates_order_zones_and_unknown_fields() {
+    for (zone, start, end) in [
+        ("UTC", "2026-02-29", "2026-03-01"),
+        ("UTC", "2026-2-04", "2026-02-05"),
+        ("UTC", "2026-10-03", "2026-10-02"),
+        ("Unknown/Zone", "2026-10-01", "2026-10-02"),
+        ("UTC", "99999-01-01", "99999-01-02"),
+    ] {
+        assert_eq!(
+            selection(zone, custom(start, end), "2026-10-02T12:00:00Z").unwrap_err(),
+            token_pulse_core::error::ErrorCode::InvalidQuery
+        );
+    }
+    assert!(
+        serde_json::from_value::<token_pulse_core::calendar::CalendarSelection>(
+            serde_json::json!({"kind":"today","days":1})
+        )
+        .is_err()
+    );
+}

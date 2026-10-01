@@ -17,6 +17,7 @@ fn main() {
             "query_sessions",
             "get_session_bundle",
             "query_turns",
+            "resolve_calendar_selection",
             "query_usage_events",
             "close_query_snapshot",
             "get_price_rules",

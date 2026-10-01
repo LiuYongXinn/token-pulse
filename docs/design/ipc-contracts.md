@@ -392,3 +392,9 @@ classifications 是当前 active ledger 的跨日期观察分类，按 kind / re
 query_turns 接收 TurnsRequest（query.session_key / filter / price_basis / page_size、cursor），最多 200 条，固定按所选事件最大时间降序 / turn_id 的 BINARY 升序稳定 keyset 分页。目标会话与 filter.sessions 取交集，解析镜像别名；不使用模型、请求数、时间邻近或计数流猜测回合。仅明确非空 turn_id 分组，每组的 first_at_ms / last_at_ms / summary / pricing 都只覆盖所选日期与维度下的事件，不能称为该回合的完整生命周期消耗。
 
 TurnsPage 的 summary / pricing / coverage 覆盖指定会话全部所选消费，包括没有回合标识的事件；unidentified_usage_event_count 单独报告 null / 空标识事件数量。turns 是已识别回合，不将未知身份事件折成伪回合，不把总范围汇总当作当前页合计。meta / 价格 / 回合成员在真实租约中固定，与详情 bundle 独立。游标绑定 owner / 完整 query / turns 域，close_query_snapshot 的 Turns 分支接受原 TurnsRequest + 非空游标，合法重复关闭幂等；任意 snapshot_id 不授权读取。末页和失败释放租约。
+
+### 2.10 日历日期与 IANA 时区转换
+
+resolve_calendar_selection（仅主窗口）接收 CalendarSelectionRequest：timezone 为受限长度的合法 IANA 时区；selection 为 today / last7 / last30 / custom。custom 必填严格 YYYY-MM-DD 的 start_date 与 end_date_inclusive，用户结束日包含在选择内，后台转成下一当地日期边界作为排他 UTC 截止。CalendarSelectionResult 返回 range、独立的近 182 当地日 heatmap_range、后台当前时刻在该时区的 local_today。固定自定义日期不随午夜改变，热力图仍为当前时刻的独立近 26 周。
+
+所有边界复用 Rust / chrono-tz：重复当地午夜选择更早的 UTC 边界，午夜缺口采用其后的首个有效时刻；整日跳过导致空 UTC 区间则 INVALID_QUERY，不能凭空补 24 小时。反向区间、无效闰日、不规范日期、未知时区和未知字段拒绝。该命令只解析日历，不代表数据快照或价格修订，也不自行改变主窗口 / mini_scope；UI 应成功取得 range 后整体发起正式查询。

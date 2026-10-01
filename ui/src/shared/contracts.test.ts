@@ -5,6 +5,21 @@ import type { TokenMeasure, MiniScope, DecimalInt, DashboardBundle } from './gen
 
 const ajv = new Ajv({ strict: false });
 
+test('calendar selection contracts bound dates and require independent UTC ranges', () => {
+  const validate = ajv.compile(protocol.schemas.CalendarSelectionRequest);
+  const selection = { timezone: 'America/New_York', selection: { kind: 'custom', start_date: '2026-11-01', end_date_inclusive: '2026-11-01' } };
+  expect(validate(selection)).toBe(true);
+  expect(validate({ timezone: 'UTC', selection: { kind: 'today' } })).toBe(true);
+  expect(validate({ ...selection, selection: { ...selection.selection, start_date: '2026-1-01' } })).toBe(false);
+  expect(validate({ ...selection, selection: { kind: 'today', days: 1 } })).toBe(false);
+  expect(validate({ ...selection, timezone: 'x'.repeat(129) })).toBe(false);
+  const range = { start_ms: Date.parse('2026-11-01T04:00:00Z'), end_ms: Date.parse('2026-11-02T05:00:00Z'), timezone: 'America/New_York' };
+  const result = { range, heatmap_range: { ...range, start_ms: 0 }, local_today: '2026-10-02' };
+  const validateResult = ajv.compile(protocol.schemas.CalendarSelectionResult);
+  expect(validateResult(result)).toBe(true);
+  expect(validateResult({ ...result, heatmap_range: undefined })).toBe(false);
+});
+
 test('price invalidation carries exact revision and a whole-model marker without private data', () => {
   const validate = ajv.compile(protocol.schemas.PriceChanged);
   expect(validate({ price_revision: '9007199254740993', all_models: true })).toBe(true);

@@ -1,6 +1,8 @@
 use schemars::{JsonSchema, generate::SchemaSettings};
 use std::{collections::BTreeMap, fs, path::PathBuf};
-use token_pulse_core::calendar::{CalendarBucket, Grain};
+use token_pulse_core::calendar::{
+    CalendarBucket, CalendarSelection, CalendarSelectionRequest, CalendarSelectionResult, Grain,
+};
 use token_pulse_core::jobs::*;
 use token_pulse_core::pricing::{
     ModelAlias, PriceChanged, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft,
@@ -57,6 +59,9 @@ fn main() {
         DateRange,
         Grain,
         CalendarBucket,
+        CalendarSelection,
+        CalendarSelectionRequest,
+        CalendarSelectionResult,
         DimensionSelection,
         UsageFilter,
         PriceBasis,

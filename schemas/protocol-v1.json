@@ -348,6 +348,215 @@
       "title": "CalendarBucket",
       "type": "object"
     },
+    "CalendarSelection": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "today",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "last7",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "last30",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "end_date_inclusive": {
+              "maxLength": 10,
+              "minLength": 10,
+              "type": "string"
+            },
+            "kind": {
+              "const": "custom",
+              "type": "string"
+            },
+            "start_date": {
+              "maxLength": 10,
+              "minLength": 10,
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "start_date",
+            "end_date_inclusive"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "CalendarSelection"
+    },
+    "CalendarSelectionRequest": {
+      "$defs": {
+        "CalendarSelection": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "last7",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "last30",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "end_date_inclusive": {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "custom",
+                  "type": "string"
+                },
+                "start_date": {
+                  "maxLength": 10,
+                  "minLength": 10,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "start_date",
+                "end_date_inclusive"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "selection": {
+          "$ref": "#/$defs/CalendarSelection"
+        },
+        "timezone": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "timezone",
+        "selection"
+      ],
+      "title": "CalendarSelectionRequest",
+      "type": "object"
+    },
+    "CalendarSelectionResult": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "heatmap_range": {
+          "$ref": "#/$defs/DateRange"
+        },
+        "local_today": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/DateRange"
+        }
+      },
+      "required": [
+        "range",
+        "heatmap_range",
+        "local_today"
+      ],
+      "title": "CalendarSelectionResult",
+      "type": "object"
+    },
     "CancelJobResult": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [

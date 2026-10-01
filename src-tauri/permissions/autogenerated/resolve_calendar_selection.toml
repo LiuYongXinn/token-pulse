@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-resolve-calendar-selection"
+description = "Enables the resolve_calendar_selection command without any pre-configured scope."
+commands.allow = ["resolve_calendar_selection"]
+
+[[permission]]
+identifier = "deny-resolve-calendar-selection"
+description = "Denies the resolve_calendar_selection command without any pre-configured scope."
+commands.deny = ["resolve_calendar_selection"]
