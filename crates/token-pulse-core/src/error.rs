@@ -30,6 +30,8 @@ pub enum ErrorCode {
     QuotaUnsupported,
     QuotaTimeout,
     QuotaAuthRequired,
+    QuotaProtocolError,
+    QuotaServiceUnavailable,
     TaskbarUnsupported,
     TaskbarNoSpace,
     TaskbarEmbedFailed,

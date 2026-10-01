@@ -18,6 +18,7 @@ pub mod pricing;
 pub mod privacy;
 pub mod protocol;
 pub mod query;
+pub mod quota;
 pub mod reader;
 pub mod scheduling;
 pub mod selections;

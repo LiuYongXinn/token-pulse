@@ -496,3 +496,13 @@ mini_window 偏好新增 passthrough，旧配置缺字段默认 false，null / �
 关闭和恢复入口优先恢复鼠标：存储失败不会重新开启穿透。快捷键、托盘「显示悬浮窗 / 恢复交互」、正式显示动作均先解除 native ignore，再保存关闭偏好；已有小窗的坏配置 / 位置保存失败也不能阻止该恢复。透明度重设失败不阻止鼠标恢复；无可靠配置时保留当前 native alpha，记录错误，不伪造新的偏好。读取能区分已关闭但保存仍为 true，设置页允许重试保存。原生交互变化发 mini_interaction_changed 空载荷失效通知，成功持久变化另发 settings_changed；UI 重新读取实际状态，通知不携带统计值。
 
 每次明确重新显示会关闭穿透；保存 true 不会绕过确认并自动开启新窗口。登录启动 / 自动显示偏好尚未交付，不能把本节作为完整启动恢复验收。任务栏后续复用该恢复入口，不开放任意 HWND / 原生消息 / 快捷键代码。
+
+### 2.24 已实现的账户额度领域基础
+
+QuotaSnapshot / QuotaWindow / QuotaLimit 沿用既有契约，新增受控错误 QUOTA_PROTOCOL_ERROR / QUOTA_SERVICE_UNAVAILABLE；M12a 仅实现后端解析和内存协调器，get_account_quota 等命令尚未注册。快照与本地 SQLite 消费 / 价格完全独立，不持久化账户额度或服务原始消息。
+
+按照 [App Server 官方协议](https://learn.chatgpt.com/docs/app-server)，完整读取优先 rateLimitsByLimitId，null / 缺字段才兼容 rateLimits，空映射不回退。单桶 account/rateLimits/updated 按 limitId 合并而非覆盖其他桶；身份缺失通知仅能更新已证明缺少服务标识的旧版单桶，不能用本地 legacy 字符串冒充服务身份。桶标识冲突 / 非对象窗口等结构错误拒绝；未知数值 / 名称保留 null。只提取额度需要的字段，不保留邮件、订阅、credits、认证信息或未知消息内容。
+
+普通读取令牌包含精确连接 epoch / 请求 ID；账户变化和断开清除全部缓存，未完成本 epoch 读取前拒绝通知。新通知优先于此前开始的查询回复，保留各桶自己的 fetched_at_ms；没有选定桶时 fetched_at_ms 为 null。quota_revision 为十进制字符串。服务 actor 必须在串行处理内部采样单调时间，10 秒请求期限 / 5 秒下限 / 失败退避 / 60 秒或 5 分钟轮询不受系统时间回拨影响。延迟回复只能发布、已超时或被忽略，不能恢复旧 epoch。
+
+只按 actual window_duration_mins 识别唯一周窗口和短周期，未知时长不猜角色；reset_at_ms 从 Unix 秒 checked 转换。剩余百分比在已知 usedPercent 时计算并夹紧，缺失仍为 null；通知 / 超时 / 陈旧不改成本地推测百分比。多桶不加总，默认 codex 或唯一桶，否则留待明确选择；原选择消失不悄悄改选。实际 stdio、授权作业、IPC 权限及 UI 消费在后续模块接入。
