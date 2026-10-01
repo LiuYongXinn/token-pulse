@@ -27,6 +27,6 @@ export function SessionsPage({ request, refreshRevision, onSessionScope }: { req
       {pager.trimmed && <p className="group-footnote">只缓存最近 10 页；查看更早页面请重新查询。</p>}
       <p className="group-footnote">分页固定同一数据与价格版本；服务器租约最多 30 秒，过期后请重新查询。汇总覆盖整个筛选范围。数据修订 {page.meta.data_revision} · 价格修订 {page.meta.price_revision}</p>
     </>}
-    {selected?.key === scopeKey && page && <SessionDrawer row={selected.row} meta={page.meta} range={request.filter.range} onClose={() => setSelected(null)} onSessionScope={(key, name) => { setSelected(null); onSessionScope(key, name); }} />}
+    {selected?.key === scopeKey && page && <SessionDrawer request={{ session_key: selected.row.session_key, filter: request.filter, price_basis: request.price_basis }} displayName={selected.row.display_name} onClose={() => setSelected(null)} onSessionScope={(key, name) => { setSelected(null); onSessionScope(key, name); }} />}
   </>;
 }

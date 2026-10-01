@@ -5,6 +5,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     type Query = { filter: { range: { start_ms: number; end_ms: number; timezone: string }; sources: { ids?: string[] }; sessions: { ids?: string[] } }; price_basis: unknown; sort: string; page_size: number };
     let id = 0, expired = false, defer = false, release: (() => void) | null = null;
+    let detailRevision = 0, deferDetail = false, failDetail = false;
+    const detailReleases: (() => void)[] = [];
     const calls: { command: string; args: Record<string, unknown> }[] = [];
     const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
     const measure = { value: null, covered_total_tokens: '0', complete: false };
@@ -19,6 +21,16 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge supplies sessions only');
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'close_query_snapshot') return response(null);
+      if (command === 'get_session_bundle') {
+        const request = args.request as { session_key: string; filter: Query['filter']; price_basis: unknown };
+        if (failDetail) throw { code: 'DB_CORRUPT' };
+        const index = Number(request.session_key.split('-').at(-1));
+        const identity = { session_key: request.session_key, display_name: `Synthetic 会话 ${index}`, parent_key: index === 0 ? 'synthetic-session-1' : null, parent_display_name: index === 0 ? 'Synthetic 会话 1' : null, parent_provider_id: index === 0 ? 'parent-provider' : 'unresolved-parent' };
+        const total = detailRevision === 0 ? '321' : '654';
+        const data = { meta: { snapshot_id: `synthetic-detail-${detailRevision}`, data_revision: String(8 + detailRevision), price_revision: String(3 + detailRevision), generated_at_ms: request.filter.range.start_ms + 2000, parser_versions: ['synthetic'], accounting_versions: ['synthetic'], display_timezone: request.filter.range.timezone }, identity, summary: tokens(total), pricing: price(total), coverage, latest_selected_activity: { occurred_at_ms: request.filter.range.start_ms + 1000, model: `Synthetic Detail Model ${detailRevision}`, project_id: 'detail-project', project_display_name: 'Synthetic Detail Project' }, latest_context: { context_tokens: index === 0 ? '9007199254740993' : null, model_context_window: null, percentage: null, observed_at_ms: index === 0 ? request.filter.range.end_ms + 12000 : null, quality: index === 0 ? 'confirmed' : 'unknown' }, child_count: index === 0 ? '3' : '0', children: index === 0 ? [{ session_key: 'synthetic-session-2', display_name: 'Synthetic 会话 2', parent_key: request.session_key, parent_display_name: identity.display_name, parent_provider_id: null }] : [], children_truncated: index === 0, classifications: [{ kind: 'inherited', reason_code: 'inherited_prefix', observation_count: '1' }, { kind: 'pending', reason_code: 'lineage_pending', observation_count: '2' }] };
+        if (deferDetail) await new Promise<void>(resolve => { detailReleases.push(resolve); });
+        return response(data);
+      }
       if (command === 'query_sessions') {
         const { query, cursor } = args.request as { query: Query; cursor: string | null };
         if (cursor !== null && expired) throw { code: 'SNAPSHOT_EXPIRED' };
@@ -41,7 +53,7 @@ test.beforeEach(async ({ page }) => {
         return response(data);
       }
       throw new Error(`Unexpected synthetic command ${command}`);
-    } }, __syntheticSessionCalls: () => calls, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; } });
+    } }, __syntheticSessionCalls: () => calls, __expireSyntheticSessions: () => { expired = true; }, __resetSyntheticSessions: () => { expired = false; }, __deferSyntheticSessions: () => { defer = true; }, __releaseSyntheticSessions: () => { release?.(); release = null; }, __reviseSyntheticDetail: () => { ++detailRevision; }, __failSyntheticDetail: (fail: boolean) => { failDetail = fail; }, __deferSyntheticDetail: () => { deferDetail = true; }, __releaseSyntheticDetail: () => { deferDetail = false; for (const release of detailReleases.splice(0)) release(); } });
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
@@ -62,6 +74,13 @@ test('sessions show exact consumption and independent context, stable pages and 
   await expect(drawer.getByRole('heading', { name: '最近请求上下文' })).toBeVisible();
   await expect(drawer.getByText('窗口容量未知', { exact: true })).toBeVisible();
   await expect(drawer).toContainText('最近上下文不表示所选日期内累计消费');
+  await expect(drawer.locator('.session-drawer-total')).toContainText('321');
+  await expect(drawer).toContainText('详情整体快照 · 数据 8 / 价格 3');
+  await expect(drawer.getByRole('heading', { name: '当前账本分类证据' })).toBeVisible();
+  await expect(drawer.locator('.session-classifications')).toContainText('父序列前缀已验证');
+  await expect(drawer.locator('.session-classifications')).toContainText('继承边界待确认');
+  await expect(drawer).toContainText('显示前 1 个子关系，共 3 个');
+  await expect(drawer.getByRole('list', { name: '已解析子会话' }).getByRole('button', { name: 'Synthetic 会话 2' })).toBeVisible();
   await expect(page.getByRole('button', { name: '关闭会话详情' })).toBeFocused();
   expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(true);
   await page.screenshot({ path: 'test-results/session-drawer-top-1280.png' });
@@ -123,4 +142,44 @@ test('sort and scope changes serialize release, clear obsolete values and clean 
   await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticSessions());
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls())).filter(c => c.command === 'close_query_snapshot').length).toBeGreaterThanOrEqual(3);
   await expect(page.locator('.session-table')).toHaveCount(0);
+});
+
+test('detail refresh replaces its whole bundle, child navigation retains filters, and late responses stay closed', async ({ page }) => {
+  type Bridge = { __reviseSyntheticDetail: () => void; __failSyntheticDetail: (fail: boolean) => void; __deferSyntheticDetail: () => void; __releaseSyntheticDetail: () => void };
+  await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.locator('.session-drawer-total')).toContainText('321');
+  await page.evaluate(() => (window as unknown as Bridge).__reviseSyntheticDetail());
+  await drawer.getByRole('button', { name: '刷新详情' }).click();
+  await expect(drawer.locator('.session-drawer-total')).toContainText('654');
+  await expect(drawer).toContainText('Synthetic Detail Model 1');
+  await expect(drawer).toContainText('详情整体快照 · 数据 9 / 价格 4');
+  await drawer.locator('.session-classifications').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/session-classifications-1280.png' });
+  await page.setViewportSize({ width: 960, height: 680 });
+  await page.screenshot({ path: 'test-results/session-classifications-960.png' });
+  expect(await drawer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await drawer.getByRole('list', { name: '已解析子会话' }).getByRole('button', { name: 'Synthetic 会话 2', exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('Synthetic 会话 2');
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(1);
+  await page.evaluate(() => (window as unknown as Bridge).__failSyntheticDetail(true));
+  await page.getByRole('button', { name: 'Synthetic 会话 2', exact: true }).click();
+  await expect(drawer.getByRole('alert')).toBeVisible();
+  await expect(drawer.locator('.session-drawer-total')).toHaveCount(0);
+  await expect(drawer.getByRole('button', { name: '刷新详情' })).toBeEnabled();
+  await page.evaluate(() => (window as unknown as Bridge).__failSyntheticDetail(false));
+  await drawer.getByRole('button', { name: '刷新详情' }).click();
+  await expect(drawer.locator('.session-drawer-total')).toContainText('654');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => (window as unknown as Bridge).__deferSyntheticDetail());
+  const trigger = page.getByRole('button', { name: 'Synthetic 会话 2', exact: true });
+  await trigger.click();
+  await expect(drawer).toContainText('正在读取详情快照');
+  await expect(drawer.locator('.session-drawer-total')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticDetail());
+  await expect(drawer).toHaveCount(0);
+  expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(false);
 });
