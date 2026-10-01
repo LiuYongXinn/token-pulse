@@ -13,7 +13,7 @@ pub fn start(app: tauri::AppHandle) {
         match result {
             Ok(()) => {
                 println!(
-                    "NATIVE_SMOKE_OK: isolated startup, real WebView IPC, tray, close-to-hide, single-instance activation, explicit exit"
+                    "NATIVE_SMOKE_OK: isolated startup, real WebView IPC, native power-message routing, tray, close-to-hide, single-instance activation, explicit exit"
                 );
                 app.exit(0);
             }
@@ -68,6 +68,44 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     }
     if !window.is_visible().map_err(|e| e.to_string())? {
         return Err("cold start window is hidden".into());
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::{
+            Foundation::HWND,
+            UI::WindowsAndMessaging::{
+                PBT_APMRESUMEAUTOMATIC, PBT_APMSUSPEND, SendMessageW, WM_POWERBROADCAST,
+            },
+        };
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as HWND;
+        unsafe {
+            SendMessageW(hwnd, WM_POWERBROADCAST, PBT_APMSUSPEND as usize, 0);
+        }
+        thread::sleep(Duration::from_millis(150));
+        if !app
+            .state::<super::RuntimeState>()
+            .collector
+            .as_ref()
+            .map_err(|e| e.to_string())?
+            .status()
+            .suspended
+        {
+            return Err("native power suspend not routed".into());
+        }
+        unsafe {
+            SendMessageW(hwnd, WM_POWERBROADCAST, PBT_APMRESUMEAUTOMATIC as usize, 0);
+        }
+        thread::sleep(Duration::from_millis(150));
+        if app
+            .state::<super::RuntimeState>()
+            .collector
+            .as_ref()
+            .map_err(|e| e.to_string())?
+            .status()
+            .suspended
+        {
+            return Err("native power resume not routed".into());
+        }
     }
     window.close().map_err(|e| e.to_string())?;
     thread::sleep(Duration::from_millis(500));

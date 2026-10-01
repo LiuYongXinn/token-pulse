@@ -19,6 +19,10 @@ tauri-plugin-single-instance = "2"
 serde.workspace = true
 token-pulse-core.workspace = true
 token-pulse-store.workspace = true
+token-pulse-collector.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

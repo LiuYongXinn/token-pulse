@@ -13,6 +13,7 @@ use token_pulse_core::{
 struct RuntimeState {
     data_directory: PathBuf,
     database: token_pulse_store::StoreResult<token_pulse_store::Database>,
+    collector: token_pulse_store::StoreResult<token_pulse_collector::service::CollectorService>,
 }
 
 #[tauri::command]
@@ -35,7 +36,19 @@ fn get_app_status(
             version: env!("CARGO_PKG_VERSION").into(),
             development: cfg!(debug_assertions),
             data_directory: state.data_directory.to_string_lossy().into_owned(),
-            collector: ServiceState::NotConfigured,
+            collector: match &state.collector {
+                Ok(collector) => {
+                    let status = collector.status();
+                    if status.error.is_some() {
+                        ServiceState::Error
+                    } else if status.enabled_sources == 0 {
+                        ServiceState::NotConfigured
+                    } else {
+                        ServiceState::Ready
+                    }
+                }
+                Err(_) => ServiceState::Error,
+            },
             storage: if state.database.is_ok() {
                 ServiceState::Ready
             } else {
@@ -93,7 +106,10 @@ pub fn run() {
             let data_directory = app.path().app_local_data_dir()?;
             token_pulse_store::prepare_data_directory(&data_directory)?;
             let database = token_pulse_store::Database::open(&data_directory);
-            app.manage(RuntimeState { data_directory, database });
+            let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()),Err(error)=>Err(error.code.into())};
+            app.manage(RuntimeState { data_directory, database, collector });
+            #[cfg(windows)]
+            power::install(app.handle()).map_err(std::io::Error::other)?;
             let open = MenuItem::with_id(app, "open", "打开统计", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出 TokenPulse", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
@@ -138,8 +154,24 @@ pub fn run() {
         }
         context
     };
-    builder.run(context).expect("desktop runtime failed");
+    builder
+        .build(context)
+        .expect("desktop runtime failed")
+        .run(|app, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                if let Some(state) = app.try_state::<RuntimeState>() {
+                    if let Ok(collector) = &state.collector {
+                        collector.shutdown();
+                    }
+                }
+            }
+        });
 }
 
+#[cfg(windows)]
+mod power;
 #[cfg(debug_assertions)]
 mod smoke;

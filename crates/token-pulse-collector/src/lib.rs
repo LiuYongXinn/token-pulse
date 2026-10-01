@@ -1,4 +1,5 @@
 //! Independent collection service; no renderer, IDE, authentication or external CLI dependencies.
+pub mod service;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use token_pulse_core::{

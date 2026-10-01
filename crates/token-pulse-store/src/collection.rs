@@ -24,6 +24,22 @@ pub struct SessionAccounting {
     pub revisions: BTreeMap<(String, String), i64>,
 }
 impl Database {
+    pub fn enabled_sources(&self) -> StoreResult<Vec<crate::SourceRecord>> {
+        self.snapshot(|tx,_| {let mut s=tx.prepare("SELECT source_id,root_path,directory_identity,kind,enabled,created_at_ms FROM sources WHERE enabled=1")?;
+            let rows=s.query_map([],|r|Ok(crate::SourceRecord{source_id:r.get(0)?,root_path:r.get(1)?,directory_identity:r.get(2)?,kind:r.get(3)?,enabled:r.get(4)?,created_at_ms:r.get(5)?}))?;
+            rows.collect::<Result<Vec<_>,_>>().map_err(Into::into)
+        })
+    }
+    pub fn update_source_runtime(
+        &self,
+        source_id: String,
+        readability: token_pulse_core::sources::SourceReadability,
+        capabilities: token_pulse_core::sources::SourceCapabilities,
+        scan_at: Option<i64>,
+        success_at: Option<i64>,
+    ) -> StoreResult<()> {
+        self.write(move|conn| {conn.execute("UPDATE sources SET readability=?1,capabilities_json=?2,last_scan_at_ms=COALESCE(?3,last_scan_at_ms),last_success_at_ms=COALESCE(?4,last_success_at_ms) WHERE source_id=?5",params![serde_json::to_value(readability)?.as_str(),serde_json::to_string(&capabilities)?,scan_at,success_at,source_id])?;Ok(())})
+    }
     pub fn enabled_source_root(&self, source_id: &str) -> StoreResult<Option<String>> {
         self.snapshot(|tx, _| {
             Ok(tx
