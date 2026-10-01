@@ -4,6 +4,14 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 pub const SETTINGS_VERSION: u32 = 1;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum AppTheme {
+    #[default]
+    Dark,
+    Light,
+    System,
+}
 pub fn validate_timezone(value: &str) -> Result<(), ErrorCode> {
     if value.is_empty() || value.len() > 128 || value.parse::<chrono_tz::Tz>().is_err() {
         return Err(ErrorCode::InvalidQuery);
@@ -17,6 +25,7 @@ pub struct DisplayPreferences {
     #[schemars(length(min = 1, max = 128))]
     pub display_timezone: Option<String>,
     pub privacy: bool,
+    pub theme: AppTheme,
 }
 impl DisplayPreferences {
     pub fn validate(&self) -> Result<(), ErrorCode> {
@@ -73,6 +82,20 @@ pub struct DisplayPrivacyMutation {
     pub expected_settings_revision: DecimalInt,
 }
 impl DisplayPrivacyMutation {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        i64::try_from(self.expected_settings_revision.value())
+            .map_err(|_| ErrorCode::InvalidQuery)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayThemeMutation {
+    pub theme: AppTheme,
+    pub expected_settings_revision: DecimalInt,
+}
+impl DisplayThemeMutation {
     pub fn validate(&self) -> Result<(), ErrorCode> {
         i64::try_from(self.expected_settings_revision.value())
             .map_err(|_| ErrorCode::InvalidQuery)?;

@@ -4,7 +4,8 @@ use token_pulse_core::{
     privacy::{DisplayPolicyStamp, PrivacyState, PrivateResponse},
     protocol::validate_request_id,
     settings::{
-        DisplayPrivacyMutation, DisplaySettingsSnapshot, SettingsChanged, TimezoneMutation,
+        DisplayPrivacyMutation, DisplaySettingsSnapshot, DisplayThemeMutation, SettingsChanged,
+        TimezoneMutation,
     },
 };
 fn authorized(window: &WebviewWindow, request_id: &str) -> Result<(), Box<AppError>> {
@@ -144,4 +145,62 @@ pub async fn set_display_privacy(
         data,
         state.privacy.clone(),
     ))
+}
+
+#[tauri::command]
+pub async fn set_display_theme(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: DisplayThemeMutation,
+    request_id: String,
+) -> Result<PrivateResponse<DisplaySettingsSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    request
+        .validate()
+        .map_err(|e| Box::new(AppError::new(e, request_id.clone())))?;
+    let db = state
+        .database
+        .as_ref()
+        .cloned()
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    let (data, changed) = tauri::async_runtime::spawn_blocking(move || {
+        let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
+        db.mutate_display_theme(request, at)
+    })
+    .await
+    .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
+    .map_err(|e: token_pulse_store::StoreError| {
+        Box::new(AppError::new(e.code, request_id.clone()))
+    })?;
+    apply_native_theme(window.app_handle(), data.preferences.theme);
+    if changed {
+        let _ = window.app_handle().emit(
+            "settings_changed",
+            SettingsChanged {
+                settings_revision: data.settings_revision.clone(),
+            },
+        );
+    }
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
+}
+
+pub(super) fn apply_native_theme(
+    app: &tauri::AppHandle,
+    theme: token_pulse_core::settings::AppTheme,
+) {
+    use token_pulse_core::settings::AppTheme;
+    let native = match theme {
+        AppTheme::Dark => Some(tauri::Theme::Dark),
+        AppTheme::Light => Some(tauri::Theme::Light),
+        AppTheme::System => None,
+    };
+    for window in app.webview_windows().values() {
+        if window.set_theme(native).is_err() {
+            eprintln!("NATIVE_THEME_UNAVAILABLE");
+        }
+    }
 }

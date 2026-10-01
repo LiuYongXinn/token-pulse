@@ -426,3 +426,7 @@ DisplayPreferences 公开 privacy；DisplayPrivacyMutation { privacy, expected_s
 主窗口要求敏感响应带 display_policy；DisplayPolicyGate 用精确十进制修订判定最新策略，并用独立 epoch 失效已显示 DTO。开启在发 IPC 前本地封闭，提交冲突 / 失败不自动恢复显示；明确关闭成功才重新查询。display_policy_changed 独立监听，settings_changed 继续只触发配置重读。已开启时空价格规则响应通过策略状态明确显示“已隐藏”，不解释为规则缺失。
 
 响应请求捕获 epoch；返回旧策略 / 旧世代则拒绝数据。get_filter_options / query_sessions / query_usage_events / query_turns 的迟到拒绝必须用原 query 与返回 next_cursor 释放租约；close 不使用 snapshot_id。显示设置 / 关闭租约等无身份控制响应保留安全处理，纯日历 / 窗口动作没有显示字段。策略变化清空统计 / 来源缓存、候选和详情 / 价格编辑器；保留稳定筛选 ID / 日期 / 估价时点，旧会话 / 项目候选名字以通用文字替代，关闭后通过新查询恢复可显示值。
+
+### 2.15 持久主题
+
+DisplayPreferences 增加 theme: AppTheme（dark / light / system），缺少旧字段时读取既有深色默认。DisplayThemeMutation { theme, expected_settings_revision } 按全局修订 CAS 更新单一字段；get_display_settings / set_display_theme 返回完整显示配置与最新隐私戳。主题提交后 settings_changed，同值 / 冲突不通知，不发布隐私变化。主窗口权限已登记；共享 useAppTheme 根据保存值解析 system 并监听系统媒体变化，theme 与 themePreference 明确区分。原生应用窗口通过 Tauri set_theme 同步，任务栏宿主将按其自己的系统背景设计实现。

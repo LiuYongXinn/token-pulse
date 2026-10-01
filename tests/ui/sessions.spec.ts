@@ -36,13 +36,13 @@ test.beforeEach(async ({ page }) => {
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
       if (command === 'plugin:event|unlisten') return null;
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: settingsRevision, privacy }, data: privacy ? hide(data) : data });
-      if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { privacy, display_timezone: 'Asia/Shanghai' } });
+      if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { theme: 'dark', privacy, display_timezone: 'Asia/Shanghai' } });
       if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'set_display_privacy') {
         const mutation = args.request as { privacy: boolean; expected_settings_revision: string };
         if (rejectPrivacy || mutation.expected_settings_revision !== settingsRevision) throw { code: 'REVISION_CONFLICT' };
         if (mutation.privacy !== privacy) { privacy = mutation.privacy; settingsRevision = String(BigInt(settingsRevision) + 1n); notifyPrivacy(); }
-        return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { privacy, display_timezone: 'Asia/Shanghai' } });
+        return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { theme: 'dark', privacy, display_timezone: 'Asia/Shanghai' } });
       }
       if (command === 'get_filter_options') {
         const q = args.request as { query: { dimension: string; filter: { range: { timezone: string } } } };

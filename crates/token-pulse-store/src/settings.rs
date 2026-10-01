@@ -63,6 +63,12 @@ fn read_stored(
         }
     };
     let preferences = DisplayPreferences {
+        theme: payload
+            .get("theme")
+            .map(|value| serde_json::from_value(value.clone()))
+            .transpose()
+            .map_err(|_| ErrorCode::DbCorrupt)?
+            .unwrap_or_default(),
         privacy: payload
             .get("privacy")
             .and_then(serde_json::Value::as_bool)
@@ -85,6 +91,27 @@ fn read(tx: &Transaction<'_>, revision: i64) -> StoreResult<DisplaySettingsSnaps
     Ok(read_stored(tx, revision)?.0)
 }
 impl Database {
+    pub fn mutate_display_theme(
+        &self,
+        mutation: DisplayThemeMutation,
+        at: EpochMs,
+    ) -> StoreResult<(DisplaySettingsSnapshot, bool)> {
+        mutation.validate()?;
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let revision: i64 = tx.query_row("SELECT settings_revision FROM app_state WHERE singleton=1", [], |r| r.get(0))?;
+            let (mut snapshot, mut payload) = read_stored(&tx, revision)?;
+            if mutation.expected_settings_revision.value() != i128::from(revision) { return Err(ErrorCode::RevisionConflict.into()); }
+            if snapshot.preferences.theme == mutation.theme { tx.commit()?; return Ok((snapshot, false)); }
+            let next_revision = revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
+            payload.insert("theme".into(), serde_json::to_value(mutation.theme)?);
+            snapshot.preferences.theme = mutation.theme;
+            tx.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,?1,?2,?3) ON CONFLICT(singleton) DO UPDATE SET settings_version=excluded.settings_version,payload_json=excluded.payload_json,updated_at_ms=excluded.updated_at_ms", params![SETTINGS_VERSION,serde_json::to_string(&payload)?,at.value()])?;
+            tx.execute("UPDATE app_state SET settings_revision=?1 WHERE singleton=1", [next_revision])?;
+            snapshot.settings_revision = DecimalInt::from_nonnegative(next_revision.into())?;
+            tx.commit()?; Ok((snapshot, true))
+        })
+    }
     pub fn display_settings(&self) -> StoreResult<DisplaySettingsSnapshot> {
         self.snapshot(|tx, revision| read(tx, revision.settings))
     }

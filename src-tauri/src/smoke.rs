@@ -66,7 +66,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let price_listener = app.listen("price_rules_changed", move |event| {
         let _ = price_sender.try_send(event.payload().to_owned());
     });
-    let (settings_sender, settings_receiver) = std::sync::mpsc::sync_channel(8);
+    let (settings_sender, settings_receiver) = std::sync::mpsc::sync_channel(16);
     let settings_listener = app.listen("settings_changed", move |event| {
         let _ = settings_sender.try_send(event.payload().to_owned());
     });
@@ -347,6 +347,21 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 await waitFor(()=>document.querySelector('.privacy-status')?.textContent.includes('隐私已关闭'));
                 const disabledByUI=await invoke('get_display_settings',{requestId:'native-smoke-privacy-ui-final'});
                 ok=ok && disabledByUI.data.settings_revision==='8' && disabledByUI.data.preferences.privacy===false;
+                for (const [theme,revision] of [['light','9'],['system','10'],['dark','11']]) {
+                    await waitFor(()=>!document.querySelector('select[aria-label="应用主题"]')?.disabled);
+                    const themeSelect=document.querySelector('select[aria-label="应用主题"]');
+                    themeSelect.value=theme; themeSelect.dispatchEvent(new Event('change',{bubbles:true}));
+                    await waitFor(()=>document.documentElement.dataset.themePreference===theme);
+                    const savedTheme=await invoke('get_display_settings',{requestId:'native-smoke-theme-'+theme});
+                    ok=ok && savedTheme.data.settings_revision===revision && savedTheme.data.preferences.theme===theme
+                        && savedTheme.data.preferences.display_timezone==='Asia/Tokyo' && savedTheme.data.preferences.privacy===false;
+                    if(theme!=='system') ok=ok && document.documentElement.dataset.theme===theme;
+                }
+                let themeConflict=false;
+                try { await invoke('set_display_theme',{requestId:'native-smoke-theme-conflict',request:{theme:'light',expected_settings_revision:'8'}}); } catch(error) { themeConflict=error.code==='REVISION_CONFLICT'; }
+                const themeNoop=await invoke('set_display_theme',{requestId:'native-smoke-theme-noop',request:{theme:'dark',expected_settings_revision:'11'}});
+                ok=ok && themeConflict && themeNoop.data.settings_revision==='11';
+
 
 
             } catch (error) { console.error('Native IPC check:', error); }
@@ -364,12 +379,12 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("WebView get_app_status IPC failed".into());
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
-    if settings_events.len() != 7 {
-        return Err("display changes did not emit exactly seven settings notifications".into());
+    if settings_events.len() != 10 {
+        return Err("display changes did not emit exactly ten settings notifications".into());
     }
     for (payload, revision) in settings_events
         .iter()
-        .zip(["2", "3", "4", "5", "6", "7", "8"])
+        .zip(["2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])
     {
         let event: token_pulse_core::settings::SettingsChanged =
             serde_json::from_str(payload).map_err(|e| e.to_string())?;

@@ -20,6 +20,7 @@ fn main() {
             "resolve_calendar_selection",
             "get_display_settings",
             "set_display_timezone",
+            "set_display_theme",
             "set_display_privacy",
             "query_usage_events",
             "close_query_snapshot",

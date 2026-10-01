@@ -7,11 +7,11 @@ const ajv = new Ajv({ strict: false });
 
 test('display settings preserve uninitialized null, exact revision and strict timezone mutations', () => {
   const validate = ajv.compile(protocol.schemas.DisplaySettingsSnapshot);
-  const snapshot = { settings_version: 1, settings_revision: '9007199254740993', preferences: { privacy: false, display_timezone: null } };
+  const snapshot = { settings_version: 1, settings_revision: '9007199254740993', preferences: { theme: 'dark', privacy: false, display_timezone: null } };
   expect(validate(snapshot)).toBe(true);
-  expect(validate({ ...snapshot, preferences: { privacy: false, display_timezone: 'Asia/Shanghai' } })).toBe(true);
+  expect(validate({ ...snapshot, preferences: { theme: 'dark', privacy: false, display_timezone: 'Asia/Shanghai' } })).toBe(true);
   expect(validate({ ...snapshot, settings_revision: 1 })).toBe(false);
-  expect(validate({ ...snapshot, preferences: { privacy: false, display_timezone: null, auth: 'private' } })).toBe(false);
+  expect(validate({ ...snapshot, preferences: { theme: 'dark', privacy: false, display_timezone: null, auth: 'private' } })).toBe(false);
   const validateMutation = ajv.compile(protocol.schemas.TimezoneMutation);
   expect(validateMutation({ kind: 'initialize', system_timezone: 'UTC' })).toBe(true);
   expect(validateMutation({ kind: 'set', display_timezone: 'UTC', expected_settings_revision: '1' })).toBe(true);

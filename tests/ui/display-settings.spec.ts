@@ -4,11 +4,12 @@ test.use({ timezoneId: 'UTC' });
 test.beforeEach(async ({ page }) => {
   // This isolated browser bridge models DTO and conflict behavior; production imports none of it.
   await page.addInitScript(() => {
+    let theme = sessionStorage.getItem('synthetic-theme') ?? 'dark', rejectTheme = false;
     let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
-    const snapshot = () => ({ settings_version: 1, settings_revision: revision, preferences: { privacy: false, display_timezone: timezone } });
+    const snapshot = () => ({ settings_version: 1, settings_revision: revision, preferences: { theme, privacy: false, display_timezone: timezone } });
     const notify = () => { for (const [id, listener] of listeners) if (listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: revision } }); };
     const measure = { value: null, covered_total_tokens: '0', complete: false };
     const summary = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
@@ -23,6 +24,13 @@ test.beforeEach(async ({ page }) => {
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
         if (command === 'get_display_settings') { if (failRead) throw { code: 'UNSUPPORTED_SETTINGS_VERSION' }; return response(snapshot()); }
+        if (command === 'set_display_theme') {
+          const r = args.request as { theme: string; expected_settings_revision: string };
+          if (rejectTheme || r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
+          if (!['dark', 'light', 'system'].includes(r.theme)) throw { code: 'INVALID_QUERY' };
+          if (theme !== r.theme) { theme = r.theme; sessionStorage.setItem('synthetic-theme', theme); revision = String(BigInt(revision) + 1n); notify(); }
+          return response(snapshot());
+        }
         if (command === 'set_display_timezone') {
           const r = args.request as { kind: string; system_timezone?: string; display_timezone?: string; expected_settings_revision?: string };
           const value = r.kind === 'initialize' ? r.system_timezone! : r.display_timezone!;
@@ -48,10 +56,10 @@ test.beforeEach(async ({ page }) => {
           return response(command === 'get_grouped_usage' ? { ...common, dimension: r.dimension, groups: [], total_group_count: '0', truncated: false } : { ...common, series: [], heatmap: [], recent_sessions: [] });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
+      } }, __themeQA: { reject: (value: boolean) => { rejectTheme = value; }, external: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); notify(); } }, __calendarQA: { calls: () => calls, snapshot, failRead: (value: boolean) => { failRead = value; }, badCalendar: (value: boolean) => { badCalendar = value; }, reset: () => { timezone = null; revision = '0'; }, externalChange: () => { timezone = 'UTC'; revision = String(BigInt(revision) + 1n); notify(); }, listeners: () => [...listeners.values()].filter(value => value.event === 'settings_changed').length } });
   });
 });
-type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
+type QA = { __calendarQA: { calls: () => { command: string; request: unknown }[]; snapshot: () => { settings_revision: string; preferences: { theme: 'dark', privacy: false, display_timezone: string | null } }; failRead: (v: boolean) => void; badCalendar: (v: boolean) => void; reset: () => void; externalChange: () => void; listeners: () => number } };
 async function openSettings(page: import('@playwright/test').Page) { await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click(); }
 
 test('saved timezone drives all pages, exact revisions and backend DST boundaries', async ({ page }) => {
@@ -123,4 +131,39 @@ test('custom date draft requires explicit apply, rejects reversal, preserves sco
   await expect(page.getByTitle('编辑已应用日期')).toHaveText('2024-02-28 — 2024-02-29');
   await page.getByTitle('编辑已应用日期').click(); await expect(page.getByLabel('开始日期')).toHaveValue('2024-02-28'); await page.getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('日期范围')).toHaveValue('today');
+});
+
+type ThemeQA = { __themeQA: { reject: (value: boolean) => void; external: (value: string) => void } };
+test('saved theme changes real surfaces, persists reload and keeps timezone and layout', async ({ page }) => {
+  await page.goto('/'); await openSettings(page); await expect(page.getByLabel('应用主题')).toHaveValue('dark');
+  await page.getByLabel('应用主题').selectOption('light'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
+  expect(await page.locator('html').evaluate(e => getComputedStyle(e).color)).toBe('rgb(32, 33, 36)');
+  expect(await page.locator('.panel').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
+  await page.screenshot({ path: 'test-results/theme-light-1280.png', fullPage: true });
+  await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/theme-light-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.reload(); await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
+  await expect(page.locator('.filters')).toContainText('Asia/Shanghai');
+});
+
+test('system follows media changes without new setting writes, explicit themes ignore system and external updates preserve drafts', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' }); await page.goto('/'); await openSettings(page);
+  await page.getByLabel('应用主题').selectOption('system'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' }); await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByLabel('应用主题')).toHaveValue('system');
+  expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_display_theme'))).toHaveLength(1);
+  await page.getByLabel('应用主题').selectOption('dark'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' }); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByLabel('统计时区').fill('America/New_York'); await page.evaluate(() => (window as unknown as ThemeQA).__themeQA.external('light'));
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light'); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
+  await page.getByRole('button', { name: '保存统计时区' }).click(); await expect(page.getByRole('alert')).toContainText('已发生变化');
+});
+
+test('theme save failure preserves confirmed theme and stored configuration', async ({ page }) => {
+  await page.goto('/'); await openSettings(page); await page.evaluate(() => (window as unknown as ThemeQA).__themeQA.reject(true));
+  await page.getByLabel('应用主题').selectOption('light'); await expect(page.getByRole('alert')).toContainText('已发生变化');
+  await expect(page.getByLabel('应用主题')).toHaveValue('dark'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).settings_revision).toBe('9007199254740993');
 });

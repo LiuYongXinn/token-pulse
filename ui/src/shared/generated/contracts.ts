@@ -14,13 +14,17 @@ export type DisplayPreferences = {
 /**
  * None means not initialized, never an implicit UTC/system fallback.
  */
-display_timezone: string | null, privacy: boolean, };
+display_timezone: string | null, privacy: boolean, theme: AppTheme, };
 
 export type DisplaySettingsSnapshot = { settings_version: number, settings_revision: DecimalInt, preferences: DisplayPreferences, };
 
 export type TimezoneMutation = { "kind": "initialize", system_timezone: string, } | { "kind": "set", display_timezone: string, expected_settings_revision: DecimalInt, };
 
 export type DisplayPrivacyMutation = { privacy: boolean, expected_settings_revision: DecimalInt, };
+
+export type AppTheme = "dark" | "light" | "system";
+
+export type DisplayThemeMutation = { theme: AppTheme, expected_settings_revision: DecimalInt, };
 
 export type SettingsChanged = { settings_revision: DecimalInt, };
 

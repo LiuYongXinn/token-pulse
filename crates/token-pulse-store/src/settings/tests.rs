@@ -417,3 +417,96 @@ fn privacy_future_corrupt_and_overflowed_settings_are_preserved() {
     );
     assert!(!db.display_settings().unwrap().preferences.privacy);
 }
+fn theme(value: AppTheme, revision: i128) -> DisplayThemeMutation {
+    DisplayThemeMutation {
+        theme: value,
+        expected_settings_revision: DecimalInt::from_nonnegative(revision).unwrap(),
+    }
+}
+#[test]
+fn theme_defaults_persists_system_and_keeps_all_other_configuration_and_revisions() {
+    let (dir, db) = setup();
+    assert_eq!(
+        db.display_settings().unwrap().preferences.theme,
+        AppTheme::Dark
+    );
+    db.mutate_display_timezone(initialize("Asia/Shanghai"), at())
+        .unwrap();
+    db.mutate_display_privacy(privacy(true, 1), at()).unwrap();
+    let (saved, changed) = db
+        .mutate_display_theme(theme(AppTheme::Light, 2), at())
+        .unwrap();
+    assert!(changed);
+    assert_eq!(saved.settings_revision.as_str(), "3");
+    assert!(saved.preferences.privacy);
+    assert_eq!(
+        saved.preferences.display_timezone.as_deref(),
+        Some("Asia/Shanghai")
+    );
+    assert!(
+        !db.mutate_display_theme(theme(AppTheme::Light, 3), at())
+            .unwrap()
+            .1
+    );
+    assert_eq!(
+        db.mutate_display_theme(theme(AppTheme::Dark, 2), at())
+            .unwrap_err()
+            .code,
+        ErrorCode::RevisionConflict
+    );
+    db.mutate_display_theme(theme(AppTheme::System, 3), at())
+        .unwrap();
+    assert_eq!(
+        db.snapshot(|_, r| Ok((r.data, r.price, r.settings)))
+            .unwrap(),
+        (0, 0, 4)
+    );
+    drop(db);
+    let reopened = Database::open(dir.path()).unwrap();
+    assert_eq!(
+        reopened.display_settings().unwrap().preferences.theme,
+        AppTheme::System
+    );
+    assert!(reopened.display_settings().unwrap().preferences.privacy);
+}
+#[test]
+fn theme_writer_failure_rolls_back_payload_and_revision_and_does_not_repair_corrupt_configuration()
+{
+    let (_dir, db) = setup();
+    db.write(|conn| { conn.execute_batch("CREATE TRIGGER fail_theme_revision BEFORE UPDATE OF settings_revision ON app_state BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")?; Ok(()) }).unwrap();
+    assert_eq!(
+        db.mutate_display_theme(theme(AppTheme::Light, 0), at())
+            .unwrap_err()
+            .code,
+        ErrorCode::DbWriteFailed
+    );
+    assert_eq!(
+        db.display_settings().unwrap().preferences.theme,
+        AppTheme::Dark
+    );
+    assert_eq!(
+        db.display_settings().unwrap().settings_revision.as_str(),
+        "0"
+    );
+    db.write(|conn| { conn.execute_batch("DROP TRIGGER fail_theme_revision; UPDATE settings SET payload_json='{\"theme\":\"invalid\"}';")?; Ok(()) }).unwrap();
+    assert_eq!(
+        db.mutate_display_theme(theme(AppTheme::Light, 0), at())
+            .unwrap_err()
+            .code,
+        ErrorCode::DbCorrupt
+    );
+    db.write(|conn| {
+        conn.execute(
+            "UPDATE settings SET settings_version=99,payload_json='{\"theme\":\"light\"}'",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        db.mutate_display_theme(theme(AppTheme::Dark, 0), at())
+            .unwrap_err()
+            .code,
+        ErrorCode::UnsupportedSettingsVersion
+    );
+}

@@ -57,6 +57,8 @@ fn main() {
         DisplaySettingsSnapshot,
         TimezoneMutation,
         DisplayPrivacyMutation,
+        AppTheme,
+        DisplayThemeMutation,
         SettingsChanged,
         ErrorCode,
         ErrorDetail,

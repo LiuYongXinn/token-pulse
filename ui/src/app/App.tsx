@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
+import { useAppTheme } from '../shared/useAppTheme';
 import { getAppStatus, getSources, onDisplayPolicyChanged, runtimeError, windowAction } from '../shared/runtime';
 import type { AppStatus } from '../shared/runtime';
 import { SourcesPanel } from './SourcesPanel';
@@ -49,6 +50,7 @@ export function App() {
   const statusRequest = useRef(0);
   const mounted = useRef(false);
   const display = useMainCalendar(selection, status?.storage === 'ready', refreshRevision, clock);
+  useAppTheme(display.settings?.preferences.theme);
   const query = useMemo(() => {
     if (!display.calendar) return null;
     const request = mainRequestForCalendar(display.calendar, source, grain);
