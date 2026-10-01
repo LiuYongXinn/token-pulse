@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     batch::tests::{fixture, setup},
     query::{
-        raw_totals,
+        grouped, raw_grouped, raw_totals,
         tests::{extra, filter, ids},
         totals,
     },
@@ -15,7 +15,168 @@ fn assert_same(tx: &Transaction<'_>, f: &UsageFilter) -> StoreResult<()> {
         serde_json::to_value(&cached)?,
         serde_json::to_value(raw_totals(tx, f)?)?
     );
+    for dimension in [GroupDimension::Models, GroupDimension::Projects] {
+        for sort in [GroupSort::TotalDesc, GroupSort::NameAsc] {
+            assert_eq!(
+                serde_json::to_value(
+                    try_grouped(tx, f, dimension, sort, 200)?.expect("cache selected")
+                )?,
+                serde_json::to_value(raw_grouped(tx, f, dimension, sort, 200)?)?
+            );
+        }
+    }
     Ok(())
+}
+
+#[test]
+fn grouped_cache_keeps_exact_sort_provider_identity_alias_and_project_labels() {
+    use crate::SessionRegistration;
+    use token_pulse_core::{
+        jobs::{JobRequest, JobScope},
+        protocol::JobKind,
+    };
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.ensure_session(SessionRegistration {
+        session_key: "alias".into(),
+        provider_session_id: Some("alias-provider".into()),
+        parent_key: None,
+        parent_provider_id: None,
+        created_at_ms: None,
+        ledger_id: "alias-ledger".into(),
+        registered_at_ms: 1,
+    })
+    .unwrap();
+    db.create_job(
+        "proof".into(),
+        JobRequest {
+            kind: JobKind::Rebuild,
+            scope: JobScope::All {},
+            request_key: "proof".into(),
+        },
+        1,
+    )
+    .unwrap();
+    db.write(|conn| {
+        conn.execute(
+            "INSERT INTO projects VALUES('p','synthetic','原名','未知项目',1)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO session_aliases VALUES('alias','session','proof')",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    extra(
+        &db,
+        "huge-a",
+        3_600_000,
+        i64::MAX,
+        (Some("same"), Some("a")),
+        Some("common"),
+        Some("p"),
+    );
+    extra(
+        &db,
+        "huge-b",
+        7_200_000,
+        i64::MAX,
+        (Some("same"), Some("a")),
+        Some("common"),
+        Some("p"),
+    );
+    extra(
+        &db,
+        "second",
+        7_200_500,
+        9_007_199_254_740_993,
+        (Some("same"), Some("b")),
+        Some("common"),
+        None,
+    );
+    extra(
+        &db,
+        "unknown-provider",
+        10_800_000,
+        7,
+        (None, Some("known-provider")),
+        None,
+        None,
+    );
+    db.build_hourly_rollup("ledger", 10).unwrap();
+    let mut f = filter();
+    f.range.end_ms = EpochMs::new(14_400_000).unwrap();
+    f.sessions = ids(&["alias"], false);
+    db.snapshot(|tx, _| {
+        assert_same(tx, &f)?;
+        let g = grouped(tx, &f, GroupDimension::Models, GroupSort::TotalDesc, 2)?;
+        assert_eq!(g[0].display_name, "same · a");
+        assert_eq!(g[0].totals.total_tokens.as_str(), "18446744073709551614");
+        assert_eq!(
+            g[0].totals.reliable_turn_count.as_ref().unwrap().as_str(),
+            "1"
+        );
+        assert_eq!(g[1].display_name, "same · b");
+        assert_eq!(g[1].totals.total_tokens.as_str(), "9007199254740993");
+        let projects = grouped(tx, &f, GroupDimension::Projects, GroupSort::NameAsc, 200)?;
+        assert_eq!(projects.len(), 2);
+        assert!(projects.iter().all(|g| g.display_name == "未知项目"));
+        assert!(projects[0].key.is_none());
+        assert_eq!(projects[1].key.as_deref(), Some("p"));
+        f.projects = ids(&["p"], true);
+        assert_same(tx, &f)?;
+        f.projects = ids(&[], false);
+        assert_same(tx, &f)?;
+        assert!(grouped(tx, &f, GroupDimension::Models, GroupSort::NameAsc, 200)?.is_empty());
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn empty_ready_cache_and_negative_partial_range_do_not_create_groups_or_zeros() {
+    let (_dir, db) = setup();
+    db.build_hourly_rollup("ledger", 10).unwrap();
+    let mut f = filter();
+    f.range.start_ms = EpochMs::new(-7_200_500).unwrap();
+    f.range.end_ms = EpochMs::new(7_200_500).unwrap();
+    db.snapshot(|tx, _| {
+        assert_same(tx, &f)?;
+        let t = totals(tx, &f)?;
+        assert_eq!(t.total_tokens.as_str(), "0");
+        assert_eq!(t.session_count.as_str(), "0");
+        assert!(t.input_total.value.is_none());
+        Ok(())
+    })
+    .unwrap();
+    db.commit(fixture()).unwrap();
+    extra(
+        &db,
+        "negative",
+        -7_200_000,
+        7,
+        (None, Some("p")),
+        Some("common"),
+        None,
+    );
+    extra(
+        &db,
+        "negative-partial",
+        -7_200_499,
+        11,
+        (None, None),
+        Some("common"),
+        None,
+    );
+    db.build_hourly_rollup("ledger", 20).unwrap();
+    db.snapshot(|tx, _| {
+        assert_same(tx, &f)?;
+        assert_eq!(totals(tx, &f)?.total_tokens.as_str(), "128");
+        Ok(())
+    })
+    .unwrap();
 }
 #[test]
 fn full_hours_and_partial_edges_preserve_turn_identity_and_unknown_breakdown() {

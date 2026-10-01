@@ -273,6 +273,22 @@ pub fn grouped(
     if !(1..=200).contains(&limit) {
         return Err(ErrorCode::InvalidQuery.into());
     }
+    if let Some(groups) = cached::try_grouped(tx, filter, dimension, sort, limit)? {
+        return Ok(groups);
+    }
+    raw_grouped(tx, filter, dimension, sort, limit)
+}
+
+pub(crate) fn raw_grouped(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    dimension: GroupDimension,
+    sort: GroupSort,
+    limit: usize,
+) -> StoreResult<Vec<GroupedUsage>> {
+    if !(1..=200).contains(&limit) {
+        return Err(ErrorCode::InvalidQuery.into());
+    }
     let p = predicate(filter)?;
     let (key, label, join, group_by) = match dimension {
         GroupDimension::Models => (
