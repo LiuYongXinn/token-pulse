@@ -1,16 +1,33 @@
 //! Reusable reads for bundles and leases. All input values are bound parameters.
 use crate::{Database, ErrorCode, StoreResult};
-use rusqlite::{Row, Transaction, params_from_iter, types::Value};
+use rusqlite::{
+    Connection, Row, Transaction, functions::FunctionFlags, params_from_iter, types::Value,
+};
 use token_pulse_core::{
+    calendar::{self, CalendarBucket, Grain},
     numeric::DecimalInt,
     protocol::{DimensionSelection, TokenMeasure, TokenTotals, UsageFilter},
     query::{GroupDimension, GroupSort, GroupedUsage},
 };
 
+pub struct BucketTotals {
+    pub bucket: CalendarBucket,
+    pub totals: TokenTotals,
+}
+
 const MODEL_KEY: &str =
     "usage_model_key(json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model)";
 const FROM: &str =
     "active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id";
+const VECTOR_SUM: &str = "sum_usage_vector(e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens)";
+
+fn fact_from(filter: &UsageFilter, require_model: bool) -> &'static str {
+    if require_model || !matches!(filter.models, DimensionSelection::All {}) {
+        FROM
+    } else {
+        "active_usage_events e"
+    }
+}
 
 pub(crate) struct Predicate {
     pub sql: String,
@@ -87,58 +104,133 @@ pub(crate) fn predicate(filter: &UsageFilter) -> StoreResult<Predicate> {
     Ok(p)
 }
 
-fn decimal(value: Option<String>) -> StoreResult<Option<DecimalInt>> {
-    value
-        .map(|s| DecimalInt::parse(&s).map_err(Into::into))
-        .transpose()
-}
 fn zero() -> DecimalInt {
     DecimalInt::from_nonnegative(0).expect("zero")
+}
+
+fn empty_totals() -> TokenTotals {
+    let measure = || TokenMeasure {
+        value: None,
+        covered_total_tokens: zero(),
+        complete: false,
+    };
+    TokenTotals {
+        total_tokens: zero(),
+        input_total: measure(),
+        cached_input: measure(),
+        noncached_input: measure(),
+        output_total: measure(),
+        reasoning_output: measure(),
+        session_count: zero(),
+        usage_event_count: zero(),
+        reliable_turn_count: None,
+        reliable_turns_complete: false,
+    }
+}
+
+fn series_sql(filter: &UsageFilter) -> StoreResult<(String, Vec<Value>)> {
+    let p = predicate(filter)?;
+    let sql = format!(
+        "SELECT current_usage_bucket(e.occurred_at_ms) AS bucket_index,{} FROM {} WHERE {} GROUP BY bucket_index ORDER BY bucket_index",
+        aggregate_sql(),
+        fact_from(filter, false),
+        p.sql
+    );
+    Ok((sql, p.values))
+}
+
+struct BucketFunction<'a>(&'a Connection);
+impl Drop for BucketFunction<'_> {
+    fn drop(&mut self) {
+        let _ = self.0.remove_function("current_usage_bucket", 1);
+    }
+}
+
+fn bucket_function<'a>(
+    conn: &'a Connection,
+    bins: &[CalendarBucket],
+) -> StoreResult<BucketFunction<'a>> {
+    let ends = bins.iter().map(|b| b.end_ms.value()).collect::<Vec<_>>();
+    let start = bins
+        .first()
+        .ok_or(ErrorCode::InvalidQuery)?
+        .start_ms
+        .value();
+    conn.create_scalar_function(
+        "current_usage_bucket",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        move |ctx| {
+            let time: i64 = ctx.get(0)?;
+            let index = ends.partition_point(|end| *end <= time);
+            if time < start || index >= ends.len() {
+                return Err(rusqlite::Error::UserFunctionError(Box::new(
+                    ErrorCode::InvalidQuery,
+                )));
+            }
+            Ok(index as i64)
+        },
+    )?;
+    Ok(BucketFunction(conn))
+}
+
+/// One controlled range query, never all raw events in the renderer or 2000
+/// separate transactions. The caller can query summary and heatmap on this tx.
+pub fn series(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    grain: Grain,
+) -> StoreResult<Vec<BucketTotals>> {
+    let bins = calendar::buckets(&filter.range, grain)?;
+    // This connection belongs exclusively to the current read transaction.
+    // Function capture is immutable and removed after all statements drop.
+    let _function = bucket_function(tx, &bins)?;
+    let (sql, values) = series_sql(filter)?;
+    let mut result = bins
+        .into_iter()
+        .map(|bucket| BucketTotals {
+            bucket,
+            totals: empty_totals(),
+        })
+        .collect::<Vec<_>>();
+    let mut statement = tx.prepare(&sql)?;
+    let mut rows = statement.query(params_from_iter(values))?;
+    while let Some(row) = rows.next()? {
+        let index = usize::try_from(row.get::<_, i64>(0)?).map_err(|_| ErrorCode::DbCorrupt)?;
+        result.get_mut(index).ok_or(ErrorCode::DbCorrupt)?.totals = read_totals(row, 1)?;
+    }
+    Ok(result)
 }
 
 /// Aggregate values and covered-token denominators independently. A known zero
 /// component is different from no observed component; empty sets remain unknown.
 fn aggregate_sql() -> String {
-    let mut fields = vec!["sum_token_decimal(e.total_tokens)".into(), "COUNT(*)".into(), "COUNT(DISTINCT e.session_key)".into(),
-        "COUNT(DISTINCT CASE WHEN e.turn_id IS NOT NULL AND e.turn_id<>'' THEN json_array(e.session_key,e.turn_id) END)".into(),
-        "COUNT(CASE WHEN e.turn_id IS NOT NULL AND e.turn_id<>'' THEN 1 END)".into()];
-    for expression in [
-        "e.input_tokens_total",
-        "e.cached_input_tokens",
-        "CASE WHEN e.input_tokens_total IS NOT NULL AND e.cached_input_tokens IS NOT NULL THEN e.input_tokens_total-e.cached_input_tokens END",
-        "e.output_tokens_total",
-        "e.reasoning_output_tokens",
-    ] {
-        fields.push(format!("sum_token_decimal({expression})"));
-        fields.push(format!(
-            "sum_token_decimal(CASE WHEN ({expression}) IS NOT NULL THEN e.total_tokens END)"
-        ));
-        fields.push(format!("COUNT({expression})"));
-    }
-    fields.join(",")
+    format!(
+        "{VECTOR_SUM},COUNT(*),COUNT(DISTINCT e.session_key),COUNT(DISTINCT CASE WHEN e.turn_id IS NOT NULL AND e.turn_id<>'' THEN json_array(e.session_key,e.turn_id) END),COUNT(CASE WHEN e.turn_id IS NOT NULL AND e.turn_id<>'' THEN 1 END)"
+    )
 }
 
 fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
-    let total = decimal(row.get(offset)?)?.unwrap_or_else(zero);
+    let sums: crate::aggregate::TokenSums =
+        serde_json::from_str(&row.get::<_, String>(offset)?).map_err(|_| ErrorCode::DbCorrupt)?;
     let events: i64 = row.get(offset + 1)?;
     let sessions: i64 = row.get(offset + 2)?;
     let turns: i64 = row.get(offset + 3)?;
     let turn_events: i64 = row.get(offset + 4)?;
-    let measure = |i: usize| -> StoreResult<TokenMeasure> {
-        let count: i64 = row.get(offset + 5 + i * 3 + 2)?;
-        Ok(TokenMeasure {
-            value: decimal(row.get(offset + 5 + i * 3)?)?,
-            covered_total_tokens: decimal(row.get(offset + 5 + i * 3 + 1)?)?.unwrap_or_else(zero),
-            complete: events > 0 && count == events,
-        })
-    };
+    let [
+        input_total,
+        cached_input,
+        noncached_input,
+        output_total,
+        reasoning_output,
+    ] = sums.measures;
     Ok(TokenTotals {
-        total_tokens: total,
-        input_total: measure(0)?,
-        cached_input: measure(1)?,
-        noncached_input: measure(2)?,
-        output_total: measure(3)?,
-        reasoning_output: measure(4)?,
+        total_tokens: sums.total,
+        input_total,
+        cached_input,
+        noncached_input,
+        output_total,
+        reasoning_output,
         session_count: DecimalInt::from_nonnegative(sessions.into())?,
         usage_event_count: DecimalInt::from_nonnegative(events.into())?,
         reliable_turn_count: if turns == 0 {
@@ -153,8 +245,9 @@ fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
 pub fn totals(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<TokenTotals> {
     let p = predicate(filter)?;
     let mut statement = tx.prepare(&format!(
-        "SELECT {} FROM {FROM} WHERE {}",
+        "SELECT {} FROM {} WHERE {}",
         aggregate_sql(),
+        fact_from(filter, false),
         p.sql
     ))?;
     let mut rows = statement.query(params_from_iter(p.values))?;
@@ -172,16 +265,18 @@ pub fn grouped(
         return Err(ErrorCode::InvalidQuery.into());
     }
     let p = predicate(filter)?;
-    let (key, label, join) = match dimension {
+    let (key, label, join, group_by) = match dimension {
         GroupDimension::Models => (
             MODEL_KEY,
             "CASE WHEN e.model IS NULL THEN '未知模型' ELSE e.model || CASE WHEN json_extract(o.normalized_json,'$.effective_metadata.provider') IS NULL THEN '' ELSE ' · ' || json_extract(o.normalized_json,'$.effective_metadata.provider') END END",
             "",
+            "e.model,CASE WHEN e.model IS NULL THEN NULL ELSE json_extract(o.normalized_json,'$.effective_metadata.provider') END",
         ),
         GroupDimension::Projects => (
             "e.project_id",
             "COALESCE(project.user_alias,project.display_name,'未知项目')",
             " LEFT JOIN projects project ON project.project_id=e.project_id",
+            "e.project_id",
         ),
     };
     // Decimal strings require numeric ordering by length and then digits, never
@@ -191,8 +286,9 @@ pub fn grouped(
         GroupSort::NameAsc => "label COLLATE BINARY ASC, dimension_key ASC",
     };
     let sql = format!(
-        "SELECT {key} AS dimension_key,MIN({label}) AS label,sum_token_decimal(e.total_tokens) AS amount,{} FROM {FROM}{join} WHERE {} GROUP BY {key} ORDER BY {order} LIMIT ?",
+        "SELECT {key} AS dimension_key,MIN({label}) AS label,json_extract({VECTOR_SUM},'$.total') AS amount,{} FROM {}{join} WHERE {} GROUP BY {group_by} ORDER BY {order} LIMIT ?",
         aggregate_sql(),
+        fact_from(filter, matches!(dimension, GroupDimension::Models)),
         p.sql
     );
     let mut values = p.values;

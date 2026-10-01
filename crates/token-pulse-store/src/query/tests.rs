@@ -226,6 +226,28 @@ fn model_keys_separate_providers_and_unknowns_without_label_sql() {
 }
 
 #[test]
+fn unknown_model_is_one_dimension_even_when_provider_is_known() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    extra(&db, "unknown-a", 1100, 7, (None, Some("a")), None, None);
+    extra(&db, "unknown-b", 1200, 9, (None, Some("b")), None, None);
+    db.snapshot(|tx, _| {
+        let groups = grouped(
+            tx,
+            &filter(),
+            GroupDimension::Models,
+            GroupSort::TotalDesc,
+            200,
+        )?;
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].key.is_none());
+        assert_eq!(groups[0].totals.total_tokens.as_str(), "126");
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
 fn exact_large_group_sort_and_half_open_time_range() {
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();
@@ -417,4 +439,223 @@ fn project_ids_distinguish_unknown_and_keep_user_aliases_in_the_snapshot() {
         Ok(())
     })
     .unwrap();
+}
+
+#[test]
+fn series_binds_calendar_bounds_and_uses_indexed_event_ranges() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    extra(
+        &db,
+        "hour-edge",
+        3_600_000,
+        7,
+        (Some("edge"), None),
+        None,
+        None,
+    );
+    extra(
+        &db,
+        "end-excluded",
+        10_800_000,
+        19,
+        (None, None),
+        None,
+        None,
+    );
+    let mut f = filter();
+    f.range.end_ms = EpochMs::new(10_800_000).unwrap();
+    db.snapshot(|tx, _| {
+        let s = series(tx, &f, Grain::Hour)?;
+        assert_eq!(
+            s.iter()
+                .map(|b| b.totals.total_tokens.as_str())
+                .collect::<Vec<_>>(),
+            vec!["110", "7", "0"]
+        );
+        assert_eq!(s[1].bucket.start_ms.value(), 3_600_000);
+        assert!(s[0].totals.input_total.complete);
+        assert!(s[1].totals.input_total.value.is_none());
+        assert!(s[2].totals.input_total.value.is_none() && !s[2].totals.input_total.complete);
+        assert_eq!(totals(tx, &f)?.total_tokens.as_str(), "117");
+        let _function = bucket_function(tx, &calendar::buckets(&f.range, Grain::Hour)?)?;
+        let (sql, values) = series_sql(&f)?;
+        let mut statement = tx.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?;
+        let plan = statement
+            .query_map(params_from_iter(values), |r| r.get::<_, String>(3))?
+            .collect::<Result<Vec<_>, _>>()?;
+        assert!(
+            plan.iter()
+                .any(|p| p.contains("SEARCH e USING INDEX events_")
+                    && p.contains("occurred_at_ms>?")
+                    && p.contains("occurred_at_ms<?")),
+            "{plan:?}"
+        );
+        assert!(!plan.iter().any(|p| p.starts_with("SCAN e")), "{plan:?}");
+        Ok(())
+    })
+    .unwrap();
+    let key = model_key(None, Some("edge")).unwrap();
+    f.models = ids(&[&key], false);
+    db.snapshot(|tx, _| {
+        assert_eq!(
+            series(tx, &f, Grain::Hour)?
+                .iter()
+                .map(|b| b.totals.total_tokens.as_str().to_owned())
+                .collect::<Vec<_>>(),
+            vec!["0", "7", "0"]
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn series_keeps_repeated_dst_hours_and_snapshot_results_separate() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    let ms = |s| chrono_test_ms(s);
+    let first = ms("2024-11-03T01:15:00-04:00");
+    let second = ms("2024-11-03T01:15:00-05:00");
+    extra(&db, "first-one", first, 17, (None, None), None, None);
+    extra(&db, "second-one", second, 23, (None, None), None, None);
+    let mut f = filter();
+    f.range = DateRange {
+        start_ms: EpochMs::new(ms("2024-11-03T00:00:00-04:00")).unwrap(),
+        end_ms: EpochMs::new(ms("2024-11-03T03:00:00-05:00")).unwrap(),
+        timezone: "America/New_York".into(),
+    };
+    db.snapshot(|tx, _| {
+        let writer = db.clone();
+        std::thread::spawn(move || {
+            extra(&writer, "late-first", first, 5, (None, None), None, None)
+        })
+        .join()
+        .unwrap();
+        let s = series(tx, &f, Grain::Hour)?;
+        assert_eq!(
+            s.iter()
+                .map(|b| b.totals.total_tokens.as_str())
+                .collect::<Vec<_>>(),
+            vec!["0", "17", "23", "0"]
+        );
+        assert_eq!(s[1].bucket.display_label, s[2].bucket.display_label);
+        assert_ne!(s[1].bucket.utc_offset, s[2].bucket.utc_offset);
+        assert_ne!(s[1].bucket.start_ms, s[2].bucket.start_ms);
+        assert_eq!(totals(tx, &f)?.total_tokens.as_str(), "40");
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(db.usage_totals(&f).unwrap().total_tokens.as_str(), "45");
+}
+
+fn chrono_test_ms(value: &str) -> i64 {
+    // Independent fixture timestamps, fixed RFC3339 conversions from the
+    // already verified calendar cases. No production bucketing computes them.
+    match value {
+        "2024-11-03T00:00:00-04:00" => 1_730_606_400_000,
+        "2024-11-03T01:15:00-04:00" => 1_730_610_900_000,
+        "2024-11-03T01:15:00-05:00" => 1_730_614_500_000,
+        "2024-11-03T03:00:00-05:00" => 1_730_620_800_000,
+        _ => panic!("unknown fixture time"),
+    }
+}
+
+#[test]
+fn repeated_series_on_one_connection_does_not_reuse_prior_timezone_or_range() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    let mut f = filter();
+    f.range.end_ms = EpochMs::new(7_200_000).unwrap();
+    db.snapshot(|tx, _| {
+        assert_eq!(series(tx, &f, Grain::Hour)?.len(), 2);
+        assert!(tx.prepare("SELECT current_usage_bucket(1000)").is_err());
+        f.range.timezone = "Asia/Kathmandu".into();
+        let s = series(tx, &f, Grain::Hour)?;
+        assert_eq!(s.len(), 3);
+        assert_eq!(
+            s.iter()
+                .map(|b| b.totals.total_tokens.as_str())
+                .collect::<Vec<_>>(),
+            vec!["110", "0", "0"]
+        );
+        f.range.end_ms = EpochMs::new(86_400_000).unwrap();
+        f.range.timezone = "UTC".into();
+        assert_eq!(series(tx, &f, Grain::Day)?.len(), 1);
+        assert!(tx.prepare("SELECT current_usage_bucket(1000)").is_err());
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+#[ignore = "explicit 300k-event query benchmark; does not read user sources"]
+fn benchmark_300k_event_totals_groups_and_calendar_series() {
+    use std::time::Instant;
+    let (_dir, db) = setup();
+    db.write(|conn| {
+        let tx = conn.transaction()?;
+        for i in 0..100 {
+            let session = format!("bench-session-{i}"); let ledger = format!("bench-ledger-{i}");
+            tx.execute("INSERT INTO sessions(session_key,provider,identity_status) VALUES(?1,'codex','fixture')",[&session])?;
+            tx.execute("INSERT INTO ledger_generations VALUES(?1,?2,'active','fixture','fixture',0,0,0,'{}')",params![ledger,session])?;
+            tx.execute("UPDATE sessions SET active_ledger_id=?1 WHERE session_key=?2",params![ledger,session])?;
+        }
+        tx.execute_batch("WITH RECURSIVE n(v) AS (VALUES(0) UNION ALL SELECT v+1 FROM n WHERE v<299999)
+          INSERT INTO observations(observation_id,file_generation_id,byte_offset,byte_end,session_key,kind,observed_at_ms,model,normalized_json,payload_fingerprint,format_version)
+          SELECT 'bench-'||v,'generation',v*100,v*100+100,'bench-session-'||(v%100),'usage',v*60000,'model-'||(v%10),json_object('kind','usage','effective_metadata',json_object('provider','perf','model','model-'||(v%10))),'fingerprint-'||v,'fixture' FROM n;
+          INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,episode_id,model,input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json)
+          SELECT observation_id,'bench-ledger-'||((byte_offset/100)%100),observation_id,observed_at_ms,'episode',model,1,0,0,0,1,1,'fixture','[\"confirmed\"]' FROM observations;
+          INSERT INTO event_provenance SELECT event_id,origin_observation_id,'origin' FROM usage_events;
+          UPDATE app_state SET data_revision=data_revision+1;")?;
+        tx.commit()?; Ok(())
+    }).unwrap();
+    let mut f = filter();
+    f.range.end_ms = EpochMs::new(300000 * 60000).unwrap();
+    let wal = std::fs::metadata(format!("{}-wal", db.path().display()))
+        .unwrap()
+        .len();
+    let mut total_times = Vec::new();
+    let mut group_times = Vec::new();
+    let mut series_times = Vec::new();
+    for _ in 0..6 {
+        db.snapshot(|tx, _| {
+            let start = Instant::now();
+            let t = totals(tx, &f)?;
+            total_times.push(start.elapsed().as_micros());
+            assert_eq!(t.total_tokens.as_str(), "300000");
+            assert_eq!(t.session_count.as_str(), "100");
+            assert!(t.input_total.complete);
+            let start = Instant::now();
+            let g = grouped(tx, &f, GroupDimension::Models, GroupSort::TotalDesc, 200)?;
+            group_times.push(start.elapsed().as_micros());
+            assert_eq!(g.len(), 10);
+            assert!(g.iter().all(|r| r.totals.total_tokens.as_str() == "30000"));
+            let start = Instant::now();
+            let s = series(tx, &f, Grain::Day)?;
+            series_times.push(start.elapsed().as_micros());
+            assert_eq!(s.len(), 209);
+            assert_eq!(s.last().unwrap().totals.total_tokens.as_str(), "480");
+            assert!(
+                s[..208]
+                    .iter()
+                    .all(|b| b.totals.total_tokens.as_str() == "1440")
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+    for (name, values) in [
+        ("totals", total_times),
+        ("models", group_times),
+        ("daily_series", series_times),
+    ] {
+        let first = values[0];
+        let mut hot = values[1..].to_vec();
+        hot.sort_unstable();
+        println!(
+            "BENCH {name} events=300000 sessions=100 first_reader_us={first} hot_p50_us={} hot_p95_nearest_rank_us={} hot_max_us={} samples=5 wal_bytes={wal}",
+            hot[2], hot[4], hot[4]
+        );
+    }
 }

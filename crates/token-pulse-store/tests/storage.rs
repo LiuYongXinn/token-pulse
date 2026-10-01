@@ -87,6 +87,28 @@ fn exact_sql_aggregate_preserves_unknown_and_overflow() {
         Ok(())
     }).unwrap();
 }
+
+#[test]
+fn combined_vector_aggregate_preserves_exact_zero_null_and_validation() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    db.snapshot(|tx,_| {
+        let sums: serde_json::Value = serde_json::from_str(&tx.query_row("SELECT sum_usage_vector(i,c,o,r,t) FROM (SELECT 9223372036854775807 AS i,0 AS c,0 AS o,0 AS r,9223372036854775807 AS t UNION ALL SELECT 9223372036854775807,0,0,0,9223372036854775807)",[],|r|r.get::<_,String>(0))?).unwrap();
+        assert_eq!(sums["total"],"18446744073709551614");
+        assert_eq!(sums["measures"][0]["value"],"18446744073709551614");
+        assert_eq!(sums["measures"][1]["value"],"0");
+        assert_eq!(sums["measures"][1]["covered_total_tokens"],"18446744073709551614");
+        assert_eq!(sums["measures"][1]["complete"],true);
+        let unknown: serde_json::Value = serde_json::from_str(&tx.query_row("SELECT sum_usage_vector(NULL,NULL,NULL,NULL,5)",[],|r|r.get::<_,String>(0))?).unwrap();
+        assert_eq!(unknown["total"],"5"); assert_eq!(unknown["measures"][0]["value"],serde_json::Value::Null);
+        assert_eq!(unknown["measures"][0]["complete"],false);
+        let empty: serde_json::Value = serde_json::from_str(&tx.query_row("SELECT sum_usage_vector(1,0,0,0,1) WHERE 0",[],|r|r.get::<_,String>(0))?).unwrap();
+        assert_eq!(empty["total"],"0"); assert_eq!(empty["measures"][0]["value"],serde_json::Value::Null);
+        assert!(tx.query_row("SELECT sum_usage_vector(0,1,5,0,5)",[],|r|r.get::<_,String>(0)).is_err());
+        assert!(tx.query_row("SELECT sum_usage_vector(1,0,2,0,4)",[],|r|r.get::<_,String>(0)).is_err());
+        Ok(())
+    }).unwrap();
+}
 #[test]
 fn unknown_newer_schema_and_corruption_do_not_create_fresh_history() {
     let dir = tempfile::tempdir().unwrap();
