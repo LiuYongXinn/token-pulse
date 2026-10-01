@@ -90,6 +90,16 @@ pub struct ReaderContext {
     pub provider_session_id: Option<String>,
     pub session_key: Option<String>,
     pub metadata: EffectiveMetadata,
+    #[serde(default)]
+    pub oversized_line: Option<OversizedLineState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OversizedLineState {
+    pub start_offset: u64,
+    pub scan_offset: u64,
+    pub anchors: Vec<ContentAnchor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +129,7 @@ pub struct UsageObservation {
     pub cumulative: Option<UsageVector>,
     pub effective_metadata: EffectiveMetadata,
     pub explicit_episode_start: bool,
+    pub model_context_window: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

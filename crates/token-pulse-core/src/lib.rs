@@ -2,10 +2,12 @@
 
 pub const API_VERSION: u32 = 1;
 
+pub mod adapter;
 pub mod domain;
 pub mod error;
 pub mod numeric;
 pub mod protocol;
+pub mod reader;
 
 #[derive(
     Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema, ts_rs::TS,

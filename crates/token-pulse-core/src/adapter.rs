@@ -1,0 +1,290 @@
+//! Explicit Codex rollout layouts; ephemeral JSON values never enter persistence.
+use crate::{domain::*, error::ErrorCode};
+use serde_json::{Map, Value};
+
+pub enum AdaptedRecord {
+    Observation(Box<NormalizedObservation>),
+    Ignored,
+    Diagnostic(AdapterDiagnostic),
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterDiagnostic {
+    pub position: PhysicalPosition,
+    pub code: ErrorCode,
+    pub reason: &'static str,
+}
+fn diagnostic(position: PhysicalPosition, code: ErrorCode, reason: &'static str) -> AdaptedRecord {
+    AdaptedRecord::Diagnostic(AdapterDiagnostic {
+        position,
+        code,
+        reason,
+    })
+}
+
+pub fn adapt(
+    bytes: &[u8],
+    position: PhysicalPosition,
+    context: &mut ReaderContext,
+) -> AdaptedRecord {
+    if bytes.iter().all(u8::is_ascii_whitespace) {
+        return AdaptedRecord::Ignored;
+    }
+    let value: Value = match serde_json::from_slice(bytes) {
+        Ok(v) => v,
+        Err(_) => {
+            return diagnostic(
+                position,
+                ErrorCode::UnsupportedFormat,
+                "invalid_json_or_utf8",
+            );
+        }
+    };
+    let Some(root) = value.as_object() else {
+        return diagnostic(position, ErrorCode::UnsupportedFormat, "record_not_object");
+    };
+    let Some(kind) = root.get("type").and_then(Value::as_str) else {
+        return diagnostic(
+            position,
+            ErrorCode::UnsupportedFormat,
+            "missing_record_type",
+        );
+    };
+    let time = match timestamp(root.get("timestamp")) {
+        Ok(t) => t,
+        Err(_) => return diagnostic(position, ErrorCode::UnsupportedFormat, "invalid_timestamp"),
+    };
+    match kind {
+        "session_meta" => {
+            let Some(payload) = root.get("payload").and_then(Value::as_object) else {
+                return diagnostic(
+                    position,
+                    ErrorCode::UnsupportedFormat,
+                    "missing_session_payload",
+                );
+            };
+            let Some(id) = payload
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty() && id.len() <= 256)
+            else {
+                return diagnostic(position, ErrorCode::UnsupportedFormat, "missing_session_id");
+            };
+            let metadata = match session_metadata(payload) {
+                Ok(metadata) => metadata,
+                Err(()) => {
+                    return diagnostic(
+                        position,
+                        ErrorCode::UnsupportedFormat,
+                        "invalid_session_metadata",
+                    );
+                }
+            };
+            context.provider_session_id = Some(id.into());
+            context.session_key = Some(format!("codex:{id}"));
+            context.metadata = metadata.clone();
+            AdaptedRecord::Observation(Box::new(NormalizedObservation::SessionMetadata {
+                physical_position: position,
+                provider_session_id: id.into(),
+                metadata,
+                created_at_ms: time,
+            }))
+        }
+        "turn_context" => {
+            let Some(session) = context.session_key.clone() else {
+                return diagnostic(
+                    position,
+                    ErrorCode::AmbiguousUsage,
+                    "metadata_before_session_identity",
+                );
+            };
+            let Some(payload) = root.get("payload").and_then(Value::as_object) else {
+                return diagnostic(
+                    position,
+                    ErrorCode::UnsupportedFormat,
+                    "missing_turn_payload",
+                );
+            };
+            // A missing model/cwd keeps the previous effective metadata; explicit null clears it.
+            let mut metadata = context.metadata.clone();
+            for (key, target) in [
+                ("model", &mut metadata.model),
+                ("cwd", &mut metadata.cwd),
+                ("turn_id", &mut metadata.turn_id),
+                ("model_provider", &mut metadata.provider),
+            ] {
+                if payload.contains_key(key) {
+                    *target = match string(payload, key) {
+                        Ok(v) => v,
+                        Err(()) => {
+                            return diagnostic(
+                                position,
+                                ErrorCode::UnsupportedFormat,
+                                "invalid_turn_metadata",
+                            );
+                        }
+                    };
+                }
+            }
+            context.metadata = metadata;
+            AdaptedRecord::Observation(Box::new(NormalizedObservation::TurnMetadata {
+                physical_position: position,
+                session_key: session,
+                metadata: context.metadata.clone(),
+            }))
+        }
+        "event_msg" => {
+            let Some(payload) = root.get("payload").and_then(Value::as_object) else {
+                return diagnostic(
+                    position,
+                    ErrorCode::UnsupportedFormat,
+                    "missing_event_payload",
+                );
+            };
+            let Some(subtype) = payload.get("type").and_then(Value::as_str) else {
+                return diagnostic(position, ErrorCode::UnsupportedFormat, "missing_event_type");
+            };
+            if subtype != "token_count" {
+                return if matches!(
+                    subtype,
+                    "user_message"
+                        | "agent_message"
+                        | "agent_reasoning"
+                        | "task_started"
+                        | "task_complete"
+                        | "turn_aborted"
+                        | "context_compacted"
+                        | "item_completed"
+                        | "warning"
+                        | "error"
+                ) {
+                    AdaptedRecord::Ignored
+                } else {
+                    diagnostic(
+                        position,
+                        ErrorCode::UnsupportedFormat,
+                        "unsupported_event_type",
+                    )
+                };
+            }
+            let Some(info) = payload.get("info") else {
+                return diagnostic(position, ErrorCode::UnsupportedFormat, "missing_usage_info");
+            };
+            if info.is_null() {
+                return AdaptedRecord::Ignored;
+            }
+            let Some(info) = info.as_object() else {
+                return diagnostic(position, ErrorCode::UnsupportedFormat, "invalid_usage_info");
+            };
+            let last = match usage(info.get("last_token_usage")) {
+                Ok(v) => v,
+                Err(_) => {
+                    return diagnostic(position, ErrorCode::InvalidUsage, "invalid_last_field");
+                }
+            };
+            let cumulative = match usage(info.get("total_token_usage")) {
+                Ok(v) => v,
+                Err(_) => {
+                    return diagnostic(
+                        position,
+                        ErrorCode::InvalidUsage,
+                        "invalid_cumulative_field",
+                    );
+                }
+            };
+            if last.is_none() && cumulative.is_none() {
+                return diagnostic(
+                    position,
+                    ErrorCode::UnsupportedFormat,
+                    "usage_fields_missing",
+                );
+            }
+            let Some(session) = context.session_key.clone() else {
+                return diagnostic(
+                    position,
+                    ErrorCode::AmbiguousUsage,
+                    "usage_without_session_identity",
+                );
+            };
+            let window = match optional_integer(info.get("model_context_window")) {
+                Ok(v) => v,
+                Err(_) => {
+                    return diagnostic(position, ErrorCode::InvalidUsage, "invalid_context_window");
+                }
+            };
+            AdaptedRecord::Observation(Box::new(NormalizedObservation::Usage(UsageObservation {
+                physical_position: position,
+                session_key: session,
+                event_time_ms: time,
+                request_identity: None,
+                stream_hint: None,
+                last,
+                cumulative,
+                effective_metadata: context.metadata.clone(),
+                explicit_episode_start: false,
+                model_context_window: window,
+            })))
+        }
+        "response_item" => AdaptedRecord::Ignored,
+        "compacted" => AdaptedRecord::Ignored,
+        _ => diagnostic(
+            position,
+            ErrorCode::UnsupportedFormat,
+            "unsupported_record_type",
+        ),
+    }
+}
+fn string(map: &Map<String, Value>, key: &str) -> Result<Option<String>, ()> {
+    match map.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) if s.len() <= 32768 => Ok(Some(s.clone())),
+        _ => Err(()),
+    }
+}
+fn session_metadata(payload: &Map<String, Value>) -> Result<EffectiveMetadata, ()> {
+    Ok(EffectiveMetadata {
+        provider: string(payload, "model_provider")?,
+        cwd: string(payload, "cwd")?,
+        parent_provider_id: string(payload, "forked_from_id")?,
+        ..EffectiveMetadata::default()
+    })
+}
+fn timestamp(value: Option<&Value>) -> Result<Option<i64>, ()> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => chrono::DateTime::parse_from_rfc3339(s)
+            .map(|dt| Some(dt.timestamp_millis()))
+            .map_err(|_| ()),
+        _ => Err(()),
+    }
+}
+fn optional_integer(value: Option<&Value>) -> Result<Option<i64>, ()> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_i64().map(Some).ok_or(()),
+    }
+}
+fn usage(value: Option<&Value>) -> Result<Option<UsageVector>, ()> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => {
+            let map = value.as_object().ok_or(())?;
+            let allowed = [
+                "input_tokens",
+                "cached_input_tokens",
+                "output_tokens",
+                "reasoning_output_tokens",
+                "total_tokens",
+            ];
+            if map.keys().any(|key| !allowed.contains(&key.as_str())) {
+                return Err(());
+            }
+            Ok(Some(UsageVector {
+                input_total: optional_integer(map.get("input_tokens"))?,
+                cached_input: optional_integer(map.get("cached_input_tokens"))?,
+                output_total: optional_integer(map.get("output_tokens"))?,
+                reasoning_output: optional_integer(map.get("reasoning_output_tokens"))?,
+                reported_total: optional_integer(map.get("total_tokens"))?,
+            }))
+        }
+    }
+}

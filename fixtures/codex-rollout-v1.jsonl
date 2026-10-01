@@ -1,0 +1,9 @@
+{"timestamp":"1970-01-01T00:00:01Z","type":"session_meta","payload":{"id":"synthetic-session","cwd":"E:\\synthetic\\项目"}}
+{"timestamp":"1970-01-01T00:00:02Z","type":"turn_context","payload":{"model":"synthetic-model","turn_id":"turn-a"}}
+{"timestamp":"1970-01-01T00:00:03Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":120},"total_token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":120},"model_context_window":1000}}}
+{"type":"response_item","payload":{"type":"message","content":[{"type":"input_text","text":"SYNTHETIC_BODY_MUST_NOT_SURVIVE"}]}}
+{"type":"event_msg","payload":{"type":"token_count","info":null}}
+{"type":"turn_context","payload":{"cwd":"E:\\synthetic\\next","model":null}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":9007199254740993}}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":-1}}}}
+{"type":"future_unverified_type","payload":{"secret":"SYNTHETIC_BODY_MUST_NOT_SURVIVE"}}

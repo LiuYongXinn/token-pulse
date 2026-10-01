@@ -1,0 +1,13 @@
+{
+  "record_kinds": ["session_metadata", "turn_metadata", "usage", "ignored", "ignored", "turn_metadata", "usage", "usage", "diagnostic"],
+  "session_id": "synthetic-session",
+  "created_at_ms": 1000,
+  "first_usage_time_ms": 3000,
+  "first_usage": {"input_total":100,"cached_input":40,"output_total":20,"reasoning_output":5,"reported_total":120},
+  "unknown_provider": null,
+  "updated_cwd": "E:\\synthetic\\next",
+  "updated_model": null,
+  "large_reported_total": 9007199254740993,
+  "negative_input_preserved_for_accounting": -1,
+  "unsupported_reason": "unsupported_record_type"
+}

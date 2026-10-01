@@ -59,6 +59,7 @@ fn fixture() -> WriteBatch {
         cumulative: Some(usage),
         effective_metadata: EffectiveMetadata::default(),
         explicit_episode_start: true,
+        model_context_window: None,
     };
     WriteBatch {
         file_generation_id: "generation".into(),
