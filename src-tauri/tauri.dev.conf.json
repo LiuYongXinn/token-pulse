@@ -1,0 +1,5 @@
+{
+  "productName": "TokenPulse Dev",
+  "identifier": "com.tokenpulse.desktop.dev",
+  "app": { "windows": [{ "label": "main", "title": "TokenPulse · 开发版", "width": 1280, "height": 860, "minWidth": 960, "minHeight": 680, "backgroundColor": "#202020" }] }
+}

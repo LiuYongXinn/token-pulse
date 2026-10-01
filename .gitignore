@@ -20,3 +20,9 @@ coverage/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Rust and desktop generated output
+target/
+src-tauri/gen/
+playwright-report/
+test-results/
