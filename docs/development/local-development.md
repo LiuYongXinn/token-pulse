@@ -4,9 +4,15 @@
 
 ## 主窗口位置冷启动验收
 
+M15f3 已追加合成 960×600 DIP 工作区在真实主窗口上的尺寸适配 / 四边检查及 React 导航 / 页脚滚动检查，随后恢复本次普通窗口继续退出保存验证；不修改系统 DPI / 工作区。浏览器对应检查为 `npx playwright test tests/ui/overview.spec.ts --grep 'small work-area' --workers=1`，两项截图只用测试桥 DTO。尚未包含在下方 M16f 安装包时点中。
+
 先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-main-window.ps1`。三个独立 debug 应用进程共用本次 UUID 隔离数据库，只接受 seed / restore / missing 阶段，不能输入任意数据路径。实际普通移动与快速最大化、最小化不覆盖位置、关闭隐藏 / 重新打开、下一进程启动恢复、合成原屏缺失时主屏工作区夹紧通过；冷启动预期在正式恢复前冻结，不依赖恢复后保存值；最后移动在数据库尚未保存时立即退出，下一进程必须读到独立已知的最终位置，验证退出保存。Win10 19045 / 150% SEQUENCE_OK、退出 0，1412 提示仍保留，无真实来源 / 账户或性能测试。
 
 系统窗口检查为实际原生 API 和 WebView 程序化检查，不能替代物理拖动 / 断屏 / 多屏 DPI / Win11。详见[交付记录](delivery-status.md#m15f2主窗口原生捕获与冷启动恢复)。本模块提交时，下方 M16e 安装包尚未包含主窗口位置功能，新包另作记录。
+
+## 任务栏 Tab 导航检查
+
+`cargo test -p token-pulse-taskbar windows::canvas::tests --lib -- --test-threads=1` 包含可用按键条件及实际自有窗口的 IsDialogMessage / GetFocus 检查：Tab 进出、失焦关闭详情和 Enter 单次动作。四项通过，未向系统其他窗口发送输入；这是实际原生消息导航而非 Explorer 物理键盘验收。最新真实 wire 仍在自有前台夹具被 CoreWindow 覆盖时拒绝发送输入，历史一轮通过与本次限制分别记录。见[交付记录](delivery-status.md#m13g1任务栏按键请求与原生-tab-导航)。
 
 当前最新完整 NSIS 包（M16e）：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,605,439 字节，SHA-256 `2e8eb45072009cd9ae862afb604a09d07a6e3429ba2dce6169896fbbfe63410b`。同次正式 TS / Vite、release 宿主 / 桌面、334 项第三方声明和 makensis 全部通过；旧段落中的包哈希按历史保留。包含最新正式空态说明，账户 / notify 选择器验收代码只在 debug 中。此轮未覆盖现有正式数据进行安装，未生成正式签名或发布；干净安装 / 卸载及完整更新不能由打包通过替代。
 

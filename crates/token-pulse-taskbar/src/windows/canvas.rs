@@ -16,7 +16,8 @@ use std::{
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, TME_CANCEL, TME_HOVER, TME_LEAVE, TRACKMOUSEEVENT,
-    TrackMouseEvent, VK_APPS, VK_ESCAPE, VK_F10, VK_RETURN, VK_SHIFT, VK_SPACE,
+    TrackMouseEvent, VK_APPS, VK_DOWN, VK_END, VK_ESCAPE, VK_F10, VK_HOME, VK_NEXT, VK_PRIOR,
+    VK_RETURN, VK_SHIFT, VK_SPACE, VK_UP,
 };
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
@@ -28,7 +29,7 @@ use windows_sys::Win32::{
     UI::{
         Controls::{WM_MOUSEHOVER, WM_MOUSELEAVE},
         WindowsAndMessaging::{
-            CREATESTRUCTW, CS_DBLCLKS, CreateWindowExW, DLGC_WANTALLKEYS, DefWindowProcW,
+            CREATESTRUCTW, CS_DBLCLKS, CreateWindowExW, DLGC_WANTMESSAGE, DefWindowProcW,
             DestroyWindow, EndMenu, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW,
             IsWindowVisible, KillTimer, MA_NOACTIVATE, PostMessageW, RegisterClassExW,
             SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW,
@@ -73,6 +74,28 @@ impl Drop for PaintGuard<'_> {
     }
 }
 const CLICK_TIMER: usize = 1;
+fn dialog_code(ready: bool, details_visible: bool, key: usize, shift: bool) -> LRESULT {
+    if !ready {
+        return 0;
+    }
+    // Claim only keys we process. In particular, Tab remains native focus navigation.
+    // wParam is the queried virtual key; a generic query (0) claims no message.
+    let command = [VK_RETURN, VK_SPACE, VK_APPS]
+        .into_iter()
+        .any(|k| key == k as usize)
+        || (key == VK_F10 as usize && shift);
+    let detail = details_visible
+        && [
+            VK_ESCAPE, VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END,
+        ]
+        .into_iter()
+        .any(|k| key == k as usize);
+    if command || detail {
+        DLGC_WANTMESSAGE as _
+    } else {
+        0
+    }
+}
 unsafe extern "system" fn procedure(
     window: HWND,
     message: u32,
@@ -131,6 +154,14 @@ unsafe extern "system" fn procedure(
             state.interactive && state.plan.is_some() && !state.menu_open
         } && slot.alive.get();
         match message {
+            WM_GETDLGCODE => {
+                return dialog_code(
+                    ready,
+                    slot.details.visible(),
+                    wparam,
+                    unsafe { GetKeyState(VK_SHIFT as i32) } < 0,
+                );
+            }
             WM_MOUSEMOVE if ready => {
                 if !slot.tracking.get() {
                     let mut tracking = TRACKMOUSEEVENT {
@@ -214,7 +245,6 @@ unsafe extern "system" fn procedure(
         }
         let state = unsafe { &mut *slot.get() };
         match message {
-            WM_GETDLGCODE => return DLGC_WANTALLKEYS as _,
             WM_KEYDOWN | WM_KEYUP if state.interactive && state.plan.is_some() => {
                 if wparam == VK_APPS as usize
                     || (wparam == VK_F10 as usize && unsafe { GetKeyState(VK_SHIFT as i32) } < 0)
@@ -651,6 +681,135 @@ mod tests {
     use super::super::topology::{DpiGuard, rect};
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextW, WS_POPUP};
+    #[test]
+    fn dialog_requests_only_active_commands_and_visible_detail_keys() {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_TAB;
+        for key in [0, VK_TAB as usize, b'A' as usize, VK_F10 as usize] {
+            assert_eq!(dialog_code(true, true, key, false), 0);
+        }
+        for key in [VK_RETURN, VK_SPACE, VK_APPS] {
+            assert_eq!(
+                dialog_code(true, false, key as usize, false),
+                DLGC_WANTMESSAGE as isize
+            );
+            assert_eq!(dialog_code(false, true, key as usize, false), 0);
+        }
+        assert_eq!(
+            dialog_code(true, false, VK_F10 as usize, true),
+            DLGC_WANTMESSAGE as isize
+        );
+        for key in [
+            VK_ESCAPE, VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END,
+        ] {
+            assert_eq!(dialog_code(true, false, key as usize, false), 0);
+            assert_eq!(
+                dialog_code(true, true, key as usize, false),
+                DLGC_WANTMESSAGE as isize
+            );
+        }
+    }
+    #[test]
+    fn native_dialog_tab_leaves_canvas_and_dismisses_details_without_an_action() {
+        use windows_sys::Win32::UI::{
+            HiDpi::GetDpiForWindow,
+            Input::KeyboardAndMouse::{GetFocus, SetFocus, VK_TAB},
+            WindowsAndMessaging::{
+                IsDialogMessageW, MSG, SW_SHOWNOACTIVATE, ShowWindow, WS_OVERLAPPEDWINDOW,
+                WS_VISIBLE,
+            },
+        };
+        let _dpi = DpiGuard::enter().unwrap();
+        let parent = unsafe {
+            CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                wide("STATIC").as_ptr(),
+                wide("TokenPulse SYNTHETIC dialog navigation test").as_ptr(),
+                WS_OVERLAPPEDWINDOW,
+                200,
+                200,
+                1000,
+                100,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null(),
+            )
+        };
+        assert!(!parent.is_null());
+        unsafe {
+            ShowWindow(parent, SW_SHOWNOACTIVATE);
+        }
+        let dpi = unsafe { GetDpiForWindow(parent) };
+        let mut canvas = unsafe { NativeCanvas::create(parent, dpi) }.unwrap();
+        let next = unsafe {
+            CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                wide("BUTTON").as_ptr(),
+                wide("Synthetic next control").as_ptr(),
+                WS_CHILD | WS_TABSTOP | WS_VISIBLE,
+                750,
+                0,
+                200,
+                40,
+                parent,
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null(),
+            )
+        };
+        assert!(!next.is_null());
+        let view = super::super::details_window::fixture();
+        canvas
+            .prepare(
+                &view,
+                DisplayPreferences::default(),
+                dpi,
+                700,
+                60,
+                view.generated_at_ms.value(),
+            )
+            .unwrap();
+        canvas.set_attached(true);
+        unsafe {
+            ShowWindow(canvas.window, SW_SHOWNOACTIVATE);
+            SetFocus(canvas.window);
+        }
+        assert_eq!(unsafe { GetFocus() }, canvas.window);
+        assert!(canvas.state.details.visible());
+        let message = MSG {
+            hwnd: canvas.window,
+            message: WM_KEYDOWN,
+            wParam: VK_TAB as usize,
+            ..unsafe { mem::zeroed() }
+        };
+        assert_ne!(unsafe { IsDialogMessageW(parent, &message) }, 0);
+        assert_eq!(unsafe { GetFocus() }, next);
+        assert!(!canvas.state.details.visible());
+        assert!(canvas.take_actions().is_empty());
+        // Native dialog tab order can also re-enter this ordinary WS_TABSTOP child.
+        let message = MSG {
+            hwnd: next,
+            ..message
+        };
+        assert_ne!(unsafe { IsDialogMessageW(parent, &message) }, 0);
+        assert_eq!(unsafe { GetFocus() }, canvas.window);
+        assert!(canvas.state.details.visible());
+        let enter = MSG {
+            hwnd: canvas.window,
+            message: WM_KEYDOWN,
+            wParam: VK_RETURN as usize,
+            ..unsafe { mem::zeroed() }
+        };
+        // IsDialogMessage dispatches our requested message; do not dispatch it twice.
+        assert_ne!(unsafe { IsDialogMessageW(parent, &enter) }, 0);
+        assert_eq!(canvas.take_actions(), [HostAction::OpenFloat {}]);
+        assert!(!canvas.state.details.visible());
+        canvas.clear().unwrap();
+        drop(canvas);
+        unsafe {
+            DestroyWindow(parent);
+        }
+    }
     #[test]
     fn authored_own_canvas_events_hover_focus_escape_rearm_and_clear_without_actions() {
         use windows_sys::Win32::UI::{

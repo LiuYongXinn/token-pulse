@@ -67,6 +67,8 @@ Token 683.1K    $0.57 估算
 
 原生实现按系统 `GetDoubleClickTime` 延迟确认单击，双击到达后取消待处理单击，避免两种动作连续触发。原型采用 240 ms 演示延迟。自动数据刷新保持当前键盘焦点，不自动弹窗。
 
+M13g1：原生画布的 `WM_GETDLGCODE` 只请求当前可用的 Enter / Space / 菜单键 / Shift+F10；方向 / 翻页 / 首尾 / Escape 只在详情可见时请求。Tab、普通字符及无按键的通用查询交给 Windows，避免无条件 WANTALLKEYS 阻止原生焦点导航。Win10 自有窗口的实际 IsDialogMessage / 焦点 API 已验证 Tab 移出、再进入、详情随失焦关闭且无动作、Enter 仅一次打开小窗动作；不当作 Explorer 物理键盘或屏幕阅读器完成证据。依据 [WM_GETDLGCODE](https://learn.microsoft.com/zh-cn/windows/desktop/dlgbox/wm-getdlgcode) 和 [IsDialogMessage](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-isdialogmessagew)，已经由 IsDialogMessage 处理的消息不再额外分发。
+
 悬停面板宽约 340 DIP，按当前屏幕工作区夹紧位置；点击打开的小窗为现有 360 × 380 DIP 展开模式。悬浮窗继续支持固定会话、拖动、收起和隐藏。任务栏不提供鼠标穿透，因为读数本身就是交互入口。
 
 ## 5. 统计范围与异常状态
