@@ -10,3 +10,9 @@ test('notify failures explain action without echoing unknown diagnostics', () =>
   expect(notifyIssueText('transaction_unavailable')).toContain('日志采集继续可用');
   expect(runtimeError({ code: 'NOTIFY_INTEGRATION_FAILED', details: { notify_issue: 'synthetic private command' } })).not.toContain('synthetic');
 });
+
+test('update failures explain retry without exposing raw provider details', () => {
+  expect(runtimeError({ code: 'UPDATE_UNAVAILABLE', details: { raw: 'private-provider-text' } })).toContain('正式安装版');
+  expect(runtimeError({ code: 'UPDATE_BUSY' })).toContain('等待完成');
+  expect(runtimeError({ code: 'UPDATE_FAILED', details: { raw: 'private-provider-text' } })).not.toContain('private-provider-text');
+});

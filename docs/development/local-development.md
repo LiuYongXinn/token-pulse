@@ -1,5 +1,13 @@
 # 本地开发与运行
 
+## 软件更新 UI 验证
+
+2026-10-03 接入更新 UI / 原生提供方 / 安装退出钩子后，`npm run tauri:build` 完整重建通过；本地最新 0.1.0 NSIS 包为 6,493,332 字节（6.19 MiB），替换原早期 5.22 MiB 开发产物。最新包尚无正式发布公钥 / 签名，不能当作真实自动升级就绪。生成脚本已核对 update-hooks 在占用检查前执行，宿主仍 externalBin 同目标打包；此前 M16a 安装记录不自动适用于新包，需要另在干净配置验收，不覆盖当前正式数据或安装注册。
+
+`npx playwright test tests/ui/updates.spec.ts` 使用测试文件内显式合成桥，检查阶段 / null / 精确修订与字节、签名失败无安装权、绑定确认、迟到 / 隐私 / 离页和重开。正式 UI 仅调用原生命令，无开发数据默认入口。开发截图位于忽略的 test-results/updates-*-review.png；深浅 / 960 宽已查看。
+
+先 `npm run build`，再 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Updates`，会通过真实 React 设置按钮检查未配置公钥时的更新页、刷新、共享隐私公开版本及权限 / null 回归；需 NATIVE_UPDATES_IPC_OK / 退出 0。本机 Win10 19045 已通过，WebView2 注销 1412 保留。真实发布 / 安装仍需正式签名公钥和发布资产，不用合成页替代。
+
 ## 更新安装生命周期验证
 
 `pwsh -NoProfile -File scripts/verify-update-hook.ps1` 用已下载 NSIS 编译器生成自有 Temp 最小夹具，仅写同目录测试标记。验证安装器在父进程存在时等待，父进程正常退出才继续；通过 NATIVE_UPDATE_HOOK_OK 和退出 0。脚本检查拥有的 UUID Temp 路径，最后只删除该夹具和关闭其自有进程。该检查不安装产品、读取账户或改变 Explorer，不能替代完整安装 / 更新。

@@ -61,6 +61,24 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         let denied=false;try{await invoke(command,{requestId:'updates-mini',request:{expected_update_revision:'0'}});}catch{denied=true;}if(!denied)throw new Error('UPDATES_MINI_ALLOWED:'+command);
       }
     "#));
+    let result = result.and_then(|_| super::mini_smoke::evaluate(app, &main, r#"
+      [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='设置').click();
+      await wait(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='软件更新'));
+      [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='软件更新').click();
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      const panel=document.querySelector('.update-panel');
+      const button=(name)=>[...panel.querySelectorAll('button')].find(n=>n.textContent===name);
+      if(!button('检查更新')?.disabled||button('安装更新')||!panel.textContent.includes('未配置有效的更新签名公钥')||panel.textContent.includes('当前已是最新版本')||panel.querySelector('progress'))throw new Error('UPDATES_UI_UNAVAILABLE');
+      if(!panel.textContent.includes('0.1.0')||!panel.textContent.includes('尚未提供'))throw new Error('UPDATES_UI_NULL');
+      button('刷新更新状态').click();
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      const settings=await invoke('get_display_settings',{requestId:'updates-ui-privacy'});
+      await invoke('set_display_privacy',{requestId:'updates-ui-hide',request:{privacy:true,expected_settings_revision:settings.data.settings_revision}});
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      if(!document.querySelector('.update-panel').textContent.includes('0.1.0'))throw new Error('UPDATES_UI_PRIVATE_PUBLIC_VERSION');
+      const hidden=await invoke('get_display_settings',{requestId:'updates-ui-hidden'});
+      await invoke('set_display_privacy',{requestId:'updates-ui-show',request:{privacy:false,expected_settings_revision:hidden.data.settings_revision}});
+    "#));
     app.unlisten(listener);
     result?;
     if receiver.try_iter().next().is_some() {

@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest, MiniSessionsRequest, MiniSessionsPage } from './generated/contracts';
 import { displayPolicy } from './display-policy';
+import type { UpdateSnapshot, UpdateActionRequest } from './generated/contracts';
 import type { NotifyIntegrationsSnapshot, NotifyPrepareAction, NotifyConfigPreview, NotifyApplyResult } from './generated/contracts';
 import type { DisplayPolicyStamp, DisplayPrivacyMutation, DisplayThemeMutation } from './generated/contracts';
 import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
@@ -70,6 +71,15 @@ export async function onDisplayPolicyChanged(): Promise<() => void> {
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
+export function getUpdateStatus(): Promise<UpdateSnapshot> { return request('get_update_status'); }
+export function checkForUpdates(): Promise<UpdateSnapshot> { return request('check_for_updates'); }
+export function downloadUpdate(action: UpdateActionRequest): Promise<UpdateSnapshot> { return request('download_update', { request: action }); }
+export function installUpdate(action: UpdateActionRequest): Promise<UpdateSnapshot> { return request('install_update', { request: action }); }
+export async function onUpdatesChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen('updates_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 // These DTOs contain display switches and runtime state only, never usage values or paths.
 export function getTaskbarPreferences(): Promise<import('./generated/contracts').TaskbarPreferencesSnapshot> { return request('get_taskbar_preferences'); }
 export function setTaskbarPreferences(mutation: import('./generated/contracts').TaskbarPreferencesMutation): Promise<import('./generated/contracts').TaskbarPreferencesSnapshot> { return request('set_taskbar_preferences', { request: mutation }); }
@@ -147,6 +157,9 @@ export function runtimeError(error: unknown): string {
       return notifyIssueText(issue);
     }
     if (code === 'SNAPSHOT_EXPIRED') return '查询快照已过期，请重新查询。';
+    if (code === 'UPDATE_UNAVAILABLE') return '更新不可用，请确认正在使用已配置发布源的正式安装版。';
+    if (code === 'UPDATE_BUSY') return '已有更新操作正在进行，请等待完成。';
+    if (code === 'UPDATE_FAILED') return '更新未能完成，请重新检查后重试。';
     if (code === 'CURSOR_INVALID') return '分页条件或游标已失效，请重新查询。';
     if (code === 'DB_WRITE_FAILED') return '数据库写入失败，设置未保存，请重试。';
     const descriptions: Record<string, string> = { QUOTA_DISCONNECTED: '账户服务未连接，请先连接已保存服务。', QUOTA_UNSUPPORTED: '当前连接不提供账户额度，本地统计继续可用。', QUOTA_AUTH_REQUIRED: '所选 Codex Home 的本地登录态不可用，请选择已登录账户使用的 Home 后重新连接。', QUOTA_TIMEOUT: '账户服务响应超时，保留已知旧快照。', QUOTA_PROTOCOL_ERROR: '账户服务响应无法验证，请检查服务版本或重新连接。', QUOTA_SERVICE_UNAVAILABLE: '账户服务程序不可用，请检查已选择程序和 Home。', SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '选择已过期或程序已变化，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
