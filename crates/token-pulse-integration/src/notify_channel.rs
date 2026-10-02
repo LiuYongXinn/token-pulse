@@ -51,6 +51,9 @@ impl NotifyCapability {
     pub fn registration_id(&self) -> &str {
         &self.registration_id
     }
+    pub(crate) fn matches(&self, other: &Self) -> bool {
+        self.registration_id == other.registration_id && same_nonce(&self.nonce, &other.nonce)
+    }
 
     pub fn encode_hint(&self, hint: &NotifyWakeHint) -> Result<Vec<u8>, WakeError> {
         let bytes = serde_json::to_vec(&WakeFrame {

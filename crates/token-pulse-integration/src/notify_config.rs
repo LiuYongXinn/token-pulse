@@ -141,6 +141,9 @@ impl NotifyRestoreRecord {
     pub fn original_value(&self) -> Option<&str> {
         self.original_value.as_deref()
     }
+    pub fn installed_arguments(&self) -> &[String] {
+        &self.installed_arguments
+    }
     /// For an explicitly authorized original-command chain; never executed by this planner.
     pub fn original_arguments(&self) -> Result<Option<Vec<String>>, ConfigError> {
         self.original_value
