@@ -7548,6 +7548,521 @@
       ],
       "title": "PriceOutcome"
     },
+    "PriceRevalueJob": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "CANDIDATE_OBSOLETE",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "QUOTA_PROTOCOL_ERROR",
+            "QUOTA_SERVICE_UNAVAILABLE",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PriceRevalueState": {
+          "enum": [
+            "queued",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "interrupted"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "automatic": {
+          "type": "boolean"
+        },
+        "basis": {
+          "$ref": "#/$defs/PriceBasis"
+        },
+        "can_cancel": {
+          "type": "boolean"
+        },
+        "completed_ledgers": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "created_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "processed_events": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "state": {
+          "$ref": "#/$defs/PriceRevalueState"
+        },
+        "total_events": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "total_ledgers": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "updated_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        }
+      },
+      "required": [
+        "job_id",
+        "state",
+        "automatic",
+        "price_revision",
+        "basis",
+        "total_ledgers",
+        "completed_ledgers",
+        "total_events",
+        "processed_events",
+        "can_cancel",
+        "error",
+        "created_at_ms",
+        "updated_at_ms"
+      ],
+      "title": "PriceRevalueJob",
+      "type": "object"
+    },
+    "PriceRevalueRequest": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "JobScope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "all",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "sources",
+                  "type": "string"
+                },
+                "source_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "source_ids"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "sessions",
+                  "type": "string"
+                },
+                "session_keys": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "session_keys"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/PriceBasis"
+        },
+        "expected_price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "request_key": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/JobScope"
+        }
+      },
+      "required": [
+        "scope",
+        "basis",
+        "expected_price_revision",
+        "request_key"
+      ],
+      "title": "PriceRevalueRequest",
+      "type": "object"
+    },
+    "PriceRevalueState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "queued",
+        "running",
+        "cancelling",
+        "succeeded",
+        "cancelled",
+        "failed",
+        "interrupted"
+      ],
+      "title": "PriceRevalueState",
+      "type": "string"
+    },
+    "PriceRevalueStatus": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "CANDIDATE_OBSOLETE",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "QUOTA_PROTOCOL_ERROR",
+            "QUOTA_SERVICE_UNAVAILABLE",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "PriceBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "event_time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "specified_time",
+                  "type": "string"
+                },
+                "specified_at_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "mode",
+                "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PriceRevalueJob": {
+          "additionalProperties": false,
+          "properties": {
+            "automatic": {
+              "type": "boolean"
+            },
+            "basis": {
+              "$ref": "#/$defs/PriceBasis"
+            },
+            "can_cancel": {
+              "type": "boolean"
+            },
+            "completed_ledgers": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "created_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorCode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "job_id": {
+              "type": "string"
+            },
+            "price_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "processed_events": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "state": {
+              "$ref": "#/$defs/PriceRevalueState"
+            },
+            "total_events": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "total_ledgers": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "updated_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            }
+          },
+          "required": [
+            "job_id",
+            "state",
+            "automatic",
+            "price_revision",
+            "basis",
+            "total_ledgers",
+            "completed_ledgers",
+            "total_events",
+            "processed_events",
+            "can_cancel",
+            "error",
+            "created_at_ms",
+            "updated_at_ms"
+          ],
+          "type": "object"
+        },
+        "PriceRevalueState": {
+          "enum": [
+            "queued",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "interrupted"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "active_job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceRevalueJob"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "current_price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "latest_job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceRevalueJob"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uncached_ledgers": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "current_price_revision",
+        "active_job",
+        "latest_job",
+        "uncached_ledgers"
+      ],
+      "title": "PriceRevalueStatus",
+      "type": "object"
+    },
     "PriceRule": {
       "$defs": {
         "DecimalInt": {

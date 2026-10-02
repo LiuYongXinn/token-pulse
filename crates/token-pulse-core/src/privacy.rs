@@ -343,6 +343,12 @@ impl PrivacyRedact for crate::pricing::offline::OfflinePriceCatalogSnapshot {
         self.catalog = None;
     }
 }
+impl PrivacyRedact for crate::pricing::revalue::PriceRevalueStatus {
+    fn redact(&mut self) {}
+}
+impl PrivacyRedact for crate::pricing::revalue::PriceRevalueJob {
+    fn redact(&mut self) {}
+}
 impl PrivacyRedact for ContextSnapshot {
     fn redact(&mut self) {}
 }

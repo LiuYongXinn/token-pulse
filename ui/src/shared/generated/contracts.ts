@@ -254,6 +254,14 @@ export type OfflinePriceCatalog = { format_version: number, catalog_id: string, 
 
 export type OfflinePriceCatalogSnapshot = { price_revision: DecimalInt, catalog: OfflinePriceCatalog | null, };
 
+export type PriceRevalueRequest = { scope: JobScope, basis: PriceBasis, expected_price_revision: DecimalInt, request_key: string, };
+
+export type PriceRevalueState = "queued" | "running" | "cancelling" | "succeeded" | "cancelled" | "failed" | "interrupted";
+
+export type PriceRevalueJob = { job_id: string, state: PriceRevalueState, automatic: boolean, price_revision: DecimalInt, basis: PriceBasis, total_ledgers: DecimalInt, completed_ledgers: DecimalInt, total_events: DecimalInt, processed_events: DecimalInt, can_cancel: boolean, error: ErrorCode | null, created_at_ms: EpochMs, updated_at_ms: EpochMs, };
+
+export type PriceRevalueStatus = { current_price_revision: DecimalInt, active_job: PriceRevalueJob | null, latest_job: PriceRevalueJob | null, uncached_ledgers: DecimalInt, };
+
 export type PriceRule = { rule_id: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin: PriceOrigin, origin_reference: string | null, created_at_ms: EpochMs, };
 
 export type PriceRuleDraft = { provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin_reference: string | null, };

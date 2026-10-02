@@ -17,6 +17,7 @@ mod proof_jobs;
 pub mod query;
 pub mod rebuild;
 mod registration;
+pub mod revalue_jobs;
 pub mod rollup;
 pub mod rollup_service;
 pub mod settings;

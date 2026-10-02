@@ -274,6 +274,35 @@ impl Database {
         basis: &PriceBasis,
         at_ms: i64,
         stop: &Arc<AtomicBool>,
+        progress: impl FnMut(u64, u64),
+    ) -> StoreResult<ValuationResult> {
+        self.build_event_valuation_pinned(ledger, basis, None, at_ms, stop, progress)
+    }
+    pub fn build_event_valuation_at_revision_interruptible(
+        &self,
+        ledger: &str,
+        basis: &PriceBasis,
+        price_revision: i64,
+        at_ms: i64,
+        stop: &Arc<AtomicBool>,
+        progress: impl FnMut(u64, u64),
+    ) -> StoreResult<ValuationResult> {
+        self.build_event_valuation_pinned(
+            ledger,
+            basis,
+            Some(price_revision),
+            at_ms,
+            stop,
+            progress,
+        )
+    }
+    fn build_event_valuation_pinned(
+        &self,
+        ledger: &str,
+        basis: &PriceBasis,
+        requested: Option<i64>,
+        at_ms: i64,
+        stop: &Arc<AtomicBool>,
         mut progress: impl FnMut(u64, u64),
     ) -> StoreResult<ValuationResult> {
         EpochMs::new(at_ms)?;
@@ -282,7 +311,9 @@ impl Database {
             return Err(ErrorCode::InvalidQuery.into());
         }
         self.snapshot(|tx,revision| {
-            let input=input(tx,ledger,revision.price,basis)?;
+            let price=requested.unwrap_or(revision.price);
+            if price<0 || price>revision.price {return Err(ErrorCode::InvalidQuery.into())}
+            let input=input(tx,ledger,price,basis)?;
             let id=input.id()?;
             let begin=input.clone(); let begin_id=id.clone();
             let already_ready=self.write(move |conn| {

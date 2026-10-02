@@ -503,6 +503,10 @@ M09g2a 已接持久事件费用缓存读写基础：schema v5 使用既有 `valu
 `build_event_valuation_interruptible` 在单一实际 SQLite 读事务捕获账本和价格，流式计算并每 500 行通过 Writer 写入 building 候选，无全历史事件向量驻留。发布前重新校验活跃账本、证据修订、解析 / 核算版本，复核持久行数量与完整候选摘要，再同事务设置 ready。取消、事实变化和发布失败留下不可读候选，先前 ready 结果保留。缓存版本或事件输入变化即失配；旧 SQLite 租约仍读取原始事实 / 规则 / 缓存。读取方每次查询创建并复用 CacheReader，没有匹配 ready 集合时仅检查一次后直接计价。金额使用十进制整数原子，不经过 SQLite REAL / JS Number。总览 / 分组 / 会话 / 回合 / 小窗共用 visit 读法，明细租约单独接同一读法。
 
 本模块提供内部构建 / 进度回调 / 取消信号及启动中断处理；独立后台服务、正式重估作业与进度 / 取消 UI 尚未接入，不能将持久表和内部构建 API 视为完整 M09 重估交付。部分发布缓存和未命中事件始终以同一快照版本即时补算，不混用新旧价格。
+
+M09g2b1 追加 schema v6 的独立 `price_revalue_jobs` / `price_revalue_plan`。价格作业保存规范化范围、估价模式、固定 price revision、请求幂等键、账本计划和十进制进度；不复用采集作业的文件计数或检查点。创建 / 领取 / 单调进度 / 完成 / 取消 / 启动中断均经 Writer 原子提交。手动请求使用价格修订 CAS，重复键先返回原结果，变更载荷拒绝；同一时刻只领取一个作业，手动队列优先。整个作业通过 `build_event_valuation_at_revision_interruptible` 固定规则版本，途中改价不混用金额，查询仍按自己的快照匹配缓存。
+
+自动请求身份包含价格修订、缓存版本和全部活跃账本证据，排除缓存就绪状态。取消 / 失败后同一输入不自动反复启动；新价格 / 证据可以建立新任务，用户也可发新手动请求。重启把未结束任务标为 interrupted，已持久化的取消保持 cancelled；自动补建仅重排缺失的 ready 缓存，先前发布结果保留。状态中的 uncached_ledgers 专指当前价格版本的 event_time 缓存缺口，不代表指定时点的覆盖。此阶段尚未启动线程、暴露前端命令或进度界面。
 - price_revision 改变通知前端刷新；查询响应同时带 data_revision 与 price_revision。构建期间显示重估状态，不能混用两个价格版本。
 - 查询或租约捕获的 price_revision 固定规则与别名：`introduced_revision <= revision` 且 `retired_revision IS NULL OR retired_revision > revision`。内存 PricingService 必须按该版本取不可变规则，不能使用“最新规则”解释旧快照。
 

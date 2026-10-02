@@ -80,6 +80,38 @@ fn replace(db: &Database) {
 }
 
 #[test]
+fn pinned_revision_survives_price_publication_during_build() {
+    let (_directory, db) = priced();
+    let stop = Arc::new(AtomicBool::new(false));
+    let result = db
+        .build_event_valuation_at_revision_interruptible(
+            "ledger",
+            &PriceBasis::EventTime {},
+            1,
+            3,
+            &stop,
+            |done, _| {
+                if done == 0 {
+                    replace(&db);
+                }
+            },
+        )
+        .unwrap();
+    assert_eq!(result.price_revision, 1);
+    db.snapshot(|tx, r| {
+        assert_eq!(r.price, 2);
+        assert_eq!(
+            cost(cached(tx, 1, &PriceBasis::EventTime {})?.unwrap()),
+            "900"
+        );
+        assert!(cached(tx, 2, &PriceBasis::EventTime {})?.is_none());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(summary_cost(&db), "0.000000000001300");
+}
+
+#[test]
 fn precise_cache_reopens_and_does_not_change_consumption_or_checkpoint() {
     let (directory, db) = priced();
     let before=db.snapshot(|tx,r|Ok((r.data,r.price,r.settings,tx.query_row("SELECT committed_offset,checkpoint_revision FROM file_generations WHERE file_generation_id='generation'",[],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?)))?))).unwrap();
