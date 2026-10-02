@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+当前最新完整 NSIS 包（M16e）：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,605,439 字节，SHA-256 `2e8eb45072009cd9ae862afb604a09d07a6e3429ba2dce6169896fbbfe63410b`。同次正式 TS / Vite、release 宿主 / 桌面、334 项第三方声明和 makensis 全部通过；旧段落中的包哈希按历史保留。包含最新正式空态说明，账户 / notify 选择器验收代码只在 debug 中。此轮未覆盖现有正式数据进行安装，未生成正式签名或发布；干净安装 / 卸载及完整更新不能由打包通过替代。
+
+本轮按用户允许重试任务栏 wire，输入桌面可打开，但自有前台夹具仍被全屏 Windows.UI.Core.CoreWindow 覆盖，命中保护在发送输入之前拒绝 / 退出 101；不计真实输入通过、不绕过保护，历史 M13e7 通过证据保留。详见[本轮记录](delivery-status.md#2026-10-03本轮任务栏真实输入复测)。
+
 ## Windows notify 目录选择器验收
 
 先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -NotifyDialogs`；只构建 debug 桌面应用，使用新的 UUID native-probe 数据库和自有 synthetic-notify-dialog-home。实际 React 按钮打开正式 Windows 文件夹选择器，canonical 目录限制在配置读取之前执行。取消 / 选择 / 关闭预览均不写配置，明确确认才启用；停用也必须先预览再确认，字节级核对原 notify、注释 / CRLF 与后来新增的用户设置。测试不注入能力、不读真实 Home 或认证，也不执行真实 Codex 回合。

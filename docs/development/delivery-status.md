@@ -2,6 +2,18 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16e：选择器收尾后的正式 Windows 安装包
+
+完成 M12m / M15a8 后执行 `npm run tauri:build`（当前进程 PATH 需包含用户 .cargo/bin），真实 beforeBuild 完成 TS / Vite 生产构建、Windows release 独立任务栏宿主准备和第三方声明生成；随后正式 Rust release 与 NSIS 打包退出 0。本包包含 M06g 的真实空态说明；本轮 debug 验收驱动 / 测试场景不编入生产能力，没有新增运行时 Node / Cargo / 当前对话依赖。
+
+最新 `target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe`：6,605,439 字节，SHA-256 `2e8eb45072009cd9ae862afb604a09d07a6e3429ba2dce6169896fbbfe63410b`；同次桌面 exe：25,482,240 字节，SHA-256 `43d34fd3cd2c9d9d7f42bfc4e96da736ad992623092e31526e716ad973f02865`。第三方声明仍为 334 项 / 2,986,262 字节 / `2dad741130f6a68d7fcf87fba744043a1ba838e9d0cf8bfc846630ee006001e0`，前端产物 index-i7C1Clkf.js。下方旧安装包大小 / 哈希属于历史构建，不替换其历史验收证据。
+
+此步骤是当前源码的实际完整打包检查，不是本轮新的干净安装 / 卸载或完整更新通过证明。本机正式目录状态仍存在两项，保持原状，没有绕过 verify-installer 的现有数据保护或清理用户目录。尚未配置正式更新公钥、产生正式签名或上传发布资产；实际完整升级仍需该条件。最终 TokenPulse 应用 / 宿主 / 合成账户 / 输入测试进程数量 0，原用户未提交内容保留，无性能测试。
+
+## 2026-10-03：本轮任务栏真实输入复测
+
+按用户“可以测试”的持续授权再次运行 `cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskbar-wire-development-check`，使用新构建宿主、自有前台测试窗口和原有输入命中保护。OpenInputDesktop 检查已通过，但实际位置 (180,100,540,240) 命中全屏 Windows.UI.Core.CoreWindow (0,0,2560,1440)，在发送输入 / 启动宿主之前拒绝，退出 101。本轮不计真实 hover / 点击 / 双击 / 键盘通过，历史 M13e7 已通过证据继续保留；没有绕过命中检查或操作覆盖面板，也不反复要求用户解锁。其他可实现模块继续，原有未提交内容保留。
+
 ## M15a8：真实 notify 目录选择与确认撤销流程
 
 新增 `native-smoke.ps1 -NotifyDialogs`，独立 native-probe UUID 数据库 / synthetic-notify-dialog-home；真实 React 设置按钮打开正式 Windows 文件夹选择器，经共享有界 PID / 标题 / 控件类别 / ID 驱动执行取消、选择。取消返回 null 与无改动提示；选择仅生成只读预览，默认保留原通知命令；关闭预览不登记或改写文件；第二次选择后明确确认才修改根级 notify。验收未直接操作管理器、注入预览或选择能力，使用正式五命令和实际 WebView。
