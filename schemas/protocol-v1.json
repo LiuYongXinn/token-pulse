@@ -7002,6 +7002,387 @@
       ],
       "title": "ModelAliasMutation"
     },
+    "OfflineContextBand": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "all",
+        "short",
+        "long"
+      ],
+      "title": "OfflineContextBand",
+      "type": "string"
+    },
+    "OfflinePriceCatalog": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_write_per_million": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cached_per_million": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "context": {
+              "$ref": "#/$defs/OfflineContextBand"
+            },
+            "input_per_million": {
+              "description": "Currency units per million tokens, exact decimal strings (never f64).",
+              "type": "string"
+            },
+            "model_exact": {
+              "type": "string"
+            },
+            "output_per_million": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "tier": {
+              "$ref": "#/$defs/OfflinePriceTier"
+            }
+          },
+          "required": [
+            "model_exact",
+            "tier",
+            "context",
+            "input_per_million",
+            "cached_per_million",
+            "cache_write_per_million",
+            "output_per_million",
+            "reference"
+          ],
+          "type": "object"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/OfflinePriceEntry"
+          },
+          "type": "array"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "reference_basis": {
+          "$ref": "#/$defs/OfflineReferenceBasis"
+        },
+        "short_context_max_input": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "verified_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        }
+      },
+      "required": [
+        "format_version",
+        "catalog_id",
+        "verified_at_ms",
+        "provider",
+        "currency",
+        "short_context_max_input",
+        "reference_basis",
+        "entries"
+      ],
+      "title": "OfflinePriceCatalog",
+      "type": "object"
+    },
+    "OfflinePriceCatalogSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceCatalog": {
+          "additionalProperties": false,
+          "properties": {
+            "catalog_id": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/OfflinePriceEntry"
+              },
+              "type": "array"
+            },
+            "format_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "reference_basis": {
+              "$ref": "#/$defs/OfflineReferenceBasis"
+            },
+            "short_context_max_input": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "verified_at_ms": {
+              "$ref": "#/$defs/EpochMs"
+            }
+          },
+          "required": [
+            "format_version",
+            "catalog_id",
+            "verified_at_ms",
+            "provider",
+            "currency",
+            "short_context_max_input",
+            "reference_basis",
+            "entries"
+          ],
+          "type": "object"
+        },
+        "OfflinePriceEntry": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_write_per_million": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cached_per_million": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "context": {
+              "$ref": "#/$defs/OfflineContextBand"
+            },
+            "input_per_million": {
+              "description": "Currency units per million tokens, exact decimal strings (never f64).",
+              "type": "string"
+            },
+            "model_exact": {
+              "type": "string"
+            },
+            "output_per_million": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "tier": {
+              "$ref": "#/$defs/OfflinePriceTier"
+            }
+          },
+          "required": [
+            "model_exact",
+            "tier",
+            "context",
+            "input_per_million",
+            "cached_per_million",
+            "cache_write_per_million",
+            "output_per_million",
+            "reference"
+          ],
+          "type": "object"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "catalog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OfflinePriceCatalog"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "price_revision",
+        "catalog"
+      ],
+      "title": "OfflinePriceCatalogSnapshot",
+      "type": "object"
+    },
+    "OfflinePriceEntry": {
+      "$defs": {
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cache_write_per_million": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cached_per_million": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "context": {
+          "$ref": "#/$defs/OfflineContextBand"
+        },
+        "input_per_million": {
+          "description": "Currency units per million tokens, exact decimal strings (never f64).",
+          "type": "string"
+        },
+        "model_exact": {
+          "type": "string"
+        },
+        "output_per_million": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/OfflinePriceTier"
+        }
+      },
+      "required": [
+        "model_exact",
+        "tier",
+        "context",
+        "input_per_million",
+        "cached_per_million",
+        "cache_write_per_million",
+        "output_per_million",
+        "reference"
+      ],
+      "title": "OfflinePriceEntry",
+      "type": "object"
+    },
+    "OfflinePriceTier": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "standard",
+        "batch",
+        "flex",
+        "fast",
+        "ultrafast"
+      ],
+      "title": "OfflinePriceTier",
+      "type": "string"
+    },
+    "OfflineReferenceBasis": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "global_api_reference"
+      ],
+      "title": "OfflineReferenceBasis",
+      "type": "string"
+    },
     "PriceBasis": {
       "$defs": {
         "EpochMs": {

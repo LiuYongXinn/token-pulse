@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-offline-price-catalog"
+description = "Enables the get_offline_price_catalog command without any pre-configured scope."
+commands.allow = ["get_offline_price_catalog"]
+
+[[permission]]
+identifier = "deny-get-offline-price-catalog"
+description = "Denies the get_offline_price_catalog command without any pre-configured scope."
+commands.deny = ["get_offline_price_catalog"]

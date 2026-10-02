@@ -134,7 +134,10 @@ range 左闭右开，start < end；时区必须合法 IANA 名称。ids 数量�
 |`get_sources`|request_id|配置、规范路径、能力、可读性、扫描 / 导入状态|
 |`query_diagnostics`|受控来源 / 类别 / 时间、cursor|简化错误列表、必要位置、重新检测与手动重建；不返回原文样本或完整继承证据|
 |`get_price_rules`|revision 或当前、分页|规则版本、来源、匹配与生效时间|
+|`get_offline_price_catalog`|revision 或当前；main-only|OfflinePriceCatalogSnapshot，固定价格修订的事实目录或 null|
 |`get_job` / `list_jobs`|job_id / 状态与分页|持久进度与明确最终状态|
+
+M09g1b：目录请求 `{ revision: string|null, request_id }` 使用十进制修订；只读实际 SQLite 快照固定当前或已发布历史版本，不接受超前修订。`OfflinePriceCatalogSnapshot { price_revision, catalog|null }` 的目录含 format_version、catalog_id、verified_at_ms、provider、currency、short_context_max_input、reference_basis 和 entries；条目含确切模型、处理模式、上下文档位、四种精确每百万单价及官方来源。可空单价保留 null。目录无写入 IPC，使用内嵌正式事实；共享隐私在序列化时将 catalog 清空，前端同时受显示策略与请求代次门禁。价格设置页固定 get_price_rules 返回的版本读取目录，独立失败重试不会阻止自定义规则编辑。
 
 旧方案的 get_snapshot / query_series 被 bundle 包含；正式工程统一采用本表名字，避免并列两套近似协议。确需独立轻量 query_series 时只在同租约内实现，不能与主页面响应拼凑快照。
 

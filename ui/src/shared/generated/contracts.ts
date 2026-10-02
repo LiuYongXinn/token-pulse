@@ -238,6 +238,22 @@ export type PricingSummary = { redacted: boolean, basis: PriceBasis, currencies:
 
 export type PriceOrigin = "custom" | "offline";
 
+export type OfflinePriceTier = "standard" | "batch" | "flex" | "fast" | "ultrafast";
+
+export type OfflineContextBand = "all" | "short" | "long";
+
+export type OfflineReferenceBasis = "global_api_reference";
+
+export type OfflinePriceEntry = { model_exact: string, tier: OfflinePriceTier, context: OfflineContextBand,
+/**
+ * Currency units per million tokens, exact decimal strings (never f64).
+ */
+input_per_million: string, cached_per_million: string | null, cache_write_per_million: string | null, output_per_million: string, reference: string, };
+
+export type OfflinePriceCatalog = { format_version: number, catalog_id: string, verified_at_ms: EpochMs, provider: string, currency: string, short_context_max_input: number, reference_basis: OfflineReferenceBasis, entries: Array<OfflinePriceEntry>, };
+
+export type OfflinePriceCatalogSnapshot = { price_revision: DecimalInt, catalog: OfflinePriceCatalog | null, };
+
 export type PriceRule = { rule_id: string, introduced_revision: DecimalInt, retired_revision: DecimalInt | null, provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin: PriceOrigin, origin_reference: string | null, created_at_ms: EpochMs, };
 
 export type PriceRuleDraft = { provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin_reference: string | null, };

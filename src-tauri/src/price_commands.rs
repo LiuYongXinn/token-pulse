@@ -45,6 +45,30 @@ async fn blocking<T: Send + 'static>(
 }
 
 #[tauri::command]
+pub async fn get_offline_price_catalog(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    revision: Option<String>,
+    request_id: String,
+) -> Result<
+    PrivateResponse<token_pulse_core::pricing::offline::OfflinePriceCatalogSnapshot>,
+    Box<AppError>,
+> {
+    authorized(&window, &request_id)?;
+    let requested = revision
+        .as_deref()
+        .map(|v| self::revision(v, &request_id))
+        .transpose()?;
+    let db = database(&state, &request_id)?;
+    let snapshot = blocking(&request_id, move || db.offline_price_catalog_at(requested)).await?;
+    Ok(PrivateResponse::new(
+        request_id,
+        snapshot,
+        state.privacy.clone(),
+    ))
+}
+
+#[tauri::command]
 pub async fn get_price_rules(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,

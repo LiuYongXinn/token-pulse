@@ -1,0 +1,18 @@
+.offline-prices { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 20px; min-width: 0; }
+.offline-explanation { font-size: 12px; line-height: 1.7; color: var(--muted); }
+.offline-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 14px 0; }
+.offline-filters label { display: grid; gap: 6px; font-size: 12px; }
+.offline-filters input { width: min(260px, 55vw); }
+.offline-filters > span { padding-bottom: 9px; }
+.offline-table-wrap { max-height: 390px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.offline-price-table { width: 100%; min-width: 630px; border-collapse: collapse; font-size: 12px; }
+.offline-price-table caption { padding: 10px; color: var(--muted); text-align: left; }
+.offline-price-table th { text-align: left; font-weight: 500; color: var(--muted); background: var(--panel); }
+.offline-price-table td, .offline-price-table th { padding: 11px 10px; border-bottom: 1px solid var(--line); }
+.offline-price-table td:not(:first-child) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.offline-price-table td:first-child { min-width: 180px; }
+.offline-price-table td:last-child { min-width: 100px; white-space: normal; }
+.offline-price-table strong, .offline-price-table small { display: block; }
+.offline-price-table small { color: var(--muted); margin-top: 5px; }
+.offline-price-table a { color: var(--link); font-size: 11px; text-decoration: none; display: inline-block; margin-top: 5px; }
+.offline-price-table a:hover { text-decoration: underline; }

@@ -35,6 +35,7 @@
     "allow-cancel-job",
     "allow-get-context-snapshot",
     "allow-get-price-rules",
+    "allow-get-offline-price-catalog",
     "allow-save-price-rule",
     "allow-mutate-model-alias",
     "allow-retire-price-rule",

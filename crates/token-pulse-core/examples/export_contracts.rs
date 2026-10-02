@@ -5,6 +5,7 @@ use token_pulse_core::calendar::{
 };
 use token_pulse_core::jobs::*;
 use token_pulse_core::mini::*;
+use token_pulse_core::pricing::offline::*;
 use token_pulse_core::pricing::{
     ModelAlias, ModelAliasDraft, ModelAliasMutation, PriceChanged, PriceOrigin, PriceOutcome,
     PriceRule, PriceRuleDraft, PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
@@ -151,6 +152,12 @@ fn main() {
         UnpricedReason,
         PricingSummary,
         PriceOrigin,
+        OfflinePriceTier,
+        OfflineContextBand,
+        OfflineReferenceBasis,
+        OfflinePriceEntry,
+        OfflinePriceCatalog,
+        OfflinePriceCatalogSnapshot,
         PriceRule,
         PriceRuleDraft,
         ModelAliasDraft,

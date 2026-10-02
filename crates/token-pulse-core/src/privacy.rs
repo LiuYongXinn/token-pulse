@@ -338,6 +338,11 @@ impl PrivacyRedact for crate::pricing::PriceRulesSnapshot {
         self.aliases.clear();
     }
 }
+impl PrivacyRedact for crate::pricing::offline::OfflinePriceCatalogSnapshot {
+    fn redact(&mut self) {
+        self.catalog = None;
+    }
+}
 impl PrivacyRedact for ContextSnapshot {
     fn redact(&mut self) {}
 }

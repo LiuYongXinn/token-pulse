@@ -17,6 +17,7 @@ test.beforeEach(async ({ page }) => {
       const current = () => ({ price_revision: String(revision), rules: structuredClone(rules), aliases: structuredClone(aliases) });
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
+      if (command === 'get_offline_price_catalog') return response({ price_revision: args.revision ?? String(revision), catalog: null });
       if (command === 'get_price_rules') {
         if (args.revision === null) return response(current());
         const value = Number(args.revision); if (!history.has(value)) throw { code: 'INVALID_QUERY' };
