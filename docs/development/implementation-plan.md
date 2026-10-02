@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15a1 已开始 notify：纯领域载荷读取只保留 thread-id / nullable turn-id，剔除正文 / cwd / 认证、限制输入与标识、必要字段重复 / 错误拒绝、未知事件无提示，不创建消费 / 费用。新增合成 5 项及 core strict Clippy / fmt / 契约漂移检查通过；配置保真编辑 / 原 notify 保留与撤销、headless / 唤醒通道和正式 UI 接下来继续。真实用户配置没有改变。详见[交付记录](delivery-status.md#m15a1notify-载荷的纯领域读取边界)。
+
 M13e7 已补真实任务栏输入：显式 wire 的独立非空前台 / 失活计数，实际 300 ms hover 打开详情及普通刷新不抢焦点、真实单击 / 双击正确动作、配置 / 隐私清除旧意图与全部原几何恢复。按设计将被动焦点与显式点击开窗分开，拒绝 0→0 假通过；正式宿主实现保持原样。Win10 19045 / 150% DPI 最终退出 0，strict Clippy all-targets / fmt 通过；正式 Tauri 真实点击开窗、其他输入 / Explorer / Win11 / 物理多屏仍继续验收。详见[交付记录](delivery-status.md#m13e7真实任务栏悬停与点击的独立前台验收)。
 
 M11h 已复核综合键盘恢复：原失败时输入桌面访问拒绝 5 / 无前台；增加 debug 只读前置检查及明确分开的自有 WM_HOTKEY 消息专项。用户解锁后真实键盘 / 鼠标、透明度、合成账户、托盘 / 单实例 / 合成电源路由综合全部通过，NATIVE_SMOKE_OK / 退出 0。core 1、store 2、Playwright 5 与 strict Clippy / release check 通过。先前键盘失败为历史结果；新增任务栏 wire 实际单 / 双击动作通过，但最终焦点为空导致退出 101，继续单列排查。详见[交付记录](delivery-status.md#m11h区分输入环境与小窗恢复通路的原生验收)。
