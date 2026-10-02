@@ -12,12 +12,9 @@ use token_pulse_core::{
     protocol::{CoverageState, DateRange, DimensionSelection, UsageFilter},
 };
 use token_pulse_integration::{
-    notify_channel::NotifyCapability,
-    notify_config::{
-        ManagedNotifyCommand,
-        windows::{prepare_enable_file, prepare_restore_file, read_config},
-    },
-    notify_registry::{NotifyRegistration, windows::NotifyRegistry},
+    notify_config::windows::read_config,
+    notify_manager::NotifyManager,
+    notify_registry::{RegistryError, windows::NotifyRegistry},
 };
 use token_pulse_store::{SourceRecord, source_management::SourceMutation};
 
@@ -27,7 +24,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_NOTIFY_COLLECTOR_OK: conditional config install and undo preserving user settings, explicitly retained synthetic original, offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected"
+                "NATIVE_NOTIFY_COLLECTOR_OK: reviewed manager install and undo preserving user settings, registration retirement without orphan markers, explicitly retained synthetic original, offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected"
             ),
             Err(error) => eprintln!("NATIVE_NOTIFY_COLLECTOR_FAILED: {error}"),
         }
@@ -143,12 +140,6 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     )
     .map_err(|_| "fixture metadata")?;
     readonly(&path, true)?;
-    let cap = NotifyCapability::new();
-    let command = ManagedNotifyCommand::new(
-        &std::env::current_exe().map_err(|_| "own exe")?,
-        cap.registration_id(),
-    )
-    .map_err(|_| "owned command")?;
     // Exact prior command is explicit in this synthetic fixture, never silently inserted.
     let original =
         std::path::PathBuf::from(std::env::var_os("SystemRoot").ok_or("system directory")?)
@@ -166,17 +157,24 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         serde_json::to_string(&original).map_err(|_| "original encoding")?
     );
     fs::write(root.join("config.toml"), before.as_bytes()).map_err(|_| "fixture base config")?;
-    let plan = prepare_enable_file(&root, &command).map_err(|_| "notify file plan")?;
-    let registration =
-        NotifyRegistration::from_prepared(&root, cap, plan.restore_record().clone(), true)
-            .map_err(|_| "fixture registration")?;
-    registry
-        .create(&registration)
-        .map_err(|_| "fixture registration save")?;
-    plan.apply()
-        .map_err(|_| "notify conditional installation")?;
+    let mut manager = NotifyManager::new(
+        registry.clone(),
+        std::env::current_exe().map_err(|_| "own exe")?,
+    );
+    let preview = manager
+        .prepare_enable(&root, None)
+        .map_err(|_| "notify enable review")?;
+    if !preview.chain_original || !preview.can_chain_original {
+        return Err("existing original was not retained by default".into());
+    }
+    let enabled = manager
+        .apply(&preview.plan_id)
+        .map_err(|_| "notify manager installation")?;
+    if !enabled.configured || enabled.cleanup_error.is_some() {
+        return Err("notify manager installation state".into());
+    }
     let config = read_config(&root).map_err(|_| "installed config readback")?;
-    let id = registration.capability().registration_id();
+    let id = preview.registration_id.as_str();
     {
         let owner = state.notify.lock().map_err(|_| "notify owner lock")?;
         owner
@@ -315,10 +313,22 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let mut changed = config;
     changed.extend_from_slice(b"new_key='user-kept'\r\n");
     fs::write(root.join("config.toml"), &changed).map_err(|_| "fixture unrelated user edit")?;
-    prepare_restore_file(&root, plan.restore_record())
-        .map_err(|_| "notify undo plan")?
-        .apply()
-        .map_err(|_| "notify conditional undo")?;
+    let undo = manager
+        .prepare_disable(id)
+        .map_err(|_| "notify undo review")?;
+    let disabled = manager
+        .apply(&undo.plan_id)
+        .map_err(|_| "notify manager undo")?;
+    if disabled.configured
+        || disabled.cleanup_error.is_some()
+        || !matches!(registry.get(id), Err(RegistryError::NotFound))
+        || !manager
+            .registrations()
+            .map_err(|_| "notify remaining registrations")?
+            .is_empty()
+    {
+        return Err("notify manager retirement state".into());
+    }
     let expected = format!("{before}new_key='user-kept'\r\n");
     if read_config(&root).map_err(|_| "restored config readback")? != expected.as_bytes() {
         return Err("notify undo overwrote user setting".into());

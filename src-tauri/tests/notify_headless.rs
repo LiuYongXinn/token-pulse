@@ -132,6 +132,26 @@ fn production_executable_notifies_online_without_gui_or_source_writes() {
     drop(listener);
 }
 #[test]
+fn retired_cached_notification_is_ignored_without_gui_or_orphan_marker() {
+    let mut scene = Scene::new(&executable(), false);
+    scene.installed = b"notify=['original.exe'] # original\r\nmodel='leave alone'\r\n".to_vec();
+    std::fs::write(scene.home.path().join("config.toml"), &scene.installed).unwrap();
+    scene
+        .registry
+        .retire(scene.registration.capability())
+        .unwrap();
+    let output = scene.invoke(&[]);
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    assert!(
+        !scene
+            .registry
+            .has_pending(scene.registration.capability().registration_id())
+            .unwrap()
+    );
+    scene.require_no_gui_initialization_or_source_write();
+}
+#[test]
 fn production_executable_coalesces_offline_notifications() {
     let scene = Scene::new(&executable(), false);
     assert!(scene.invoke(&[]).status.success());

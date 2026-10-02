@@ -25,12 +25,13 @@ use windows_sys::Win32::{
         TOKEN_QUERY, TOKEN_USER, TokenUser,
     },
     Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateDirectoryW, CreateFileW, FILE_ALL_ACCESS,
-        FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ,
-        FILE_GENERIC_WRITE, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, GetFileInformationByHandle, MOVEFILE_WRITE_THROUGH, MoveFileExW,
-        OPEN_ALWAYS, OPEN_EXISTING, READ_CONTROL,
+        BY_HANDLE_FILE_INFORMATION, CREATE_NEW, CreateDirectoryW, CreateFileW, DELETE,
+        FILE_ALL_ACCESS, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_READ_ATTRIBUTES,
+        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FileDispositionInfo,
+        GetFileInformationByHandle, MOVEFILE_WRITE_THROUGH, MoveFileExW, OPEN_ALWAYS,
+        OPEN_EXISTING, READ_CONTROL, SetFileInformationByHandle,
     },
     System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
@@ -204,6 +205,43 @@ pub(super) fn open_verified(path: &Path, directory: bool) -> Result<File, Regist
 }
 pub(super) fn open_marker(path: &Path) -> Result<File, RegistryError> {
     open_verified_with_sharing(path, false, true)
+}
+pub(super) fn open_for_delete(path: &Path) -> Result<File, RegistryError> {
+    let path = wide(path)?;
+    unsafe {
+        let raw = CreateFileW(
+            path.as_ptr(),
+            FILE_GENERIC_READ | DELETE,
+            FILE_SHARE_READ,
+            ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT,
+            ptr::null_mut(),
+        );
+        if raw == INVALID_HANDLE_VALUE {
+            return Err(last());
+        }
+        let file = File::from_raw_handle(raw.cast());
+        verify_handle(&file, false)?;
+        Ok(file)
+    }
+}
+/// Delete only the verified object behind this owned handle, never a later path substitute.
+pub(super) fn delete_owned(file: File) -> Result<(), RegistryError> {
+    unsafe {
+        let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+        if SetFileInformationByHandle(
+            file.as_raw_handle().cast(),
+            FileDispositionInfo,
+            (&info as *const FILE_DISPOSITION_INFO).cast(),
+            mem::size_of_val(&info) as u32,
+        ) == 0
+        {
+            return Err(last());
+        }
+    }
+    drop(file);
+    Ok(())
 }
 fn open_verified_with_sharing(
     path: &Path,

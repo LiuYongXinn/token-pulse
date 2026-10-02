@@ -4,10 +4,17 @@ use super::{
     MAX_REGISTRATION_BYTES, MAX_REGISTRATIONS, NotifyRegistration, RegistryError,
     local_absolute_path, valid_registration_id,
 };
-use crate::notify_channel::NotifyCapability;
+use crate::{
+    notify_channel::NotifyCapability,
+    notify_config::{
+        owns_current_notify,
+        windows::{ConfigFileError, lock_current_config},
+    },
+};
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 /// Only this dedicated child directory is written, with a current-user protected owner and DACL.
@@ -31,6 +38,18 @@ impl NotifyRegistry {
     fn check_root(&self) -> Result<(), RegistryError> {
         files::open_verified(&self.root, true).map(|_| ())
     }
+    fn mutation_guard(&self) -> Result<std::fs::File, RegistryError> {
+        self.check_root()?;
+        let until = Instant::now() + Duration::from_millis(250);
+        loop {
+            match files::allocation_guard(&self.root.join(".registry.lock")) {
+                Err(RegistryError::Io) if Instant::now() < until => {
+                    std::thread::sleep(Duration::from_millis(2))
+                }
+                result => return result,
+            }
+        }
+    }
     fn named(&self, id: &str, suffix: &str) -> Result<PathBuf, RegistryError> {
         if !valid_registration_id(id) {
             return Err(RegistryError::InvalidRecord);
@@ -41,7 +60,7 @@ impl NotifyRegistry {
     pub fn create(&self, registration: &NotifyRegistration) -> Result<(), RegistryError> {
         self.check_root()?;
         // Deny sharing while allocating a registration, so separate processes cannot exceed the limit.
-        let _guard = files::allocation_guard(&self.root.join(".registry.lock"))?;
+        let _guard = self.mutation_guard()?;
         if self.registration_ids()?.len() >= MAX_REGISTRATIONS {
             return Err(RegistryError::LimitReached);
         }
@@ -127,6 +146,7 @@ impl NotifyRegistry {
         &self,
         capability: &NotifyCapability,
     ) -> Result<MarkDisposition, RegistryError> {
+        let _guard = self.mutation_guard()?;
         let registered = self.get(capability.registration_id())?;
         if !registered.capability().matches(capability) {
             return Err(RegistryError::Unauthorized);
@@ -146,13 +166,14 @@ impl NotifyRegistry {
     }
     /// Rename before acknowledging, so completion cannot remove a newly arrived wake marker.
     pub fn claim_pending(&self, id: &str) -> Result<Option<PendingWake>, RegistryError> {
+        let _guard = self.mutation_guard()?;
         let pending = self.named(id, ".wake")?;
         match require_marker(&pending) {
             Ok(()) => {}
             Err(RegistryError::NotFound) => return Ok(None),
             Err(error) => return Err(error),
         }
-        self.get(id)?;
+        let capability = self.get(id)?.capability().clone();
         let claimed = self
             .root
             .join(format!("{id}.claim.{}", uuid::Uuid::new_v4().simple()));
@@ -162,6 +183,7 @@ impl NotifyRegistry {
                 pending,
                 claimed,
                 completed: false,
+                capability,
             })),
             Err(RegistryError::NotFound) => Ok(None),
             Err(error) => Err(error),
@@ -180,6 +202,7 @@ impl NotifyRegistry {
     }
     /// Called only by the single service owner on startup, never by headless marker writers.
     pub(crate) fn recover_claims(&self) -> Result<(), RegistryError> {
+        let _guard = self.mutation_guard()?;
         self.check_root()?;
         for (count, entry) in std::fs::read_dir(&self.root)
             .map_err(|_| RegistryError::Io)?
@@ -214,7 +237,105 @@ impl NotifyRegistry {
         }
         Ok(())
     }
+    /// Retire only when the latest config is known not to contain this exact managed command.
+    /// Keep config/missing-name and private file guards until all controlled removals complete.
+    pub fn retire(&self, capability: &NotifyCapability) -> Result<RetireDisposition, RetireError> {
+        let _guard = self.mutation_guard()?;
+        let id = capability.registration_id();
+        let record = match self.get(id) {
+            Ok(record) => record,
+            Err(RegistryError::NotFound) => return Ok(RetireDisposition::AlreadyAbsent),
+            Err(error) => return Err(error.into()),
+        };
+        if !record.capability().matches(capability) {
+            return Err(RegistryError::Unauthorized.into());
+        }
+        let config = lock_current_config(record.codex_home()).map_err(RetireError::Config)?;
+        if let Some(bytes) = config.bytes() {
+            if owns_current_notify(bytes, record.restore_record())
+                .map_err(|error| RetireError::Config(error.into()))?
+            {
+                return Err(RetireError::ActiveConfiguration);
+            }
+        }
+        let mut markers = Vec::new();
+        for (count, entry) in std::fs::read_dir(&self.root)
+            .map_err(|_| RegistryError::Io)?
+            .enumerate()
+        {
+            if count >= 128 {
+                return Err(RegistryError::LimitReached.into());
+            }
+            let entry = entry.map_err(|_| RegistryError::Io)?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let claim = name.strip_prefix(&format!("{id}.claim."));
+            if name != format!("{id}.wake") && claim.is_none() {
+                continue;
+            }
+            if claim.is_some_and(|suffix| !valid_registration_id(suffix)) {
+                return Err(RegistryError::InvalidMarker.into());
+            }
+            let file = files::open_for_delete(&entry.path())?;
+            if file.metadata().map_err(|_| RegistryError::Io)?.len() != 0 {
+                return Err(RegistryError::InvalidMarker.into());
+            }
+            markers.push(file);
+        }
+        let mut registered = files::open_for_delete(&self.named(id, ".registration.json")?)?;
+        if registered.metadata().map_err(|_| RegistryError::Io)?.len()
+            > MAX_REGISTRATION_BYTES as u64
+        {
+            return Err(RegistryError::TooLarge.into());
+        }
+        let mut bytes = Vec::new();
+        (&mut registered)
+            .take(MAX_REGISTRATION_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| RegistryError::Io)?;
+        let current: NotifyRegistration =
+            serde_json::from_slice(&bytes).map_err(|_| RegistryError::InvalidRecord)?;
+        if serde_json::to_vec(&current).map_err(|_| RegistryError::InvalidRecord)?
+            != serde_json::to_vec(&record).map_err(|_| RegistryError::InvalidRecord)?
+        {
+            return Err(RegistryError::Unauthorized.into());
+        }
+        for file in markers {
+            files::delete_owned(file)?;
+        }
+        files::delete_owned(registered)?;
+        Ok(RetireDisposition::Retired)
+    }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RetireDisposition {
+    Retired,
+    AlreadyAbsent,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RetireError {
+    Registry(RegistryError),
+    Config(ConfigFileError),
+    ActiveConfiguration,
+}
+impl From<RegistryError> for RetireError {
+    fn from(error: RegistryError) -> Self {
+        Self::Registry(error)
+    }
+}
+impl std::fmt::Display for RetireError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Registry(error) => error.fmt(f),
+            Self::Config(error) => error.fmt(f),
+            Self::ActiveConfiguration => f.write_str("notify_registration_still_active"),
+        }
+    }
+}
+impl std::error::Error for RetireError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MarkDisposition {
@@ -227,10 +348,19 @@ pub struct PendingWake {
     pending: PathBuf,
     claimed: PathBuf,
     completed: bool,
+    capability: NotifyCapability,
 }
 impl PendingWake {
     pub fn complete(mut self) -> Result<(), RegistryError> {
+        let _guard = self.registry.mutation_guard()?;
         self.registry.check_root()?;
+        if matches!(
+            self.registry.get(self.capability.registration_id()),
+            Err(RegistryError::NotFound)
+        ) {
+            self.completed = true;
+            return Ok(());
+        }
         require_marker(&self.claimed)?;
         std::fs::remove_file(&self.claimed).map_err(|_| RegistryError::Io)?;
         self.completed = true;
@@ -239,7 +369,26 @@ impl PendingWake {
 }
 impl Drop for PendingWake {
     fn drop(&mut self) {
-        if !self.completed
+        if self.completed {
+            return;
+        }
+        let Ok(_guard) = self.registry.mutation_guard() else {
+            return;
+        };
+        let current = self.registry.get(self.capability.registration_id());
+        if matches!(current, Err(RegistryError::NotFound))
+            || current
+                .as_ref()
+                .is_ok_and(|record| !record.capability().matches(&self.capability))
+        {
+            if let Ok(file) = files::open_for_delete(&self.claimed) {
+                if file.metadata().is_ok_and(|metadata| metadata.len() == 0) {
+                    let _ = files::delete_owned(file);
+                }
+            }
+            return;
+        }
+        if current.is_ok()
             && self.registry.check_root().is_ok()
             && require_marker(&self.claimed).is_ok()
         {

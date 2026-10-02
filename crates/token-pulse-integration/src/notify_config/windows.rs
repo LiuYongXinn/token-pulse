@@ -87,7 +87,7 @@ impl ConfigFilePlan {
     pub fn apply(&self) -> Result<(), ConfigFileError> {
         self.stage()?.commit()
     }
-    fn stage(&self) -> Result<StagedWrite, ConfigFileError> {
+    pub(crate) fn stage(&self) -> Result<StagedWrite, ConfigFileError> {
         let root = open_home(&self.home)?;
         if information(&root)?.0 != self.home_identity {
             return Err(ConfigError::StalePlan.into());
@@ -123,12 +123,12 @@ impl ConfigFilePlan {
         })
     }
 }
-struct StagedWrite {
+pub(crate) struct StagedWrite {
     transaction: transaction::Transaction,
     _root: File,
 }
 impl StagedWrite {
-    fn commit(self) -> Result<(), ConfigFileError> {
+    pub(crate) fn commit(self) -> Result<(), ConfigFileError> {
         self.transaction.commit()
     }
 }
@@ -191,11 +191,42 @@ pub fn read_config(home: &Path) -> Result<Vec<u8>, ConfigError> {
         .bytes
         .ok_or(ConfigError::InvalidToml)
 }
+pub(crate) fn read_optional_config(home: &Path) -> Result<Option<Vec<u8>>, ConfigFileError> {
+    Ok(snapshot(home)?.bytes)
+}
 struct Snapshot {
     home: PathBuf,
     home_identity: Identity,
     file_identity: Option<Identity>,
     bytes: Option<Vec<u8>>,
+    _root: File,
+    _canonical_root: File,
+    _file: Option<File>,
+}
+/// Holds the actual config against writes/rename while application-owned metadata is retired.
+/// A missing filename is reserved in an uncommitted transaction and remains absent on release.
+pub(crate) struct ConfigReadLease {
+    snapshot: Snapshot,
+    _missing: Option<transaction::Transaction>,
+}
+impl ConfigReadLease {
+    pub(crate) fn bytes(&self) -> Option<&[u8]> {
+        self.snapshot.bytes.as_deref()
+    }
+}
+pub(crate) fn lock_current_config(home: &Path) -> Result<ConfigReadLease, ConfigFileError> {
+    let snapshot = snapshot(home)?;
+    let missing = if snapshot.bytes.is_none() {
+        let transaction = transaction::Transaction::begin()?;
+        drop(transaction.open_config(&snapshot.home.join("config.toml"), true)?);
+        Some(transaction)
+    } else {
+        None
+    };
+    Ok(ConfigReadLease {
+        snapshot,
+        _missing: missing,
+    })
 }
 fn snapshot(home: &Path) -> Result<Snapshot, ConfigFileError> {
     let root = open_home(home)?;
@@ -225,6 +256,9 @@ fn snapshot(home: &Path) -> Result<Snapshot, ConfigFileError> {
                 home_identity,
                 file_identity: None,
                 bytes: None,
+                _root: root,
+                _canonical_root: canonical_root,
+                _file: None,
             }),
             _ => Err(transaction::io_error(error)),
         };
@@ -238,6 +272,9 @@ fn snapshot(home: &Path) -> Result<Snapshot, ConfigFileError> {
         home_identity,
         file_identity: Some(file_identity),
         bytes: Some(bytes),
+        _root: root,
+        _canonical_root: canonical_root,
+        _file: Some(file),
     })
 }
 fn local_path(path: &Path) -> bool {

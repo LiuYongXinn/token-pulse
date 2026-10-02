@@ -109,7 +109,16 @@ pub mod windows {
                 original: None,
             });
         }
-        let registered = registry.get(invocation.registration_id())?;
+        let registered = match registry.get(invocation.registration_id()) {
+            Ok(record) => record,
+            Err(RegistryError::NotFound) => {
+                return Ok(DispatchOutcome {
+                    wake: Ok(WakeOutcome::Ignored),
+                    original: None,
+                });
+            }
+            Err(error) => return Err(error),
+        };
         if Path::new(&registered.restore_record().installed_arguments()[0]) != current_executable {
             return Err(RegistryError::Unauthorized);
         }
@@ -144,7 +153,11 @@ pub mod windows {
         let Some(hint) = invocation.hint() else {
             return Ok(WakeOutcome::Ignored);
         };
-        let registered = registry.get(invocation.registration_id())?;
+        let registered = match registry.get(invocation.registration_id()) {
+            Ok(record) => record,
+            Err(RegistryError::NotFound) => return Ok(WakeOutcome::Ignored),
+            Err(error) => return Err(error),
+        };
         if Path::new(&registered.restore_record().installed_arguments()[0]) != current_executable {
             return Err(RegistryError::Unauthorized);
         }
@@ -157,10 +170,11 @@ pub mod windows {
         }
         match send_hint(registered.capability(), hint).await {
             Ok(()) => Ok(WakeOutcome::Delivered),
-            Err(_) => {
-                registry.mark_pending(registered.capability())?;
-                Ok(WakeOutcome::Pending)
-            }
+            Err(_) => match registry.mark_pending(registered.capability()) {
+                Ok(_) => Ok(WakeOutcome::Pending),
+                Err(RegistryError::NotFound) => Ok(WakeOutcome::Ignored),
+                Err(error) => Err(error),
+            },
         }
     }
 }
