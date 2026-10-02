@@ -1,6 +1,6 @@
 # 本地开发与运行
 
-当前最新完整安装包为 M16f：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,619,447 字节，SHA-256 `20491ccdb3dce83219f536125f82ea767bdea62619ddb06e2190eb8d55ff3270`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置恢复。下面 M16e 及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新和 Win11 / 物理多屏验收仍需外部条件。
+当前最新完整安装包为 M16g：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,623,768 字节，SHA-256 `65a53f0b0181762cdd8ee58cbed6bceb4ea115c8b7756758f687cd4497009c4e`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置 / 工作区尺寸适配及任务栏 Tab 修复。下面 M16f / M16e 及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新和 Win11 / 物理多屏验收仍需外部条件；同 DPI 显示器切换检测还需补齐。
 
 ## 主窗口位置冷启动验收
 
