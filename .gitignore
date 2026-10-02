@@ -24,5 +24,6 @@ Desktop.ini
 # Rust and desktop generated output
 target/
 src-tauri/gen/
+src-tauri/binaries/
 playwright-report/
 test-results/

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "pwsh -NoProfile -File scripts/prepare-desktop.ps1"
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": ["binaries/token-pulse-taskbar-host"],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": false },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

@@ -1,5 +1,17 @@
 # 本地开发与运行
 
+## 简单 Windows 安装包
+
+根目录运行 `npm run tauri:build`，加载 `src-tauri/tauri.bundle.conf.json`，编译前端 / 原生宿主并生成唯一 NSIS currentUser 安装包。默认 x64 文件 `target/release/bundle/nsis/TokenPulse_<version>_x64-setup.exe`。不要用裸 `npx tauri build` 代替此正式入口；基础配置不要求 externalBin，保持新检出后的普通 Cargo 验证可运行，开发数据隔离不变。
+
+prepare 使用 TAURI_ENV_TARGET_TRIPLE / TAURI_ENV_DEBUG，默认本机 target / release；通过 cargo metadata 读取真实 target_directory，尊重 CARGO_TARGET_DIR。只接受 Windows MSVC 目标，目标工具链须已安装。本次实际验收仅 x64，不将 aarch64 配置支持记为系统检查。
+
+`pwsh -NoProfile -File scripts/verify-installer.ps1` 要求无正式安装、生产数据和应用进程，发现既有内容即拒绝。脚本安装至 UUID 临时目录，核对注册 / 文件、真实前端 UIA / SQLite、隐藏 / 单实例、托盘小窗 / 正常退出、冷启动和普通卸载。数据库保留，不递归清理 AppData；重复完整验收应使用另一个干净 Windows 测试用户 / 环境，不得为了重跑删除数据。
+
+显式 `-OwnTrayCommands` 是桌面无法弹出菜单时的缩减验收：锁定 muda 版本与源码三项菜单创建顺序，只投递该进程自有托盘窗口有限命令。它不证明可见菜单或物理输入；默认场景要求真实标准菜单文本与 ID。映射变化时拒绝，不试探任意 ID。
+
+Win10 19045 / 150% 已实际安装 / 独立运行。初轮验收脚本修正后分步完成缩减托盘命令、小窗、两个退出码 0 的冷启动及正常卸载，数据库字节不变；没有在另一个干净配置一次重跑最终脚本。WebView2 缺失场景、可见菜单、Win11 和签名更新分开待验收，当前产物未签名。细节见[交付记录](delivery-status.md#m16a单渠道-windows-安装包与实际独立启动)。
+
 M15a7：`npx playwright test tests/ui/notify.spec.ts tests/ui/sources.spec.ts tests/ui/account-service.spec.ts --workers=1` 共 8 项（新增通知 3）通过；`npm run test -- ui/src/shared/runtime.test.ts ui/src/shared/privacy-runtime.test.ts` 共 7 项（新增错误说明 1）通过。TS / 生产构建、desktop all-targets strict Clippy / release check、fmt / diff 通过。`test-results/notify-dark-preview.png`（1280）与 `notify-light-preview.png`（960）已查看，属于明确合成测试画面，不是产品演示数据；构建后的 Win10 `native-smoke.ps1 -Notify` 通过实际设置按钮启用 / 停用、IPC / 隐私 / mini 权限及正式采集 3→10→11，退出 0，WebView2 1412 提示仍记录。系统 Home 选择器已接入口但未实际交互验收，真实用户 Home 没有修改，无性能测试。详见[交付记录](delivery-status.md#m15a7正式-notify-设置与差异确认)。
 
 M15a6 定向：`cargo test -p token-pulse-core --test notify_integration` 新增 3 项；`cargo test -p token-pulse-desktop --lib notify_commands::tests` 新增 2 项；`npm run test -- ui/src/shared/contracts.test.ts` 共 11 项（新增 notify schema 1 项）。既有隐私 5 / manager 6 回归、TS / 契约漂移、core / integration / desktop all-targets strict Clippy（integration/test-fixture）、desktop release check、fmt / diff 通过。`pwsh -NoProfile -File scripts/native-smoke.ps1 -Notify` 输出 NATIVE_NOTIFY_IPC_OK 和 NATIVE_NOTIFY_COLLECTOR_OK / 退出 0：实际主 WebView 五命令 / 私有路径隐藏 / 写门禁 / 旧预览失效 / 条件启用撤销 / active 退休拒绝 / mini 权限和原采集 3→10→11。WebView2 1412 继续单列，Home 为隔离合成目录、无性能测试。系统选择器只接入 backend，尚未交互验收；正式设置 UI 待接。详见[交付记录](delivery-status.md#m15a6主窗口-notify-ipc与共享隐私门禁)。

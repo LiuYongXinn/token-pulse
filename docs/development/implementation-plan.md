@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M16a（2026-10-03）：唯一 NSIS currentUser 正式打包入口、同目标任务栏 externalBin 和 WebView2 检测已接入，首个完整 release 安装包构建成功。Win10 19045 / 150% 实际安装、嵌入前端 UIA 总览、正式 SQLite、关闭隐藏 / 单实例通过；菜单受桌面条件限制，显式自有命令场景验证小窗和正常退出，两个冷启动退出码 0，普通卸载保留数据库字节。验收脚本初轮修正后分步恢复，最终版本未在另一干净配置一次重跑；不声称真实菜单 / WebView2 缺失 / Win11 通过。签名自动更新与发布声明继续 M16，当前本地安装包未签名。见[交付记录](delivery-status.md#m16a单渠道-windows-安装包与实际独立启动) / [运行入口](local-development.md#简单-windows-安装包)，不恢复取消范围，无性能测试。
+
 M15a7（2026-10-03）通知正式设置 UI 已接真实 DTO：来源 / Home 选择、默认保留原命令、前后差异与确认、保真停用、清理失败独立提示 / 重试、关闭 / 过期 / 隐私 / 离页草稿释放和迟到响应拒绝。既有来源路径按当前隐私即时隐藏。新增通知 Playwright 3 / 错误说明 unit 1 项通过，相关 UI 共 8 / runtime 与 privacy 共 7、TS / 生产构建、desktop strict Clippy / release check / fmt / diff 通过。深色 1280 / 浅色 960 预览截图已查看；正式 Win10 `-Notify` 实际设置按钮完成启用 / 停用，五命令与采集 3→10→11 回归通过，退出 0，1412 提示仍保留。notify UI 待办按此收敛，系统目录选择实际交互、真实 Codex 回合、Win11 / provider 限制继续明确；其他保留功能仍继续交付，无性能测试。详见[交付记录](delivery-status.md#m15a7正式-notify-设置与差异确认)。
 
 M15a6（2026-10-03）已接主窗口 notify 五项 IPC、DTO / schema / TS 和受限 capability，Home 只来自登记本地来源或后台系统选择器；不接受前端路径 / 命令 / capability。最新共享隐私序列化和配置操作门禁、数据库 / 显示修订绑定旧预览拒绝、有限错误 / 清理结果与 null 状态就绪。新增 core 3 / app 2 / schema 1 项通过；隐私 5 / manager 6、schema 共 11、TS / 契约漂移、三个包 strict Clippy / release check / fmt / diff 通过。实际 Win10 `-Notify` 已通过 main WebView 五命令 / 隐私 / 失效预览 / active 拒绝 / enable / undo / mini 权限及采集 3→10→11，退出 0、1412 提示仍记录。正式设置 UI / 系统目录选择交互和真实 Codex 回合继续；不改真实 Home、无性能测试。详见[交付记录](delivery-status.md#m15a6主窗口-notify-ipc与共享隐私门禁)。

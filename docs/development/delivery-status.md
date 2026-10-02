@@ -2,6 +2,20 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16a：单渠道 Windows 安装包与实际独立启动
+
+正式入口 `npm run tauri:build` 加载独立 bundle overlay；普通 Cargo 验证不要求生成宿主。beforeBuild 编译前端及同目标 / profile 的任务栏宿主，通过 cargo metadata 定位真实 target_directory，复制带 target triple 的 externalBin 并检查 SHA-256。NSIS currentUser 安装主程序、嵌入前端及同目录 `token-pulse-taskbar-host.exe`；只有一个安装渠道，不依赖 IDE、开发服务器或对话工具。中文 / 英文随系统选择，不增加语言选择页。WebView2 已存在时直接使用，缺失时下载 Microsoft bootstrapper 并展示安装交互；配置与生成 NSIS 检测脚本均核对。依据：[Windows installer](https://v2.tauri.app/distribute/windows-installer/) / [externalBin](https://v2.tauri.app/develop/sidecar/)。
+
+构建：TS / Vite、release 宿主和 Tauri 完整代码生成、NSIS helper 下载哈希验证及打包通过。首个产物 `target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe`，5,472,699 字节（约 5.22 MiB）；最终 prepare 脚本重跑及验收脚本解析 / diff 检查通过，无性能测试。
+
+实际 Win10 19045 / 150%：无既有正式安装 / 数据，安装到 UUID 临时目录，HKCU 版本 / 位置和三个安装文件正确。宿主 SHA-256 相同；主程序独立字节比较仅有固定 `__TAURI_BUNDLE_TYPE_VAR_UNK` 到 `NSS` 的三字节差异，其他字节完全相同。Tauri 在打包后恢复未补丁构建输出，故不能直接比较其原始哈希，也不能放宽为任意差异：[官方 bundle 源码](https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle.rs)。
+
+安装版创建正式 SQLite，UIA 在自有 PID 主窗找到嵌入前端“总览”；关闭主窗保留进程，第二次启动唤回原窗。可见托盘菜单未弹出，因此显式 OwnTrayCommands 缩减场景核对锁定版本 / 源码顺序后投递自有 HWND 有限命令：实际小窗创建及正常退出通过，后续两个完整冷启动取得真实退出码 0。修正了共享文件读取、托盘初始化等待及进程退出状态句柄保持；初轮失败后分步恢复验证，未宣称最终脚本在干净配置一次完整通过，不冒充真实菜单点击。
+
+正常卸载移除应用 / 宿主及卸载注册，正式数据库 SHA-256 不变，最后 COLD_MINI_EXIT_OK / UNINSTALL_OK / SEQUENCE_OK、退出 0。NSIS 默认保留的产品安装位置注册及新建正式数据仍保留；没有删除 AppData、覆盖开发数据或混入用户未提交内容。可复用入口和干净环境要求见[本地开发](local-development.md#简单-windows-安装包)。
+
+本机已有 WebView2，缺失运行时实际安装、可见菜单 / 物理点击、Win11、签名更新与第三方声明仍待交付。当前安装包未签名。同期重跑物理 taskbar wire 仍被全屏 Windows.UI.Core.CoreWindow 覆盖，发送输入前拒绝并退出 1，不计通过，不阻塞可实现部分。
+
 ## 当前交付状态（2026-10-03，M15a7 / M15a6 / M15a5 / M15a4 / M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
 
 M13f1 已通过当前真实账户到正式独立原生任务栏的第三入口：两个实际应用进程冷启动、真实 DTO 到可见读数 / 详情全文、三入口共享隐私、仅任务栏可见时普通后台新读取及原生成功时间更新、停用原几何恢复、退出拥有的宿主结束，最终 native 场景退出 0。默认 / 真实 / 真实任务栏入口分开，新增 scene 门禁、details 8 / wire 13 / scene 3 及 strict Clippy / release / fmt / diff 通过。过程未保存实际额度 / 身份、未发起登录 / 模型回合 / 性能测试，1412 保留。自有 WM_SETFOCUS 不冒充物理输入，真实通知 / 切换 / 过期 / 重置、Explorer / Win11 / 物理兼容及安装更新继续。详见[账户第三入口验证](account-quota-verification.md)。
