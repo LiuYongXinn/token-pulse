@@ -22,6 +22,20 @@ impl WindowPlacement {
         Ok(())
     }
 }
+
+/// Main-window location is independent of the floating display's scope and interaction state.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MainWindowPreferences {
+    pub placement: Option<WindowPlacement>,
+}
+impl MainWindowPreferences {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        self.placement
+            .as_ref()
+            .map_or(Ok(()), WindowPlacement::validate)
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MiniWindowPreferences {

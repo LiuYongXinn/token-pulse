@@ -1,4 +1,5 @@
 //! A single Writer publishes configuration and its revision atomically.
+mod main_window;
 mod opacity;
 mod passthrough;
 mod quota;
@@ -53,6 +54,10 @@ pub(crate) fn read_stored(
                             token_pulse_core::shortcuts::RecoveryShortcut,
                         >(field.clone())
                         .is_ok_and(|key| key.virtual_key().is_ok()),
+                        "main_window" => serde_json::from_value::<
+                            token_pulse_core::placement::MainWindowPreferences,
+                        >(field.clone())
+                        .is_ok_and(|value| value.validate().is_ok()),
                         "mini_window" => serde_json::from_value::<
                             token_pulse_core::placement::MiniWindowPreferences,
                         >(field.clone())

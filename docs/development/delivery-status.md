@@ -2,6 +2,12 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M15f1：独立主窗口位置持久契约
+
+核对实际代码后确认原有位置恢复仅覆盖 mini，主窗口尚未实现。新增内部 MainWindowPreferences 与 SQLite settings.main_window 字段，缺省 placement=None；重用已校验的 monitor / 工作区相对 DIP 坐标。读取及写入不接受未知字段、非有限坐标或未来配置版本，不写默认覆盖坏记录。Writer 仅修改最新 payload 的 main_window 并与全局修订原子提交，保留小窗、显示、账户与其他设置；同值无修订变化。没有新增 IPC / renderer 路径或几何能力、数据表或迁移保护工作。
+
+三项独立存储预期通过：未保存 null、保存 / 同值 / 精确修订 / reopen、小窗和显示偏好保持；revision Writer 故障保留原配置；坏字段 / 未来版本读取和修改均拒绝且原 payload 不变。现有工作区坐标两项与小窗存储两项回归、store lib / tests strict Clippy 通过，fmt / diff 随提交复核。仅合成临时库，无真实日志 / 账户 / 性能测试。主窗口原生事件、启动恢复、关闭隐藏及退出捕获继续由 M15f2 实施，当前不能声称原生恢复已完成。
+
 ## M16e：选择器收尾后的正式 Windows 安装包
 
 完成 M12m / M15a8 后执行 `npm run tauri:build`（当前进程 PATH 需包含用户 .cargo/bin），真实 beforeBuild 完成 TS / Vite 生产构建、Windows release 独立任务栏宿主准备和第三方声明生成；随后正式 Rust release 与 NSIS 打包退出 0。本包包含 M06g 的真实空态说明；本轮 debug 验收驱动 / 测试场景不编入生产能力，没有新增运行时 Node / Cargo / 当前对话依赖。

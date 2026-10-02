@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M15f1 主窗口位置作为现有 settings payload 的独立 `main_window` 字段存储，内部 `MainWindowPreferences` 只含可空 placement（monitor / 工作区相对 DIP x、y），缺省 None 表示尚未保存，不伪装零坐标。与 mini_window 分离，无新数据表、迁移保护扩展或前端几何写入。读取走完整版本 / 字段验证；原生 Writer 更新先读最新 payload，仅改主窗位置，与 settings_revision 在同一事务提交，同值不推进修订；未知版本 / 坏字段 / 写入失败保留原记录。实际原生捕获 / 恢复由后续 M15f2 接入，不能以此存储检查宣称 Windows 位置恢复已完成。
+
 M10d2 不增加 schema：基础诊断只读现有 diagnostics、当前文件映射、活动账本 pending_usage 和 source_scan_state，同事务捕获 data_revision。未解决日志诊断只定位当前指针选定的 current 代次，NULL 代次没有文件位置；当前账本未确认 / 未归属观察按原代次精确偏移定位。退役 / 候选 / 无效 / 未选定代次及历史账本不会被误标到新位置，移动后使用同一代次的当前映射。缺失文件保留原保存位置及历史事实；目录错误仅使用启用且根仍匹配的当前扫描，未知偏移保持 null。按来源、位置、类别、码聚合一处最近代表项，固定排序并最多取 21 行（返回 20 行和 has_more），不将完整日志诊断历史 / metadata / 向量 / evidence 暴露给 UI。
 
 M06f8 增加候选物理身份的位置迁移，不改变 schema。来源内按实际物理 identity 检索 reading / ready / claimed / failed 候选，原冻结文件、当前指针及路径仍须匹配；同一身份对应多个逻辑文件时拒绝合并。Writer 检查原路径、候选检查点修订、身份及来源 rollout 边界，目标已被其他逻辑文件占用则拒绝。reading / ready 仅更新冻结路径并递增候选检查点修订，保留观察暂存、上下文、锚点和游标；原活动检查点、账本及全局修订不变。
