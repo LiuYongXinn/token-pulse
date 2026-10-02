@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+M13e7 更新显式 taskbar wire 场景。先构建 `cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host`，再运行 `cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskbar-wire-development-check`。场景会打开一个明确标题的自有前台测试窗口，以真实 SendInput 激活，核对读数宿主 PID / 命中后实际悬停 / 单击 / 双击，结束后关闭测试窗口并恢复光标 / 线程 DPI / 任务栏矩形。须让桌面可交互，不能有系统面板遮挡或已有按键；失败拒绝向其他窗口发送输入。它不是默认 CI / 性能测试。
+
+Win10 19045 / 150% DPI 最终退出 0，actual_hover / actual_single_double / passive_focus_preserved / geometry_restored 均 true。悬停 / 自动刷新与配置 / 隐私 / shutdown 严格保持非空前台且无失活；点击按设计产生打开其他应用表面的动作，之后由自有真实输入重新建立前台，不对显式点击错误要求“全程旧前台不变”。原空前台 0→0 不能证明焦点保持。完整详情使用明确合成 HostDetails，未知源扫描时间保持 null。详见[交付记录](delivery-status.md#m13e7真实任务栏悬停与点击的独立前台验收)。此前焦点失败及锁屏覆盖是历史记录；正式应用真实点击开窗 / 右键 / 键盘 / 辅助功能与兼容矩阵继续验收。
+
 M11h 原生验收更新：综合 `pwsh -NoProfile -File scripts/native-smoke.ps1` 保留真实键盘 / 鼠标断言，不自动切换桌面或改用消息。输入桌面不可读取、应用桌面不匹配、无前台或已有键按下时明确失败；先解锁并释放按键再运行。本机用户解锁后综合 NATIVE_SMOKE_OK / 退出 0，收敛下方历史键盘失败记录。Win10 19045 / 150% DPI，账户仍为合成配置 / 快照，电源为自有消息；不等同真实账户持续刷新、实际休眠、Win11 或多屏验收。
 
 独立 `pwsh -NoProfile -File scripts/native-smoke.ps1 -RecoveryRoutes` 只检查自有 HWND 的明确合成 WM_HOTKEY、实际注册 / 冲突 / Writer 回滚及透明度 / 两个 WebView；NATIVE_RECOVERY_ROUTES_OK / 退出 0 明确不包含键盘 / 鼠标输入验收。本机通过。相关定向命令：`cargo test -p token-pulse-core --lib shortcuts`、`cargo test -p token-pulse-store --lib settings::shortcuts`、`npx playwright test tests/ui/display-settings.spec.ts --grep recovery --workers=1`，分别 1 / 2 / 5 项通过；没有性能测试。

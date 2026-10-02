@@ -1,5 +1,8 @@
 //! Explicit production-wire/native-host check. Synthetic fixture only; never run by default CI.
 #[cfg(windows)]
+#[path = "support/foreground.rs"]
+mod foreground;
+#[cfg(windows)]
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     use token_pulse_core::numeric::DecimalInt;
@@ -9,7 +12,6 @@ async fn main() {
         display::{DisplayLayout, DisplayPreferences},
         windows::{topology::inspect_primary_taskbar, transport::HostConnection},
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     if std::env::args().skip(1).collect::<Vec<_>>() != ["--native-taskbar-wire-development-check"] {
         std::process::exit(2);
     }
@@ -17,7 +19,10 @@ async fn main() {
         "DEVELOPMENT ONLY: synthetic fixture over production native host pipe; actual taskbar layout"
     );
     let before = inspect_primary_taskbar().expect("supported baseline");
-    let focus = unsafe { GetForegroundWindow() };
+    let pointer = PointerRestore::save();
+    // A transient external foreground or 0 -> 0 cannot prove nonactivation.
+    // The visible fixture is deliberately activated by real input on this probe's own HWND.
+    let mut focus = foreground::ForegroundFixture::create();
     let executable = std::env::current_exe()
         .unwrap()
         .parent()
@@ -28,6 +33,24 @@ async fn main() {
     let mut connection = HostConnection::launch(&executable).await.unwrap();
     let mut fixture: TaskbarView =
         serde_json::from_str(include_str!("../../../fixtures/taskbar-display.json")).unwrap();
+    fixture.details = Some(token_pulse_taskbar::HostDetails {
+        theme: token_pulse_core::settings::AppTheme::Dark,
+        range: token_pulse_core::protocol::DateRange {
+            start_ms: token_pulse_core::numeric::EpochMs::new(1790899200000).unwrap(),
+            end_ms: token_pulse_core::numeric::EpochMs::new(1790985600000).unwrap(),
+            timezone: "Asia/Shanghai".into(),
+        },
+        scope: token_pulse_taskbar::HostScope::TodayAllSources,
+        source_last_success_at_ms: None,
+        source_statuses: vec![token_pulse_taskbar::HostSourceStatus::ScanEvidenceMissing],
+        pending_observations: DecimalInt::parse("0").unwrap(),
+        pending_files: DecimalInt::parse("0").unwrap(),
+        breakdown_complete: false,
+        input_complete: false,
+        cached_complete: true,
+        output_complete: false,
+        pricing_calculating: false,
+    });
     fixture.settings_revision = DecimalInt::parse("1").unwrap();
     let mut configuration = HostConfiguration {
         position: Default::default(),
@@ -72,7 +95,25 @@ async fn main() {
     assert_eq!(shown.state, HostDisplayState::Embedded);
     assert!(shown.density.is_some() && shown.failure.is_none());
     let full_width = own_readout_width(connection.process_id());
-    let pointer = PointerRestore::save();
+    focus.assert_preserved("initial embedding");
+    actual_mouse(connection.process_id(), None);
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert!(
+        own_details_visible(connection.process_id()),
+        "actual 300 ms hover must show details"
+    );
+    focus.assert_preserved("actual hover details");
+    connection
+        .exchange(HostMessage::Snapshot {
+            view: Box::new(fixture.clone()),
+        })
+        .await
+        .unwrap();
+    assert!(
+        own_details_visible(connection.process_id()),
+        "ordinary refresh must preserve visible details"
+    );
+    focus.assert_preserved("ordinary details refresh");
     actual_click(connection.process_id(), false);
     connection
         .exchange(HostMessage::Snapshot {
@@ -90,9 +131,10 @@ async fn main() {
         actions(&mut connection, "1").await.is_empty(),
         "single click consumed once"
     );
-    println!("foreground baseline={focus:?} after_single={:?}", unsafe {
-        GetForegroundWindow()
-    });
+    assert!(
+        !own_details_visible(connection.process_id()),
+        "actual click dismisses details"
+    );
     actual_click(connection.process_id(), true);
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(
@@ -105,9 +147,9 @@ async fn main() {
         actions(&mut connection, "1").await.is_empty(),
         "double click has no delayed mini"
     );
-    println!("foreground after_double={:?}", unsafe {
-        GetForegroundWindow()
-    });
+    // Clicking explicitly opens another application surface; preserving the old foreground
+    // across that user action is not required. Re-establish own foreground for passive changes.
+    focus.activate();
     // Author a pending release on the verified own child, then cross the configuration barrier.
     pending_release(connection.process_id());
     configuration.settings_revision = DecimalInt::parse("2").unwrap();
@@ -204,11 +246,12 @@ async fn main() {
     assert_eq!(disabled.state, HostDisplayState::Disabled);
     assert_eq!(disabled.last_restore, Some(HostRestore::Restored));
     assert_eq!(inspect_primary_taskbar().unwrap(), before);
-    assert_eq!(unsafe { GetForegroundWindow() }, focus);
+    focus.assert_preserved("configuration, privacy and detach");
     drop(pointer);
     connection.shutdown().await.unwrap();
+    focus.assert_preserved("host shutdown");
     println!(
-        "waiting={:?} shown={:?} token_only={:?} disabled={:?} actual_single_double=true revision_privacy_clear=true geometry_restored=true focus_preserved=true cleanup={:?}",
+        "waiting={:?} shown={:?} token_only={:?} disabled={:?} actual_hover=true actual_single_double=true revision_privacy_clear=true geometry_restored=true passive_focus_preserved=true cleanup={:?}",
         waiting.state,
         shown.state,
         single.state,
@@ -281,6 +324,41 @@ fn click_deadline() -> std::time::Duration {
     )
 }
 #[cfg(windows)]
+fn own_details_visible(pid: u32) -> bool {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM},
+        UI::WindowsAndMessaging::*,
+    };
+    struct Probe {
+        pid: u32,
+        found: bool,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut actual = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut actual);
+        }
+        if actual == probe.pid && unsafe { IsWindowVisible(window) } != 0 {
+            let mut class = [0u16; 128];
+            let length = unsafe { GetClassNameW(window, class.as_mut_ptr(), class.len() as i32) };
+            if length > 0
+                && String::from_utf16_lossy(&class[..length as usize])
+                    .starts_with("TokenPulse.Taskbar.Details.")
+            {
+                probe.found = true;
+            }
+        }
+        1
+    }
+    let mut probe = Probe { pid, found: false };
+    assert_ne!(
+        unsafe { EnumWindows(Some(collect), (&mut probe as *mut Probe) as LPARAM) },
+        0
+    );
+    probe.found
+}
+#[cfg(windows)]
 async fn actions(
     connection: &mut token_pulse_taskbar::windows::transport::HostConnection,
     revision: &str,
@@ -344,10 +422,13 @@ impl Drop for PointerRestore {
 }
 #[cfg(windows)]
 fn actual_click(pid: u32, double: bool) {
+    actual_mouse(pid, Some(double));
+}
+#[cfg(windows)]
+fn actual_mouse(pid: u32, double: Option<bool>) {
     use windows_sys::Win32::{
         Foundation::{POINT, RECT},
         UI::{
-            HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
             Input::KeyboardAndMouse::{
                 INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT,
                 SendInput,
@@ -359,9 +440,7 @@ fn actual_click(pid: u32, double: bool) {
         },
     };
     let window = own_readout(pid).0;
-    let previous =
-        unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    assert!(!previous.is_null());
+    let _dpi = foreground::PhysicalCoordinates::enter();
     let mut rect: RECT = Default::default();
     assert_ne!(unsafe { GetWindowRect(window, &mut rect) }, 0);
     let center = POINT {
@@ -411,6 +490,17 @@ fn actual_click(pid: u32, double: bool) {
         window,
         "refuse mouse input outside own readout"
     );
+    let Some(double) = double else {
+        let mut movement: INPUT = unsafe { std::mem::zeroed() };
+        movement.r#type = INPUT_MOUSE;
+        movement.Anonymous.mi.dwFlags =
+            windows_sys::Win32::UI::Input::KeyboardAndMouse::MOUSEEVENTF_MOVE;
+        assert_eq!(
+            unsafe { SendInput(1, &movement, std::mem::size_of::<INPUT>() as i32) },
+            1
+        );
+        return;
+    };
     let input: Vec<INPUT> = (0..if double { 4 } else { 2 })
         .map(|n| INPUT {
             r#type: INPUT_MOUSE,
@@ -436,9 +526,6 @@ fn actual_click(pid: u32, double: bool) {
         },
         input.len() as u32
     );
-    unsafe {
-        SetThreadDpiAwarenessContext(previous);
-    }
 }
 #[cfg(not(windows))]
 fn main() {
