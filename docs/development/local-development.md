@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+M11h 原生验收更新：综合 `pwsh -NoProfile -File scripts/native-smoke.ps1` 保留真实键盘 / 鼠标断言，不自动切换桌面或改用消息。输入桌面不可读取、应用桌面不匹配、无前台或已有键按下时明确失败；先解锁并释放按键再运行。本机用户解锁后综合 NATIVE_SMOKE_OK / 退出 0，收敛下方历史键盘失败记录。Win10 19045 / 150% DPI，账户仍为合成配置 / 快照，电源为自有消息；不等同真实账户持续刷新、实际休眠、Win11 或多屏验收。
+
+独立 `pwsh -NoProfile -File scripts/native-smoke.ps1 -RecoveryRoutes` 只检查自有 HWND 的明确合成 WM_HOTKEY、实际注册 / 冲突 / Writer 回滚及透明度 / 两个 WebView；NATIVE_RECOVERY_ROUTES_OK / 退出 0 明确不包含键盘 / 鼠标输入验收。本机通过。相关定向命令：`cargo test -p token-pulse-core --lib shortcuts`、`cargo test -p token-pulse-store --lib settings::shortcuts`、`npx playwright test tests/ui/display-settings.spec.ts --grep recovery --workers=1`，分别 1 / 2 / 5 项通过；没有性能测试。
+
+解锁后的 `cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskbar-wire-development-check` 真实单击 / 双击及动作屏障 / 几何断言通过，但最终前台为空 / 焦点保持断言失败，退出 101；仍待任务栏焦点复核，不以综合小窗通过代替。
+
 M10d2 补充检查：相关契约 / 隐私运行时 Vitest 15 项、`cargo check -p token-pulse-desktop --release` 通过；新诊断 API 的生产配置编译正常，合成来源的专项启动器仅在 debug 编译。`cargo test -p token-pulse-store diagnostics --lib` 本次实际 7 项通过（新增查询 5 项及原暂存 / 发布回归 2 项）。没有扩展到性能或已取消的数据恢复专项。
 
 M10d2：`cargo test -p token-pulse-core diagnostics --lib` 2 项；`cargo test -p token-pulse-store diagnostics::tests --lib` 5 项（diagnostics 过滤合计含旧事务 / 发布回归 7 项）；`cargo test -p token-pulse-collector --test diagnostics` 实际临时 JSONL 1 项通过。相关 `diagnostics.spec.ts jobs.spec.ts taskbar.spec.ts` Playwright 10 项（新增 2 项）通过；截图实际查看。core / store / collector / desktop strict Clippy、TS / 构建、契约生成检查和 fmt 通过。显式 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Diagnostics` 在自己的 native-probe / 合成来源启动正式资源，NATIVE_DIAGNOSTIC_POSITIONS_OK / 退出 0：格式问题实际偏移、缺失文件、主窗口显示、最新隐私 / mini 拒绝、来源恢复后的替换发布消除问题、可信总量 9、原 / 修正源字节保持。首轮恢复使用小窗操作前的旧设置修订而拒绝，改为正式 get_sources 取最新修订后通过，未绕过 CAS。没有用户 Home / 账户、人工系统键盘 / Win11 / 物理多屏或安装 / 性能验收；此前综合键盘失败仍保留。

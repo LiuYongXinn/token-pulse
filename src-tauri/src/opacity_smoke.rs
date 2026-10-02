@@ -77,8 +77,8 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       if(!denied || value.data.opacity_percent!==80)throw new Error('MINI_OPACITY_PERMISSIONS');
     "#,
     )?;
-    // The existing recovery smoke already proves real SendInput -> WM_HOTKEY. Show is the
-    // same recovery/tray entry and must reapply alpha after Tauri resets cursor-ignore.
+    // Explicit show uses the recovery/tray entry and must reapply alpha after Tauri
+    // resets cursor-ignore. Keyboard input is accepted separately on an interactive desktop.
     mini.set_ignore_cursor_events(true)
         .map_err(|e| e.to_string())?;
     mini.hide().map_err(|e| e.to_string())?;

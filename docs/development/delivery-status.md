@@ -2,7 +2,9 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02，M10d2 / M06f8 / M09g2b3 / M13e6）
+## 当前交付状态（2026-10-02，M11h / M10d2 / M06f8 / M09g2b3 / M13e6）
+
+M11h 最新原生回归：原综合键盘失败时，输入桌面 OpenInputDesktop 返回访问拒绝 5、前台为空，WM_HOTKEY 未到达。增加 debug 输入前置检查与显式独立消息通路；用户解锁后，真实键盘恢复 / 鼠标穿透、透明度、合成账户显示 / 配置、托盘 / 单实例 / 电源路由综合全部通过，NATIVE_SMOKE_OK / 退出 0。下方旧“键盘恢复失败待复核”是历史结果，由本次收敛。新增 taskbar wire 真实单击 / 双击动作通过，但前台变为 0，最终焦点保持失败（退出 101）；单列继续排查。
 
 M10d2 最新 UI 增量：必要文件位置与受限问题摘要已接正式诊断。当前物理代次 / 活动账本、未解决记录、缺失与当前扫描问题按同类 / 位置收敛，一处代表偏移、来源筛选、20 处上限，未知值、精度和共享隐私保持。新增 core 2 / SQLite 5 / 实际 JSONL 1 项、相关 Playwright 10 项通过；Win10 专项正式 WebView 验证从格式问题 / 文件缺失到来源恢复 / 替换发布后的问题消除和 9 Token，退出 0。下述 M10d1 文件级位置待办由本增量完成；此前综合真实键盘恢复失败、其他保留功能与环境验收继续推进。
 
@@ -38,6 +40,18 @@ M06f1 最新增量：schema v8 已落地替换文件候选的隔离暂存区、�
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。历史 M14 / 导出副本及迁移保护 / 专门故障恢复待办已由上述范围修订撤销，既有实现和测试记录保留。
 
 账户服务已注册主窗口专用原生程序 / Home 选择、草稿释放、配置保存、连接 / 断开和额度桶选择命令，设置页接入实际 DTO、显示隐私门禁与精确修订。默认不连接，已保存的明确 auto_connect 偏好接启动钩子；程序变化拒绝，配置保存不替换当前连接。用户已确认复用本地已登录账户，新增登录 / 设备码 / 取消登录不在交付范围。本机已通过选定程序和已有 Home 读到真实 ready / 周额度，未发起新登录。主总览与小窗完整额度内容、真实账户持续刷新 / 身份变化、完整冷进程自动连接及 OS 文件选择对话框交互仍待后续；不以单次读取证明全部账户验收。
+
+## M11h：区分输入环境与小窗恢复通路的原生验收
+
+没有改写正式恢复快捷键实现。debug-only 输入检查只读打开当前输入桌面，比较应用线程桌面名称、检查前台和已按下的修饰键 / 目标键；不可交互时明确报错，不自动解锁、切换桌面、释放用户键或用合成消息冒充键盘。查阅 [OpenInputDesktop](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openinputdesktop) 和 [SendInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput) 的系统契约。
+
+新增显式 `scripts/native-smoke.ps1 -RecoveryRoutes`，隔离 native-probe 数据库与正式两个 WebView。只向自有主 HWND 投递明确标记的 WM_HOTKEY：失效注册号、错误修饰键 / 虚拟键不触发；当前注册恢复隐藏小窗并清除忽略鼠标样式。实际设置 UI 保存 / 全局占用 / 旧键释放、外部注册冲突与 SQLite Writer 失败保留原注册及修订 / 草稿；随后检查实际 HWND alpha、置顶 / Writer 回滚、恢复交互保持透明度和重建 WebView。NATIVE_RECOVERY_MESSAGE_ROUTE_OK / MINI_OPACITY_OK / RECOVERY_ROUTES_OK、退出 0；输出明确未做真实键盘 / 鼠标验收。
+
+本机 Win10 19045 / 150% DPI，用户明确解锁后重跑综合场景：真实 SendInput → WM_HOTKEY 恢复成功；真实鼠标穿透到独立测试 HWND，键盘解除穿透同时持久化。启用写入失败撤销样式、恢复保存失败仍可交互并显示重试、mini 只读权限、alpha 保持、账户合成周期及断开、本地程序检测 / 合成账户配置、关闭隐藏 / 托盘、单实例激活和合成电源路由均通过，NATIVE_SMOKE_OK / 退出 0。MINI_PASSTHROUGH_RECOVERY_SAVE_FAILED 来自显式故障检查；WebView2 注销 1412 仍记录。
+
+自动定向 core 快捷键 1 项、store 快捷键 2 项、相关恢复设置 Playwright 5 项，以及 desktop strict Clippy all-targets / release check / fmt 通过。没有真实账户登录、人工按键、OS 文件选择对话框、Win11 / 物理多屏或性能验收。
+
+额外任务栏 wire 真实鼠标场景的单击 OpenFloat、双击仅 OpenStats、配置 / 隐私清除动作与几何断言通过；前台 baseline 非空，点击后为空，最终焦点保持失败 / 退出 101。此项不计作通过，下一模块排查；整体目标继续进行。
 
 ## M10d2：必要位置的受限诊断查询与正式显示
 

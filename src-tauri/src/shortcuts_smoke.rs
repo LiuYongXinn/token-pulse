@@ -58,6 +58,7 @@ pub(super) fn reserve(key: RecoveryShortcut) -> Result<ReservedKey, String> {
     })
 }
 pub(super) fn send_key(key: &RecoveryShortcut) -> Result<(), String> {
+    super::input_smoke::require_interactive()?;
     let mut codes = Vec::new();
     if key.control {
         codes.push(VK_CONTROL);
@@ -69,6 +70,9 @@ pub(super) fn send_key(key: &RecoveryShortcut) -> Result<(), String> {
         codes.push(VK_SHIFT);
     }
     codes.push(key.virtual_key().map_err(|e| e.to_string())? as u16);
+    if unsafe { GetAsyncKeyState(i32::from(*codes.last().unwrap())) } < 0 {
+        return Err("INPUT_KEY_ALREADY_HELD; release key before input acceptance".into());
+    }
     let inputs: Vec<INPUT> = codes
         .iter()
         .map(|code| (*code, 0))
@@ -94,7 +98,37 @@ pub(super) fn send_key(key: &RecoveryShortcut) -> Result<(), String> {
     }
     Ok(())
 }
+pub(super) fn start_routes(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        let result = (|| {
+            let state = app.state::<super::RuntimeState>();
+            if !app.config().identifier.ends_with(".dev")
+                || !state
+                    .data_directory
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("native-probe-"))
+            {
+                return Err("recovery route scene requires isolated debug database".into());
+            }
+            super::mini_window::show(&app)?;
+            verify_internal(&app, true)?;
+            super::opacity_smoke::verify(&app)?;
+            Ok::<_, String>(())
+        })();
+        match &result {
+            Ok(()) => println!(
+                "NATIVE_RECOVERY_ROUTES_OK: owned HWND messages and real WebView/SQLite only; keyboard and mouse input acceptance NOT performed"
+            ),
+            Err(error) => eprintln!("NATIVE_RECOVERY_ROUTES_FAILED: {error}"),
+        }
+        app.exit(if result.is_ok() { 0 } else { 1 });
+    });
+}
 pub(super) fn verify(app: &tauri::AppHandle) -> Result<(), String> {
+    verify_internal(app, false)
+}
+fn verify_internal(app: &tauri::AppHandle, routes_only: bool) -> Result<(), String> {
     let main = app.get_webview_window("main").ok_or("main missing")?;
     let key = RecoveryShortcut {
         key: "U".into(),
@@ -141,7 +175,11 @@ pub(super) fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     mini.set_ignore_cursor_events(true)
         .map_err(|e| e.to_string())?;
     mini.hide().map_err(|e| e.to_string())?;
-    send_key(&key)?;
+    if routes_only {
+        verify_owned_messages(app, &main, &mini, &key)?;
+    } else {
+        send_key(&key)?;
+    }
     let mut visible = false;
     for _ in 0..100 {
         if mini.is_visible().unwrap_or(false) {
@@ -151,7 +189,12 @@ pub(super) fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         thread::sleep(Duration::from_millis(30));
     }
     if !visible {
-        return Err("real keyboard input did not recover the mini window".into());
+        return Err(if routes_only {
+            "owned hotkey message did not recover the mini window"
+        } else {
+            "real keyboard input did not recover the mini window"
+        }
+        .into());
     }
     super::mini_smoke::evaluate(
         app,
@@ -220,7 +263,57 @@ pub(super) fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     }
     mini.hide().map_err(|e| e.to_string())?;
     println!(
-        "NATIVE_RECOVERY_SHORTCUT_OK: actual settings UI registration, global ownership, SendInput to WM_HOTKEY recovery, cursor ignore cleared, external conflict keeps key/draft, Writer failure releases candidate and retains old registration"
+        "{}: actual settings UI registration, global ownership, cursor ignore cleared, external conflict keeps key/draft, Writer failure releases candidate and retains old registration",
+        if routes_only {
+            "NATIVE_RECOVERY_MESSAGE_ROUTE_OK"
+        } else {
+            "NATIVE_RECOVERY_SHORTCUT_OK"
+        }
     );
+    Ok(())
+}
+
+fn verify_owned_messages(
+    app: &tauri::AppHandle,
+    main: &tauri::WebviewWindow,
+    mini: &tauri::WebviewWindow,
+    key: &RecoveryShortcut,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, SendMessageW, WM_HOTKEY};
+    let id = app
+        .state::<super::RuntimeState>()
+        .recovery_shortcut
+        .lock()
+        .map_err(|_| "recovery state unavailable")?
+        .active
+        .as_ref()
+        .filter(|(_, active)| active == key)
+        .map(|(id, _)| *id)
+        .ok_or("configured native registration missing")?;
+    let hwnd = main.hwnd().map_err(|e| e.to_string())?.0.cast();
+    let packed = ((key.virtual_key().map_err(|e| e.to_string())? << 16) | key.modifiers()) as isize;
+    // Explicitly synthetic messages to this app's HWND. Retired IDs / wrong modifiers / keys
+    // must not trigger recovery. Do not send messages to any system or other application window.
+    let retired = super::shortcuts::SLOTS
+        .iter()
+        .copied()
+        .find(|slot| *slot != id)
+        .unwrap();
+    for (slot, payload) in [
+        (retired, packed),
+        (id, packed ^ 1),
+        (id, packed ^ (1 << 16)),
+    ] {
+        unsafe {
+            SendMessageW(hwnd, WM_HOTKEY, slot as usize, payload);
+        }
+    }
+    thread::sleep(Duration::from_millis(100));
+    if mini.is_visible().map_err(|e| e.to_string())? {
+        return Err("unowned hotkey message triggered recovery".into());
+    }
+    if unsafe { PostMessageW(hwnd, WM_HOTKEY, id as usize, packed) } == 0 {
+        return Err("owned HWND message failed to queue".into());
+    }
     Ok(())
 }

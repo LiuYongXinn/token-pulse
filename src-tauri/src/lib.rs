@@ -245,6 +245,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if std::env::args().any(|arg| arg == "--native-recovery-routes-smoke") {shortcuts_smoke::start_routes(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-diagnostics-smoke") {diagnostics_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg| arg == "--native-offline-prices-smoke") {
@@ -344,6 +346,8 @@ pub fn run() {
 
 #[cfg(debug_assertions)]
 mod diagnostics_smoke;
+#[cfg(all(debug_assertions, windows))]
+mod input_smoke;
 mod job_commands;
 mod mini_commands;
 mod mini_opacity;
