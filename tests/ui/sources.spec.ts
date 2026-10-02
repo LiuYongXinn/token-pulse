@@ -14,6 +14,8 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
       if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: window.__syntheticCalendar(command, args) };
       if (command === 'get_app_status') data = { version: 'synthetic-test', development: true, data_directory: 'E:\\synthetic-test-data', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' };
+      else if (command === 'get_account_service_config') data = { settings_revision: String(revision), executable_display_path: null, home_display_path: null, executable_sha256: null, configured: false, auto_connect: false };
+      else if (command === 'get_account_quota') data = { connection_epoch: 'synthetic-disconnected', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], fetched_at_ms: null, last_attempt_at_ms: null, windows: [], error_code: null };
       else if (command === 'get_sources') data = { settings_revision: String(revision), sources: [{ ...source }] };
       else if (command === 'manage_source') {
         if (args.expectedSettingsRevision !== String(revision)) throw { code: 'REVISION_CONFLICT' };

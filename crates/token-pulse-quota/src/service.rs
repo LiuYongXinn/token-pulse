@@ -31,6 +31,9 @@ pub struct RefreshReceipt {
     pub snapshot: QuotaSnapshot,
 }
 enum Action {
+    Unavailable {
+        epoch: String,
+    },
     Connect {
         spec: Arc<NativeService>,
         epoch: String,
@@ -145,6 +148,15 @@ impl AccountQuotaService {
     ) -> Result<QuotaSnapshot, ErrorCode> {
         match self.request(Action::Connect {
             spec: Arc::new(spec),
+            epoch: expected_epoch.into(),
+        })? {
+            Receipt::Snapshot(s) => Ok(s),
+            _ => Err(ErrorCode::QuotaProtocolError),
+        }
+    }
+    /// A configured startup target failed local validation; do not silently look connected.
+    pub fn report_unavailable(&self, expected_epoch: &str) -> Result<QuotaSnapshot, ErrorCode> {
+        match self.request(Action::Unavailable {
             epoch: expected_epoch.into(),
         })? {
             Receipt::Snapshot(s) => Ok(s),
@@ -378,6 +390,22 @@ impl Driver {
     }
     fn action(&mut self, action: Action) -> Result<Receipt, ErrorCode> {
         let result = match action {
+            Action::Unavailable { epoch } => {
+                if epoch != self.coordinator.epoch() {
+                    return Err(ErrorCode::RevisionConflict);
+                }
+                self.clear_transport();
+                self.desired = None;
+                self.retry_at = None;
+                self.launch_pending = false;
+                let epoch = self.coordinator.begin_connection(self.clock.now()?)?;
+                self.coordinator.connection_failed(
+                    &epoch,
+                    ErrorCode::QuotaServiceUnavailable,
+                    self.clock.now()?,
+                )?;
+                Receipt::Snapshot(self.coordinator.snapshot())
+            }
             Action::Connect { spec, epoch } => {
                 if epoch != self.coordinator.epoch() {
                     return Err(ErrorCode::RevisionConflict);

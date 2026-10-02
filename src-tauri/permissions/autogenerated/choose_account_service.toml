@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-account-service"
+description = "Enables the choose_account_service command without any pre-configured scope."
+commands.allow = ["choose_account_service"]
+
+[[permission]]
+identifier = "deny-choose-account-service"
+description = "Denies the choose_account_service command without any pre-configured scope."
+commands.deny = ["choose_account_service"]

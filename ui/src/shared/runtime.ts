@@ -15,10 +15,13 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
+const plainCommands = new Set(['cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
+  if (command === 'choose_account_service' && typeof data === 'object' && data !== null && 'selection_handle' in data && typeof data.selection_handle === 'string') {
+    await invoke('cancel_account_service_selection', { requestId: crypto.randomUUID(), selectionHandle: data.selection_handle }).catch(() => {});
+  }
   const kind = pageKinds[command];
   if (!kind || typeof data !== 'object' || data === null || !('next_cursor' in data) || typeof data.next_cursor !== 'string') return;
   // Return only the original request and authenticated cursor. A snapshot ID is never a close capability.
@@ -112,7 +115,7 @@ export function runtimeError(error: unknown): string {
     if (code === 'SNAPSHOT_EXPIRED') return '查询快照已过期，请重新查询。';
     if (code === 'CURSOR_INVALID') return '分页条件或游标已失效，请重新查询。';
     if (code === 'DB_WRITE_FAILED') return '数据库写入失败，设置未保存，请重试。';
-    const descriptions: Record<string, string> = { SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '目录选择已过期，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
+    const descriptions: Record<string, string> = { QUOTA_DISCONNECTED: '账户服务未连接，请先连接已保存服务。', QUOTA_UNSUPPORTED: '当前连接不提供账户额度，本地统计继续可用。', QUOTA_AUTH_REQUIRED: '账户服务需要登录授权，额度暂不可用。', QUOTA_TIMEOUT: '账户服务响应超时，保留已知旧快照。', QUOTA_PROTOCOL_ERROR: '账户服务响应无法验证，请检查服务版本或重新连接。', QUOTA_SERVICE_UNAVAILABLE: '账户服务程序不可用，请检查已选择程序和 Home。', SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '选择已过期或程序已变化，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
     return descriptions[code] ?? `操作失败（${code}），请查看采集诊断。`;
   }
   return '桌面服务未能完成操作，请重试。';
@@ -136,3 +139,16 @@ export async function onMiniStatsRequested(refresh: () => void): Promise<() => v
 }
 
 export function queryMiniSessions(query: MiniSessionsRequest): Promise<MiniSessionsPage> { return request('query_mini_sessions', { request: query }); }
+
+export function getAccountServiceConfig(): Promise<import('./generated/contracts').AccountServiceConfigSnapshot> { return request('get_account_service_config'); }
+export function chooseAccountService(selection: import('./generated/contracts').AccountServiceSelectionRequest): Promise<import('./generated/contracts').AccountServiceSelection | null> { return request('choose_account_service', { request: selection }); }
+export function cancelAccountServiceSelection(selectionHandle: string): Promise<void> { return request('cancel_account_service_selection', { selectionHandle }); }
+export function saveAccountServiceConfig(mutation: import('./generated/contracts').AccountServiceConfigMutation): Promise<import('./generated/contracts').AccountServiceConfigSnapshot> { return request('save_account_service_config', { request: mutation }); }
+export function manageAccountConnection(connection: import('./generated/contracts').AccountConnectionRequest): Promise<import('./generated/contracts').QuotaSnapshot> { return request('manage_account_connection', { request: connection }); }
+export function getAccountQuota(): Promise<import('./generated/contracts').QuotaSnapshot> { return request('get_account_quota'); }
+export function refreshAccountQuota(): Promise<import('./generated/contracts').QuotaRefreshResult> { return request('refresh_account_quota'); }
+export async function onAccountQuotaChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen<import('./generated/contracts').QuotaChanged>('account_quota_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}

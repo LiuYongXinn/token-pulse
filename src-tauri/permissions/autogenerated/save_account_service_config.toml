@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-account-service-config"
+description = "Enables the save_account_service_config command without any pre-configured scope."
+commands.allow = ["save_account_service_config"]
+
+[[permission]]
+identifier = "deny-save-account-service-config"
+description = "Denies the save_account_service_config command without any pre-configured scope."
+commands.deny = ["save_account_service_config"]

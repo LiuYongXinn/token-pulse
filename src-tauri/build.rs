@@ -3,6 +3,11 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
             "get_account_quota",
+            "get_account_service_config",
+            "choose_account_service",
+            "cancel_account_service_selection",
+            "save_account_service_config",
+            "manage_account_connection",
             "refresh_account_quota",
             "get_mini_opacity",
             "get_mini_passthrough",

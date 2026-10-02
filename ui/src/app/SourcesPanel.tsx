@@ -1,4 +1,5 @@
 import { displayPolicy } from '../shared/display-policy';
+import { AccountServicePanel } from './AccountServicePanel';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { chooseSourceDirectory, getSources, manageSource, runtimeError } from '../shared/runtime';
 import type { CapabilityState, ManageSourceAction, SourceDirectoryKind, SourceReadability, SourcesSnapshot } from '../shared/generated/contracts';
@@ -8,7 +9,7 @@ const capability: Record<CapabilityState, string> = { not_probed: '尚未探测'
 const origins = { windows_default: 'Windows 本地', environment: 'CODEX_HOME', custom: '自定义目录', wsl: 'WSL' };
 function time(value: number | null): string { return value === null ? '尚无成功记录' : new Date(value).toLocaleString(); }
 
-export function SourcesPanel({ onChanged }: { onChanged: () => void }) {
+export function SourcesPanel({ onChanged, timezone }: { onChanged: () => void; timezone: string | null }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
   const [snapshot, setSnapshot] = useState<SourcesSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,5 +59,6 @@ export function SourcesPanel({ onChanged }: { onChanged: () => void }) {
       <dl><dt>文件监听能力</dt><dd>{capability[source.capabilities.watcher]} · {source.enabled ? '定期核对持续开启' : '采集已停止，历史保留'}</dd><dt>物理文件身份</dt><dd>{capability[source.capabilities.physical_identity]}</dd><dt>最近目录核对</dt><dd>{time(source.last_scan_at_ms)}</dd><dt>最近成功采集</dt><dd>{time(source.last_success_at_ms)}</dd></dl>
       <div className="source-actions"><button disabled={busy} onClick={() => void run({ kind: source.enabled ? 'pause' : 'resume', source_id: source.source_id })}>{source.enabled ? '暂停采集' : '恢复采集'}</button>{!source.removed && <button disabled={busy} onClick={() => void run({ kind: 'retain_remove', source_id: source.source_id })}>移除来源并保留历史</button>}</div>
     </article>)}</div>
+    <AccountServicePanel timezone={timezone} />
   </section>;
 }

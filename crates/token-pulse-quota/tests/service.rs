@@ -80,6 +80,32 @@ fn default_is_disconnected_and_shutdown_does_not_launch_a_service() {
     );
 }
 #[test]
+fn invalid_saved_target_reports_real_error_with_new_epoch_and_no_automatic_retry() {
+    let (service, _) = start();
+    let initial = service.snapshot().unwrap();
+    let failed = service
+        .report_unavailable(&initial.connection_epoch)
+        .unwrap();
+    assert!(matches!(failed.state, QuotaState::Error));
+    assert_ne!(failed.connection_epoch, initial.connection_epoch);
+    assert_eq!(
+        failed.error_code.as_deref(),
+        Some("QUOTA_SERVICE_UNAVAILABLE")
+    );
+    assert!(failed.windows.is_empty());
+    assert!(failed.fetched_at_ms.is_none());
+    assert_eq!(
+        service.report_unavailable(&initial.connection_epoch).err(),
+        Some(ErrorCode::RevisionConflict)
+    );
+    std::thread::sleep(Duration::from_millis(120));
+    assert_eq!(
+        service.snapshot().unwrap().connection_epoch,
+        failed.connection_epoch
+    );
+    service.shutdown();
+}
+#[test]
 fn owner_drives_handshake_account_query_and_independent_bucket_selection() {
     let (_home, native) = spec("service");
     let (service, changes) = start();

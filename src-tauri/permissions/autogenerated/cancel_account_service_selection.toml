@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-account-service-selection"
+description = "Enables the cancel_account_service_selection command without any pre-configured scope."
+commands.allow = ["cancel_account_service_selection"]
+
+[[permission]]
+identifier = "deny-cancel-account-service-selection"
+description = "Denies the cancel_account_service_selection command without any pre-configured scope."
+commands.deny = ["cancel_account_service_selection"]

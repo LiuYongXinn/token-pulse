@@ -530,3 +530,14 @@ AccountServiceConfigSnapshot 为展示配置，含 settings_revision、可空 ex
 AccountConnectionRequest 为 connect（预期设置修订 / epoch / 确认指纹）、disconnect（预期 epoch）、select_limit（预期 epoch / quota_revision / 桶 ID）。严格未知字段拒绝，不含任意路径、参数、RPC、token 或登录输入；authorize 继续由后续实际登录模块定义。M12d1 仅实现契约、后台选择租约、持久 CAS 和启动指纹检查，管理命令尚未注册，不能将类型生成当作 UI / 授权完成。
 
 内部 account_service 配置与全局 settings_revision 同事务保存，默认不配置、不自动连接。未来 / 损坏配置拒绝；旧字段缺失兼容。选择租约与来源目录分域且只允许 main，五分钟过期，16 条有界；实际启动重新验证程序指纹，Windows 文件句柄在检查与 spawn 期间阻止写入 / 删除。程序变更必须重新选择 / 确认，不继续执行旧确认的不同字节。
+
+
+### 2.28 已实现的原生选择与正式连接管理
+
+get_account_service_config / choose_account_service / cancel_account_service_selection / save_account_service_config / manage_account_connection 正式注册且仅 main；mini 只保留额度读取 / 刷新。所有后台命令再次验证窗口与 request_id。选择请求 kind 为 executable / home / default_home / current，后三者必须已有目标；current 不打开对话框但重新校验当前配置指纹，用于单独修改 auto_connect。预览路径来自原生选择并经过最新 PrivateResponse，Renderer 不提交路径。cancel_account_service_selection 仅接受独立 selectionHandle，返回普通 Response<null>，允许隐私开启后清理高熵能力；不能释放来源 / 查询能力。
+
+选择能力五分钟有效，绑定选择时全局 settings_revision；再次选择只有成功插入新能力后才移除旧能力。原生对话框取消保留旧草稿，设置变化或程序字节改变拒绝。保存通过 CAS 窄更新账户服务偏好，失败保留旧配置与能力，成功移除能力并发送 settings_changed；保存本身不连接或替换现有账户。
+
+connect 复核 expected_settings_revision、acknowledged_executable_sha256、expected_connection_epoch，从已保存内部目标构造 NativeService 后交由 owner；不存在任意可执行路径 / 参数 / RPC / token 接口。disconnect 只要求当前 epoch，不依赖 SQLite 可读，也不修改启动偏好；select_limit 额外要求 expected_quota_revision。管理响应是最新 PrivateResponse<QuotaSnapshot>。启动只执行已保存 auto_connect=true；配置 / 程序失效保留配置，目标验证失败发布 error / QUOTA_SERVICE_UNAVAILABLE，默认不建立外部连接。完整冷启动和在线账户仍待验收。
+
+正式设置页获取配置与额度，不使用主筛选推导账户；选择 / 保存 / 连接由明确用户操作触发。原生私有响应迟到时隐私门禁拒绝并释放选择，当前可见缓存绑定隐私 epoch，事件属于失效提示。授权 / 取消命令继续在后续实际登录模块定义；本节取代前面历史模块中“管理命令未注册”的阶段描述。

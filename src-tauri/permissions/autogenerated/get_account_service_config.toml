@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-account-service-config"
+description = "Enables the get_account_service_config command without any pre-configured scope."
+commands.allow = ["get_account_service_config"]
+
+[[permission]]
+identifier = "deny-get-account-service-config"
+description = "Denies the get_account_service_config command without any pre-configured scope."
+commands.deny = ["get_account_service_config"]

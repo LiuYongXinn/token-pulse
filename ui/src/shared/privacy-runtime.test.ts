@@ -41,3 +41,21 @@ test('sensitive unversioned responses are refused instead of guessing a privacy 
   api.invoke.mockImplementationOnce(async (_command, args) => ({ api_version: 1, request_id: args.requestId, data: { data_directory: 'SECRET' } }));
   await expect(getAppStatus()).rejects.toThrow('丢弃旧响应');
 });
+
+test('late account program selection is discarded and its separate capability released after privacy seals', async () => {
+  const { displayPolicy } = await import('./display-policy');
+  const { chooseAccountService, cancelAccountServiceSelection } = await import('./runtime');
+  displayPolicy.accept({ settings_revision: '1', privacy: false });
+  let resolve!: (value: unknown) => void;
+  let id = '';
+  api.invoke.mockImplementation((command, args) => {
+    if (command === 'choose_account_service') { id = args.requestId; return new Promise(done => { resolve = done; }); }
+    return Promise.resolve({ api_version: 1, request_id: args.requestId, data: null });
+  });
+  const pending = chooseAccountService({ kind: 'executable', expected_settings_revision: '1', base_selection_handle: null });
+  displayPolicy.enable();
+  resolve({ api_version: 1, request_id: id, display_policy: { settings_revision: '1', privacy: false }, data: { selection_handle: 'account-only-capability', preview: { executable_display_path: 'SECRET' } } });
+  await expect(pending).rejects.toThrow('丢弃旧响应');
+  expect(api.invoke).toHaveBeenLastCalledWith('cancel_account_service_selection', { requestId: expect.any(String), selectionHandle: 'account-only-capability' });
+  await expect(cancelAccountServiceSelection('another-account-capability')).resolves.toBeNull();
+});

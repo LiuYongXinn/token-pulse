@@ -260,7 +260,7 @@ export type QuotaChanged = { connection_epoch: string, quota_revision: DecimalIn
 
 export type AccountServiceConfigSnapshot = { settings_revision: DecimalInt, executable_display_path: string | null, home_display_path: string | null, executable_sha256: string | null, configured: boolean, auto_connect: boolean, };
 
-export type AccountServiceSelectionKind = "executable" | "home" | "default_home";
+export type AccountServiceSelectionKind = "current" | "executable" | "home" | "default_home";
 
 export type AccountServiceSelectionRequest = { kind: AccountServiceSelectionKind, base_selection_handle: string | null, expected_settings_revision: DecimalInt, };
 
