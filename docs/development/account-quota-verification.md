@@ -48,4 +48,12 @@ Win10 19045 上四阶段 `NATIVE_ACCOUNT_COLD_OK` 与 `NATIVE_ACCOUNT_COLD_SEQUE
 
 自动回归：领域 quota 14 / 配置 3 项、服务 8 项通过，覆盖可见 / 隐藏轮询、单飞 / 退避、真实零 / null、账户变化清空旧值、未证明通知拒绝及暂停恢复；quota all-targets / all-features strict Clippy、fmt / diff 通过。自动身份切换使用合成夹具；未切换用户真实账户。
 
-仍需完成真实账户通知 / 身份变化、登录过期 / 实际重置、真实账户冷启动、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。
+## M12j：真实账户冷启动与两入口渲染（2026-10-03）
+
+`pwsh -NoProfile -File scripts/native-account-startup.ps1 -ExistingAccount` 为独立显式入口。默认四阶段仍只访问合成 Home；真实场景必须同时具备 `--native-existing-account`、UUID、native-smoke 和 local_seed / local_ready 有限阶段，缺少、重复或与合成阶段混用会拒绝。这段验收仅 debug 构建存在，生产初始化未修改，不属于默认 CI。
+
+首个完整应用进程只检测本机原生程序和现有 Home、经真实 main IPC 保存目标和自动连接，账户仍断开；退出后第二个完整应用进程由正常启动钩子从同一隔离库建立连接，不从验收代码直接调用连接。真实 account / quota 读取成功后，main 与 mini 的正式 IPC 均为 ready、同一连接 epoch、成功时间非空。总览右栏的周期和剩余条与 DTO 对应；点击真实小窗 DOM 额度区展开详情，其周期及每条 progress 值也与 DTO 对应。检查没有写入产品演示数据，不记录真实百分比、身份或原始服务消息，也不复制认证文件或改写用户 Home。
+
+Win10 19045 实际进程输出 LocalSeed / LocalReady 两阶段 COLD_OK、EXISTING_COLD_DISPLAY_OK、EXISTING_COLD_SEQUENCE_OK，退出 0；正常退出流程关闭所拥有的服务。scene 两项自动检查、desktop all-targets strict Clippy 及 release check 通过。默认合成四阶段另作回归。WebView2 注销 1412 继续记录。此证据包含真实冷启动 / 两个真实 WebView 的 DTO 和 DOM 渲染，不冒充物理点击、截图视觉或任务栏第三入口验收。
+
+仍需完成真实账户通知 / 身份变化、登录过期 / 实际重置、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。

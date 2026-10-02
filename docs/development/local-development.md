@@ -278,6 +278,8 @@ M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普�
 
 真实已有账户持续读取的显式命令为 `cargo run -p token-pulse-quota --features local-account-check --example local_account_check -- --observe-local-existing-account`，要求 initial_ready 和两次 subsequent_read_ready、退出 0。此命令实际连接检测到的已有本地账户，不属于 CI；不调用强制刷新、不发起登录或模型回合。Win10 本机已完成三次读取；只输出净化存在性和连接标记，不保存实际百分比 / 身份。合成领域 / 服务回归分开记录，真实账户切换 / 重置等条件保留，详见[账户共享显示验证](account-quota-verification.md)。
 
+真实账户冷启动使用 `pwsh -NoProfile -File scripts/native-account-startup.ps1 -ExistingAccount`，必须显式选择；默认不运行真实分支。首进程检测现有原生服务 / Home 并保存，第二进程从隔离库正常冷启动；要求 LocalSeed / LocalReady、EXISTING_COLD_DISPLAY_OK / SEQUENCE_OK 与退出 0。Win10 已通过正式 main / mini IPC、周期和 progress DOM 对应真实 DTO。没有保存截图或真实额度值，不发起登录 / 模型回合，不代替物理输入、任务栏第三入口及 Win11 验收。
+
 ## 显式模型别名 IPC 验收
 
 pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceAliases 选择 debug-only、无来源 / 账户的隔离库及两个真实 WebView，实际核对 main-only create / replace / retire / 旧版本、CAS / 映射冲突、提交成功通知、隐私投影和 mini 拒绝。Win10 已输出 NATIVE_PRICE_ALIAS_OK、退出 0，WebView2 注销 1412 保留。此检查不启用任务栏、不读取真实日志 / 登录信息，不等同设置编辑器 UI 验收。定向自动检查 cargo test -p token-pulse-core --test pricing 和 cargo test -p token-pulse-store --lib pricing 均使用合成单价 / 模型、独立预期费用及消费不变；没有性能测试。

@@ -8,6 +8,8 @@ M12h 新增四个独立 Tauri 进程的真实 Win10 冷启动验收：同一隔�
 
 M12i 补齐现有本地账户持续读取：显式观察入口使用生产 owner，首次 ready 及两次后续尝试 / 成功时间前进，同一连接、实际周期 / 百分比提供，断开 / shutdown 后退出 0。没有强制刷新、时钟改动、登录 / 登出或模型回合，输出仅净化存在性标记，不记录真实百分比 / 身份 / 路径 / 认证。领域 17 / 服务 8 项回归、quota 全目标全 feature strict Clippy / fmt / diff 通过，官方 account/read / updated 协议同步核对。真实身份变化 / 通知、过期 / 重置、真实账户冷启动及三入口 / 兼容 / 部署仍分别推进；不记为性能或无限期验收。详见[账户验证](account-quota-verification.md)。
 
+M12j 进一步通过真实账户冷启动：单独 -ExistingAccount 明确启用，两个完整应用进程共享隔离库，首进程保存不连接，第二进程按正常初始化连接现有登录。main / mini 的正式 ready DTO、同一 epoch、成功时间及真实周期 / progress 渲染全部通过，EXISTING_COLD_DISPLAY_OK / SEQUENCE_OK、退出 0；不输出实际数值 / 身份，不直接读取认证，不修改用户 Home。默认合成流程保留；scene 2 项、desktop strict Clippy / release check 通过，1412 保留。真实账户冷启动从待办收敛，物理 UI、通知 / 切换 / 过期 / 重置、第三入口和物理兼容矩阵仍保留。详见[账户验证](account-quota-verification.md)。
+
 本轮按用户“可以测试”复测：正式 `native-smoke.ps1 -TaskbarActions` 的 DETAILS / RECREATE / APPLICATION_POSITION / MENU / ACTIONS 全通过、退出 0。随后真实 SendInput 场景仍发现全屏 Windows.UI.Core.CoreWindow 覆盖自有前台夹具，在发送输入前拒绝，退出 101；不记为真实输入通过，不覆盖 M13e7 的历史成功证据。
 
 M15a7 已将 notify 接入正式“数据来源”设置，来源 / 其他 Home、默认保留原命令、配置差异、确认启用 / 停用、清理重试与隐私 / 草稿释放可用。UI 使用真实 DTO，没有加入产品演示数据。来源旧缓存路径按当前隐私即时隐藏；通知迟到预览释放、Busy 保留可重试、清理失败不掩盖撤销成功。新增 UI 3 / unit 1 项通过，相关 Playwright 共 8 / runtime 共 7、TS / 生产构建及 desktop strict Clippy / release check / fmt / diff 通过。深色 1280 / 浅色 960 实际预览截图已查看；正式 Win10 WebView 按钮启用 / 停用以及 IPC / 采集 3→10→11 通过，退出 0、1412 仍记录。下述 UI 待办按此收敛，系统目录选择交互、真实 Codex 回合 / Win11 / 其他卷限制仍保留，完整应用交付继续，无性能测试。

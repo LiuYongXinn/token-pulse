@@ -1,4 +1,4 @@
-//! Opt-in, debug-only cold starts sharing one synthetic database. No account or auth files.
+//! Opt-in debug cold starts. Real existing-account scenes require an additional explicit flag.
 use std::{
     thread,
     time::{Duration, Instant},
@@ -12,6 +12,8 @@ pub enum Phase {
     Ready,
     Disabled,
     Changed,
+    LocalSeed,
+    LocalReady,
 }
 pub struct Scene {
     pub directory: String,
@@ -24,9 +26,16 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Option<Scene>, &'stat
     let mut id = None;
     let mut phase = None;
     let mut enabled = false;
+    let mut existing_account = false;
     for arg in args {
         if arg == "--native-smoke" {
             enabled = true;
+        }
+        if arg == "--native-existing-account" {
+            if existing_account {
+                return Err("duplicate existing-account opt-in");
+            }
+            existing_account = true;
         }
         if let Some(value) = arg.strip_prefix("--native-account-startup-id=") {
             if id.is_some() {
@@ -43,16 +52,22 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Option<Scene>, &'stat
                 "ready" => Phase::Ready,
                 "disabled" => Phase::Disabled,
                 "changed" => Phase::Changed,
+                "local_seed" => Phase::LocalSeed,
+                "local_ready" => Phase::LocalReady,
                 _ => return Err("invalid startup phase"),
             });
         }
     }
     match (id, phase, enabled) {
-        (None, None, _) => Ok(None),
-        (Some(id), Some(phase), true) => Ok(Some(Scene {
-            directory: format!("native-account-startup-{}", id.simple()),
-            phase,
-        })),
+        (None, None, _) if !existing_account => Ok(None),
+        (Some(id), Some(phase), true)
+            if existing_account == matches!(phase, Phase::LocalSeed | Phase::LocalReady) =>
+        {
+            Ok(Some(Scene {
+                directory: format!("native-account-startup-{}", id.simple()),
+                phase,
+            }))
+        }
         _ => Err("startup probe requires native-smoke, UUID and phase"),
     }
 }
@@ -118,6 +133,9 @@ fn verify(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
     }
     let db = state.database.as_ref().map_err(|e| e.to_string())?;
     let quota = state.quota.as_ref().map_err(|e| format!("{e:?}"))?;
+    if matches!(phase, Phase::LocalSeed | Phase::LocalReady) {
+        return verify_existing(app, phase);
+    }
     let home = state.data_directory.join("synthetic-home");
     let program = home.join("synthetic-codex.exe");
     if phase == Phase::Seed {
@@ -166,7 +184,7 @@ fn verify(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
         Phase::Ready => QuotaState::Ready,
         Phase::Disabled => QuotaState::Disconnected,
         Phase::Changed => QuotaState::Error,
-        Phase::Seed => unreachable!(),
+        Phase::Seed | Phase::LocalSeed | Phase::LocalReady => unreachable!(),
     };
     let deadline = Instant::now() + Duration::from_secs(10);
     let snapshot = loop {
@@ -255,6 +273,82 @@ fn verify(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
     }
     Ok(())
 }
+fn verify_existing(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
+    let state = app.state::<super::RuntimeState>();
+    let db = state.database.as_ref().map_err(|e| e.to_string())?;
+    let quota = state.quota.as_ref().map_err(|e| format!("{e:?}"))?;
+    let (prefs, _) = db
+        .account_service_preferences()
+        .map_err(|e| e.to_string())?;
+    if phase == Phase::LocalSeed {
+        if prefs.target.is_some() {
+            return Err("existing-account seed requires fresh isolated database".into());
+        }
+        let target = token_pulse_quota::detect_local_service(None).map_err(|e| format!("{e:?}"))?;
+        save(app, true, target)?;
+        if !matches!(
+            quota.snapshot().map_err(|e| format!("{e:?}"))?.state,
+            QuotaState::Disconnected
+        ) {
+            return Err("saving existing target launched account service".into());
+        }
+        return Ok(());
+    }
+    if !prefs.auto_connect || prefs.target.is_none() {
+        return Err("existing cold-start configuration missing".into());
+    }
+    let deadline = Instant::now() + Duration::from_secs(25);
+    let snapshot = loop {
+        let snapshot = quota.snapshot().map_err(|e| format!("{e:?}"))?;
+        if matches!(snapshot.state, QuotaState::Ready) && snapshot.fetched_at_ms.is_some() {
+            break snapshot;
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "existing account cold-start unavailable: {:?}",
+                snapshot.state
+            ));
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
+    let epoch = serde_json::to_string(&snapshot.connection_epoch).map_err(|e| e.to_string())?;
+    let main = app.get_webview_window("main").ok_or("main missing")?;
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        &format!(
+            r#"
+        const q=(await invoke('get_account_quota',{{requestId:'cold-existing-main'}})).data;
+        if(q.state!=='ready'||q.connection_epoch!=={epoch}||q.fetched_at_ms===null)throw new Error('EXISTING_MAIN_PROOF');
+        await wait(()=>document.querySelectorAll('.quota-overview .quota-period').length===q.windows.length);
+        const values=q.windows.filter(w=>w.remaining_percent!==null).map(w=>w.remaining_percent);
+        await wait(()=>JSON.stringify([...document.querySelectorAll('.quota-overview progress')].map(p=>p.value))===JSON.stringify(values));
+    "#
+        ),
+    )?;
+    super::mini_window::show(app)?;
+    let mini = app.get_webview_window("mini").ok_or("mini missing")?;
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        &format!(
+            r#"
+        const q=(await invoke('get_account_quota',{{requestId:'cold-existing-mini'}})).data;
+        if(q.state!=='ready'||q.connection_epoch!=={epoch}||q.fetched_at_ms===null)throw new Error('EXISTING_MINI_PROOF');
+        await wait(()=>document.querySelector('.mini-quota:not(:disabled)'));
+        document.querySelector('.mini-quota').click();
+        await wait(()=>document.querySelector('.mini-window.expanded') && document.querySelector('.mini-quota-details'));
+        await wait(()=>document.querySelectorAll('.mini-quota-details .quota-period').length===q.windows.length);
+        const values=q.windows.filter(w=>w.remaining_percent!==null).map(w=>w.remaining_percent);
+        await wait(()=>JSON.stringify([...document.querySelectorAll('.mini-quota-details progress')].map(p=>p.value))===JSON.stringify(values));
+    "#
+        ),
+    )?;
+    eprintln!(
+        "NATIVE_ACCOUNT_EXISTING_COLD_DISPLAY_OK: real persisted startup, main/mini IPC and rendered progress, no identity or quota values logged"
+    );
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,5 +375,32 @@ mod tests {
         duplicate.push(format!("--native-account-startup-id={id}"));
         assert!(parse(duplicate).is_err());
         assert!(parse(Vec::<String>::new()).unwrap().is_none());
+    }
+    #[test]
+    fn existing_account_scene_requires_separate_explicit_opt_in() {
+        let args = vec![
+            "--native-smoke".into(),
+            "--native-account-startup-id=bd4a2122-8066-4e03-a846-3665274fa201".into(),
+            "--native-account-phase=local_ready".into(),
+        ];
+        assert!(parse(args.clone()).is_err());
+        let mut enabled = args;
+        enabled.push("--native-existing-account".into());
+        assert_eq!(
+            parse(enabled.clone()).unwrap().unwrap().phase,
+            Phase::LocalReady
+        );
+        enabled.push("--native-existing-account".into());
+        assert!(parse(enabled).is_err());
+        assert!(parse(vec!["--native-existing-account".into()]).is_err());
+        assert!(
+            parse(vec![
+                "--native-smoke".into(),
+                "--native-account-startup-id=bd4a2122-8066-4e03-a846-3665274fa201".into(),
+                "--native-account-phase=seed".into(),
+                "--native-existing-account".into(),
+            ])
+            .is_err()
+        );
     }
 }
