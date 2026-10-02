@@ -186,3 +186,11 @@ NativeCanvas 拥有 NativeDetails，后者为宿主控制窗口的 owned WS_POPU
 TrackMouseEvent 注册 TME_HOVER / TME_LEAVE 和 300 ms；配置清理取消注册并令排队 hover 无效，新移动重新注册，用户关闭后须离开再进入。鼠标允许从入口穿过间隙到面板滚动，离开两者后隐藏；入口焦点模式保留内容直到失焦或关闭。调用依据：[TrackMouseEvent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-trackmouseevent)。SetWindowPos 使用 NOACTIVATE，详情本身 WM_MOUSEACTIVATE 返回 MA_NOACTIVATE，依据：[SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos)。真实输入 / 焦点和屏幕阅读器仍需独立验收。
 
 原生清屏包含停止面板计时器、隐藏、丢弃旧 Frame、替换窗口名称与覆盖客户区像素；隐私 ACK 不能先于该流程。WndProc 用 Rc 保留本次绘制帧且不持 RefCell 借用调用 user32，重入清屏不能在旧帧仍使用时返回成功。新数据无效也清除旧帧。归属窗口销毁使存活标记失效，析构不对已复用 HWND 操作。Win10 正式双进程及自动验证见交付记录 M13e4b。
+
+## M13e5a：已销毁读数代次重建
+
+State 保留自有顶层控制窗口，NativeCanvas 的存活标记由本代次 WM_NCDESTROY 确定；不以可能复用的数值 HWND 认为旧画布仍有效。Replace / 配置、系统刷新，以及 Inspect / TakeActions 在发现画布代次已销毁时，先有条件释放旧 LayoutLease，丢弃旧画布 / 详情 / 点击 / 菜单资源，再在同一 UI 线程创建独立新类名的隐藏画布和详情。实际任务栏重新探测、DPI / 字体测量及原有所有权校验完成后，才挂接当前已经接受的快照。
+
+新窗口代次递增 system_revision，清除只属于旧原生资源代次的失败状态；原生创建 / 当前绘制再次失败仍走既有错误与有界宿主重试。旧 Explorer 窗口或归属已失效时，布局释放维持 IdentityLost 等真实结果，不写入新 / 复用的 Shell HWND，也不携带旧几何进入新租约。销毁发生在模态菜单中时结束跟踪；旧点击 / 菜单意图不能转入新画布，详情保持隐藏直到新输入。禁用 / 清屏不因恢复而重新启用。
+
+自动普通测试只销毁自有隐藏窗口，不启用嵌入；正式 -TaskbarActions 在真实 Win10 任务栏中关闭自有 PID / 类的嵌入子窗口，并分别验证详情 + 待确认单击、模态菜单时的恢复。宿主 PID 不变、新类名与新详情、旧意图丢弃及最后原几何恢复通过；这不等于真实 Explorer 退出 / 重启或 Shell PID / 结构变化已经验收。

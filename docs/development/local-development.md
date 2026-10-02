@@ -183,3 +183,5 @@ M13e4a 的定向检查：cargo test -p token-pulse-taskbar --test details --test
 M13e4b 原生详情定向检查：cargo test -p token-pulse-taskbar --lib；全套用 cargo test -p token-pulse-taskbar --all-targets。四档 DPI 使用系统字体和合成 DTO，独立检查完整字符 / 数值、布局边界、0 / unknown 条、隐私 / 主题，以及自有 HWND 的显示 / 滚动 / 清屏像素 / 销毁；不调整系统 DPI。可显式设置 TOKENPULSE_DETAILS_VISUAL_DIR 为仓库 test-results/native-details 后运行 details_window 过滤测试，输出开发合成 GDI BMP；该环境变量仅由测试模块读取，生产宿主不写图像文件。
 
 pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions 现在还检查正式独立宿主详情窗，以自有焦点 / 翻页 / Escape 消息显示与关闭，再用真实主端命令作两次隐私切换 / 新输入核对内容，并回归菜单、窗口及退出原几何恢复。需同时有 NATIVE_TASKBAR_DETAILS_OK / NATIVE_TASKBAR_MENU_OK / NATIVE_TASKBAR_ACTIONS_OK 和退出 0。Win10 19045 / 150% 已通过；WebView2 注销 1412 仍记录，不是本场景断言失败。自有消息不替代物理悬停 / 键盘可达性 / 焦点和屏幕阅读器；实际自动隐藏、Explorer、Win11 / 物理多屏 DPI 后续单独验收，已有综合恢复键回归失败仍待复核。未运行性能测试。
+
+M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普通测试仅销毁自有隐藏子窗口并由 Inspect / TakeActions 恢复，不启用任务栏嵌入或重启 Explorer。-TaskbarActions 增加实际嵌入子窗口丢失场景：只向本次宿主 PID / 类确认的读数发送 WM_CLOSE，在详情 / 待确认点击和菜单期间分别检查同宿主新类重建、旧意图消除、新详情 / 现有动作及最终原几何恢复。需追加 NATIVE_TASKBAR_RECREATE_OK；Win10 19045 / 150% 已通过，真实 Explorer 退出 / 重启与物理兼容矩阵另行验收。

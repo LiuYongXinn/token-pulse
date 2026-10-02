@@ -57,6 +57,7 @@ fn verify_actions(app: &tauri::AppHandle) -> Result<(), String> {
     )?;
     wait_actions_ready(app)?;
     verify_details(app, &main)?;
+    verify_canvas_recreation(app, &mini)?;
     main.hide().map_err(|e| e.to_string())?;
     // These are authored messages to our verified own readout, explicitly not real mouse input.
     own_click_message(app, WM_LBUTTONUP)?;
@@ -224,17 +225,13 @@ fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
 fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String> {
     own_readout_message(app, message, 0, 0)
 }
-fn own_readout_message(
+fn own_readout_window(
     app: &tauri::AppHandle,
-    message: u32,
-    wparam: usize,
-    lparam: isize,
-) -> Result<(), String> {
+) -> Result<windows_sys::Win32::Foundation::HWND, String> {
     use windows_sys::Win32::{
         Foundation::{HWND, LPARAM},
         UI::WindowsAndMessaging::{
-            EnumChildWindows, FindWindowW, GetClassNameW, GetWindowThreadProcessId,
-            IsWindowVisible, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+            EnumChildWindows, FindWindowW, GetClassNameW, GetWindowThreadProcessId, IsWindowVisible,
         },
     };
     struct Probe {
@@ -277,12 +274,22 @@ fn own_readout_message(
     if probe.windows.len() != 1 {
         return Err("own readout identity not unique".into());
     }
+    Ok(probe.windows[0])
+}
+fn own_readout_message(
+    app: &tauri::AppHandle,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW};
+    let window = own_readout_window(app)?;
     if message == windows_sys::Win32::UI::WindowsAndMessaging::WM_CONTEXTMENU {
         if unsafe {
             windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
-                probe.windows[0],
+                window,
                 message,
-                probe.windows[0] as usize,
+                window as usize,
                 -1,
             )
         } == 0
@@ -293,7 +300,7 @@ fn own_readout_message(
     }
     if unsafe {
         SendMessageTimeoutW(
-            probe.windows[0],
+            window,
             message,
             wparam,
             lparam,
@@ -305,6 +312,79 @@ fn own_readout_message(
     {
         return Err("own click message timed out".into());
     }
+    Ok(())
+}
+fn verify_canvas_recreation(
+    app: &tauri::AppHandle,
+    mini: &tauri::WebviewWindow,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetClassNameW, WM_CLOSE, WM_KILLFOCUS, WM_LBUTTONUP, WM_SETFOCUS,
+    };
+    let service = super::taskbar_commands::service(app).ok_or("recreation service missing")?;
+    let pid = service.owned_host_pid().ok_or("recreation host missing")?;
+    let navigation = app
+        .state::<super::RuntimeState>()
+        .main_navigation
+        .lock()
+        .map_err(|_| "navigation lock")?
+        .revision
+        .clone();
+    let class = |window| {
+        let mut name = [0; 128];
+        let n = unsafe { GetClassNameW(window, name.as_mut_ptr(), 128) };
+        String::from_utf16_lossy(&name[..n.max(0) as usize])
+    };
+    for menu in [false, true] {
+        wait_actions_ready(app)?;
+        let old = class(own_readout_window(app)?);
+        let old_details = class(own_details(app)?.0);
+        if menu {
+            open_own_menu(app)?;
+        } else {
+            own_click_message(app, WM_SETFOCUS)?;
+            if !own_details(app)?.1 {
+                return Err("details absent before owned readout loss".into());
+            }
+            own_click_message(app, WM_LBUTTONUP)?; // Pending single must die with its native generation.
+        }
+        // Close only our verified PID/class child. Never close or restart Explorer here.
+        own_click_message(app, WM_CLOSE)?;
+        until_action(app, || {
+            service.owned_host_pid() == Some(pid)
+                && own_readout_window(app).is_ok_and(|w| class(w) != old)
+                && own_menu(pid).is_none()
+        })?;
+        wait_actions_ready(app)?;
+        let (new_details, visible, _) = own_details(app)?;
+        if class(new_details) == old_details || visible {
+            return Err("old details generation survived readout recreation".into());
+        }
+        thread::sleep(Duration::from_millis(
+            u64::from(unsafe {
+                windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime()
+            }) + 200,
+        ));
+        if mini.is_visible().map_err(|e| e.to_string())?
+            || app
+                .state::<super::RuntimeState>()
+                .main_navigation
+                .lock()
+                .map_err(|_| "navigation lock")?
+                .revision
+                != navigation
+        {
+            return Err("old generation intention escaped recreation".into());
+        }
+        own_click_message(app, WM_SETFOCUS)?;
+        if !own_details(app)?.1 {
+            return Err("new details cannot open after recreation".into());
+        }
+        own_click_message(app, WM_KILLFOCUS)?;
+    }
+    println!(
+        "NATIVE_TASKBAR_RECREATE_OK: actual owned embedded child loss with details/pending click and modal menu; same host PID creates new window/detail classes, old intentions discarded, current snapshot reattached; actual Explorer restart acceptance separate"
+    );
     Ok(())
 }
 fn own_details(

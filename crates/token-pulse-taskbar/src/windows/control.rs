@@ -137,6 +137,7 @@ impl NativeReceipt {
     }
 }
 struct State {
+    control: HWND,
     receiver: Receiver<Request>,
     view: Option<Box<TaskbarView>>,
     topology: Result<TaskbarTopology, ProbeError>,
@@ -151,6 +152,31 @@ struct State {
     instance: String,
 }
 impl State {
+    fn canvas_lost(&self) -> bool {
+        self.canvas.as_ref().is_none_or(|canvas| !canvas.alive())
+    }
+    fn recreate_canvas(&mut self) -> Result<(), TransportError> {
+        if !self.canvas_lost() {
+            return Ok(());
+        }
+        // Release only matching shell ownership. A new Explorer generation cannot inherit
+        // either the old layout lease, native actions, font resources or hidden details.
+        self.detach();
+        let previous = self.canvas.take();
+        drop(previous);
+        self.topology = inspect_primary_taskbar();
+        let dpi = self
+            .topology
+            .as_ref()
+            .map(|topology| topology.dpi)
+            .unwrap_or(96);
+        let canvas = unsafe { NativeCanvas::create(self.control, dpi) }
+            .map_err(|_| TransportError::Native)?;
+        self.canvas = Some(canvas);
+        self.native_failed = false;
+        self.system_revision = self.system_revision.saturating_add(1);
+        Ok(())
+    }
     fn receipt(&self, window: HWND) -> NativeReceipt {
         NativeReceipt {
             cached_view_present: self.view.is_some(),
@@ -192,6 +218,7 @@ impl State {
         }
     }
     fn prepare(&mut self) -> Result<(), TransportError> {
+        self.recreate_canvas()?;
         if !self.enabled || self.view.is_none() || self.layout.as_ref().is_some_and(|l| !l.valid())
         {
             self.detach();
@@ -354,14 +381,24 @@ unsafe extern "system" fn procedure(
                             state.prepare()
                         }
                         Operation::Inspect => {
-                            if state.layout.as_ref().is_some_and(|l| !l.valid()) {
-                                state.detach();
-                                state.topology = inspect_primary_taskbar();
-                                state.embedding_failure = Some(ProbeError::UnsafeGeometry);
+                            if state.canvas_lost() {
+                                state.prepare()
+                            } else {
+                                if state.layout.as_ref().is_some_and(|l| !l.valid()) {
+                                    state.detach();
+                                    state.topology = inspect_primary_taskbar();
+                                    state.embedding_failure = Some(ProbeError::UnsafeGeometry);
+                                }
+                                Ok(())
                             }
-                            Ok(())
                         }
-                        Operation::TakeActions => Ok(()),
+                        Operation::TakeActions => {
+                            if state.canvas_lost() {
+                                state.prepare()
+                            } else {
+                                Ok(())
+                            }
+                        }
                     };
                     if result.is_err() {
                         state.native_failed = true;
@@ -531,6 +568,7 @@ unsafe fn native_thread(
         busy: Cell::new(false),
         taskbar_created,
         state: UnsafeCell::new(State {
+            control: ptr::null_mut(),
             receiver,
             view: None,
             topology: inspect_primary_taskbar(),
@@ -576,6 +614,9 @@ unsafe fn native_thread(
             UnregisterClassW(class.as_ptr(), module);
         }
         return Err(TransportError::Native);
+    }
+    unsafe {
+        (*state.state.get()).control = window;
     }
     let canvas_dpi = unsafe { &*state.state.get() }
         .topology
@@ -657,6 +698,76 @@ mod tests {
             quota: None,
             details: None,
         }
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn lost_owned_canvas_is_recreated_before_status_or_actions_without_reusing_old_generation()
+     {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetClassInfoExW, SMTO_ABORTIFHUNG, SMTO_BLOCK, SendMessageTimeoutW,
+        };
+        let baseline = inspect_primary_taskbar();
+        let controller = NativeController::start().unwrap();
+        let control = controller.window as HWND;
+        controller.replace(Some(view())).await.unwrap();
+        let name = |window| {
+            let mut name = [0; 128];
+            let n = unsafe { GetClassNameW(window, name.as_mut_ptr(), 128) };
+            assert!(n > 0);
+            String::from_utf16_lossy(&name[..n as usize])
+        };
+        for actions_first in [false, true] {
+            let before = controller.inspect().await.unwrap();
+            let canvas = unsafe { GetWindow(control, GW_CHILD) };
+            assert!(!canvas.is_null());
+            let old_class = name(canvas);
+            let mut result = 0;
+            assert_ne!(
+                unsafe {
+                    SendMessageTimeoutW(
+                        canvas,
+                        WM_CLOSE,
+                        0,
+                        0,
+                        SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                        2000,
+                        &mut result,
+                    )
+                },
+                0
+            );
+            assert_eq!(unsafe { IsWindow(canvas) }, 0);
+            assert_ne!(unsafe { IsWindow(control) }, 0);
+            if actions_first {
+                assert!(controller.take_actions().await.unwrap().is_empty());
+            }
+            let after = controller.inspect().await.unwrap();
+            let recreated = unsafe { GetWindow(control, GW_CHILD) };
+            assert!(!recreated.is_null());
+            assert_ne!(name(recreated), old_class); // Numeric HWND reuse is permitted, class generation is not.
+            assert!(after.system_revision > before.system_revision);
+            assert!(after.cached_view_present && after.private_fields_present);
+            assert!(
+                !after.paint_failed
+                    && !after.readout_visible
+                    && !after.control_visible
+                    && !after.embedded
+            );
+            let mut info: WNDCLASSEXW = unsafe { mem::zeroed() };
+            assert_eq!(
+                unsafe {
+                    GetClassInfoExW(
+                        GetModuleHandleW(ptr::null()),
+                        wide(&old_class).as_ptr(),
+                        &mut info,
+                    )
+                },
+                0
+            );
+        }
+        let clear = controller.replace(None).await.unwrap();
+        assert!(!clear.cached_view_present && !clear.private_fields_present && !clear.paint_failed);
+        drop(controller);
+        assert_eq!(inspect_primary_taskbar(), baseline); // This ordinary test never enables embedding.
     }
     #[tokio::test(flavor = "current_thread")]
     async fn actual_hidden_window_owns_cache_and_clears_it_before_native_receipt() {

@@ -306,3 +306,13 @@ HostQuota 增加独立 last_attempt_at_ms 和受限 ErrorCode，成功读取时�
 实际系统：Win10 19045 / 150% DPI，隔离无来源 / 无账户数据库，正式主程序 / 独立宿主 / 两个真实 WebView。扩展 -TaskbarActions，通过明确标记的自有焦点 / 滚动 / Escape 消息检查真实详情窗、工作区及非激活样式，两次正式共享隐私切换关闭旧面板，重新输入后全文与已提交策略一致；菜单 / 小窗 / 同范围统计 / 禁用及 shutdown 原几何恢复继续通过。最后边界收尾后重复场景，均输出 NATIVE_TASKBAR_DETAILS_OK / NATIVE_TASKBAR_MENU_OK / NATIVE_TASKBAR_ACTIONS_OK、退出 0；WebView2 注销 1412 诊断保留。
 
 以上不替代物理 300 ms 悬停、键盘可达性 / 焦点保持 / 屏幕阅读器、实际自动隐藏、系统控件、Explorer 重建和 Win11 / 物理多屏 DPI；当前已有 SendInput 锁屏 / 前台异常和综合恢复键回归失败仍单列待复核。继续实现 Explorer 生命周期等剩余范围，M14 与迁移保护取消项保持不变。
+
+## M13e5a：丢失画布后的新代次恢复
+
+修复控制器已持有画布但其窗口代次已销毁时，继续使用旧对象 / 直接判为永久原生失败的问题。WM_NCDESTROY 标记本代次失效，后续状态 / 动作读取或快照 / 配置 / 系统刷新先释放匹配的旧布局，丢弃旧画布 / 详情 / 意图，在同一 UI 线程新建隐藏窗口、重探真实拓扑 / DPI 并按原安全租约挂接当前快照。新代次递增 system_revision；新建或绘制失败继续真实报错。模态菜单中销毁结束跟踪，旧点击不能逃逸；配置禁用 / 隐私清屏仍有效，原始日志与数据库不受影响。
+
+自动定向 controller 3 项及任务栏 all-targets 全套 55 项通过，1 项内部私有入口 ignored。新增自有隐藏窗口两次销毁，分别以 Inspect / TakeActions 首次触发重建，检查不同类名、旧类注销、新修订、数据保留、动作为空与清屏，测试未启用嵌入且前后任务栏几何一致。taskbar / desktop all-targets Clippy warnings denied、fmt 与文档链接 / 差异检查通过。
+
+真实系统：Win10 19045 / 150% DPI 的隔离 -TaskbarActions，分别关闭经自有宿主 PID / 类验证的嵌入子窗口：详情打开 + 单击尚待系统双击期限确认，以及标准菜单打开。正式通道恢复后同一宿主 PID、新读数 / 详情类名、原快照重新嵌入、旧详情隐藏 / 旧点击与导航无泄漏，新详情仍可打开；后续全部菜单 / 窗口回归及最后 shutdown 原几何恢复通过。NATIVE_TASKBAR_RECREATE_OK / DETAILS_OK / MENU_OK / ACTIONS_OK、退出 0；WebView2 注销 1412 诊断保留。
+
+没有终止 Explorer，此场景不能替代真实 Shell 退出 / 重启、Shell PID / HWND 复用 / 结构变化及实际 DPI / 多屏验收；继续推进剩余任务栏适配与其他保留模块，无性能测试或已取消灾难恢复扩展。

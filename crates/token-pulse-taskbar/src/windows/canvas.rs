@@ -95,6 +95,11 @@ unsafe extern "system" fn procedure(
         if message == WM_NCDESTROY {
             slot.alive.set(false);
             slot.details.clear().ok();
+            if !slot.painting.get() && unsafe { (*slot.get()).menu_open } {
+                unsafe {
+                    EndMenu();
+                }
+            }
             unsafe {
                 SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             }
@@ -494,6 +499,10 @@ impl NativeCanvas {
     }
     pub(crate) fn visible(&self) -> bool {
         self.state.alive.get() && unsafe { IsWindowVisible(self.window) } != 0
+    }
+    pub(crate) fn alive(&self) -> bool {
+        // NCDESTROY belongs to this generation; a reused numeric HWND is not this canvas.
+        self.state.alive.get()
     }
     pub(crate) fn plan(&self) -> Option<&MeasuredPlan> {
         unsafe { &*self.state.get() }.plan.as_ref()
