@@ -3,11 +3,12 @@ use std::{mem, ptr};
 use windows_sys::{
     Wdk::System::SystemServices::RtlGetVersion,
     Win32::{
-        Foundation::{CloseHandle, HANDLE, HWND, LPARAM, RECT},
+        Foundation::{CloseHandle, FILETIME, HANDLE, HWND, LPARAM, RECT, WAIT_TIMEOUT},
         System::{
             SystemInformation::{GetWindowsDirectoryW, OSVERSIONINFOW},
             Threading::{
-                OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+                GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+                PROCESS_SYNCHRONIZE, QueryFullProcessImageNameW, WaitForSingleObject,
             },
         },
         UI::{
@@ -16,8 +17,8 @@ use windows_sys::{
                 SetThreadDpiAwarenessContext,
             },
             WindowsAndMessaging::{
-                EnumChildWindows, FindWindowW, GetClassNameW, GetParent, GetWindowRect,
-                GetWindowThreadProcessId, IsWindowVisible,
+                EnumChildWindows, FindWindowW, GetClassNameW, GetClientRect, GetParent,
+                GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
             },
         },
     },
@@ -34,6 +35,7 @@ pub enum ProbeError {
     UnexpectedStructure,
     UnsafeGeometry,
     InsufficientSpace,
+    BackgroundUnavailable,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScreenRect {
@@ -49,7 +51,7 @@ impl ScreenRect {
     pub fn height(self) -> i32 {
         self.bottom - self.top
     }
-    fn valid(self) -> bool {
+    pub(crate) fn valid(self) -> bool {
         [self.left, self.top, self.right, self.bottom]
             .iter()
             .all(|v| (-1_000_000..=1_000_000).contains(v))
@@ -136,9 +138,9 @@ impl TaskbarTopology {
         })
     }
 }
-struct DpiGuard(HANDLE);
+pub(crate) struct DpiGuard(HANDLE);
 impl DpiGuard {
-    fn enter() -> Result<Self, ProbeError> {
+    pub(crate) fn enter() -> Result<Self, ProbeError> {
         let previous =
             unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         if previous.is_null() {
@@ -163,7 +165,7 @@ impl Drop for ProcessHandle {
         }
     }
 }
-fn rect(window: HWND) -> Result<ScreenRect, ProbeError> {
+pub(crate) fn rect(window: HWND) -> Result<ScreenRect, ProbeError> {
     let mut rect: RECT = unsafe { mem::zeroed() };
     if unsafe { GetWindowRect(window, &mut rect) } == 0 {
         return Err(ProbeError::Os);
@@ -175,7 +177,7 @@ fn rect(window: HWND) -> Result<ScreenRect, ProbeError> {
         bottom: rect.bottom,
     })
 }
-fn process_id(window: HWND) -> u32 {
+pub(crate) fn process_id(window: HWND) -> u32 {
     let mut pid = 0;
     unsafe {
         GetWindowThreadProcessId(window, &mut pid);
@@ -222,8 +224,14 @@ fn unique(children: &[Child], name: &str, parent: HWND, pid: u32) -> Result<HWND
     }
     Ok(matches[0].handle)
 }
-fn verify_explorer(pid: u32) -> Result<(), ProbeError> {
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+fn verify_explorer(pid: u32) -> Result<ProcessHandle, ProbeError> {
+    let handle = unsafe {
+        OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+            0,
+            pid,
+        )
+    };
     if handle.is_null() {
         return Err(ProbeError::Os);
     }
@@ -246,11 +254,134 @@ fn verify_explorer(pid: u32) -> Result<(), ProbeError> {
     )) {
         return Err(ProbeError::UnexpectedStructure);
     }
-    Ok(())
+    Ok(handle)
+}
+pub(crate) fn birth(handle: HANDLE) -> Result<[u32; 2], ProbeError> {
+    let mut created: FILETIME = unsafe { mem::zeroed() };
+    let mut exited: FILETIME = unsafe { mem::zeroed() };
+    let mut kernel: FILETIME = unsafe { mem::zeroed() };
+    let mut user: FILETIME = unsafe { mem::zeroed() };
+    if unsafe { GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user) } == 0 {
+        return Err(ProbeError::Os);
+    }
+    Ok([created.dwLowDateTime, created.dwHighDateTime])
+}
+pub(crate) fn class_name(window: HWND) -> Result<String, ProbeError> {
+    let mut text = [0; 128];
+    let length = unsafe { GetClassNameW(window, text.as_mut_ptr(), 128) };
+    if length <= 0 || length == 127 {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    String::from_utf16(&text[..length as usize]).map_err(|_| ProbeError::UnexpectedStructure)
+}
+pub(crate) fn client_rect(window: HWND) -> Result<ScreenRect, ProbeError> {
+    let mut rect: RECT = unsafe { mem::zeroed() };
+    if unsafe { GetClientRect(window, &mut rect) } == 0 {
+        return Err(ProbeError::Os);
+    }
+    Ok(ScreenRect {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    })
+}
+pub(crate) struct TaskbarWindows {
+    pub(crate) root: HWND,
+    pub(crate) rebar: HWND,
+    pub(crate) switch: HWND,
+    pub(crate) list: HWND,
+    pub(crate) tray: HWND,
+    pub(crate) pid: u32,
+    pub(crate) birth: [u32; 2],
+    process: ProcessHandle,
+}
+impl TaskbarWindows {
+    pub(crate) fn safe_slot(&self, slot: ScreenRect, child: HWND) -> Result<(), ProbeError> {
+        self.verify()?;
+        let mut children = Children {
+            windows: vec![],
+            overflow: false,
+            examined: 0,
+        };
+        unsafe {
+            EnumChildWindows(
+                self.root,
+                Some(collect),
+                (&mut children as *mut Children) as LPARAM,
+            );
+        }
+        if children.overflow {
+            return Err(ProbeError::UnexpectedStructure);
+        }
+        if children
+            .windows
+            .iter()
+            .any(|c| c.parent == self.rebar && c.handle != self.switch)
+        {
+            return Err(ProbeError::UnexpectedStructure);
+        }
+        for window in children
+            .windows
+            .iter()
+            .filter(|c| c.parent == self.root && c.handle != self.rebar && c.handle != child)
+        {
+            let bounds = rect(window.handle)?;
+            if bounds.left < slot.right
+                && bounds.right > slot.left
+                && bounds.top < slot.bottom
+                && bounds.bottom > slot.top
+            {
+                return Err(ProbeError::UnsafeGeometry);
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn verify(&self) -> Result<(), ProbeError> {
+        if unsafe { WaitForSingleObject(self.process.0, 0) } != WAIT_TIMEOUT
+            || birth(self.process.0)? != self.birth
+        {
+            return Err(ProbeError::UnexpectedStructure);
+        }
+        for (window, class, parent) in [
+            (self.root, "Shell_TrayWnd", std::ptr::null_mut()),
+            (self.rebar, "ReBarWindow32", self.root),
+            (self.switch, "MSTaskSwWClass", self.rebar),
+            (self.list, "MSTaskListWClass", self.switch),
+            (self.tray, "TrayNotifyWnd", self.root),
+        ] {
+            if process_id(window) != self.pid
+                || class_name(window)? != class
+                || unsafe { GetParent(window) } != parent
+            {
+                return Err(ProbeError::UnexpectedStructure);
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn topology(&self) -> Result<TaskbarTopology, ProbeError> {
+        self.verify()?;
+        Ok(TaskbarTopology {
+            build: 19045,
+            dpi: unsafe { GetDpiForWindow(self.root) },
+            taskbar: rect(self.root)?,
+            rebar: rect(self.rebar)?,
+            task_switch: rect(self.switch)?,
+            task_list: rect(self.list)?,
+            notification: rect(self.tray)?,
+        })
+    }
 }
 /// Inspect only the primary taskbar on the currently supported Win10 build.
 /// Unsupported versions are an explicit capability failure, never embedded success.
 pub fn inspect_primary_taskbar() -> Result<TaskbarTopology, ProbeError> {
+    let _dpi = DpiGuard::enter()?;
+    let windows = discover_primary_taskbar()?;
+    let topology = windows.topology()?;
+    topology.validate()?;
+    Ok(topology)
+}
+pub(crate) fn discover_primary_taskbar() -> Result<TaskbarWindows, ProbeError> {
     let _dpi = DpiGuard::enter()?;
     let mut version: OSVERSIONINFOW = unsafe { mem::zeroed() };
     version.dwOSVersionInfoSize = mem::size_of_val(&version) as u32;
@@ -269,7 +400,7 @@ pub fn inspect_primary_taskbar() -> Result<TaskbarTopology, ProbeError> {
     if pid == 0 {
         return Err(ProbeError::Os);
     }
-    verify_explorer(pid)?;
+    let process = verify_explorer(pid)?;
     let mut children = Children {
         windows: vec![],
         overflow: false,
@@ -297,19 +428,16 @@ pub fn inspect_primary_taskbar() -> Result<TaskbarTopology, ProbeError> {
     {
         return Err(ProbeError::UnexpectedStructure);
     }
-    let topology = TaskbarTopology {
-        build: version.dwBuildNumber,
-        dpi: unsafe { GetDpiForWindow(root) },
-        taskbar: rect(root)?,
-        rebar: rect(rebar)?,
-        task_switch: rect(switch)?,
-        task_list: rect(list)?,
-        notification: rect(tray)?,
+    let windows = TaskbarWindows {
+        root,
+        rebar,
+        switch,
+        list,
+        tray,
+        pid,
+        birth: birth(process.0)?,
+        process,
     };
-    topology.validate()?;
-    // A probe is ephemeral; a future mutating adapter must recheck HWND/PID/generation.
-    if process_id(root) != pid || unsafe { GetParent(rebar) } != root {
-        return Err(ProbeError::UnexpectedStructure);
-    }
-    Ok(topology)
+    windows.verify()?;
+    Ok(windows)
 }

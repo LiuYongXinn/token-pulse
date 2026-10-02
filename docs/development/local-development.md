@@ -83,9 +83,9 @@ cargo run -p token-pulse-taskbar --example export_host_contract -- --check
 cargo clippy -p token-pulse-taskbar --all-targets -- -D warnings
 ```
 
-Windows 测试自动启动 Cargo 构建的独立宿主，使用本次随机命名管道和合成协议，验证 DACL / PID / 正常及异常退出；心跳期限检查等待真实 15 秒。这是功能检查，不是性能测试。测试不读取真实账户、日志或统计库，也不调整 Explorer。当前宿主仅完成通信，未创建任务栏窗口；不手工传入或记录 nonce 参数。正式 Tauri 管理器与安装位置解析随后接入，独立程序将随应用打包，生产不依赖 Cargo 或开发环境。
+Windows 测试自动启动 Cargo 构建的独立宿主，使用本次随机命名管道和合成协议，验证 DACL / PID / 正常及异常退出；心跳期限检查等待真实 15 秒。这是功能检查，不是性能测试。默认测试不读取真实账户、日志或统计库，也不调整 Explorer。当前宿主已具备隐藏控制窗口、原生文字与画布；生产管道尚未启用 Explorer 布局。不要手工传入或记录 nonce 参数。正式 Tauri 管理器与安装位置解析随后接入，独立程序将随应用打包，生产不依赖 Cargo 或开发环境。
 
-宿主现已创建隐藏控制窗口和 UI 线程，但仍未绘制或嵌入。可显式运行以下只读探测，不调整系统布局、不读取窗口标题或账户数据：
+可显式运行以下只读探测，不调整系统布局、不读取窗口标题或账户数据：
 
 ```powershell
 cargo run -p token-pulse-taskbar --example inspect_taskbar -- --inspect-taskbar
@@ -95,10 +95,20 @@ cargo run -p token-pulse-taskbar --example inspect_taskbar -- --inspect-taskbar
 
 ## 原生任务栏文字与开发视觉检查
 
-宿主已创建自有读数子窗口并按真实 DTO 准备文字 / 系统字体布局，当前仍隐藏且未挂入 Explorer。以下显式开发命令只使用仓库合成夹具，不访问真实账户 / 日志，不改变任务栏：
+宿主已创建自有读数子窗口并按真实 DTO 准备文字 / 系统字体布局，默认隐藏。以下显式开发命令只使用仓库合成夹具，不访问真实账户 / 日志，不改变任务栏：
 
 ```powershell
 cargo run -p token-pulse-taskbar --example render_taskbar -- --render-development-fixtures
 ```
 
 原生 GDI BMP 输出在被 Git 忽略的 test-results/taskbar-native-visual，文件名及 README 明确 DEVELOPMENT-FIXTURE。默认应用不链接这些值，正常测试不生成视觉文件；使用图像查看器检查，无需 Python / Pillow。实际绘制代码与宿主共用，但图片不证明系统任务栏嵌入、实际账户或物理 DPI 切换已经验收。
+
+## 显式 Windows 任务栏实际布局验收
+
+以下开发命令会短暂调整已支持的 Win10 19045 主任务列表宽度，显示合成读数约 5 秒，更新隐私，然后验证禁用、重挂接和正常析构恢复原布局。仅在需要实际原生验收时执行，默认 tests / CI 不执行，也不重启 Explorer、不读取账户或日志。
+
+```powershell
+cargo run -p token-pulse-taskbar --example check_taskbar_layout -- --native-taskbar-development-check
+```
+
+该独立开发程序只截取其自身已验证的原生读数窗口，生成 test-results/taskbar-native-attachment 下两张 DEVELOPMENT-FIXTURE BMP 和说明，不截取桌面、系统控件或其他应用。检查原生文字、背景、费用估算与隐私清除；矩形使用物理 DPI 上下文。程序显式禁用和正常作用域析构都执行条件恢复；强制杀进程不等于正常析构，目前仍待父端归属清理实现。此次本机实际 150% DPI 证据见[交付记录](delivery-status.md)，不代表 Win11 / 所有 DPI / 多屏或系统按钮交互全部通过。

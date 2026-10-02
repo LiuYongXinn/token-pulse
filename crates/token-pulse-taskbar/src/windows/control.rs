@@ -1,8 +1,10 @@
 //! Dedicated Win32 UI thread. The hidden top-level window receives shell/system broadcasts.
-//! It never claims embedding and does not modify Explorer in this module.
+//! Embedding is opt-in and delegated to the guarded, thread-owned layout lease.
 use super::{
     TransportError,
     canvas::NativeCanvas,
+    layout::{LayoutLease, RestoreDisposition, background},
+    render::Palette,
     topology::{ProbeError, TaskbarTopology, inspect_primary_taskbar, wide},
     transport::IO_TIMEOUT,
 };
@@ -11,7 +13,7 @@ use crate::{
     display::{Density, DisplayPreferences},
 };
 use std::{
-    cell::UnsafeCell,
+    cell::{Cell, UnsafeCell},
     mem, ptr,
     sync::mpsc::{self, Receiver, SyncSender},
     thread::{self, JoinHandle},
@@ -34,9 +36,22 @@ use windows_sys::Win32::{
     },
 };
 const APPLY: u32 = WM_APP + 1;
+const REFRESH: u32 = WM_APP + 2;
+struct ThreadState {
+    busy: Cell<bool>,
+    taskbar_created: u32,
+    state: UnsafeCell<State>,
+}
+struct BusyGuard<'a>(&'a Cell<bool>);
+impl Drop for BusyGuard<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
+}
 enum Operation {
     Replace(Option<Box<TaskbarView>>),
     Inspect,
+    Enable(bool),
 }
 struct Request {
     operation: Operation,
@@ -53,15 +68,21 @@ pub struct NativeReceipt {
     pub measured_width: Option<i32>,
     pub measured_density: Option<Density>,
     pub paint_failed: bool,
+    pub embedded: bool,
+    pub embedding_failure: Option<ProbeError>,
+    pub last_restore: Option<RestoreDisposition>,
 }
 struct State {
     receiver: Receiver<Request>,
     view: Option<Box<TaskbarView>>,
     topology: Result<TaskbarTopology, ProbeError>,
     system_revision: u64,
-    taskbar_created: u32,
     canvas: Option<NativeCanvas>,
     native_failed: bool,
+    enabled: bool,
+    layout: Option<LayoutLease>,
+    embedding_failure: Option<ProbeError>,
+    last_restore: Option<RestoreDisposition>,
 }
 impl State {
     fn receipt(&self, window: HWND) -> NativeReceipt {
@@ -81,20 +102,53 @@ impl State {
                 .and_then(|c| c.plan().map(|p| p.density)),
             paint_failed: self.native_failed
                 || self.canvas.as_ref().is_some_and(|c| c.paint_failed()),
+            embedded: self.layout.as_ref().is_some_and(|l| l.valid())
+                && self.canvas.as_ref().is_some_and(|c| c.visible()),
+            embedding_failure: self.embedding_failure,
+            last_restore: self.last_restore,
         }
     }
     fn system_changed(&mut self) {
         self.system_revision = self.system_revision.saturating_add(1);
+        self.detach();
         self.topology = inspect_primary_taskbar();
         if self.prepare().is_err() {
             self.native_failed = true;
         }
     }
+    fn detach(&mut self) {
+        if let Some(mut layout) = self.layout.take() {
+            self.last_restore = Some(layout.release());
+        }
+        if let Some(canvas) = self.canvas.as_mut() {
+            canvas.set_attached(false);
+        }
+    }
     fn prepare(&mut self) -> Result<(), TransportError> {
+        if !self.enabled || self.view.is_none() || self.layout.as_ref().is_some_and(|l| !l.valid())
+        {
+            self.detach();
+            self.topology = inspect_primary_taskbar();
+        }
+        self.embedding_failure = None;
         if let Some(canvas) = self.canvas.as_mut() {
             canvas.clear().map_err(|_| TransportError::Native)?;
             if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
-                let available = topology.task_switch.width() - (320 * topology.dpi / 96) as i32;
+                let available = self
+                    .layout
+                    .as_ref()
+                    .map(|l| l.slot.width())
+                    .unwrap_or_else(|| {
+                        topology.task_switch.width() - (320 * topology.dpi / 96) as i32
+                    });
+                if self.enabled {
+                    match background() {
+                        Ok(color) => canvas.set_palette(
+                            Palette::system(color).map_err(|_| TransportError::Native)?,
+                        ),
+                        Err(error) => self.embedding_failure = Some(error),
+                    }
+                }
                 let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
                     Ok(duration) => {
                         i64::try_from(duration.as_millis()).map_err(|_| TransportError::Native)?
@@ -112,6 +166,21 @@ impl State {
                         now,
                     )
                     .map_err(|_| TransportError::Native)?;
+                if self.enabled && self.layout.is_none() && self.embedding_failure.is_none() {
+                    if let Some(plan) = canvas.plan() {
+                        match LayoutLease::attach(canvas.window, plan.width) {
+                            Ok(layout) => {
+                                self.layout = Some(layout);
+                                canvas.set_attached(true);
+                            }
+                            Err(error) => self.embedding_failure = Some(error),
+                        }
+                    } else {
+                        self.embedding_failure = Some(ProbeError::InsufficientSpace);
+                    }
+                }
+            } else if self.enabled {
+                self.embedding_failure = self.topology.as_ref().err().copied();
             }
         }
         if self.native_failed || self.canvas.as_ref().is_none_or(|c| c.paint_failed()) {
@@ -133,19 +202,77 @@ unsafe extern "system" fn procedure(
             SetWindowLongPtrW(window, GWLP_USERDATA, create.lpCreateParams as isize);
         }
     }
-    let raw = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut State;
+    let raw = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut ThreadState;
     if !raw.is_null() {
-        let state = unsafe { &mut *raw };
+        let slot = unsafe { &*raw };
+        // Cross-process window operations can dispatch incoming SendMessage calls on this same
+        // thread. Defer stateful work rather than forming another &mut State during that call.
+        if slot.busy.get() {
+            if message == slot.taskbar_created {
+                unsafe {
+                    PostMessageW(window, REFRESH, 0, 0);
+                }
+            }
+            match message {
+                WM_DESTROY => unsafe {
+                    PostQuitMessage(0);
+                },
+                WM_NCDESTROY => unsafe {
+                    SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+                },
+                APPLY | WM_CLOSE => unsafe {
+                    PostMessageW(window, message, 0, 0);
+                },
+                WM_DISPLAYCHANGE | WM_DPICHANGED | WM_SETTINGCHANGE | WM_THEMECHANGED
+                | WM_POWERBROADCAST | REFRESH => unsafe {
+                    PostMessageW(window, REFRESH, 0, 0);
+                },
+                _ => {}
+            }
+            return unsafe { DefWindowProcW(window, message, wparam, lparam) };
+        }
+        let taskbar_created = slot.taskbar_created;
+        let handled = matches!(
+            message,
+            APPLY
+                | REFRESH
+                | WM_CLOSE
+                | WM_DESTROY
+                | WM_NCDESTROY
+                | WM_DISPLAYCHANGE
+                | WM_DPICHANGED
+                | WM_SETTINGCHANGE
+                | WM_THEMECHANGED
+                | WM_POWERBROADCAST
+        ) || message == taskbar_created;
+        if !handled {
+            return unsafe { DefWindowProcW(window, message, wparam, lparam) };
+        }
+        slot.busy.set(true);
+        let _busy = BusyGuard(&slot.busy);
+        let state = unsafe { &mut *slot.state.get() };
         match message {
             APPLY => {
                 // A posted message carries no pointers or commands; only this private bounded
                 // Rust queue owns the request. External WM_APP messages cannot create an action.
                 while let Ok(request) = state.receiver.try_recv() {
-                    let result = if let Operation::Replace(view) = request.operation {
-                        state.view = view;
-                        state.prepare()
-                    } else {
-                        Ok(())
+                    let result = match request.operation {
+                        Operation::Replace(view) => {
+                            state.view = view;
+                            state.prepare()
+                        }
+                        Operation::Enable(enabled) => {
+                            state.enabled = enabled;
+                            state.prepare()
+                        }
+                        Operation::Inspect => {
+                            if state.layout.as_ref().is_some_and(|l| !l.valid()) {
+                                state.detach();
+                                state.topology = inspect_primary_taskbar();
+                                state.embedding_failure = Some(ProbeError::UnsafeGeometry);
+                            }
+                            Ok(())
+                        }
                     };
                     if result.is_err() {
                         state.native_failed = true;
@@ -155,6 +282,7 @@ unsafe extern "system" fn procedure(
                 return 0;
             }
             WM_CLOSE => {
+                state.detach();
                 state.view = None;
                 if let Some(canvas) = state.canvas.as_mut() {
                     canvas.clear().ok();
@@ -165,6 +293,7 @@ unsafe extern "system" fn procedure(
                 return 0;
             }
             WM_DESTROY => {
+                state.detach();
                 state.view = None;
                 if let Some(canvas) = state.canvas.as_mut() {
                     canvas.clear().ok();
@@ -177,9 +306,9 @@ unsafe extern "system" fn procedure(
             WM_NCDESTROY => unsafe {
                 SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             },
-            WM_DISPLAYCHANGE | WM_DPICHANGED | WM_SETTINGCHANGE | WM_THEMECHANGED
+            REFRESH | WM_DISPLAYCHANGE | WM_DPICHANGED | WM_SETTINGCHANGE | WM_THEMECHANGED
             | WM_POWERBROADCAST => state.system_changed(),
-            _ if message == state.taskbar_created => state.system_changed(),
+            _ if message == taskbar_created => state.system_changed(),
             _ => {}
         }
     }
@@ -243,6 +372,10 @@ impl NativeController {
     pub async fn inspect(&self) -> Result<NativeReceipt, TransportError> {
         self.request(Operation::Inspect).await
     }
+    /// Only this private Rust queue can enable native layout mutation. Default is disabled.
+    pub async fn enable_taskbar(&self, enabled: bool) -> Result<NativeReceipt, TransportError> {
+        self.request(Operation::Enable(enabled)).await
+    }
 }
 impl Drop for NativeController {
     fn drop(&mut self) {
@@ -271,15 +404,22 @@ unsafe fn native_thread(
     if module.is_null() || taskbar_created == 0 {
         return Err(TransportError::Native);
     }
-    let state = Box::new(UnsafeCell::new(State {
-        receiver,
-        view: None,
-        topology: inspect_primary_taskbar(),
-        system_revision: 0,
+    let state = Box::new(ThreadState {
+        busy: Cell::new(false),
         taskbar_created,
-        canvas: None,
-        native_failed: false,
-    }));
+        state: UnsafeCell::new(State {
+            receiver,
+            view: None,
+            topology: inspect_primary_taskbar(),
+            system_revision: 0,
+            canvas: None,
+            native_failed: false,
+            enabled: false,
+            layout: None,
+            embedding_failure: None,
+            last_restore: None,
+        }),
+    });
     let window_class = WNDCLASSEXW {
         cbSize: mem::size_of::<WNDCLASSEXW>() as u32,
         lpfnWndProc: Some(procedure),
@@ -303,7 +443,7 @@ unsafe fn native_thread(
             ptr::null_mut(),
             ptr::null_mut(),
             module,
-            state.get().cast(),
+            (&*state as *const ThreadState).cast(),
         )
     };
     if window.is_null() {
@@ -312,13 +452,13 @@ unsafe fn native_thread(
         }
         return Err(TransportError::Native);
     }
-    let canvas_dpi = unsafe { &*state.get() }
+    let canvas_dpi = unsafe { &*state.state.get() }
         .topology
         .as_ref()
         .map(|t| t.dpi)
         .unwrap_or(96);
     match unsafe { NativeCanvas::create(window, canvas_dpi) } {
-        Ok(canvas) => unsafe { (*state.get()).canvas = Some(canvas) },
+        Ok(canvas) => unsafe { (*state.state.get()).canvas = Some(canvas) },
         Err(_) => {
             unsafe {
                 DestroyWindow(window);
@@ -341,10 +481,12 @@ unsafe fn native_thread(
         }
     }
     unsafe {
-        (*state.get()).view = None;
+        state.busy.set(true);
+        (*state.state.get()).view = None;
+        (*state.state.get()).detach();
     }
     // Move the child owner out before dropping it; WM_PARENTNOTIFY can reenter the controller.
-    let canvas = unsafe { (*state.get()).canvas.take() };
+    let canvas = unsafe { (*state.state.get()).canvas.take() };
     drop(canvas);
     // State outlives all WM_NCDESTROY access even when initialization or pumping failed.
     if unsafe { IsWindow(window) } != 0 {

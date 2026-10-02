@@ -40,7 +40,7 @@
 
 `HostSession` 初始封闭，必须先收到正确 hello。新的 privacy 设置清除接收器持有的旧展示数据，再产生 privacy_applied；原生渲染器接入后，还须在发送该确认之前清除画面。新快照必须匹配当前隐私值，设置修订不能倒退。开启时快照不包含范围名称、费用或账户快照，Token 分项按既有应用策略保留。
 
-M13b2 在正确握手后启动专属 Win32 UI 线程，创建隐藏、无激活、无任务栏按钮的顶层控制窗口。该窗口接收 TaskbarCreated、显示器、DPI、主题、设置与电源变更，重新读取探测结果；不向系统发送这些广播，不重启 Explorer。原生缓存通过容量 4 的私有 Rust 队列及无指针的 WM_APP 唤醒处理，外部同号窗口消息无法注入命令或载荷。快照、隐私与 shutdown 更新等待 UI 线程处理完成后才回复；关闭同时释放缓存、窗口、类和线程。M13c1 增加自有读数子窗口，当前仍以隐藏控制窗口为父窗口，不显示到桌面或系统任务栏。
+M13b2 在正确握手后启动专属 Win32 UI 线程，创建隐藏、无激活、无任务栏按钮的顶层控制窗口。该窗口接收 TaskbarCreated、显示器、DPI、主题、设置与电源变更，重新读取探测结果；不向系统发送这些广播，不重启 Explorer。原生缓存通过容量 4 的私有 Rust 队列及无指针的 WM_APP 唤醒处理，外部同号窗口消息无法注入命令或载荷。快照、隐私与 shutdown 更新等待 UI 线程处理完成后才回复；关闭同时释放缓存、窗口、类和线程。M13c1 增加自有读数子窗口；M13c2 增加受控 Rust 队列的原生启用 / 禁用与安全布局租约。生产 wire 及主应用尚未发送启用配置，默认仍隐藏；实际挂接通过显式独立开发验收程序验证。
 
 只读探测在受控 DPI 上下文中读取屏幕矩形并恢复调用线程原上下文，避免将虚拟化坐标混入物理像素。[Microsoft 窗口矩形与 DPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect) 目前只接受 Windows 10 build 19045，校验系统目录 explorer.exe、唯一类名、窗口 PID、父子关系、最多 256 个子窗口和区域包含 / 不交叠；额外工具栏、陌生版本、竖向 / 不安全几何返回明确能力错误。Windows 11 适配仍需后续实现与实际版本独立验证，当前拒绝不等于取消该范围。
 
@@ -54,9 +54,21 @@ M13b2 在正确握手后启动专属 Win32 UI 线程，创建隐藏、无激活�
 
 额度角色只由实际 duration_mins 判断：10080 分钟为周，唯一最短小于周的周期为短周期；同周期多窗口歧义显示未知。0% 保留并使用警示色；旧快照标记旧值，重置到时显示待更新，不自行补成 100%。重置日期使用快照的配置时区；非法时区 / 超出可显示日期明确表达，不退回本机时间。
 
-Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTextExtentPoint32W 测量每段文字，与实际 TextOutW 使用同一 HFONT。[Microsoft 文字测量](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-gettextextentpoint32w) 根据实际高度选择两行或单行，再逐级选择完整 / 精简 / 单项；仍不可读返回无布局，不裁切、覆盖或把字段偷偷改成零。颜色支持给定背景的明暗对比和当前系统高对比度；目前隐藏画布使用深灰背景，系统任务栏背景采样与实时主题适配随嵌入模块接入。
+Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTextExtentPoint32W 测量每段文字，与实际 TextOutW 使用同一 HFONT。[Microsoft 文字测量](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-gettextextentpoint32w) 根据实际高度选择两行或单行，再逐级选择完整 / 精简 / 单项；仍不可读返回无布局，不裁切、覆盖或把字段偷偷改成零。颜色支持给定背景的明暗对比和当前系统高对比度；启用时从已验证的任务栏 ReBar 边缘读取一个背景像素，失败明确返回 BackgroundUnavailable，不扩大到桌面采样。主题 / 设置通知触发重新准备，但实际明暗 / 高对比度切换还需兼容验收。
 
-画布是独立 Win32 子窗口，不含 WebView。状态通过稳定 UnsafeCell 分配交给窗口过程，在 Win32 重入时避免别名可变引用；WM_NCDESTROY 标记本代窗口已销毁，析构不访问复用的 HWND。绘制使用有限区域和资源所有权，位图辅助只绘制本应用内容、限制最多 1,048,576 像素，不捕获其他窗口或写文件；文件输出只在显式开发 example 中。
+画布是独立 Win32 子窗口，不含 WebView。状态通过稳定 UnsafeCell 分配交给窗口过程；控制窗口另设 busy 屏障，将原生跨进程调用期间重入的状态操作延后，防止再次形成可变状态引用。WM_NCDESTROY 标记本代窗口已销毁，析构不访问复用的 HWND。绘制使用有限区域和资源所有权，位图辅助只绘制本应用内容、限制最多 1,048,576 像素，不捕获其他窗口或写文件；文件输出只在显式开发 example 中。
+
+## M13c2：线程所有的布局租约
+
+仅支持已声明的 Win10 19045 水平主任务栏。探测保留 Explorer 进程句柄和创建时间，操作前后重新检查存活、类名、PID、父子关系及物理矩形；额外 ReBar 工具栏或预留区域内其他根子窗口拒绝挂接。布局互斥量按 Explorer PID / 创建时间命名，限一个 UI 线程持有；任务列表窗口上的随机非零 owner 属性绑定本次窗口代际，不作为可解引用指针。
+
+先按真实文字测量宽度规划，至少保留 320 DIP 任务按钮空间；同步缩小 MSTaskSwWClass，复核任务列表子窗口已跟随缩小、通知区与任务栏容器不变后，才把自有 WS_CHILD 读数挂到 Shell_TrayWnd。子窗口只在已预留矩形内提升到 ReBar 背景之上，不创建桌面覆盖窗或激活窗口。[Microsoft SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos) `SetParent` 不自动修正窗口样式，跨进程 DPI 行为需要单独检查；本实现保持子窗口样式，挂接后再次进入物理坐标上下文并核对实际矩形。[Microsoft SetParent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setparent)
+
+普通数据 / 隐私更新使用原预留区域，SWP_NOMOVE / SWP_NOSIZE 防止画布重回父窗口原点；无需每次重新挂接。禁用、清空、失效或正常析构先隐藏并脱离自有画布，仅当 owner、Explorer 代际、当前缩小矩形、父容器尺寸和 DPI 仍匹配时恢复原客户端矩形。如果系统 / 其他程序已修改布局，返回 ExternalChange 并保留新布局；失去归属返回 IdentityLost。恢复失败明确报告 Failed，不宣称已恢复。
+
+背景像素用 GetDCEx 的显式 clipping 选项读取验证过的 ReBar 小区域，并在同线程 ReleaseDC；不读取窗口标题或其他应用画面。[Microsoft GetDCEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdcex) 最初 GetDC 受容器裁剪而取色失败，改用此有界方法后本机挂接通过。
+
+该模块完成正常路径的实际预留 / 显示 / 更新 / 脱离。父进程强制结束 Job 时宿主无法执行析构，跨进程布局归属记录及父端条件清理仍须下一模块实现并验证；因此生产管道尚不启用挂接。不能将本次正常 Drop 证明当作宿主崩溃、Explorer 重启、Win11 或物理多屏 / 四档 DPI 验收，也没有运行性能测试。
 
 ## 契约生成与当前验证
 
