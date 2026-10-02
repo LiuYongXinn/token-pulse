@@ -132,3 +132,14 @@ cargo run -p token-pulse-taskbar --example check_taskbar_guardian -- --native-ta
 开发程序创建专用父进程、挂接合成读数的子进程及使用同一原生实现的独立清理进程。清理 armed 后才允许子进程挂接；外层仅强制结束自己创建的父进程，不调用正常析构。父进程的 Job 随之关闭，独立清理进程用持有的宿主内核句柄条件恢复，检查原任务栏全部几何一致及明确 Restored 结果。本机 Win10 19045 / 150% DPI 已通过；随后创建一次性模拟阻塞清理进程，检查 5 秒期限返回 CleanupTimeout。这是功能期限检查，不是性能测试，也未实际挂死 Explorer。
 
 默认 tests / CI 不运行此布局检查、不读真实账户或日志、不重启 Explorer。正式原生启动器已使用相同 armed 流程，但生产 wire 仍不启用挂接，正式配置 / 状态与管理器下一步接入。清理进程是同一宿主可执行文件的受限模式，生产包不依赖此 example、Cargo 或当前对话。外部终止全部进程树及强杀清理进程不在本次成功证据内。
+
+## 显式正式宿主管道配置与状态验收
+
+```powershell
+cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
+cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskbar-wire-development-check
+```
+
+该开发程序启动上一步构建的正式原生宿主及清理监督，经当前用户受控管道发送合成 DTO 和显式配置。实际验证 waiting_snapshot → embedded、单行仅 Token 后读数空间缩小、新修订清除旧快照、隐私清屏 ACK 后任务栏恢复、重新显示与禁用，以及最后完整原几何恢复 / 前台焦点保持。只检查本次宿主 PID 与自有读数类的矩形，不读取其他窗口标题、不截取其他应用、不使用真实账户或日志；默认 tests / CI 不运行布局验收。
+
+本机 Win10 19045 / 150% DPI 已通过。生产 wire 具备显式启用能力，Tauri 管理器尚未调用它，普通应用保持默认禁用。该检查不代替原生鼠标、悬停 / 菜单、Win11、Explorer 重建或物理多屏 / 各档 DPI；没有运行性能测试。

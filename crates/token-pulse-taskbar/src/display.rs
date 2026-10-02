@@ -62,7 +62,8 @@ fn span(text: impl Into<String>, tone: Tone) -> Span {
         tone,
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum Density {
     Full,
     Compact,

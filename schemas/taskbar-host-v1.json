@@ -6,6 +6,14 @@
         "pattern": "^(0|[1-9][0-9]*)$",
         "type": "string"
       },
+      "Density": {
+        "enum": [
+          "full",
+          "compact",
+          "minimal"
+        ],
+        "type": "string"
+      },
       "HostAction": {
         "oneOf": [
           {
@@ -78,6 +86,29 @@
             "type": "object"
           }
         ]
+      },
+      "HostDisplayState": {
+        "enum": [
+          "disabled",
+          "waiting_snapshot",
+          "embedded",
+          "unavailable"
+        ],
+        "type": "string"
+      },
+      "HostFailure": {
+        "enum": [
+          "os",
+          "unsupported_version",
+          "missing_taskbar",
+          "unexpected_structure",
+          "unsafe_geometry",
+          "insufficient_space",
+          "background_unavailable",
+          "cleanup_timeout",
+          "guardian_unavailable"
+        ],
+        "type": "string"
       },
       "HostReply": {
         "oneOf": [
@@ -153,8 +184,114 @@
               "action"
             ],
             "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "configured",
+                "type": "string"
+              },
+              "settings_revision": {
+                "$ref": "#/$defs/DecimalInt"
+              }
+            },
+            "required": [
+              "kind",
+              "settings_revision"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "status",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/HostStatus"
+              }
+            },
+            "required": [
+              "kind",
+              "status"
+            ],
+            "type": "object"
           }
         ]
+      },
+      "HostRestore": {
+        "enum": [
+          "no_record",
+          "restored",
+          "already_restored",
+          "external_change",
+          "identity_lost",
+          "failed",
+          "uncertain"
+        ],
+        "type": "string"
+      },
+      "HostStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "density": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Density"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HostFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_restore": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HostRestore"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settings_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/$defs/HostDisplayState"
+          },
+          "system_revision": {
+            "$ref": "#/$defs/DecimalInt"
+          }
+        },
+        "required": [
+          "settings_revision",
+          "system_revision",
+          "state",
+          "failure",
+          "density",
+          "last_restore"
+        ],
+        "type": "object"
       }
     },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -213,10 +350,65 @@
         "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
         "type": "string"
       },
+      "DisplayLayout": {
+        "enum": [
+          "two_rows",
+          "single_row"
+        ],
+        "type": "string"
+      },
+      "DisplayPreferences": {
+        "additionalProperties": false,
+        "properties": {
+          "layout": {
+            "$ref": "#/$defs/DisplayLayout"
+          },
+          "show_costs": {
+            "type": "boolean"
+          },
+          "show_quota": {
+            "type": "boolean"
+          },
+          "show_tokens": {
+            "type": "boolean"
+          },
+          "show_weekly_reset": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "layout",
+          "show_tokens",
+          "show_costs",
+          "show_quota",
+          "show_weekly_reset"
+        ],
+        "type": "object"
+      },
       "EpochMs": {
         "maximum": 8640000000000000,
         "minimum": -8640000000000000,
         "type": "integer"
+      },
+      "HostConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "$ref": "#/$defs/DisplayPreferences"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "settings_revision": {
+            "$ref": "#/$defs/DecimalInt"
+          }
+        },
+        "required": [
+          "settings_revision",
+          "enabled",
+          "display"
+        ],
+        "type": "object"
       },
       "HostCost": {
         "additionalProperties": false,
@@ -299,6 +491,36 @@
             "properties": {
               "kind": {
                 "const": "heartbeat",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/HostConfiguration"
+              },
+              "kind": {
+                "const": "configure",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "configuration"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "get_status",
                 "type": "string"
               }
             },

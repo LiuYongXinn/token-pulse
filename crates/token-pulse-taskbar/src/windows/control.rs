@@ -52,6 +52,7 @@ enum Operation {
     Replace(Option<Box<TaskbarView>>),
     Inspect,
     Enable(bool),
+    Configure(bool, DisplayPreferences),
 }
 struct Request {
     operation: Operation,
@@ -72,6 +73,67 @@ pub struct NativeReceipt {
     pub embedding_failure: Option<ProbeError>,
     pub last_restore: Option<RestoreDisposition>,
 }
+impl NativeReceipt {
+    pub fn host_status(
+        &self,
+        configuration: Option<&crate::HostConfiguration>,
+    ) -> Result<crate::HostStatus, TransportError> {
+        use crate::{HostDisplayState, HostFailure, HostRestore};
+        let enabled = configuration.is_some_and(|c| c.enabled);
+        if self.paint_failed {
+            return Err(TransportError::Native);
+        }
+        let failure = if enabled && !self.embedded {
+            self.embedding_failure
+                .or(self.topology.as_ref().err().copied())
+                .or(self.cached_view_present.then_some(ProbeError::Os))
+        } else {
+            None
+        };
+        let state = if !enabled {
+            HostDisplayState::Disabled
+        } else if self.embedded {
+            HostDisplayState::Embedded
+        } else if failure.is_some() {
+            HostDisplayState::Unavailable
+        } else {
+            HostDisplayState::WaitingSnapshot
+        };
+        let status = crate::HostStatus {
+            settings_revision: configuration.map(|c| c.settings_revision.clone()),
+            system_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(
+                self.system_revision.into(),
+            )
+            .map_err(|_| TransportError::Native)?,
+            state,
+            failure: failure.map(|e| match e {
+                ProbeError::Os => HostFailure::Os,
+                ProbeError::UnsupportedVersion => HostFailure::UnsupportedVersion,
+                ProbeError::MissingTaskbar => HostFailure::MissingTaskbar,
+                ProbeError::UnexpectedStructure => HostFailure::UnexpectedStructure,
+                ProbeError::UnsafeGeometry => HostFailure::UnsafeGeometry,
+                ProbeError::InsufficientSpace => HostFailure::InsufficientSpace,
+                ProbeError::BackgroundUnavailable => HostFailure::BackgroundUnavailable,
+                ProbeError::CleanupTimeout => HostFailure::CleanupTimeout,
+                ProbeError::GuardianUnavailable => HostFailure::GuardianUnavailable,
+            }),
+            density: (state == HostDisplayState::Embedded)
+                .then_some(self.measured_density)
+                .flatten(),
+            last_restore: self.last_restore.map(|r| match r {
+                RestoreDisposition::NoRecord => HostRestore::NoRecord,
+                RestoreDisposition::Restored => HostRestore::Restored,
+                RestoreDisposition::AlreadyRestored => HostRestore::AlreadyRestored,
+                RestoreDisposition::ExternalChange => HostRestore::ExternalChange,
+                RestoreDisposition::IdentityLost => HostRestore::IdentityLost,
+                RestoreDisposition::Failed => HostRestore::Failed,
+                RestoreDisposition::Uncertain => HostRestore::Uncertain,
+            }),
+        };
+        status.validate()?;
+        Ok(status)
+    }
+}
 struct State {
     receiver: Receiver<Request>,
     view: Option<Box<TaskbarView>>,
@@ -80,6 +142,7 @@ struct State {
     canvas: Option<NativeCanvas>,
     native_failed: bool,
     enabled: bool,
+    preferences: DisplayPreferences,
     layout: Option<LayoutLease>,
     embedding_failure: Option<ProbeError>,
     last_restore: Option<RestoreDisposition>,
@@ -160,7 +223,7 @@ impl State {
                 canvas
                     .prepare(
                         view,
-                        DisplayPreferences::default(),
+                        self.preferences,
                         topology.dpi,
                         available,
                         topology.rebar.height(),
@@ -264,6 +327,14 @@ unsafe extern "system" fn procedure(
                         }
                         Operation::Enable(enabled) => {
                             state.enabled = enabled;
+                            state.prepare()
+                        }
+                        Operation::Configure(enabled, preferences) => {
+                            if state.preferences != preferences {
+                                state.detach();
+                            }
+                            state.enabled = enabled;
+                            state.preferences = preferences;
                             state.prepare()
                         }
                         Operation::Inspect => {
@@ -384,6 +455,15 @@ impl NativeController {
     pub async fn enable_taskbar(&self, enabled: bool) -> Result<NativeReceipt, TransportError> {
         self.request(Operation::Enable(enabled)).await
     }
+    pub async fn configure(
+        &self,
+        enabled: bool,
+        preferences: DisplayPreferences,
+    ) -> Result<NativeReceipt, TransportError> {
+        preferences.validate()?;
+        self.request(Operation::Configure(enabled, preferences))
+            .await
+    }
 }
 impl Drop for NativeController {
     fn drop(&mut self) {
@@ -424,6 +504,7 @@ unsafe fn native_thread(
             canvas: None,
             native_failed: false,
             enabled: false,
+            preferences: DisplayPreferences::default(),
             layout: None,
             embedding_failure: None,
             last_restore: None,

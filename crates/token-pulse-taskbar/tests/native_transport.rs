@@ -96,6 +96,42 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     let guardian = ProcessWait::open(connection.guardian_id());
     assert_ne!(connection.guardian_id(), connection.process_id());
     assert_eq!(native_controllers(connection.process_id()), [false]);
+    let HostReply::Status { status } = connection
+        .exchange(HostMessage::GetStatus {})
+        .await
+        .unwrap()
+    else {
+        panic!("actual status reply")
+    };
+    assert_eq!(
+        status.state,
+        token_pulse_taskbar::HostDisplayState::Disabled
+    );
+    assert!(
+        status.settings_revision.is_none() && status.failure.is_none() && status.density.is_none()
+    );
+    connection
+        .exchange(HostMessage::Configure {
+            configuration: token_pulse_taskbar::HostConfiguration {
+                settings_revision: DecimalInt::parse("1").unwrap(),
+                enabled: false,
+                display: token_pulse_taskbar::display::DisplayPreferences::default(),
+            },
+        })
+        .await
+        .unwrap();
+    let HostReply::Status { status } = connection
+        .exchange(HostMessage::GetStatus {})
+        .await
+        .unwrap()
+    else {
+        panic!("actual configured status")
+    };
+    assert_eq!(status.settings_revision.unwrap().as_str(), "1");
+    assert_eq!(
+        status.state,
+        token_pulse_taskbar::HostDisplayState::Disabled
+    );
     assert!(matches!(
         connection
             .exchange(HostMessage::Privacy {

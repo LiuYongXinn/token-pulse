@@ -20,6 +20,122 @@ fn frame(sequence: &str, body: HostMessage) -> Envelope<HostMessage> {
 fn session() -> HostSession {
     HostSession::new("synthetic-host".into(), "a".repeat(64)).unwrap()
 }
+#[test]
+fn configuration_revision_clears_stale_view_and_rejects_conflicting_preferences() {
+    let mut receiver = session();
+    receiver.apply(frame("1", HostMessage::Hello {})).unwrap();
+    receiver
+        .apply(frame(
+            "2",
+            HostMessage::Privacy {
+                settings_revision: number("1"),
+                enabled: false,
+            },
+        ))
+        .unwrap();
+    receiver
+        .apply(frame(
+            "3",
+            HostMessage::Snapshot {
+                view: Box::new(view(false, "1")),
+            },
+        ))
+        .unwrap();
+    let configuration = HostConfiguration {
+        settings_revision: number("2"),
+        enabled: true,
+        display: display::DisplayPreferences::default(),
+    };
+    assert_eq!(
+        receiver
+            .apply(frame(
+                "4",
+                HostMessage::Configure {
+                    configuration: configuration.clone()
+                }
+            ))
+            .unwrap(),
+        HostReply::Configured {
+            settings_revision: number("2")
+        }
+    );
+    assert!(
+        receiver.view().is_none(),
+        "old settings cannot stay visible after reconfiguration"
+    );
+    assert_eq!(receiver.configuration(), Some(&configuration));
+    receiver
+        .apply(frame(
+            "5",
+            HostMessage::Configure {
+                configuration: configuration.clone(),
+            },
+        ))
+        .unwrap();
+    let mut conflict = configuration;
+    conflict.enabled = false;
+    assert_eq!(
+        receiver
+            .apply(frame(
+                "6",
+                HostMessage::Configure {
+                    configuration: conflict
+                }
+            ))
+            .unwrap_err(),
+        WireError::OutOfOrder
+    );
+    assert!(receiver.configuration().is_none());
+    assert_eq!(
+        receiver
+            .apply(frame("7", HostMessage::GetStatus {}))
+            .unwrap_err(),
+        WireError::Closed
+    );
+}
+#[test]
+fn invalid_configuration_never_enables_and_status_does_not_invent_embedding_or_zero_values() {
+    let mut receiver = session();
+    receiver.apply(frame("1", HostMessage::Hello {})).unwrap();
+    let configuration = HostConfiguration {
+        settings_revision: number("1"),
+        enabled: true,
+        display: display::DisplayPreferences {
+            layout: display::DisplayLayout::TwoRows,
+            show_tokens: false,
+            show_costs: false,
+            show_quota: false,
+            show_weekly_reset: false,
+        },
+    };
+    assert_eq!(
+        receiver
+            .apply(frame("2", HostMessage::Configure { configuration }))
+            .unwrap_err(),
+        WireError::InvalidFrame
+    );
+    let mut status = HostStatus {
+        settings_revision: None,
+        system_revision: number("9007199254740993"),
+        state: HostDisplayState::Disabled,
+        failure: None,
+        density: None,
+        last_restore: None,
+    };
+    status.validate().unwrap();
+    let encoded = serde_json::to_value(&status).unwrap();
+    assert!(encoded["settings_revision"].is_null() && encoded["last_restore"].is_null());
+    status.state = HostDisplayState::Embedded;
+    assert!(status.validate().is_err());
+    status.settings_revision = Some(number("1"));
+    status.density = Some(display::Density::Compact);
+    status.validate().unwrap();
+    status.failure = Some(HostFailure::UnsupportedVersion);
+    assert!(status.validate().is_err());
+    status.state = HostDisplayState::Unavailable;
+    status.density = None;
+    status.validate().unwrap();
+}
 fn view(privacy: bool, revision: &str) -> TaskbarView {
     TaskbarView {
         settings_revision: number(revision),

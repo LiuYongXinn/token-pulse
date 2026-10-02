@@ -14,6 +14,67 @@ use token_pulse_core::{
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_FRAME_BYTES: usize = 65_536;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HostConfiguration {
+    pub settings_revision: DecimalInt,
+    pub enabled: bool,
+    pub display: display::DisplayPreferences,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostDisplayState {
+    Disabled,
+    WaitingSnapshot,
+    Embedded,
+    Unavailable,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostFailure {
+    Os,
+    UnsupportedVersion,
+    MissingTaskbar,
+    UnexpectedStructure,
+    UnsafeGeometry,
+    InsufficientSpace,
+    BackgroundUnavailable,
+    CleanupTimeout,
+    GuardianUnavailable,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostRestore {
+    NoRecord,
+    Restored,
+    AlreadyRestored,
+    ExternalChange,
+    IdentityLost,
+    Failed,
+    Uncertain,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HostStatus {
+    pub settings_revision: Option<DecimalInt>,
+    pub system_revision: DecimalInt,
+    pub state: HostDisplayState,
+    pub failure: Option<HostFailure>,
+    pub density: Option<display::Density>,
+    pub last_restore: Option<HostRestore>,
+}
+impl HostStatus {
+    pub fn validate(&self) -> Result<(), WireError> {
+        if (self.state == HostDisplayState::Unavailable) != self.failure.is_some()
+            || (self.state == HostDisplayState::Embedded) != self.density.is_some()
+            || (self.settings_revision.is_none() && self.state != HostDisplayState::Disabled)
+        {
+            return Err(WireError::InvalidFrame);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Envelope<T> {
@@ -38,6 +99,10 @@ pub enum HostMessage {
         enabled: bool,
     },
     Heartbeat {},
+    Configure {
+        configuration: HostConfiguration,
+    },
+    GetStatus {},
     Shutdown {},
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -57,6 +122,8 @@ pub enum HostReply {
     PrivacyApplied { enabled: bool },
     Stopped {},
     Action { action: HostAction },
+    Configured { settings_revision: DecimalInt },
+    Status { status: HostStatus },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -286,7 +353,9 @@ pub struct HostSession {
     closed: bool,
     privacy: bool,
     policy_revision: i128,
+    privacy_revision: i128,
     view: Option<TaskbarView>,
+    configuration: Option<HostConfiguration>,
 }
 impl HostSession {
     pub fn new(instance: String, nonce: String) -> Result<Self, WireError> {
@@ -304,15 +373,21 @@ impl HostSession {
             closed: false,
             privacy: true,
             policy_revision: 0,
+            privacy_revision: 0,
             view: None,
+            configuration: None,
         })
     }
     pub fn view(&self) -> Option<&TaskbarView> {
         self.view.as_ref()
     }
+    pub fn configuration(&self) -> Option<&HostConfiguration> {
+        self.configuration.as_ref()
+    }
     pub fn close(&mut self) {
         self.closed = true;
         self.view = None;
+        self.configuration = None;
     }
     pub fn apply(&mut self, frame: Envelope<HostMessage>) -> Result<HostReply, WireError> {
         let result = self.apply_checked(frame);
@@ -345,6 +420,33 @@ impl HostSession {
         match frame.body {
             HostMessage::Hello {} => Err(WireError::InvalidState),
             HostMessage::Heartbeat {} => Ok(HostReply::Heartbeat {}),
+            HostMessage::GetStatus {} => Ok(HostReply::Heartbeat {}),
+            // Session validates the request; transport must obtain an actual UI receipt for status.
+            HostMessage::Configure { configuration } => {
+                configuration.display.validate()?;
+                if configuration.settings_revision.value() < self.policy_revision
+                    || self.configuration.as_ref().is_some_and(|old| {
+                        configuration.settings_revision.value() < old.settings_revision.value()
+                            || (configuration.settings_revision == old.settings_revision
+                                && configuration != *old)
+                    })
+                {
+                    return Err(WireError::OutOfOrder);
+                }
+                self.policy_revision = configuration.settings_revision.value();
+                if self
+                    .view
+                    .as_ref()
+                    .is_some_and(|v| v.settings_revision.value() < self.policy_revision)
+                {
+                    self.view = None;
+                }
+                let revision = configuration.settings_revision.clone();
+                self.configuration = Some(configuration);
+                Ok(HostReply::Configured {
+                    settings_revision: revision,
+                })
+            }
             HostMessage::Shutdown {} => {
                 self.close();
                 Ok(HostReply::Stopped {})
@@ -354,12 +456,13 @@ impl HostSession {
                 enabled,
             } => {
                 if settings_revision.value() < self.policy_revision
-                    || (settings_revision.value() == self.policy_revision
+                    || (settings_revision.value() == self.privacy_revision
                         && self.privacy != enabled)
                 {
                     return Err(WireError::OutOfOrder);
                 }
                 self.policy_revision = settings_revision.value();
+                self.privacy_revision = settings_revision.value();
                 self.privacy = enabled;
                 self.view = None;
                 Ok(HostReply::PrivacyApplied { enabled })
@@ -372,6 +475,7 @@ impl HostSession {
                     return Err(WireError::PrivacyViolation);
                 }
                 self.policy_revision = view.settings_revision.value();
+                self.privacy_revision = view.settings_revision.value();
                 self.view = Some(*view);
                 // Receiving display data alone never claims Explorer embedding succeeded.
                 Ok(HostReply::Heartbeat {})

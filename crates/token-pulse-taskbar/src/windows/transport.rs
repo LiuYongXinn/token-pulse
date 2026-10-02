@@ -243,11 +243,21 @@ impl HostConnection {
             return Err(WireError::OutOfOrder.into());
         };
         self.sent = sent;
-        let expected = match &message {
-            HostMessage::Hello {} => HostReply::Ready {},
-            HostMessage::Snapshot { .. } | HostMessage::Heartbeat {} => HostReply::Heartbeat {},
-            HostMessage::Privacy { enabled, .. } => HostReply::PrivacyApplied { enabled: *enabled },
-            HostMessage::Shutdown {} => HostReply::Stopped {},
+        let expected = if matches!(message, HostMessage::GetStatus {}) {
+            None
+        } else {
+            Some(match &message {
+                HostMessage::Hello {} => HostReply::Ready {},
+                HostMessage::Snapshot { .. } | HostMessage::Heartbeat {} => HostReply::Heartbeat {},
+                HostMessage::Privacy { enabled, .. } => {
+                    HostReply::PrivacyApplied { enabled: *enabled }
+                }
+                HostMessage::Shutdown {} => HostReply::Stopped {},
+                HostMessage::Configure { configuration } => HostReply::Configured {
+                    settings_revision: configuration.settings_revision.clone(),
+                },
+                HostMessage::GetStatus {} => unreachable!(),
+            })
         };
         let frame = match self.startup.envelope(self.sent, message) {
             Ok(frame) => frame,
@@ -270,7 +280,12 @@ impl HostConnection {
             if reply.sequence.value() <= self.received {
                 return Err(WireError::OutOfOrder.into());
             }
-            if reply.body != expected {
+            let matching = match (&reply.body, &expected) {
+                (HostReply::Status { status }, None) => status.validate().is_ok(),
+                (_, Some(expected)) => reply.body == *expected,
+                _ => false,
+            };
+            if !matching {
                 return Err(WireError::InvalidState.into());
             }
             self.received = reply.sequence.value();
@@ -318,9 +333,14 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
         };
         let update_native = matches!(
             incoming.body,
-            HostMessage::Snapshot { .. } | HostMessage::Privacy { .. } | HostMessage::Shutdown {}
+            HostMessage::Snapshot { .. }
+                | HostMessage::Privacy { .. }
+                | HostMessage::Shutdown {}
+                | HostMessage::Configure { .. }
         );
-        let reply = session.apply(incoming)?;
+        let get_status = matches!(incoming.body, HostMessage::GetStatus {});
+        let configure = matches!(incoming.body, HostMessage::Configure { .. });
+        let mut reply = session.apply(incoming)?;
         if matches!(reply, HostReply::Ready {}) {
             native = Some(super::control::NativeController::start_for_instance(
                 &startup.instance,
@@ -333,6 +353,24 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
                 .ok_or(TransportError::Native)?
                 .replace(session.view().cloned())
                 .await?;
+        }
+        if configure {
+            let configuration = session.configuration().ok_or(TransportError::Native)?;
+            native
+                .as_ref()
+                .ok_or(TransportError::Native)?
+                .configure(configuration.enabled, configuration.display)
+                .await?;
+        }
+        if get_status {
+            let receipt = native
+                .as_ref()
+                .ok_or(TransportError::Native)?
+                .inspect()
+                .await?;
+            reply = HostReply::Status {
+                status: receipt.host_status(session.configuration())?,
+            };
         }
         let stopped = matches!(reply, HostReply::Stopped {});
         sequence = sequence
