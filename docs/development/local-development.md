@@ -12,6 +12,8 @@ M09g2a 的 `cargo test -p token-pulse-store valuation --lib` 使用合成价格 
 
 ## 环境
 
+M09g2b2 定向 `cargo test -p token-pulse-store revalue_service` 6 项通过，store all-targets Clippy（warnings denied）通过。线程测试使用真实临时 SQLite、合成消费和同步通道控制取消 / 退出 / 改价边界，短期等待仅是功能完成截止条件；没有性能测量。正式应用尚未启动此服务。
+
 M09g2b1：`cargo test -p token-pulse-store revalue_jobs` 8 项通过，`cargo test -p token-pulse-store --lib` 188 项通过 / 1 性能夹具 ignored。新增价格作业测试仅用合成日志事实与临时 SQLite；另验证缓存构建期间真实价格发布仍保持捕获版本。契约通过 `npm run contracts` 生成，独立执行线程 / 正式界面尚待接入，暂无此模块的实际 Windows UI 验收。
 
 2026-10-01 首次工程检查：Windows 10 Pro for Workstations 22H2，build 19045.6466，x64；Node 22.22.2、npm 10.9.7；Edge WebView2 154.0.4258.37。工程初始化前没有 Rust 或 C++ 工具链，已安装官方 Rust stable MSVC 1.98.1、Visual Studio 2022 Build Tools 17.14.41（C++ workload）及 Windows SDK 10.0.26100.0。
