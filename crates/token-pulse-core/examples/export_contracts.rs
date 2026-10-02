@@ -23,6 +23,7 @@ use token_pulse_core::query::{
 use token_pulse_core::query::{TurnRow, TurnsPage, TurnsQuery, TurnsRequest};
 use token_pulse_core::settings::*;
 use token_pulse_core::sources::*;
+use token_pulse_core::taskbar::*;
 use token_pulse_core::{ServiceState, error::*, numeric::*, protocol::*};
 use ts_rs::{Config, TS};
 
@@ -56,6 +57,12 @@ fn main() {
         token_pulse_core::privacy::DisplayPolicyStamp,
         DisplayPreferences,
         DisplaySettingsSnapshot,
+        TaskbarDisplayLayout,
+        TaskbarDisplayPreferences,
+        TaskbarPosition,
+        TaskbarPreferences,
+        TaskbarPreferencesSnapshot,
+        TaskbarPreferencesMutation,
         TimezoneMutation,
         DisplayPrivacyMutation,
         AppTheme,

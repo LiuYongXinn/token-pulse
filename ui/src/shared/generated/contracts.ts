@@ -18,6 +18,18 @@ display_timezone: string | null, privacy: boolean, theme: AppTheme, };
 
 export type DisplaySettingsSnapshot = { settings_version: number, settings_revision: DecimalInt, preferences: DisplayPreferences, };
 
+export type TaskbarDisplayLayout = "two_rows" | "single_row";
+
+export type TaskbarDisplayPreferences = { layout: TaskbarDisplayLayout, show_tokens: boolean, show_costs: boolean, show_quota: boolean, show_weekly_reset: boolean, };
+
+export type TaskbarPosition = "notification_left" | "application_right";
+
+export type TaskbarPreferences = { enabled: boolean, display: TaskbarDisplayPreferences, position: TaskbarPosition, fallback_to_mini: boolean, };
+
+export type TaskbarPreferencesSnapshot = { preferences: TaskbarPreferences, settings_revision: DecimalInt, };
+
+export type TaskbarPreferencesMutation = { preferences: TaskbarPreferences, expected_settings_revision: DecimalInt, };
+
 export type TimezoneMutation = { "kind": "initialize", system_timezone: string, } | { "kind": "set", display_timezone: string, expected_settings_revision: DecimalInt, };
 
 export type DisplayPrivacyMutation = { privacy: boolean, expected_settings_revision: DecimalInt, };

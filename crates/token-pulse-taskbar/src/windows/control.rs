@@ -460,7 +460,9 @@ impl NativeController {
         enabled: bool,
         preferences: DisplayPreferences,
     ) -> Result<NativeReceipt, TransportError> {
-        preferences.validate()?;
+        preferences
+            .validate()
+            .map_err(|_| crate::WireError::InvalidFrame)?;
         self.request(Operation::Configure(enabled, preferences))
             .await
     }

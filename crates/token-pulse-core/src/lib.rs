@@ -26,6 +26,7 @@ pub mod sequence;
 pub mod settings;
 pub mod shortcuts;
 pub mod sources;
+pub mod taskbar;
 
 #[derive(
     Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema, ts_rs::TS,

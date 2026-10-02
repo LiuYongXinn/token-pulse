@@ -3,8 +3,10 @@ mod opacity;
 mod passthrough;
 mod quota;
 mod shortcuts;
+mod taskbar;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
+pub use taskbar::TaskbarInput;
 use token_pulse_core::{
     numeric::{DecimalInt, EpochMs},
     settings::*,
@@ -43,6 +45,10 @@ pub(crate) fn read_stored(
                             .as_str()
                             .is_some_and(|s| matches!(s, "dark" | "light" | "system")),
                         "privacy" | "taskbar_enabled" | "startup_enabled" => field.is_boolean(),
+                        "taskbar" => serde_json::from_value::<
+                            token_pulse_core::taskbar::TaskbarPreferences,
+                        >(field.clone())
+                        .is_ok_and(|p| p.validate().is_ok()),
                         "recovery_shortcut" => serde_json::from_value::<
                             token_pulse_core::shortcuts::RecoveryShortcut,
                         >(field.clone())

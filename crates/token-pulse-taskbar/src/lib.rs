@@ -423,7 +423,10 @@ impl HostSession {
             HostMessage::GetStatus {} => Ok(HostReply::Heartbeat {}),
             // Session validates the request; transport must obtain an actual UI receipt for status.
             HostMessage::Configure { configuration } => {
-                configuration.display.validate()?;
+                configuration
+                    .display
+                    .validate()
+                    .map_err(|_| WireError::InvalidFrame)?;
                 if configuration.settings_revision.value() < self.policy_revision
                     || self.configuration.as_ref().is_some_and(|old| {
                         configuration.settings_revision.value() < old.settings_revision.value()

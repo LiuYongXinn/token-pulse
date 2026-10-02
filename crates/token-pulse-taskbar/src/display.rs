@@ -9,41 +9,9 @@ use token_pulse_core::{
     protocol::{CoverageState, QuotaState, QuotaWindow},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum DisplayLayout {
-    TwoRows,
-    SingleRow,
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DisplayPreferences {
-    pub layout: DisplayLayout,
-    pub show_tokens: bool,
-    pub show_costs: bool,
-    pub show_quota: bool,
-    pub show_weekly_reset: bool,
-}
-impl Default for DisplayPreferences {
-    fn default() -> Self {
-        Self {
-            layout: DisplayLayout::TwoRows,
-            show_tokens: true,
-            show_costs: true,
-            show_quota: true,
-            show_weekly_reset: true,
-        }
-    }
-}
-impl DisplayPreferences {
-    pub fn validate(self) -> Result<(), WireError> {
-        if !(self.show_tokens || self.show_costs || self.show_quota || self.show_weekly_reset) {
-            Err(WireError::InvalidFrame)
-        } else {
-            Ok(())
-        }
-    }
-}
+pub use token_pulse_core::taskbar::{
+    TaskbarDisplayLayout as DisplayLayout, TaskbarDisplayPreferences as DisplayPreferences,
+};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
     Normal,
@@ -251,7 +219,7 @@ pub fn rows(
     now: i64,
 ) -> Result<Vec<Vec<Span>>, WireError> {
     view.validate()?;
-    prefs.validate()?;
+    prefs.validate().map_err(|_| WireError::InvalidFrame)?;
     let mut first = vec![];
     let mut second = vec![];
     if prefs.show_tokens {

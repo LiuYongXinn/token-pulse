@@ -350,41 +350,6 @@
         "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
         "type": "string"
       },
-      "DisplayLayout": {
-        "enum": [
-          "two_rows",
-          "single_row"
-        ],
-        "type": "string"
-      },
-      "DisplayPreferences": {
-        "additionalProperties": false,
-        "properties": {
-          "layout": {
-            "$ref": "#/$defs/DisplayLayout"
-          },
-          "show_costs": {
-            "type": "boolean"
-          },
-          "show_quota": {
-            "type": "boolean"
-          },
-          "show_tokens": {
-            "type": "boolean"
-          },
-          "show_weekly_reset": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "layout",
-          "show_tokens",
-          "show_costs",
-          "show_quota",
-          "show_weekly_reset"
-        ],
-        "type": "object"
-      },
       "EpochMs": {
         "maximum": 8640000000000000,
         "minimum": -8640000000000000,
@@ -394,7 +359,7 @@
         "additionalProperties": false,
         "properties": {
           "display": {
-            "$ref": "#/$defs/DisplayPreferences"
+            "$ref": "#/$defs/TaskbarDisplayPreferences"
           },
           "enabled": {
             "type": "boolean"
@@ -646,6 +611,41 @@
           "used_percent",
           "remaining_percent",
           "resets_at_ms"
+        ],
+        "type": "object"
+      },
+      "TaskbarDisplayLayout": {
+        "enum": [
+          "two_rows",
+          "single_row"
+        ],
+        "type": "string"
+      },
+      "TaskbarDisplayPreferences": {
+        "additionalProperties": false,
+        "properties": {
+          "layout": {
+            "$ref": "#/$defs/TaskbarDisplayLayout"
+          },
+          "show_costs": {
+            "type": "boolean"
+          },
+          "show_quota": {
+            "type": "boolean"
+          },
+          "show_tokens": {
+            "type": "boolean"
+          },
+          "show_weekly_reset": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "layout",
+          "show_tokens",
+          "show_costs",
+          "show_quota",
+          "show_weekly_reset"
         ],
         "type": "object"
       },
