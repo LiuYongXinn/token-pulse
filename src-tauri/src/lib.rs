@@ -418,6 +418,8 @@ mod quota_config;
 mod quota_smoke;
 #[cfg(all(debug_assertions, windows))]
 mod quota_startup_smoke;
+#[cfg(all(debug_assertions, windows))]
+mod quota_taskbar_smoke;
 mod revalue_commands;
 mod settings_commands;
 mod shortcuts;

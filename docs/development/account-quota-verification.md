@@ -62,4 +62,14 @@ Win10 19045 实际进程输出 LocalSeed / LocalReady 两阶段 COLD_OK、EXISTI
 
 新增独立预期检查：超安全整数修订、真实 0% 与未知窗口、最新隐私时间、空窗口 / null 时间、未知桶名仍 null、控制不变、原缓存完全不变、关闭后重新查询仍得到真实 0 / null。privacy 6 / quota 14 项通过；前端账户及相关小窗 6 项合成交互回归通过；core / desktop 全目标 strict Clippy、release check、fmt / diff 通过。实际第三入口验收独立推进，不以浏览器模拟桥替代原生或真实账户证据。
 
-仍需完成真实账户通知 / 身份变化、登录过期 / 实际重置、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。
+## M13f1：真实账户的任务栏第三入口（2026-10-03）
+
+`pwsh -NoProfile -File scripts/native-account-startup.ps1 -ExistingAccount -TaskbarAccount` 单独启用真实任务栏场景；仅 -TaskbarAccount 拒绝运行，默认合成四阶段和普通真实两入口场景不嵌入任务栏。local_seed / local_taskbar 仍使用 UUID 隔离库和正常冷启动、用户已有本地登录，正式设置 IPC 保存只显示额度 / 周重置的任务栏偏好。没有新增生产演示数据、任意参数或账户权限。
+
+检查经过本次拥有的宿主 PID、唯一类及 Explorer 父窗口确认的实际可见读数和详情。读数窗口名称全文与真实 DTO 投影对应；原生详情中每个实际周期、剩余、绝对重置和独立成功 / 尝试时间与 DTO 对应。相对倒计时跨分钟不作脆弱整串比较。使用现有展示格式化器比对是验证跨进程送达；格式正确性、null / 零与 GDI 条布局仍由固定合成夹具独立验证，不把全文检查冒充像素或 OCR 验收。全文只在本次进程内比较，不打印或保存用户真实数值 / 身份。
+
+共享隐私经正式主窗口命令切换：旧详情立即关闭，两个 WebView 的额度响应无窗口 / 时间且 DOM 无剩余条，原生读数和新详情无旧额度 / 桶；恢复显示后重新取真实快照。隐藏 main 和 mini 后保持两窗不重新出现，在 90 秒有限窗口内观察同一 epoch 的后台新尝试及新成功时间，再核对原生详情更新。没有调用用户刷新或改动生产间隔 / 时钟。正式停用后实际任务栏拓扑恢复基线，应用退出后脚本确认拥有的宿主 PID 不再存活。
+
+Win10 19045 实际完整场景两轮成功；最终必须有 NATIVE_TASKBAR_EXISTING_ACCOUNT_OK、LocalTaskbar COLD_OK / EXISTING_COLD_SEQUENCE_OK 与退出 0。新增场景门禁检查后 scene 共 3 项、taskbar details 8 / wire 13 项、desktop strict Clippy / release check / fmt / diff 通过。M12k 的响应边界修复与此验收分开提交；首次探针使用了错误的隐私戳字段，随后核对真实 DTO 才完成修复，失败不计成功证据。WebView2 注销 1412 保留。
+
+这是真实主端 / 独立原生宿主 / 当前账户的第三入口及任务栏可见时刷新证据；详情入口使用自有 WM_SETFOCUS，不能替代真实键盘焦点、物理悬停 / 点击、可访问性或截图像素检查。真实账户通知 / 身份变化、登录过期 / 实际重置、完整 Explorer 生命周期、实际拥挤 / 自动隐藏、Windows 11 / 物理多屏 / DPI 仍保留。未运行性能测试；M14 与迁移保护取消范围不变。

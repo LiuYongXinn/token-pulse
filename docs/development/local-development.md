@@ -274,6 +274,8 @@ M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普�
 
 ## 账户独立冷启动与真实持续读取
 
+真实账户第三入口：`pwsh -NoProfile -File scripts/native-account-startup.ps1 -ExistingAccount -TaskbarAccount`。两开关同时显式启用，默认账户测试不嵌入任务栏。脚本编译独立宿主，要求 TASKBAR_EXISTING_ACCOUNT_OK、LocalTaskbar COLD_OK / EXISTING_COLD_SEQUENCE_OK、退出 0 和拥有的宿主 PID 已结束。正式 IPC 保存隔离偏好、原生可见全文与真实 DTO、共享隐私、隐藏两 WebView 后普通后台读取及停用几何恢复已在 Win10 19045 通过。自有 WM_SETFOCUS 仅验通路，不替代物理输入 / 像素 / Explorer / Win11 / 多屏验收；不输出实际账户数值或发起模型回合。详情见[账户验证](account-quota-verification.md)。
+
 账户冷启动独立入口：`pwsh -NoProfile -File scripts/native-account-startup.ps1`。四个完整进程以同一 UUID 隔离库依次验证 seed / ready / disabled / changed，正常初始化读取已保存设置；脚本要求四阶段及 SEQUENCE_OK，并检查拥有的合成账户子进程已退出。不会打开用户账户、选择器或发送桌面输入。Windows 10 已通过，WebView2 注销 1412 保留；真实账户冷启动 / 持续读取及 Win11 分开记录，详见[账户共享显示验证](account-quota-verification.md)。
 
 真实已有账户持续读取的显式命令为 `cargo run -p token-pulse-quota --features local-account-check --example local_account_check -- --observe-local-existing-account`，要求 initial_ready 和两次 subsequent_read_ready、退出 0。此命令实际连接检测到的已有本地账户，不属于 CI；不调用强制刷新、不发起登录或模型回合。Win10 本机已完成三次读取；只输出净化存在性和连接标记，不保存实际百分比 / 身份。合成领域 / 服务回归分开记录，真实账户切换 / 重置等条件保留，详见[账户共享显示验证](account-quota-verification.md)。

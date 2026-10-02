@@ -4,6 +4,8 @@ M13e7 已补通知区左侧的真实宿主输入证据：独立前台测试窗�
 
 实施入口：[详细开发设计](development-design.md)，宿主帧协议、隐私与命令权限见 [IPC 契约](ipc-contracts.md)。
 
+M13f1 已通过现有真实账户的正式第三入口：正常冷启动配置、主端 DTO 到独立宿主的可见读数 / 详情全文、三入口共享隐私、隐藏 main / mini 后任务栏维持普通后台新读取、停用几何恢复及宿主退出。验收只比对本次自有窗口，不保存账户数值；入口焦点是自有消息，不能替代物理输入 / GDI 像素 / Explorer / Win11 / 多屏。实际记录及剩余条件见[账户第三入口验证](../development/account-quota-verification.md)。
+
 本设计补充[完整设计方案](token-pulse-design.md)、[UI 设计](token-pulse-ui.md)和[账户额度设计](account-quota.md)。新增类似 TrafficMonitor 的任务栏内显示模式，与统计主窗口、桌面悬浮窗共享后台快照。任务栏与悬浮窗可独立开启，也可同时显示。
 
 当前已实现 M13a–M13e6 的受限协议、独立原生宿主、安全预留 / 实际 Win10 嵌入、归属恢复监督、精确绘制、持久配置、后台管理器、真实设置 / 状态、小窗回退、单击 / 双击、原生菜单和只读详情。两种位置均已接通：通知区左侧，以及测量实际按钮后的应用图标右侧；后者在按钮增减时安全重排。默认不启用任务栏，Win10 19045 / 150% DPI 有实际系统验证；真实输入 / 焦点 / 屏幕阅读器、完整 Explorer 重建、实际拥挤 / 自动隐藏、Win11 与物理兼容矩阵仍待验收。详见[原生宿主协议](taskbar-host-protocol.md)及[交付记录](../development/delivery-status.md)。[HTML 交互原型](../../prototypes/token-pulse-ui.html)底部的任务栏区域全部为演示数据，生产应用通过真实 DTO 显示。

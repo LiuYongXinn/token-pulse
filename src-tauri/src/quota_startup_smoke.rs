@@ -14,6 +14,7 @@ pub enum Phase {
     Changed,
     LocalSeed,
     LocalReady,
+    LocalTaskbar,
 }
 pub struct Scene {
     pub directory: String,
@@ -54,6 +55,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Option<Scene>, &'stat
                 "changed" => Phase::Changed,
                 "local_seed" => Phase::LocalSeed,
                 "local_ready" => Phase::LocalReady,
+                "local_taskbar" => Phase::LocalTaskbar,
                 _ => return Err("invalid startup phase"),
             });
         }
@@ -61,7 +63,11 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Option<Scene>, &'stat
     match (id, phase, enabled) {
         (None, None, _) if !existing_account => Ok(None),
         (Some(id), Some(phase), true)
-            if existing_account == matches!(phase, Phase::LocalSeed | Phase::LocalReady) =>
+            if existing_account
+                == matches!(
+                    phase,
+                    Phase::LocalSeed | Phase::LocalReady | Phase::LocalTaskbar
+                ) =>
         {
             Ok(Some(Scene {
                 directory: format!("native-account-startup-{}", id.simple()),
@@ -133,7 +139,10 @@ fn verify(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
     }
     let db = state.database.as_ref().map_err(|e| e.to_string())?;
     let quota = state.quota.as_ref().map_err(|e| format!("{e:?}"))?;
-    if matches!(phase, Phase::LocalSeed | Phase::LocalReady) {
+    if matches!(
+        phase,
+        Phase::LocalSeed | Phase::LocalReady | Phase::LocalTaskbar
+    ) {
         return verify_existing(app, phase);
     }
     let home = state.data_directory.join("synthetic-home");
@@ -184,7 +193,7 @@ fn verify(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
         Phase::Ready => QuotaState::Ready,
         Phase::Disabled => QuotaState::Disconnected,
         Phase::Changed => QuotaState::Error,
-        Phase::Seed | Phase::LocalSeed | Phase::LocalReady => unreachable!(),
+        Phase::Seed | Phase::LocalSeed | Phase::LocalReady | Phase::LocalTaskbar => unreachable!(),
     };
     let deadline = Instant::now() + Duration::from_secs(10);
     let snapshot = loop {
@@ -347,6 +356,9 @@ fn verify_existing(app: &tauri::AppHandle, phase: Phase) -> Result<(), String> {
     eprintln!(
         "NATIVE_ACCOUNT_EXISTING_COLD_DISPLAY_OK: real persisted startup, main/mini IPC and rendered progress, no identity or quota values logged"
     );
+    if phase == Phase::LocalTaskbar {
+        super::quota_taskbar_smoke::verify(app)?;
+    }
     Ok(())
 }
 #[cfg(test)]
@@ -402,5 +414,16 @@ mod tests {
             ])
             .is_err()
         );
+    }
+    #[test]
+    fn native_taskbar_account_scene_is_not_a_default_or_synthetic_scene() {
+        let mut args = vec![
+            "--native-smoke".into(),
+            "--native-account-startup-id=bd4a2122-8066-4e03-a846-3665274fa201".into(),
+            "--native-account-phase=local_taskbar".into(),
+        ];
+        assert!(parse(args.clone()).is_err());
+        args.push("--native-existing-account".into());
+        assert_eq!(parse(args).unwrap().unwrap().phase, Phase::LocalTaskbar);
     }
 }

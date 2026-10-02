@@ -4,6 +4,8 @@
 
 ## 当前交付状态（2026-10-03，M15a7 / M15a6 / M15a5 / M15a4 / M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
 
+M13f1 已通过当前真实账户到正式独立原生任务栏的第三入口：两个实际应用进程冷启动、真实 DTO 到可见读数 / 详情全文、三入口共享隐私、仅任务栏可见时普通后台新读取及原生成功时间更新、停用原几何恢复、退出拥有的宿主结束，最终 native 场景退出 0。默认 / 真实 / 真实任务栏入口分开，新增 scene 门禁、details 8 / wire 13 / scene 3 及 strict Clippy / release / fmt / diff 通过。过程未保存实际额度 / 身份、未发起登录 / 模型回合 / 性能测试，1412 保留。自有 WM_SETFOCUS 不冒充物理输入，真实通知 / 切换 / 过期 / 重置、Explorer / Win11 / 物理兼容及安装更新继续。详见[账户第三入口验证](account-quota-verification.md)。
+
 M12k 已将额度隐藏补到共享响应序列化：不再只匿名化桶名，隐私下窗口为空、成功 / 尝试时间 null，连接 / 状态 / 精确修订 / 控制保留；owner 真值不变，关闭后重查。新增独立隐私预期、privacy 6 / quota 14 及前端相关 6 项回归通过；core / desktop strict Clippy、release / fmt / diff 通过。无需 schema 变更，原生 quota 移除和 UI 即时隐藏继续保持。真实任务栏账户第三入口正在单独验收，完整范围继续，详见[账户验证](account-quota-verification.md)。
 
 M12h 新增四个独立 Tauri 进程的真实 Win10 冷启动验收：同一隔离 SQLite 配置从保存到自动连接，关闭自动连接及程序指纹变化后的拒绝均通过；账户空值 / 正式 IPC / 拥有的服务退出检查通过，四阶段 COLD_OK、SEQUENCE_OK、退出 0。合成程序 / Home 仅在 debug UUID 隔离目录，无真实认证读取；参数单测、strict Clippy 通过，WebView2 1412 保留。详见[账户共享显示验证](account-quota-verification.md)。真实账户持续读取及其他已确认范围继续推进。

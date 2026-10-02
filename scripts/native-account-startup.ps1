@@ -1,6 +1,7 @@
-param([switch]$ExistingAccount)
+param([switch]$ExistingAccount, [switch]$TaskbarAccount)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Native account startup acceptance requires Windows.' }
+if ($TaskbarAccount -and -not $ExistingAccount) { throw 'TaskbarAccount requires the explicit ExistingAccount opt-in.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 }
@@ -10,10 +11,15 @@ if (-not $ExistingAccount) {
 }
 & cargo build -p token-pulse-desktop --features custom-protocol
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($TaskbarAccount) {
+    & cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 $startupId = [guid]::NewGuid().ToString()
 $startupExe = Join-Path $PSScriptRoot '..\target\debug\token-pulse-desktop.exe'
 $ownedServicePid = $null
-$phases = if ($ExistingAccount) { @('local_seed', 'local_ready') } else { @('seed', 'ready', 'disabled', 'changed') }
+$ownedTaskbarPid = $null
+$phases = if ($TaskbarAccount) { @('local_seed', 'local_taskbar') } elseif ($ExistingAccount) { @('local_seed', 'local_ready') } else { @('seed', 'ready', 'disabled', 'changed') }
 foreach ($phase in $phases) {
     $startupArgs = @('--native-smoke', "--native-account-startup-id=$startupId", "--native-account-phase=$phase")
     if ($ExistingAccount) { $startupArgs += '--native-existing-account' }
@@ -29,9 +35,19 @@ foreach ($phase in $phases) {
         if ("$line" -match '^NATIVE_ACCOUNT_COLD_OWNED_PID: (\d+)$') {
             $ownedServicePid = [int]$Matches[1]
         }
+        if ("$line" -match '^NATIVE_TASKBAR_ACCOUNT_OWNED_PID: (\d+)$') {
+            $ownedTaskbarPid = [int]$Matches[1]
+        }
     }
     if ($null -ne $ownedServicePid -and (Get-Process -Id $ownedServicePid -ErrorAction SilentlyContinue)) {
         throw 'Owned synthetic quota process survived application shutdown.'
+    }
+    if ($null -ne $ownedTaskbarPid -and (Get-Process -Id $ownedTaskbarPid -ErrorAction SilentlyContinue)) {
+        throw 'Owned taskbar process survived application shutdown.'
+    }
+    if ($TaskbarAccount -and $phase -eq 'local_taskbar' -and
+        ($null -eq $ownedTaskbarPid -or -not ($output | Select-String -SimpleMatch 'NATIVE_TASKBAR_EXISTING_ACCOUNT_OK:'))) {
+        throw 'Taskbar account phase did not prove the native host scenario.'
     }
 }
 if ($ExistingAccount) {

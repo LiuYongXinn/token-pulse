@@ -322,7 +322,7 @@ fn verify_application_position(
     );
     Ok(())
 }
-fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
+pub(super) fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
     until_action(app, || {
         let runtime = app.state::<super::RuntimeState>();
         let Some(service) = super::taskbar_commands::service(app) else {
@@ -347,7 +347,7 @@ fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
 fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String> {
     own_readout_message(app, message, 0, 0)
 }
-fn own_readout_window(
+pub(super) fn own_readout_window(
     app: &tauri::AppHandle,
 ) -> Result<windows_sys::Win32::Foundation::HWND, String> {
     use windows_sys::Win32::{
@@ -398,7 +398,7 @@ fn own_readout_window(
     }
     Ok(probe.windows[0])
 }
-fn own_readout_message(
+pub(super) fn own_readout_message(
     app: &tauri::AppHandle,
     message: u32,
     wparam: usize,
@@ -509,7 +509,7 @@ fn verify_canvas_recreation(
     );
     Ok(())
 }
-fn own_details(
+pub(super) fn own_details(
     app: &tauri::AppHandle,
 ) -> Result<(windows_sys::Win32::Foundation::HWND, bool, String), String> {
     use windows_sys::Win32::{
