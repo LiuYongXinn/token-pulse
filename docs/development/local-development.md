@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M06e1：`cargo test -p token-pulse-store source_scan --lib` 8 项通过，使用合成路径及真实 SQLite 检查枚举 / 读取分离、部分末行、旧回调与检查点、暂停 / 改根、已知 / 未知提示、中断重开、旧读快照及事务失败、缺失文件保留消费。store strict Clippy / fmt 通过；没有实际目录调度接入或新增 UI 验收，没有运行性能测试。
+
 离线价格目录内嵌于 core；更新事实时开发者执行 `node scripts/update-offline-prices.mjs --write YYYY-MM-DD openai-text-VERSION`，脚本只读官方公开 Markdown，并强制审查输出差异后再提交。应用启动不使用 Node 或联网抓价格。脚本保留十进制字符串，各档位直接引用官方表，不用折扣推算其他模式。M09g1a 的 store 发布暂未接生产启动，条件匹配 / 正式目录界面继续实施；自动检查使用合成更新、Writer 故障及实际 SQLite 快照，不读取用户日志或账户，不运行性能测试。
 
 M09g1b 已接正常应用启动和主窗口正式目录。运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -OfflinePrices`：在隔离库走正常目录启动发布，实际 main / mini WebView 验证 172 事实 / 37 可用规则、历史 null / 非法修订、搜索 / 模式 / 历史切换、mini 拒绝、共享隐私清空与重开新查询、重复发布不增修订和消费不变。Win10 19045 / 150% DPI 场景打印 NATIVE_OFFLINE_PRICES_OK，退出 0；WebView2 1412 保留。普通 debug / release 独立应用都使用内置目录；其他原生夹具仍保留显式空价格，避免混入市场价。定向浏览器 `npx playwright test tests/ui/offline-prices.spec.ts tests/ui/prices.spec.ts` 6 项通过；截图位于忽略的 test-results/offline-prices-*.png，合成 bridge 与公开事实用于检查界面，不冒充生产账户 / 用量。
