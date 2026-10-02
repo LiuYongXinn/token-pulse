@@ -328,7 +328,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -435,7 +438,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -604,7 +610,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -2413,7 +2422,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         }
@@ -2606,7 +2618,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         }
@@ -2910,7 +2925,10 @@
         "WINDOW_UNAVAILABLE",
         "SHORTCUT_CONFLICT",
         "SHORTCUT_UNAVAILABLE",
-        "NOTIFY_INTEGRATION_FAILED"
+        "NOTIFY_INTEGRATION_FAILED",
+        "UPDATE_UNAVAILABLE",
+        "UPDATE_BUSY",
+        "UPDATE_FAILED"
       ],
       "title": "ErrorCode",
       "type": "string"
@@ -4273,7 +4291,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -8371,7 +8392,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -8682,7 +8706,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -13472,7 +13499,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -13651,7 +13681,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -14187,7 +14220,10 @@
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
             "SHORTCUT_UNAVAILABLE",
-            "NOTIFY_INTEGRATION_FAILED"
+            "NOTIFY_INTEGRATION_FAILED",
+            "UPDATE_UNAVAILABLE",
+            "UPDATE_BUSY",
+            "UPDATE_FAILED"
           ],
           "type": "string"
         },
@@ -15627,6 +15663,245 @@
         "event_count"
       ],
       "title": "UnpricedReason",
+      "type": "object"
+    },
+    "UpdateActionRequest": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "expected_update_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "expected_update_revision"
+      ],
+      "title": "UpdateActionRequest",
+      "type": "object"
+    },
+    "UpdateIssue": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "publication_not_configured",
+        "unsupported_platform",
+        "network",
+        "invalid_release",
+        "download_failed",
+        "signature_invalid",
+        "installer_unavailable",
+        "install_failed"
+      ],
+      "title": "UpdateIssue",
+      "type": "string"
+    },
+    "UpdatePhase": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "unavailable",
+        "idle",
+        "checking",
+        "current",
+        "available",
+        "downloading",
+        "verifying",
+        "ready_to_install",
+        "installing",
+        "error"
+      ],
+      "title": "UpdatePhase",
+      "type": "string"
+    },
+    "UpdateRelease": {
+      "$defs": {
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "published_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "notes",
+        "published_at_ms"
+      ],
+      "title": "UpdateRelease",
+      "type": "object"
+    },
+    "UpdateSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "UpdateIssue": {
+          "enum": [
+            "publication_not_configured",
+            "unsupported_platform",
+            "network",
+            "invalid_release",
+            "download_failed",
+            "signature_invalid",
+            "installer_unavailable",
+            "install_failed"
+          ],
+          "type": "string"
+        },
+        "UpdatePhase": {
+          "enum": [
+            "unavailable",
+            "idle",
+            "checking",
+            "current",
+            "available",
+            "downloading",
+            "verifying",
+            "ready_to_install",
+            "installing",
+            "error"
+          ],
+          "type": "string"
+        },
+        "UpdateRelease": {
+          "additionalProperties": false,
+          "properties": {
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "published_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "notes",
+            "published_at_ms"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "current_version": {
+          "type": "string"
+        },
+        "downloaded_bytes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateIssue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_checked_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EpochMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/UpdatePhase"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateRelease"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_bytes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "update_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "update_revision",
+        "phase",
+        "current_version",
+        "release",
+        "last_checked_at_ms",
+        "downloaded_bytes",
+        "total_bytes",
+        "issue"
+      ],
+      "title": "UpdateSnapshot",
       "type": "object"
     },
     "UsageEventRow": {

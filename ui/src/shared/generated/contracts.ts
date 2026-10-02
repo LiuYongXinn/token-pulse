@@ -8,6 +8,16 @@ export type EpochMs = number;
 
 export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
+export type UpdatePhase = "unavailable" | "idle" | "checking" | "current" | "available" | "downloading" | "verifying" | "ready_to_install" | "installing" | "error";
+
+export type UpdateIssue = "publication_not_configured" | "unsupported_platform" | "network" | "invalid_release" | "download_failed" | "signature_invalid" | "installer_unavailable" | "install_failed";
+
+export type UpdateRelease = { version: string, notes: string | null, published_at_ms: EpochMs | null, };
+
+export type UpdateSnapshot = { update_revision: DecimalInt, phase: UpdatePhase, current_version: string, release: UpdateRelease | null, last_checked_at_ms: EpochMs | null, downloaded_bytes: DecimalInt | null, total_bytes: DecimalInt | null, issue: UpdateIssue | null, };
+
+export type UpdateActionRequest = { expected_update_revision: DecimalInt, };
+
 export type NotifyIssue = "unavailable" | "transaction_unavailable" | "busy" | "permission_denied" | "unsafe_path" | "unsafe_file" | "unsafe_permissions" | "invalid_config" | "invalid_notify" | "already_managed" | "config_changed" | "ownership_changed" | "invalid_registration" | "invalid_marker" | "limit_reached" | "already_exists" | "not_found" | "no_original_command" | "plan_not_found" | "plan_expired" | "plan_limit" | "active_configuration" | "cleanup_failed" | "wrong_executable" | "channel_unavailable" | "worker_unavailable";
 
 export type NotifyConfigOperation = "enable" | "disable";
@@ -108,7 +118,7 @@ export type MiniSessionOption = { session_key: string, display_name: string, };
 
 export type MiniSessionsPage = { meta: SnapshotMeta, options: Array<MiniSessionOption>, next_cursor: string | null, };
 
-export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "QUOTA_PROTOCOL_ERROR" | "QUOTA_SERVICE_UNAVAILABLE" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE" | "SHORTCUT_CONFLICT" | "SHORTCUT_UNAVAILABLE" | "NOTIFY_INTEGRATION_FAILED";
+export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "QUOTA_PROTOCOL_ERROR" | "QUOTA_SERVICE_UNAVAILABLE" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE" | "SHORTCUT_CONFLICT" | "SHORTCUT_UNAVAILABLE" | "NOTIFY_INTEGRATION_FAILED" | "UPDATE_UNAVAILABLE" | "UPDATE_BUSY" | "UPDATE_FAILED";
 
 export type ErrorDetail = string | number | boolean | null;
 

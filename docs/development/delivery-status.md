@@ -2,6 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16b1：更新状态、精确进度与安装门禁
+
+新增 pure UpdateWorkflow 和五项 DTO，区分网络下载结束、正在验签及真正可安装；未知长度保持 null，字节与修订全程精确十进制。操作令牌不可从前端反序列化，一次仅一个操作；新检查废弃旧候选 / 进度，迟到回调拒绝，安装必须匹配刚发布 ready 修订。元数据限长 / 控制字符拒绝，请求不接受 URL / 公钥 / 原始文件 / verified 标志。缺少发布配置与实际 current 分开，检查失败不刷新先前成功时间。
+
+六项独立领域测试通过：固定 JSON null / 零及缺配置、EOF 无安装权 / 验签失败、超 JS 安全整数进度与独立预期、无副作用的错误长度 / 变长 / 截断 / 空文件拒绝、旧候选 / 迟到结果 / 并发 busy、非法元数据与越界请求。测试用假提供方完成状态动作，不执行签名算法，也不是系统安装验收；提供方、正式 main-only IPC / UI、签名发布及实际更新继续 M16。不会改动消费事实 / 账户或取消范围，没有性能测试。
+
+Rust / TS / schema 同步生成；core all-targets strict Clippy、TypeScript typecheck、既有契约前端 11 项、fmt 与 diff 检查通过。该提交不新增 Tauri 命令，不启动网络 / 安装器。
+
 ## M16a：单渠道 Windows 安装包与实际独立启动
 
 正式入口 `npm run tauri:build` 加载独立 bundle overlay；普通 Cargo 验证不要求生成宿主。beforeBuild 编译前端及同目标 / profile 的任务栏宿主，通过 cargo metadata 定位真实 target_directory，复制带 target triple 的 externalBin 并检查 SHA-256。NSIS currentUser 安装主程序、嵌入前端及同目录 `token-pulse-taskbar-host.exe`；只有一个安装渠道，不依赖 IDE、开发服务器或对话工具。中文 / 英文随系统选择，不增加语言选择页。WebView2 已存在时直接使用，缺失时下载 Microsoft bootstrapper 并展示安装交互；配置与生成 NSIS 检测脚本均核对。依据：[Windows installer](https://v2.tauri.app/distribute/windows-installer/) / [externalBin](https://v2.tauri.app/develop/sidecar/)。

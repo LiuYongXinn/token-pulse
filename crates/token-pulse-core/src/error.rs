@@ -42,6 +42,9 @@ pub enum ErrorCode {
     ShortcutConflict,
     ShortcutUnavailable,
     NotifyIntegrationFailed,
+    UpdateUnavailable,
+    UpdateBusy,
+    UpdateFailed,
 }
 
 impl std::fmt::Display for ErrorCode {

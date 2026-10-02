@@ -621,3 +621,9 @@ main capability 新增 `get_price_revalue_status(requestId)`、`start_price_reva
 主窗口专用 mutate_model_alias(request: ModelAliasMutation, expectedPriceRevision: DecimalInt, requestId)，request 为 create { draft } / replace { alias_id, draft } / retire { alias_id }，draft 包含 provider、alias、canonical_model，拒绝未知字段。返回 PriceRulesSnapshot（price_revision / rules / aliases）及最新隐私策略戳。成功提交发既有 price_rules_changed { price_revision, all_models: true }，失败不发；重复 / 链式冲突 PRICE_RULE_CONFLICT，旧价格修订 REVISION_CONFLICT，非法标识 / 非用户映射 INVALID_QUERY。mini capability 无此命令；不提供任意 SQL / 模型查询 / 路径接口。Rust / TS / schema 同步；设置编辑器随后接入，不将隐私下空数组解释为配置不存在。
 
 M09f2 的前端 mutateModelAlias 继续复用响应身份、显示策略戳与 epoch 门禁，主窗口别名表单保持捕获的 expectedPriceRevision；刷新当前快照不悄悄改成最新写入基线。成功采用事务内完整 PriceRulesSnapshot，价格通知继续触发既有统计失效；错误保留草稿，隐私卸载并清空编辑器，关闭后重新查询。无新增 IPC 或 schema，历史 / 目录只读不是后台权限缺失。
+
+### M16b1：更新状态与受限动作契约
+
+Rust / TS / schema 新增 UpdatePhase、UpdateIssue、UpdateRelease、UpdateSnapshot 和 UpdateActionRequest。阶段为 unavailable / idle / checking / current / available / downloading / verifying / ready_to_install / installing / error；缺失发布配置表达 unavailable + publication_not_configured，不可当成 current。更新修订与下载字节用 DecimalInt 字符串，未开始下载的 downloaded_bytes 及未知 total_bytes 为 null，真正开始后已下载为 0 才是字符串零。成功检查时间和发布时刻独立且可未知，不在失败时刷新成功时间。
+
+UpdateActionRequest 仅 expected_update_revision，deny_unknown_fields；网络结果与操作令牌只在 Rust 内部流转。新检查清除旧发布与进度，失败保留有限原因 / 已知进度但不能安装；迟到旧令牌被拒绝。元数据只含有界版本说明 / 日期，不返回认证、密钥、下载 URL、原生文件路径或底层错误原文；公开元数据不按用量隐私删除。该步骤仅为领域契约，未注册新的 Tauri 命令或 capability；真实网络 / 签名提供方、main-only IPC 与 UI 随后接入，不把状态机测试当作真实验签或安装证据。
