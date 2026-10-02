@@ -4112,6 +4112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "token-pulse-quota"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "token-pulse-core",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "token-pulse-store"
 version = "0.1.0"
 dependencies = [

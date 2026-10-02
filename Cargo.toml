@@ -1,5 +1,5 @@
 [workspace]
-members = ["src-tauri", "crates/token-pulse-core", "crates/token-pulse-store", "crates/token-pulse-collector"]
+members = ["src-tauri", "crates/token-pulse-core", "crates/token-pulse-store", "crates/token-pulse-collector", "crates/token-pulse-quota"]
 resolver = "2"
 
 [workspace.package]

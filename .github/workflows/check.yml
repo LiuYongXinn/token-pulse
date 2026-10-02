@@ -21,5 +21,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo test -p token-pulse-quota --features test-fixture
+      - run: cargo clippy -p token-pulse-quota --all-targets --features test-fixture -- -D warnings
       - run: npm run test:native
       - run: npm run tauri:build -- --no-bundle

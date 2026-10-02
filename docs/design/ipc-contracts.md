@@ -506,3 +506,11 @@ QuotaSnapshot / QuotaWindow / QuotaLimit 沿用既有契约，新增受控错误
 普通读取令牌包含精确连接 epoch / 请求 ID；账户变化和断开清除全部缓存，未完成本 epoch 读取前拒绝通知。新通知优先于此前开始的查询回复，保留各桶自己的 fetched_at_ms；没有选定桶时 fetched_at_ms 为 null。quota_revision 为十进制字符串。服务 actor 必须在串行处理内部采样单调时间，10 秒请求期限 / 5 秒下限 / 失败退避 / 60 秒或 5 分钟轮询不受系统时间回拨影响。延迟回复只能发布、已超时或被忽略，不能恢复旧 epoch。
 
 只按 actual window_duration_mins 识别唯一周窗口和短周期，未知时长不猜角色；reset_at_ms 从 Unix 秒 checked 转换。剩余百分比在已知 usedPercent 时计算并夹紧，缺失仍为 null；通知 / 超时 / 陈旧不改成本地推测百分比。多桶不加总，默认 codex 或唯一桶，否则留待明确选择；原选择消失不悄悄改选。实际 stdio、授权作业、IPC 权限及 UI 消费在后续模块接入。
+
+### 2.25 已实现的独立账户 stdio 通信边界
+
+token-pulse-quota 是独立后台库，尚未注册 WebView 命令。NativeService 不是序列化 DTO；可执行文件 / Home 后续由受控原生选择和明确用户连接操作产生，不将路径直接变成通用 shell 入口。Windows 只执行 canonical 原生 .exe，固定 app-server 参数。受限 AccountRequest 只开放 ReadAccount / ReadLimits；初始化由宿主内部执行，实验 API 关闭，成功响应之后才发送 initialized。
+
+RpcToken 绑定 transport connection_epoch 与不可重用序列 ID，独立于账户领域快照 epoch；后续 owner 映射两者，不能用订阅或 PID 当作账户身份。ProtocolEvent 仅包含已净化的回复 / 超时 / 账户变化 / 桶通知；10 秒过期请求移除，旧回复不命中后续请求。account/updated 先清理该连接所有旧账户读取，再由领域 owner 清空快照并查询新身份。任何服务主动请求只收到受控不支持错误，未知通知不保留。
+
+原始协议帧短暂经过有界后台管道，解析后只保留展示字段；不 Debug / 日志 / 持久化消息。原始 stderr 排空但不输出，只暴露安全字节计数。Windows 自有服务以 suspended → Job 约束 → 自有主线程恢复启动，断开回收自有进程树与所有 pipe worker；Job 失败拒绝启动。相关规则依据 [Windows Job 官方说明](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)和 [ResumeThread](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-resumethread)。本节不代表授权流程或正式 get_account_quota 已可用；登录和 UI 接入继续按第 6 节设计实施。

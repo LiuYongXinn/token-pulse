@@ -2,7 +2,7 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02，M12a）
+## 当前交付状态（2026-10-02，M12b）
 
 - 独立 Tauri / React 工程、SQLite / 原子采集事务、持久化作业、只读适配、镜像与分叉核算、候选重建及已知旧核算版本升级已接入；实际 Codex 格式、完整扫描证据、文件代次替换恢复、旧 parser 重解析和实际 WSL 条件仍有待办，不能宣称采集已经完整覆盖。
 - 总览、模型、项目、会话、明细五个统计页面使用正式 DTO。会话 / 明细稳定分页使用真实 SQLite 租约；范围消费与最近上下文分开。会话详情的消费 / 关系 / 账本分类摘要使用原子 bundle，子关系支持跳转；可靠回合分页已接入详情；已保存时区、自定义日期和热力图日期跳转已接统一筛选；完整继承证明、完整诊断 / 设置尚未完成。
@@ -13,7 +13,7 @@
 
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。
 
-账户额度已新增 M12a 纯领域解析与内存协调器，完整 core 现为 94 项通过（新增 12 项）。本模块的契约生成 / 检查、workspace Clippy、前端生产构建及 29 项 Vitest 通过。账户进程连接、授权、IPC 和真实 UI 尚未接入；此前的浏览器与原生检查不是本模块的实际账户验收。
+账户额度已新增 M12a 纯领域解析与内存协调器，完整 core 现为 94 项通过（新增 12 项）。M12b 独立 stdio 通信库新增 3 项协议 / framing 与 8 项真实合成子进程检查通过，包含 Windows 自有 Job / 后代进程清理；workspace 与夹具特性 Clippy 通过。M12a 契约 / 前端构建及 29 项 Vitest 通过；M12b 没有改 UI。持续账户服务 owner、授权、持久配置、IPC 和真实额度 UI 尚未接入；不得把合成通信库验证作为真实账户验收。
 
 ## 起始状态（2026-10-01）
 
@@ -807,3 +807,15 @@ QuotaCoordinator 用连接 epoch、请求 ID、十进制修订与单调时钟管
 自动检查：12 项独立合成多场景覆盖实际窗口顺序、空映射、非法值 / 溢出 / 负 Unix 时间、账户类型、过期 epoch / 请求、超时、单飞、时钟倒退、退避、通知与读取竞争、多个桶与显式选择、legacy 名称碰撞和陈旧时间。完整 core 94 项、29 项 Vitest、契约生成 / 差异检查、workspace Clippy warnings denied、fmt、严格类型和前端生产构建通过。未更改 UI 和原生集成，因此不重复浏览器 / 原生小窗全套；未执行性能测试。
 
 实际本机只验证 codex-cli 0.130.0 的版本和离线 app-server generate-json-schema，使用新建的隔离临时 CODEX_HOME。实际 Schema 与 [官方 App Server 文档](https://learn.chatgpt.com/docs/app-server) 对照后确认单桶通知和多桶读取差异；没有启动现有账户连接、读取 auth.json 或执行授权 / 网络额度查询。该检查不是实际账户握手与额度验收。受控 stdio 宿主、登录 / 取消、权限、主窗口与小窗额度显示以及真实账户条件继续实施。
+
+## M12b：独立受控 stdio 账户通信库
+
+新增 token-pulse-quota crate，由后台 NativeService 配置选定原生程序及可选 CODEX_HOME。要求绝对路径和实际文件 / 目录；Windows 原路径与 canonical 目标都须 .exe，不执行 .cmd / .ps1 / shell，不接受任意参数。唯一启动参数是 app-server，工作目录与服务 Home / 程序目录绑定，不把本项目作为 cwd。初始化发送明确客户端和 experimentalApi=false，校验成功后只发送一次 initialized；初始化前 / 失败后账户请求拒绝。
+
+当前可调用方法仅 account/read（refreshToken=false）及 account/rateLimits/read，类型化枚举没有任意 RPC / 参数 / API key / 访问令牌入口。服务主动请求统一返回 -32601，不执行工具、审批或认证刷新；未知通知和旧 ID 回复丢弃。回复只发布已解析的 AccountAvailability / QuotaBook / QuotaUpdate，不缓存服务 Home、邮件、认证、原始错误文字或未知消息。account/updated 先使旧读取失效，再交给 owner 重新证明新身份；此库不自行发起登录或修改远端账户。
+
+stdout 每帧上限 1 MiB，限长读取不使用无限 read_line；队列 16 帧、输入 4 帧、活动请求 4 条有界。后台写入也有 10 秒期限；回复 / 初始化默认 10 秒，迟到回复不能满足新请求。stderr 用固定 buffer 排空，只保留丢弃字节计数，原文不进入诊断。Windows 以 CREATE_SUSPENDED 创建自有进程，加入 kill-on-close Job 后仅恢复该自有主线程；断开先释放队列，再结束 Job / 子进程并回收读取、写入、stderr worker。不会终止用户原有 Codex 进程。Job / 恢复失败不退化为无约束运行。
+
+自动功能检查：3 项纯协议 / framing 多场景、8 项实际合成 exe / OS pipe 场景通过。覆盖握手顺序、固定方法、敏感字段丢弃、账户通知与旧读取、单飞、主动工具请求拒绝、未知 / 旧消息、初始化不支持 / 损坏、超长 / 非 JSON / 截断帧、stderr 排空、队列填满后断开、真实 10 秒超时及迟到回复拒绝。Windows 系统 API 场景真实持有后代进程 handle：断开前 WAIT_TIMEOUT，Job 关闭后 WAIT_OBJECT_0，并确认继承管道全部释放。这个证据属于合成服务的实际原生进程生命周期，不是正式应用授权 / 网络账户 / WebView 验收。路径检查对可用的 Windows symlink 能力附加 canonical 脚本目标拒绝，缺少创建权限时该条件场景不计为实际通过。
+
+workspace all-target Clippy、夹具特性 all-target Clippy warnings denied、fmt 与差异空白检查通过；路径 canonical 检查收紧后针对性检查再次通过。CI 增加显式 test-fixture 检查；合成 exe 仅在该特性开启时构建，普通生产构建不包含它。未改前端或采集算法，不重复旧浏览器 / 小窗原生检查；没有执行性能测试。通信库尚未接到 Tauri 生命周期和前端，后续继续串行 owner / 轮询恢复、用户授权 / 取消、配置权限和真实 UI。
