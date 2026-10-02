@@ -56,6 +56,7 @@ fn verify_actions(app: &tauri::AppHandle) -> Result<(), String> {
     "#,
     )?;
     wait_actions_ready(app)?;
+    verify_details(app, &main)?;
     main.hide().map_err(|e| e.to_string())?;
     // These are authored messages to our verified own readout, explicitly not real mouse input.
     own_click_message(app, WM_LBUTTONUP)?;
@@ -221,6 +222,14 @@ fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
     })
 }
 fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String> {
+    own_readout_message(app, message, 0, 0)
+}
+fn own_readout_message(
+    app: &tauri::AppHandle,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+) -> Result<(), String> {
     use windows_sys::Win32::{
         Foundation::{HWND, LPARAM},
         UI::WindowsAndMessaging::{
@@ -286,8 +295,8 @@ fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String>
         SendMessageTimeoutW(
             probe.windows[0],
             message,
-            0,
-            0,
+            wparam,
+            lparam,
             SMTO_ABORTIFHUNG,
             1000,
             std::ptr::null_mut(),
@@ -296,6 +305,165 @@ fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String>
     {
         return Err("own click message timed out".into());
     }
+    Ok(())
+}
+fn own_details(
+    app: &tauri::AppHandle,
+) -> Result<(windows_sys::Win32::Foundation::HWND, bool, String), String> {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM},
+        UI::WindowsAndMessaging::{
+            EnumWindows, GetClassNameW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+        },
+    };
+    struct Probe {
+        pid: u32,
+        windows: Vec<HWND>,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        if pid == probe.pid {
+            let mut name = [0; 128];
+            let n = unsafe { GetClassNameW(window, name.as_mut_ptr(), 128) };
+            if n > 0
+                && String::from_utf16_lossy(&name[..n as usize])
+                    .starts_with("TokenPulse.Taskbar.Details.")
+            {
+                probe.windows.push(window);
+            }
+        }
+        1
+    }
+    let pid = super::taskbar_commands::service(app)
+        .and_then(|s| s.owned_host_pid())
+        .ok_or("details host missing")?;
+    let mut probe = Probe {
+        pid,
+        windows: vec![],
+    };
+    unsafe {
+        EnumWindows(Some(collect), (&mut probe as *mut Probe) as LPARAM);
+    }
+    if probe.windows.len() != 1 {
+        return Err("own details identity not unique".into());
+    }
+    let window = probe.windows[0];
+    let mut text = vec![0; 32768];
+    let n = unsafe { GetWindowTextW(window, text.as_mut_ptr(), text.len() as i32) };
+    if n <= 0 || n as usize == text.len() - 1 {
+        return Err("details caption missing or truncated".into());
+    }
+    Ok((
+        window,
+        unsafe { IsWindowVisible(window) } != 0,
+        String::from_utf16_lossy(&text[..n as usize]),
+    ))
+}
+fn verify_details(app: &tauri::AppHandle, main: &tauri::WebviewWindow) -> Result<(), String> {
+    use windows_sys::Win32::{
+        Foundation::RECT,
+        Graphics::Gdi::{
+            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        },
+        UI::{
+            Input::KeyboardAndMouse::{VK_END, VK_ESCAPE},
+            WindowsAndMessaging::{
+                GWL_EXSTYLE, GetWindowLongW, GetWindowRect, WM_KEYDOWN, WM_KILLFOCUS, WM_SETFOCUS,
+                WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+            },
+        },
+    };
+    let (window, visible, _) = own_details(app)?;
+    if visible {
+        return Err("details shown before input".into());
+    }
+    own_click_message(app, WM_SETFOCUS)?; // Explicit authored focus message, not physical keyboard acceptance.
+    let (_, visible, text) = own_details(app)?;
+    if !visible
+        || !text.contains("可信 Token")
+        || !text.contains("统计时区")
+        || !text.contains("账户额度")
+    {
+        return Err("actual details projection missing".into());
+    }
+    let style = unsafe { GetWindowLongW(window, GWL_EXSTYLE) } as u32;
+    if style & (WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW) != WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW {
+        return Err("details activation style invalid".into());
+    }
+    let mut rect: RECT = unsafe { std::mem::zeroed() };
+    let mut monitor: MONITORINFO = unsafe { std::mem::zeroed() };
+    monitor.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+    if unsafe { GetWindowRect(window, &mut rect) } == 0
+        || unsafe {
+            GetMonitorInfoW(
+                MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST),
+                &mut monitor,
+            )
+        } == 0
+        || rect.left < monitor.rcWork.left
+        || rect.right > monitor.rcWork.right
+        || rect.top < monitor.rcWork.top
+        || rect.bottom > monitor.rcWork.bottom
+    {
+        return Err("details outside actual monitor work area".into());
+    }
+    own_readout_message(app, WM_KEYDOWN, VK_END as usize, 0)?;
+    own_readout_message(app, WM_KEYDOWN, VK_ESCAPE as usize, 0)?;
+    if own_details(app)?.1 {
+        return Err("Escape did not hide details".into());
+    }
+    own_click_message(app, WM_KILLFOCUS)?;
+    own_click_message(app, WM_SETFOCUS)?;
+    if !own_details(app)?.1 {
+        return Err("details focus reentry failed".into());
+    }
+    for _ in 0..2 {
+        super::mini_smoke::evaluate(
+            app,
+            main,
+            r#"
+          const current=await invoke('get_display_settings',{requestId:'details-privacy-read'});
+          await invoke('set_display_privacy',{requestId:'details-privacy-save',request:{privacy:!current.data.preferences.privacy,expected_settings_revision:current.data.settings_revision}});
+        "#,
+        )?;
+        wait_actions_ready(app)?;
+        // Clear must hide the old window; fresh snapshots can prepare hidden new text.
+        if own_details(app)?.1 {
+            return Err("privacy barrier left details visible".into());
+        }
+        own_click_message(app, WM_SETFOCUS)?;
+        let (_, visible, text) = own_details(app)?;
+        let privacy = app
+            .state::<super::RuntimeState>()
+            .database
+            .as_ref()
+            .map_err(|e| e.code.to_string())?
+            .display_settings()
+            .map_err(|e| e.code.to_string())?
+            .preferences
+            .privacy;
+        if !visible
+            || (privacy
+                && (!text.contains("隐私模式")
+                    || text.contains("已计价部分估算")
+                    || text.contains("额度桶")
+                    || text.contains("剩余")))
+            || (!privacy && !text.contains("已计价部分估算"))
+        {
+            return Err("details privacy text inconsistent with committed policy".into());
+        }
+    }
+    own_click_message(app, WM_KILLFOCUS)?;
+    if own_details(app)?.1 {
+        return Err("focus loss did not hide details".into());
+    }
+    println!(
+        "NATIVE_TASKBAR_DETAILS_OK: real standalone popup/production DTO/actual work area/nonactivating styles, authored own-window focus/scroll/Escape, two shared privacy barriers hide before fresh input; physical hover/keyboard/focus acceptance separate"
+    );
     Ok(())
 }
 fn own_menu(pid: u32) -> Option<windows_sys::Win32::Foundation::HWND> {

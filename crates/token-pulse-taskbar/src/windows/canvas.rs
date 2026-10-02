@@ -1,5 +1,6 @@
 //! Owned child drawing window; it remains hidden until the taskbar adapter attaches it.
 use super::{
+    details_window::{HOVER_MS, NativeDetails},
     render::{NativeFont, Palette, rgb},
     topology::wide,
 };
@@ -14,24 +15,30 @@ use std::{
     rc::Rc,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetDoubleClickTime, GetKeyState, VK_APPS, VK_F10, VK_RETURN, VK_SHIFT, VK_SPACE,
+    GetDoubleClickTime, GetKeyState, TME_CANCEL, TME_HOVER, TME_LEAVE, TRACKMOUSEEVENT,
+    TrackMouseEvent, VK_APPS, VK_ESCAPE, VK_F10, VK_RETURN, VK_SHIFT, VK_SPACE,
 };
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Gdi::{
-        BeginPaint, ClientToScreen, EndPaint, GdiFlush, GetDC, InvalidateRect, PAINTSTRUCT,
-        ReleaseDC, UpdateWindow,
+        BeginPaint, ClientToScreen, DrawFocusRect, EndPaint, GdiFlush, GetDC, InvalidateRect,
+        PAINTSTRUCT, ReleaseDC, UpdateWindow,
     },
     System::{LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64},
-    UI::WindowsAndMessaging::{
-        CREATESTRUCTW, CS_DBLCLKS, CreateWindowExW, DLGC_WANTALLKEYS, DefWindowProcW,
-        DestroyWindow, EndMenu, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW, IsWindowVisible,
-        KillTimer, MA_NOACTIVATE, PostMessageW, RegisterClassExW, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-        UnregisterClassW, WM_CANCELMODE, WM_CONTEXTMENU, WM_ERASEBKGND, WM_GETDLGCODE, WM_KEYDOWN,
-        WM_KEYUP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCCREATE,
-        WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_TIMER,
-        WNDCLASSEXW, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_NOPARENTNOTIFY, WS_TABSTOP,
+    UI::{
+        Controls::{WM_MOUSEHOVER, WM_MOUSELEAVE},
+        WindowsAndMessaging::{
+            CREATESTRUCTW, CS_DBLCLKS, CreateWindowExW, DLGC_WANTALLKEYS, DefWindowProcW,
+            DestroyWindow, EndMenu, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW,
+            IsWindowVisible, KillTimer, MA_NOACTIVATE, PostMessageW, RegisterClassExW,
+            SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW,
+            SetWindowPos, SetWindowTextW, UnregisterClassW, WM_CANCELMODE, WM_CONTEXTMENU,
+            WM_ERASEBKGND, WM_GETDLGCODE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDBLCLK,
+            WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_MOUSEWHEEL,
+            WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_RBUTTONDOWN, WM_RBUTTONUP,
+            WM_SETFOCUS, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_NOPARENTNOTIFY,
+            WS_TABSTOP,
+        },
     },
 };
 struct State {
@@ -49,6 +56,10 @@ struct CanvasState {
     value: UnsafeCell<State>,
     painting: Cell<bool>,
     alive: Cell<bool>,
+    details: NativeDetails,
+    tracking: Cell<bool>,
+    dismissed: Cell<bool>,
+    focused: Cell<bool>,
 }
 impl CanvasState {
     fn get(&self) -> *mut State {
@@ -83,6 +94,7 @@ unsafe extern "system" fn procedure(
         let slot = unsafe { Rc::from_raw(raw) };
         if message == WM_NCDESTROY {
             slot.alive.set(false);
+            slot.details.clear().ok();
             unsafe {
                 SetWindowLongPtrW(window, GWLP_USERDATA, 0);
             }
@@ -108,6 +120,92 @@ unsafe extern "system" fn procedure(
         if message == WM_CANCELMODE {
             clear_intentions(window, &slot);
             return 0;
+        }
+        let ready = unsafe {
+            let state = &*slot.get();
+            state.interactive && state.plan.is_some() && !state.menu_open
+        } && slot.alive.get();
+        match message {
+            WM_MOUSEMOVE if ready => {
+                if !slot.tracking.get() {
+                    let mut tracking = TRACKMOUSEEVENT {
+                        cbSize: mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                        dwFlags: TME_LEAVE | if slot.dismissed.get() { 0 } else { TME_HOVER },
+                        hwndTrack: window,
+                        dwHoverTime: HOVER_MS,
+                    };
+                    slot.tracking
+                        .set(unsafe { TrackMouseEvent(&mut tracking) } != 0);
+                }
+                return 0;
+            }
+            WM_MOUSEHOVER if ready && slot.tracking.get() && !slot.dismissed.get() => {
+                if slot.details.show(slot.focused.get()).is_err() {
+                    unsafe {
+                        (*slot.get()).paint_failed = true;
+                    }
+                }
+                return 0;
+            }
+            WM_MOUSELEAVE => {
+                slot.tracking.set(false);
+                slot.dismissed.set(false);
+                if !slot.focused.get() {
+                    slot.details.leave();
+                }
+                return 0;
+            }
+            WM_SETFOCUS => {
+                slot.focused.set(true);
+                slot.dismissed.set(false);
+                if ready && slot.details.show(true).is_err() {
+                    unsafe {
+                        (*slot.get()).paint_failed = true;
+                    }
+                }
+                unsafe {
+                    InvalidateRect(window, ptr::null(), 0);
+                }
+                return 0;
+            }
+            WM_KILLFOCUS => {
+                slot.focused.set(false);
+                slot.details.hide();
+                unsafe {
+                    InvalidateRect(window, ptr::null(), 0);
+                }
+                return 0;
+            }
+            WM_MOUSEWHEEL if ready => {
+                slot.details.wheel(wparam, lparam);
+                return 0;
+            }
+            WM_KEYDOWN | WM_KEYUP if wparam == VK_ESCAPE as usize => {
+                if message == WM_KEYDOWN {
+                    dismiss_details(window, &slot);
+                }
+                return 0;
+            }
+            WM_KEYDOWN if ready && slot.details.scroll_key(wparam as u16) => return 0,
+            WM_LBUTTONDOWN | WM_RBUTTONDOWN => {
+                dismiss_details(window, &slot);
+                return 0;
+            }
+            WM_KEYDOWN
+                if ready && (wparam == VK_RETURN as usize || wparam == VK_SPACE as usize) =>
+            {
+                dismiss_details(window, &slot);
+            }
+            WM_KEYDOWN
+                if ready
+                    && lparam & (1 << 30) == 0
+                    && (wparam == VK_APPS as usize
+                        || (wparam == VK_F10 as usize
+                            && unsafe { GetKeyState(VK_SHIFT as i32) } < 0)) =>
+            {
+                dismiss_details(window, &slot);
+            }
+            _ => {}
         }
         let state = unsafe { &mut *slot.get() };
         match message {
@@ -202,6 +300,17 @@ unsafe extern "system" fn procedure(
                     }
                 };
                 state.paint_failed |= result.is_err();
+                if result.is_ok() && slot.focused.get() {
+                    let focus = RECT {
+                        left: 1,
+                        top: 1,
+                        right: rect.right - 1,
+                        bottom: rect.bottom - 1,
+                    };
+                    unsafe {
+                        DrawFocusRect(dc, &focus);
+                    }
+                }
                 if message == WM_PAINT {
                     unsafe {
                         EndPaint(window, &paint);
@@ -226,6 +335,24 @@ unsafe extern "system" fn procedure(
     unsafe { DefWindowProcW(window, message, wparam, lparam) }
 }
 fn clear_intentions(window: HWND, slot: &CanvasState) {
+    dismiss_details(window, slot);
+    // A new configuration requires a fresh mouse move. Ignore queued hover messages.
+    slot.dismissed.set(false);
+    slot.tracking.set(false);
+    let mut tracking = TRACKMOUSEEVENT {
+        cbSize: mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_CANCEL | TME_HOVER | TME_LEAVE,
+        hwndTrack: window,
+        dwHoverTime: HOVER_MS,
+    };
+    unsafe {
+        TrackMouseEvent(&mut tracking);
+    }
+    if slot.details.clear().is_err() {
+        unsafe {
+            (*slot.get()).paint_failed = true;
+        }
+    }
     let menu_open = unsafe {
         let state = &mut *slot.get();
         state.clicks.clear();
@@ -240,6 +367,23 @@ fn clear_intentions(window: HWND, slot: &CanvasState) {
             EndMenu();
         }
     }
+}
+fn dismiss_details(window: HWND, slot: &CanvasState) {
+    slot.details.hide();
+    slot.dismissed.set(true);
+    slot.tracking.set(false);
+    let mut tracking = TRACKMOUSEEVENT {
+        cbSize: mem::size_of::<TRACKMOUSEEVENT>() as u32,
+        dwFlags: TME_CANCEL | TME_HOVER | TME_LEAVE,
+        hwndTrack: window,
+        dwHoverTime: HOVER_MS,
+    };
+    unsafe {
+        TrackMouseEvent(&mut tracking);
+    }
+    tracking.dwFlags = TME_LEAVE;
+    slot.tracking
+        .set(slot.alive.get() && unsafe { TrackMouseEvent(&mut tracking) } != 0);
 }
 fn context_menu(window: HWND, slot: &CanvasState, lparam: LPARAM) {
     let ready = unsafe {
@@ -298,6 +442,10 @@ impl NativeCanvas {
             }),
             painting: Cell::new(false),
             alive: Cell::new(true),
+            details: NativeDetails::create(parent)?,
+            tracking: Cell::new(false),
+            dismissed: Cell::new(false),
+            focused: Cell::new(false),
         });
         let class = wide(&format!(
             "TokenPulse.Taskbar.Readout.{}",
@@ -352,7 +500,7 @@ impl NativeCanvas {
     }
     pub(crate) fn paint_failed(&self) -> bool {
         let state = unsafe { &*self.state.get() };
-        state.paint_failed || !self.state.alive.get()
+        state.paint_failed || self.state.details.failed() || !self.state.alive.get()
     }
     pub(crate) fn set_attached(&mut self, attached: bool) {
         self.attached = attached;
@@ -370,6 +518,7 @@ impl NativeCanvas {
     }
     pub(crate) fn clear(&mut self) -> Result<(), WireError> {
         self.clear_interactions();
+        self.state.details.clear()?;
         self.clear_render()
     }
     pub(crate) fn clear_interactions(&mut self) {
@@ -426,6 +575,7 @@ impl NativeCanvas {
         now: i64,
     ) -> Result<(), WireError> {
         self.clear_render()?;
+        self.state.details.prepare(self.window, view, dpi, now)?;
         let font = NativeFont::new(dpi)?;
         let plan = font.plan(view, prefs, now, width, height)?;
         unsafe {
@@ -492,6 +642,105 @@ mod tests {
     use super::super::topology::{DpiGuard, rect};
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextW, WS_POPUP};
+    #[test]
+    fn authored_own_canvas_events_hover_focus_escape_rearm_and_clear_without_actions() {
+        use windows_sys::Win32::UI::{
+            HiDpi::GetDpiForWindow,
+            Input::KeyboardAndMouse::VK_END,
+            WindowsAndMessaging::{SW_SHOWNOACTIVATE, ShowWindow},
+        };
+        let _dpi = DpiGuard::enter().unwrap();
+        let parent = unsafe {
+            CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                wide("STATIC").as_ptr(),
+                wide("TokenPulse SYNTHETIC canvas event test").as_ptr(),
+                WS_POPUP,
+                200,
+                200,
+                1000,
+                80,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null(),
+            )
+        };
+        assert!(!parent.is_null());
+        unsafe {
+            ShowWindow(parent, SW_SHOWNOACTIVATE);
+        }
+        let dpi = unsafe { GetDpiForWindow(parent) };
+        let mut canvas = unsafe { NativeCanvas::create(parent, dpi) }.unwrap();
+        let view = super::super::details_window::fixture();
+        canvas
+            .prepare(
+                &view,
+                DisplayPreferences::default(),
+                dpi,
+                900,
+                80,
+                view.generated_at_ms.value(),
+            )
+            .unwrap();
+        canvas.set_attached(true);
+        unsafe {
+            ShowWindow(canvas.window, SW_SHOWNOACTIVATE);
+        }
+        let window = canvas.window;
+        let event = |message, wparam| unsafe { procedure(window, message, wparam, 0) };
+        // An old queued hover without a newly armed move cannot reopen after clear.
+        event(WM_MOUSEHOVER, 0);
+        assert!(!canvas.state.details.visible());
+        event(WM_MOUSEMOVE, 0);
+        assert!(canvas.state.tracking.get());
+        event(WM_MOUSEHOVER, 0);
+        assert!(canvas.state.details.visible());
+        event(WM_SETFOCUS, 0);
+        assert!(canvas.state.focused.get());
+        event(WM_MOUSELEAVE, 0);
+        assert!(canvas.state.details.visible());
+        event(WM_KEYDOWN, VK_END as usize);
+        assert!(canvas.take_actions().is_empty());
+        event(WM_KEYDOWN, VK_ESCAPE as usize);
+        assert!(!canvas.state.details.visible());
+        event(WM_MOUSEMOVE, 0);
+        event(WM_MOUSEHOVER, 0);
+        assert!(!canvas.state.details.visible());
+        event(WM_MOUSELEAVE, 0);
+        event(WM_MOUSEMOVE, 0);
+        event(WM_MOUSEHOVER, 0);
+        assert!(canvas.state.details.visible());
+        event(WM_KEYDOWN, VK_RETURN as usize);
+        assert!(!canvas.state.details.visible());
+        assert_eq!(canvas.take_actions(), [HostAction::OpenFloat {}]);
+        canvas.clear_interactions();
+        assert!(!canvas.state.details.visible());
+        event(WM_MOUSEHOVER, 0);
+        assert!(!canvas.state.details.visible());
+        canvas
+            .prepare(
+                &view,
+                DisplayPreferences::default(),
+                dpi,
+                900,
+                80,
+                view.generated_at_ms.value(),
+            )
+            .unwrap();
+        event(WM_MOUSEMOVE, 0);
+        event(WM_MOUSEHOVER, 0);
+        assert!(canvas.state.details.visible());
+        event(WM_KILLFOCUS, 0);
+        assert!(!canvas.state.details.visible());
+        assert!(!canvas.paint_failed());
+        canvas.clear().unwrap();
+        assert!(canvas.take_actions().is_empty());
+        drop(canvas);
+        unsafe {
+            DestroyWindow(parent);
+        }
+    }
     #[test]
     fn updating_attached_canvas_preserves_reserved_position_and_size() {
         let _dpi = DpiGuard::enter().unwrap();

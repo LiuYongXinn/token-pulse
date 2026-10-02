@@ -1,6 +1,7 @@
 //! Owned local Windows transport. No shell, user-log or credential access.
 mod canvas;
 pub mod control;
+mod details_window;
 pub mod guardian;
 mod layout;
 mod menu;

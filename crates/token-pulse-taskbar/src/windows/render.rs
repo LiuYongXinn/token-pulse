@@ -213,6 +213,17 @@ impl NativeFont {
         height: i32,
         palette: Palette,
     ) -> Result<(), WireError> {
+        unsafe { self.paint_mode(dc, plan, width, height, palette, true) }
+    }
+    pub(crate) unsafe fn paint_mode(
+        &self,
+        dc: HDC,
+        plan: Option<&MeasuredPlan>,
+        width: i32,
+        height: i32,
+        palette: Palette,
+        marker: bool,
+    ) -> Result<(), WireError> {
         let saved = unsafe { SaveDC(dc) };
         if saved == 0 {
             return Err(WireError::InvalidState);
@@ -254,22 +265,24 @@ impl NativeFont {
                         return Err(WireError::InvalidState);
                     }
                 }
-                let dot = (3 * self.dpi / 96) as i32;
-                let x = (3 * self.dpi / 96) as i32;
-                let top = (height - dot) / 2;
-                let marker = unsafe { CreateSolidBrush(palette.accent) };
-                if marker.is_null() {
-                    return Err(WireError::InvalidState);
-                }
-                let marker = Object(marker);
-                let rect = RECT {
-                    left: x,
-                    top,
-                    right: x + dot,
-                    bottom: top + dot,
-                };
-                if unsafe { FillRect(dc, &rect, marker.0) } == 0 {
-                    return Err(WireError::InvalidState);
+                if marker {
+                    let dot = (3 * self.dpi / 96) as i32;
+                    let x = (3 * self.dpi / 96) as i32;
+                    let top = (height - dot) / 2;
+                    let marker = unsafe { CreateSolidBrush(palette.accent) };
+                    if marker.is_null() {
+                        return Err(WireError::InvalidState);
+                    }
+                    let marker = Object(marker);
+                    let rect = RECT {
+                        left: x,
+                        top,
+                        right: x + dot,
+                        bottom: top + dot,
+                    };
+                    if unsafe { FillRect(dc, &rect, marker.0) } == 0 {
+                        return Err(WireError::InvalidState);
+                    }
                 }
             }
             Ok(())
@@ -287,6 +300,16 @@ impl NativeFont {
         width: i32,
         height: i32,
         palette: Palette,
+    ) -> Result<Vec<u8>, WireError> {
+        self.bitmap_with(width, height, |dc| unsafe {
+            self.paint(dc, plan, width, height, palette)
+        })
+    }
+    pub(crate) fn bitmap_with(
+        &self,
+        width: i32,
+        height: i32,
+        paint: impl FnOnce(HDC) -> Result<(), WireError>,
     ) -> Result<Vec<u8>, WireError> {
         if !(1..=4096).contains(&width)
             || !(1..=2048).contains(&height)
@@ -325,7 +348,7 @@ impl NativeFont {
         if previous.is_null() || previous as isize == -1 {
             return Err(WireError::InvalidState);
         }
-        let result = unsafe { self.paint(self.dc.0, plan, width, height, palette) };
+        let result = paint(self.dc.0);
         let flushed = unsafe { GdiFlush() } != 0;
         let payload = if result.is_ok() {
             unsafe {

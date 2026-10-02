@@ -1,6 +1,6 @@
 # 任务栏原生宿主协议
 
-本文件落实 [任务栏显示设计](taskbar-display.md) 与 [IPC 契约](ipc-contracts.md) 的独立宿主边界。共享 Rust 协议库、独立 Windows 原生程序、受控命名管道、精确绘制、安全布局预留与恢复、后台管理器及正式 UI 已接入；Win10 19045 的实际 embedded 通过生产宿主状态确认，不把握手或配置成功当作嵌入成功。M13e1 的小窗回退由主应用负责，原生宿主仍不读取数据库或创建 WebView。原生鼠标 / 悬停 / 菜单与 Explorer 重建 / 兼容矩阵继续实施，详细阶段记录见本文及交付记录。
+本文件落实 [任务栏显示设计](taskbar-display.md) 与 [IPC 契约](ipc-contracts.md) 的独立宿主边界。共享 Rust 协议库、独立 Windows 原生程序、受控命名管道、精确绘制、安全布局预留与恢复、后台管理器及正式 UI 已接入；Win10 19045 的实际 embedded 通过生产宿主状态确认，不把握手或配置成功当作嵌入成功。小窗回退由主应用负责，原生宿主仍不读取数据库或创建 WebView。只读详情、原生菜单及受限窗口动作已接生产通路；真实输入 / 焦点 / 屏幕阅读器与 Explorer 重建 / 兼容矩阵继续验收，详细阶段记录见本文及交付记录。
 
 ## 帧与身份
 
@@ -176,3 +176,13 @@ TaskbarView.details: HostDetails | null 增加 theme、range、scope、source_la
 HostQuota 增加 nullable last_attempt_at_ms / ErrorCode error_code，fetched_at_ms 仍是独立成功读取时间；未知码保留 null，QuotaState 继续表达失败。隐私边界仍删除整个账户 / 成本和原范围名称，details 只保留无敏感名称的枚举、数字和日期。details 未提供时解释为未提供，不默认成功时间或主题。新版应用与宿主成对部署，旧宿主拒绝不支持字段后走既有失败处理。
 
 details::content 生成只读显示与可访问全文，不查数据库 / 源日志或连接账户。完整 Token、部分分项、精确金额和有界整数百分比保持精度；所有实际额度窗口逐项表达、unknown 与零不同、到期不改为 100%、账户时间不随本地查询更新。本步骤没有可见悬停窗，实际面板绘制与生命周期接入在下一模块验收。
+
+## M13e4b：线程所有的原生详情窗
+
+NativeCanvas 拥有 NativeDetails，后者为宿主控制窗口的 owned WS_POPUP，采用 WS_EX_NOACTIVATE / TOOLWINDOW / TOPMOST。Frame 仅从已校验 TaskbarView 投影，系统字体测量后保存不可变文字布局及实际剩余条；窗口名称来自同一完整详情文本。应用主题 / 系统高对比度配色独立于常驻任务栏背景；不增加协议字段或访问数据库 / 来源 / 账户。
+
+宽度约 340 DIP，按监视器 rcWork 及入口上 / 下方可用空间夹紧，最大 600 DIP；负坐标保留。客户区滚动保留全文，未知条与实际 0% 区分。显示前后核对入口 / 面板实际 DPI，不匹配时隐藏并走既有失败处理。失焦 / Escape / 点击 / 菜单 / 来源移动隐藏详情，普通快照只刷新当前可见内容，不自动打开隐藏面板。
+
+TrackMouseEvent 注册 TME_HOVER / TME_LEAVE 和 300 ms；配置清理取消注册并令排队 hover 无效，新移动重新注册，用户关闭后须离开再进入。鼠标允许从入口穿过间隙到面板滚动，离开两者后隐藏；入口焦点模式保留内容直到失焦或关闭。调用依据：[TrackMouseEvent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-trackmouseevent)。SetWindowPos 使用 NOACTIVATE，详情本身 WM_MOUSEACTIVATE 返回 MA_NOACTIVATE，依据：[SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos)。真实输入 / 焦点和屏幕阅读器仍需独立验收。
+
+原生清屏包含停止面板计时器、隐藏、丢弃旧 Frame、替换窗口名称与覆盖客户区像素；隐私 ACK 不能先于该流程。WndProc 用 Rc 保留本次绘制帧且不持 RefCell 借用调用 user32，重入清屏不能在旧帧仍使用时返回成功。新数据无效也清除旧帧。归属窗口销毁使存活标记失效，析构不对已复用 HWND 操作。Win10 正式双进程及自动验证见交付记录 M13e4b。
