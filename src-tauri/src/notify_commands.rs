@@ -251,6 +251,18 @@ pub async fn prepare_notify_integration(
         .as_ref()
         .cloned()
         .map_err(|e| app_error(e.code.into(), &request_id))?;
+    #[cfg(all(debug_assertions, windows))]
+    let fixture_home = if std::env::args().any(|a| a == "--native-smoke")
+        && std::env::args().any(|a| a == "--native-notify-dialogs-smoke")
+        && state
+            .data_directory
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("native-probe-"))
+    {
+        Some(state.data_directory.join("synthetic-notify-dialog-home"))
+    } else {
+        None
+    };
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<Option<NotifyConfigPreview>, Failure> {
             // Never hold the policy/manager mutex while a system dialog waits for a human.
@@ -268,6 +280,24 @@ pub async fn prepare_notify_integration(
             } else {
                 None
             };
+            #[cfg(all(debug_assertions, windows))]
+            if let Some(expected) = fixture_home {
+                let expected = expected
+                    .canonicalize()
+                    .map_err(|_| ErrorCode::PermissionDenied)?;
+                if matches!(request, NotifyPrepareAction::EnableSource { .. }) {
+                    return Err(ErrorCode::PermissionDenied.into());
+                }
+                if let Some(home) = &selected {
+                    if home
+                        .canonicalize()
+                        .map_err(|_| ErrorCode::PermissionDenied)?
+                        != expected
+                    {
+                        return Err(ErrorCode::PermissionDenied.into());
+                    }
+                }
+            }
             visible(&privacy, |stamp| {
                 if stamp.settings_revision != policy_before.settings_revision {
                     return Err(ErrorCode::StaleConfirmation.into());

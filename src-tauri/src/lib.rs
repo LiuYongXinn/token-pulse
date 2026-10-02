@@ -281,6 +281,8 @@ pub fn run() {
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {notify_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-updates-smoke") {update_smoke::start(app.handle().clone());return Ok(());}
                 #[cfg(windows)]
+                if std::env::args().any(|arg|arg=="--native-notify-dialogs-smoke") {notify_dialog_smoke::start(app.handle().clone());return Ok(());}
+                #[cfg(windows)]
                 if std::env::args().any(|arg|arg=="--native-account-dialogs-smoke") {account_dialog_smoke::start(app.handle().clone());return Ok(());}
                 #[cfg(windows)]
                 if std::env::args().any(|arg|arg=="--native-source-dialogs-smoke") {source_dialog_smoke::start(app.handle().clone());return Ok(());}
@@ -457,3 +459,6 @@ mod navigation;
 mod account_dialog_smoke;
 #[cfg(all(debug_assertions, windows))]
 mod native_dialog_driver;
+
+#[cfg(all(debug_assertions, windows))]
+mod notify_dialog_smoke;

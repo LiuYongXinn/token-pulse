@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][uint32]$ApplicationId, [Parameter(Mandatory)][ValidateSet('cancel','select')][string]$Action, [string]$Folder, [ValidateSet('source','account_executable','account_home')][string]$Kind = 'source')
+param([Parameter(Mandatory)][uint32]$ApplicationId, [Parameter(Mandatory)][ValidateSet('cancel','select')][string]$Action, [string]$Folder, [ValidateSet('source','account_executable','account_home','notify_home')][string]$Kind = 'source')
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
@@ -83,13 +83,14 @@ $dialogTitle = switch ($Kind) {
     'source' { '选择 Codex Home（包含 sessions 的目录）' }
     'account_executable' { '选择 Codex 原生 codex.exe' }
     'account_home' { '选择此账户服务的 Codex Home' }
+    'notify_home' { '选择要接入通知的 Codex Home' }
 }
 $dialogWindow = [IntPtr]::Zero
 try {
     if ($Action -eq 'select') {
         $resolvedFolder = (Resolve-Path -LiteralPath $Folder).Path
         $fixtureHome = if ($Kind -eq 'account_executable') { [IO.Path]::GetDirectoryName($resolvedFolder) } else { $resolvedFolder }
-        $expectedHomeName = if ($Kind -eq 'source') { 'synthetic-dialog-home' } else { 'synthetic-account-dialog-home' }
+        $expectedHomeName = if ($Kind -eq 'source') { 'synthetic-dialog-home' } elseif ($Kind -eq 'notify_home') { 'synthetic-notify-dialog-home' } else { 'synthetic-account-dialog-home' }
         if ([IO.Path]::GetFileName($fixtureHome) -ne $expectedHomeName -or -not ([IO.Path]::GetFileName([IO.Path]::GetDirectoryName($fixtureHome))).StartsWith('native-probe-')) { throw 'DIALOG_FIXTURE_PATH_REFUSED' }
         if ($Kind -eq 'account_executable' -and [IO.Path]::GetFileName($resolvedFolder) -ne 'synthetic-codex.exe') { throw 'DIALOG_FIXTURE_PATH_REFUSED' }
     }

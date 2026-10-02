@@ -2,6 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M15a8：真实 notify 目录选择与确认撤销流程
+
+新增 `native-smoke.ps1 -NotifyDialogs`，独立 native-probe UUID 数据库 / synthetic-notify-dialog-home；真实 React 设置按钮打开正式 Windows 文件夹选择器，经共享有界 PID / 标题 / 控件类别 / ID 驱动执行取消、选择。取消返回 null 与无改动提示；选择仅生成只读预览，默认保留原通知命令；关闭预览不登记或改写文件；第二次选择后明确确认才修改根级 notify。验收未直接操作管理器、注入预览或选择能力，使用正式五命令和实际 WebView。
+
+仅显式 debug 场景在 prepare 回调、配置读取 / 预览生成之前校验 canonical Home，拒绝其他目录及来源启用入口，release 排除限制 / 场景。测试原 notify 使用明确合成的系统 cmd.exe / exit 0 命令，不调用此命令或真实账户回合；预览的原命令和恢复内容在 UI 核对。启用后核对实际配置保留注释 / CRLF / 模型设置与 registry configured / chain_original / current_executable。随后只在合成目录追加 new_key 用户设置，经停用预览再确认，实际文件完整等于原字节加新设置，登记被退休，无残留可见接入。测试不读取 auth.json 或真实 Home，不运行性能测试。
+
+Win10 19045 / 150% 最终三个 NATIVE_NOTIFY_DIALOG_STEP_OK 与 NATIVE_NOTIFY_DIALOGS_OK、退出 0；共享驱动扩展后的账户程序 / Home 四步骤与来源完整流程也各自退出 0。三项 notify Playwright、desktop all-targets strict Clippy / release check / fmt、PowerShell AST / diff 通过，结束应用 / 宿主 / 合成服务数量 0。WebView2 注销 1412 保留。这是实际系统控件和 WebView 的程序化交互，不等同物理鼠标 / 键盘；真实 Codex 回合、Win11 / provider 条件及正式签名更新仍独立验收，未重新打包安装器。
+
 ## M12m：真实账户程序Home选择与普通连接流程
 
 新增显式 `native-smoke.ps1 -AccountDialogs`，复用有界自有 Windows Common Item Dialog 驱动，分别核对程序 / Home 的准确标题、应用 PID、可见原生控件类别 / ID、输入值及关闭。实际程序选择器 Edit / ComboBox 使用 1148，文件夹选择器使用 1152；不以 Shell 列表项或泛化 UI Automation 角色代替定位。失败仅记录有限错误码和最多十二个控件类别 / 数字 ID，不输出路径 / 控件文字。驱动保持隐藏、等待 / 回收自有辅助进程，不发送全局输入。

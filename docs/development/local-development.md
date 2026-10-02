@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+## Windows notify 目录选择器验收
+
+先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -NotifyDialogs`；只构建 debug 桌面应用，使用新的 UUID native-probe 数据库和自有 synthetic-notify-dialog-home。实际 React 按钮打开正式 Windows 文件夹选择器，canonical 目录限制在配置读取之前执行。取消 / 选择 / 关闭预览均不写配置，明确确认才启用；停用也必须先预览再确认，字节级核对原 notify、注释 / CRLF 与后来新增的用户设置。测试不注入能力、不读真实 Home 或认证，也不执行真实 Codex 回合。
+
+Win10 19045 / 150% NATIVE_NOTIFY_DIALOGS_OK 退出 0，账户 / 来源选择器回归也通过。三项 `npx playwright test tests/ui/notify.spec.ts`、desktop strict Clippy / release / fmt 与脚本解析通过；1412 提示保留。此为真实系统控件的程序化验收，物理输入 / Win11 / 真实回合分开；没有性能测试或新安装器构建。详情见[交付记录](delivery-status.md#m15a8真实-notify-目录选择与确认撤销流程)。
+
 ## Windows 账户程序 / Home 选择器验收
 
 先 `npm run build`，再执行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -AccountDialogs`。脚本构建合成 quota-fixture 和 debug 桌面应用，不构建任务栏宿主；实际 React 设置按钮打开正式程序 / 文件夹选择器，不注入能力句柄。仅显式 native-smoke、开发应用身份及 UUID native-probe 隔离库允许；canonical 目标必须属于本次 synthetic-account-dialog-home，其他选择在 inspect / 签发前拒绝。默认入口不会检测或连接真实账户。
