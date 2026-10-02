@@ -1,4 +1,4 @@
-param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$PriceAliases, [switch]$OfflinePrices)
+param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -15,5 +15,6 @@ if ($Taskbar) { $probeArgs += '--native-taskbar-smoke' }
 if ($TaskbarActions) { $probeArgs += '--native-taskbar-actions-smoke' }
 if ($PriceAliases) { $probeArgs += '--native-price-alias-smoke' }
 if ($OfflinePrices) { $probeArgs += '--native-offline-prices-smoke' }
+if ($PriceRevalue) { $probeArgs += '--native-price-revalue-smoke' }
 & (Join-Path $PSScriptRoot '..\target\debug\token-pulse-desktop.exe') @probeArgs
 exit $LASTEXITCODE

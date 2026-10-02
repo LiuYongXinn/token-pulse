@@ -119,6 +119,14 @@ export function resolveCalendarSelection(query: CalendarSelectionRequest): Promi
 export function queryUsageEvents(query: UsageEventsRequest): Promise<UsageEventsPage> { return request('query_usage_events', { request: query }); }
 export async function closeQuerySnapshot(query: CloseQuerySnapshotRequest): Promise<void> { await request<null>('close_query_snapshot', { request: query }); }
 export function getPriceRules(revision: string | null = null): Promise<PriceRulesSnapshot> { return request('get_price_rules', { revision }); }
+export function getPriceRevalueStatus(): Promise<import('./generated/contracts').PriceRevalueStatus> { return request('get_price_revalue_status'); }
+export function startPriceRevalue(job: import('./generated/contracts').PriceRevalueRequest): Promise<import('./generated/contracts').PriceRevalueJob> { return request('start_price_revalue', { request: job }); }
+export function cancelPriceRevalue(jobId: string): Promise<CancelJobResult> { return request('cancel_price_revalue', { jobId }); }
+export async function onPriceRevalueChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen('price_revalue_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 export function getOfflinePriceCatalog(revision: string | null = null): Promise<OfflinePriceCatalogSnapshot> { return request('get_offline_price_catalog', { revision }); }
 export function mutateModelAlias(aliasRequest: ModelAliasMutation, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('mutate_model_alias', { request: aliasRequest, expectedPriceRevision }); }
 export function savePriceRule(priceRequest: Exclude<PriceRuleMutation, { kind: 'retire' }>, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('save_price_rule', { request: priceRequest, expectedPriceRevision }); }

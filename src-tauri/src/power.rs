@@ -77,6 +77,11 @@ unsafe extern "system" fn power_message(
                     _ => {}
                 }
             }
+            if matches!(wparam as u32, PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND) {
+                if let Ok(service) = &state.revaluations {
+                    service.wake();
+                }
+            }
         }
     }
     if message == WM_NCDESTROY {

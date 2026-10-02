@@ -581,6 +581,12 @@ M13e4b 无新增 IPC / schema：既有 TaskbarView.details / quota 在原生宿�
 
 M13e6 不新增前端命令，既有 TaskbarPreferences.position 的 application_right 现在可由正式设置保存。独立宿主 HostConfiguration 增加严格位置枚举和旧内部配置缺省行为，schema 同步；同修订位置变化拒绝，新修订先清屏再采用新位置。只读实际按钮测量在宿主内执行，不给前端新增任意窗口 / UIA / 路径接口；配置成功不等同于 embedded，实际失败 / 回退仍分别通过运行 DTO 表达。
 
+### M09g2b3：独立费用重估
+
+main capability 新增 `get_price_revalue_status(requestId)`、`start_price_revalue(request: PriceRevalueRequest, requestId)`、`cancel_price_revalue(jobId, requestId)`。均返回 PrivateResponse 及最新显示策略戳；mini 无权限，处理函数也校验 main。请求 scope 使用既有 all / sources / sessions，basis 使用 event_time / specified_time 精确毫秒，expected_price_revision 与 request_key 为严格十进制修订 / 幂等标识。未知字段 / 不存在范围拒绝；新请求旧价返回 REVISION_CONFLICT，同键不同规范化载荷返回 REQUEST_KEY_CONFLICT，完全重复键返回原任务。
+
+状态 DTO 为当前价格修订、活跃任务、最近任务及当前 event_time 缓存缺口；不提供完整历史 / 原始日志 / 名称路径 / 费用字段。任务包含固定价格版本、估价依据、queued / running / cancelling / succeeded / cancelled / failed / interrupted、十进制账本 / 记录进度、可取消状态与受限错误码。取消返回 accepted 或 already_finished，持久化取消先于 worker 信号；已发布缓存保留。`price_revalue_changed` 的空载荷只触发重新查询，不能直接填入 UI。前端保持显示策略 epoch 门禁、隐私卸载和有界串行重读，运行失败与未知值不转换为成功或零。
+
 ### M09f1：模型别名写入
 
 主窗口专用 mutate_model_alias(request: ModelAliasMutation, expectedPriceRevision: DecimalInt, requestId)，request 为 create { draft } / replace { alias_id, draft } / retire { alias_id }，draft 包含 provider、alias、canonical_model，拒绝未知字段。返回 PriceRulesSnapshot（price_revision / rules / aliases）及最新隐私策略戳。成功提交发既有 price_rules_changed { price_revision, all_models: true }，失败不发；重复 / 链式冲突 PRICE_RULE_CONFLICT，旧价格修订 REVISION_CONFLICT，非法标识 / 非用户映射 INVALID_QUERY。mini capability 无此命令；不提供任意 SQL / 模型查询 / 路径接口。Rust / TS / schema 同步；设置编辑器随后接入，不将隐私下空数组解释为配置不存在。

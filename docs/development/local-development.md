@@ -12,6 +12,8 @@ M09g2a 的 `cargo test -p token-pulse-store valuation --lib` 使用合成价格 
 
 ## 环境
 
+M09g2b3：正式启动已运行独立费用服务；`pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceRevalue` 在 Win10 19045 / 150% DPI 的隔离数据目录验证正式启动补建、精确 900 金额原子、实际 main IPC / React 指定时点重估 / 历史、mini 权限拒绝、共享隐私和检查点保持，NATIVE_PRICE_REVALUE_OK、退出 0。数据仅通过正式 Writer 写入合成夹具，不读用户日志或账户；WebView2 1412 退出提示保留。运行中取消 / 退出由同步线程 SQLite 检查，UI 取消由 Playwright 检查，不将终态取消 API 冒充人工长任务验收。`cargo test -p token-pulse-store --lib` 最新 196 通过 / 1 性能夹具 ignored，strict Clippy / fmt、release check、契约与前端构建通过。窗口安装、Win11 和物理多屏继续待验收。
+
 M09g2b2 定向 `cargo test -p token-pulse-store revalue_service` 6 项通过，store all-targets Clippy（warnings denied）通过。线程测试使用真实临时 SQLite、合成消费和同步通道控制取消 / 退出 / 改价边界，短期等待仅是功能完成截止条件；没有性能测量。正式应用尚未启动此服务。
 
 M09g2b1：`cargo test -p token-pulse-store revalue_jobs` 8 项通过，`cargo test -p token-pulse-store --lib` 188 项通过 / 1 性能夹具 ignored。新增价格作业测试仅用合成日志事实与临时 SQLite；另验证缓存构建期间真实价格发布仍保持捕获版本。契约通过 `npm run contracts` 生成，独立执行线程 / 正式界面尚待接入，暂无此模块的实际 Windows UI 验收。

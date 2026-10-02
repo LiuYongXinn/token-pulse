@@ -1,4 +1,4 @@
-use tauri::{Emitter, State, WebviewWindow};
+use tauri::{Emitter, Manager, State, WebviewWindow};
 use token_pulse_core::{
     error::{AppError, ErrorCode},
     numeric::DecimalInt,
@@ -7,7 +7,7 @@ use token_pulse_core::{
     protocol::validate_request_id,
 };
 
-fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
+pub(super) fn authorized(window: &WebviewWindow, id: &str) -> Result<(), Box<AppError>> {
     validate_request_id(id)
         .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
     if window.label() != "main" {
@@ -24,7 +24,7 @@ fn revision(value: &str, id: &str) -> Result<i64, Box<AppError>> {
     i64::try_from(value.value())
         .map_err(|_| Box::new(AppError::new(ErrorCode::NumericOverflow, id.into())))
 }
-fn database(
+pub(super) fn database(
     state: &State<'_, super::RuntimeState>,
     id: &str,
 ) -> Result<token_pulse_store::Database, Box<AppError>> {
@@ -34,7 +34,7 @@ fn database(
         .cloned()
         .map_err(|e| Box::new(AppError::new(e.code, id.into())))
 }
-async fn blocking<T: Send + 'static>(
+pub(super) async fn blocking<T: Send + 'static>(
     id: &str,
     task: impl FnOnce() -> token_pulse_store::StoreResult<T> + Send + 'static,
 ) -> Result<T, Box<AppError>> {
@@ -101,6 +101,7 @@ async fn mutate(
         db.mutate_price_rule_snapshot(mutation, expected, token_pulse_collector::jobs::now_ms()?)
     })
     .await?;
+    wake_revalue(app);
     // A dropped notification never rolls back a published price revision.
     let _ = app.emit(
         "price_rules_changed",
@@ -128,6 +129,7 @@ pub async fn mutate_model_alias(
         db.mutate_model_alias_snapshot(request, expected, token_pulse_collector::jobs::now_ms()?)
     })
     .await?;
+    wake_revalue(&app);
     let _ = app.emit(
         "price_rules_changed",
         PriceChanged {
@@ -140,6 +142,14 @@ pub async fn mutate_model_alias(
         snapshot,
         state.privacy.clone(),
     ))
+}
+
+fn wake_revalue(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<super::RuntimeState>() {
+        if let Ok(service) = &state.revaluations {
+            service.wake();
+        }
+    }
 }
 
 #[tauri::command]

@@ -15,6 +15,71 @@ fn populated() -> (tempfile::TempDir, Database) {
     db.commit(fixture()).unwrap();
     (dir, db)
 }
+
+#[test]
+fn selected_source_or_session_plans_whole_affected_ledger() {
+    let (_dir, db) = populated();
+    for (key, scope) in [
+        (
+            "source-plan",
+            JobScope::Sources {
+                source_ids: vec!["source".into()],
+            },
+        ),
+        (
+            "session-plan",
+            JobScope::Sessions {
+                session_keys: vec!["session".into()],
+            },
+        ),
+    ] {
+        let mut selected = request(key);
+        selected.scope = scope;
+        let job = db
+            .create_price_revalue_job(key.into(), selected, 1)
+            .unwrap();
+        assert_eq!(job.total_events.as_str(), "1");
+        assert_eq!(db.price_revalue_plan(key).unwrap()[0].ledger_id, "ledger");
+    }
+}
+
+#[test]
+fn failed_status_publication_rolls_back_plan_progress() {
+    let (_dir, db) = populated();
+    db.create_price_revalue_job("atomic".into(), request("atomic"), 1)
+        .unwrap();
+    db.claim_price_revalue_job(2).unwrap();
+    db.write(|conn| {
+        conn.execute_batch("CREATE TRIGGER reject_status BEFORE UPDATE OF status_json ON price_revalue_jobs BEGIN SELECT RAISE(ABORT,'fixture'); END;")?;
+        Ok(())
+    }).unwrap();
+    assert_eq!(
+        db.progress_price_revalue("atomic".into(), "ledger".into(), 1, 1, true, 3)
+            .unwrap_err()
+            .code,
+        ErrorCode::DbWriteFailed
+    );
+    assert_eq!(
+        db.get_price_revalue_job("atomic")
+            .unwrap()
+            .job
+            .processed_events
+            .as_str(),
+        "0"
+    );
+    db.snapshot(|tx, _| {
+        assert_eq!(
+            tx.query_row(
+                "SELECT processed_count,completed FROM price_revalue_plan WHERE job_id='atomic'",
+                [],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
+            )?,
+            (0, 0)
+        );
+        Ok(())
+    })
+    .unwrap();
+}
 #[test]
 fn creation_is_idempotent_validated_and_has_no_consumption_effect() {
     let (_dir, db) = populated();

@@ -6,6 +6,7 @@ import { blankPriceForm, editPriceForm, priceDraft, pricePerMillion } from '../s
 import type { PriceForm } from '../shared/price-form';
 import './model-aliases.css';
 import { OfflinePricesPanel } from './OfflinePricesPanel';
+import { PriceRevaluePanel } from './PriceRevaluePanel';
 
 type Editor = { ruleId: string | null; revision: string; form: PriceForm };
 type AliasEditor = { aliasId: string | null; revision: string; draft: ModelAliasDraft };
@@ -106,6 +107,7 @@ export function PriceRulesPanel({ onChanged }: { onChanged: () => void }) {
     </form>}
     {snapshot?.rules.length === 0 && <div className="price-empty"><h3>此版本暂无价格规则</h3><p>添加有依据的单价后可估算费用。尚无匹配规则的消费保持未计价。</p></div>}
     {snapshot && snapshot.rules.length > 0 && <div className="price-table-wrap"><table className="price-table"><caption>单价单位：所列货币 / 百万 Token · 缓存输入包含在输入内，推理包含在输出内</caption><thead><tr><th>模型 / 提供方</th><th>输入</th><th>缓存输入</th><th>输出</th><th>适用范围 / 有效期</th><th>操作</th></tr></thead><tbody>{snapshot.rules.map(rule => <tr key={rule.rule_id}><td><strong>{rule.model_exact}</strong><small>{rule.provider} · {rule.currency}</small><small>{rule.origin === 'custom' ? '自定义' : '离线目录'} · 优先级 {rule.priority}</small>{rule.origin_reference && <small className="price-reference">{rule.origin_reference}</small>}</td><td className="price-value">{pricePerMillion(rule.input_rate_atoms)}</td><td className="price-value">{pricePerMillion(rule.cached_rate_atoms)}</td><td className="price-value">{pricePerMillion(rule.output_rate_atoms)}</td><td><span>{rule.source_id === null ? '全部来源' : sources?.find(source => source.source_id === rule.source_id)?.root_path ?? rule.source_id}</span><small>{date(rule.effective_from_ms)} 起</small><small>{rule.effective_to_ms === null ? '无截止时间' : `${date(rule.effective_to_ms)} 止`}</small><small>发布版本 {rule.introduced_revision}</small></td><td>{rule.origin === 'custom' && !historical ? <div className="price-row-actions"><button disabled={busy || editing} onClick={() => edit(rule)}>编辑</button><button disabled={busy || editing} onClick={() => void run(() => retirePriceRule(rule.rule_id, snapshot.price_revision), '规则已退休，历史版本仍可读取。')}>退休</button></div> : <span className="muted">只读</span>}</td></tr>)}</tbody></table></div>}
+    {snapshot && <PriceRevaluePanel key={snapshot.price_revision} revision={snapshot.price_revision} historical={historical} />}
     {snapshot && <OfflinePricesPanel revision={snapshot.price_revision} />}
     {snapshot && <section className="model-aliases" aria-label="模型别名">
       <div className="panel-heading"><div><h3>模型别名</h3><p className="muted">将日志中的确切模型标识映射到标准价格模型，同一提供方内生效。</p></div><button disabled={busy || historical || editing} onClick={() => editAlias(null)}>新增别名</button></div>

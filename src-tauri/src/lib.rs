@@ -34,6 +34,9 @@ struct RuntimeState {
     >,
     jobs: token_pulse_store::StoreResult<token_pulse_collector::jobs::JobService>,
     rollups: token_pulse_store::StoreResult<token_pulse_store::rollup_service::RollupService>,
+    revaluations: token_pulse_store::StoreResult<
+        std::sync::Arc<token_pulse_store::revalue_service::RevalueService>,
+    >,
 }
 
 #[tauri::command]
@@ -188,7 +191,6 @@ pub fn run() {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
                 database.interrupt_unfinished_jobs(now)?;
                 database.interrupt_rollup_builds()?;
-                database.interrupt_valuation_builds()?;
                 // Native fixtures keep their explicit empty price state, except the catalog scene.
                 let install_catalog = !cfg!(debug_assertions)
                     || !std::env::args().any(|arg| arg == "--native-smoke")
@@ -196,6 +198,8 @@ pub fn run() {
                 if install_catalog {
                     database.install_offline_price_catalog(token_pulse_core::pricing::offline::OfflinePriceCatalog::bundled()?, now)?;
                 }
+                #[cfg(debug_assertions)]
+                if std::env::args().any(|arg|arg=="--native-smoke") && std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::seed(&database)?;}
                 Ok(database)
             });
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
@@ -204,12 +208,14 @@ pub fn run() {
                 token_pulse_collector::jobs::JobService::start_with_notify(database.clone(),notify)
             },Err(error)=>Err(error.code.into())};
             let rollups=match &database {Ok(database)=>token_pulse_store::rollup_service::RollupService::start(database.clone()),Err(error)=>Err(error.code.into())};
+            let price_app=app.handle().clone();
+            let revaluations=match &database {Ok(database)=>token_pulse_store::revalue_service::RevalueService::start(database.clone(),std::sync::Arc::new(move||{use tauri::Emitter;let _=price_app.emit("price_revalue_changed",());})).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
             let theme = database.as_ref().ok().and_then(|db| db.display_settings().ok()).map(|s| s.preferences.theme).unwrap_or_default();
             settings_commands::apply_native_theme(app.handle(), theme);
             let privacy = initial_privacy(&database);
             let notify_app = app.handle().clone();
             let quota = token_pulse_quota::service::AccountQuotaService::start(&uuid::Uuid::new_v4().to_string(), std::sync::Arc::new(move |event| {use tauri::Emitter; let _ = notify_app.emit("account_quota_changed", event);})).map(std::sync::Arc::new);
-            app.manage(RuntimeState { taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            app.manage(RuntimeState { taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
             if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
@@ -239,6 +245,7 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                if std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg| arg == "--native-offline-prices-smoke") {
                     offline_prices_smoke::start(app.handle().clone());
                     return Ok(());
@@ -271,7 +278,7 @@ pub fn run() {
                 quota_commands::update_native_visibility(window);
             }
         })
-        .invoke_handler(tauri::generate_handler![navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,revalue_commands::get_price_revalue_status,revalue_commands::start_price_revalue,revalue_commands::cancel_price_revalue,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -320,6 +327,9 @@ pub fn run() {
                     if let Ok(rollups) = &state.rollups {
                         rollups.shutdown();
                     }
+                    if let Ok(service) = &state.revaluations {
+                        service.shutdown();
+                    }
                     if let Ok(jobs) = &state.jobs {
                         jobs.shutdown();
                     }
@@ -349,11 +359,14 @@ mod power;
 #[cfg(debug_assertions)]
 mod price_alias_smoke;
 mod price_commands;
+#[cfg(debug_assertions)]
+mod price_revalue_smoke;
 mod query_commands;
 mod quota_commands;
 mod quota_config;
 #[cfg(all(debug_assertions, windows))]
 mod quota_smoke;
+mod revalue_commands;
 mod settings_commands;
 mod shortcuts;
 #[cfg(all(debug_assertions, windows))]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-price-revalue"
+description = "Enables the start_price_revalue command without any pre-configured scope."
+commands.allow = ["start_price_revalue"]
+
+[[permission]]
+identifier = "deny-start-price-revalue"
+description = "Denies the start_price_revalue command without any pre-configured scope."
+commands.deny = ["start_price_revalue"]

@@ -509,6 +509,8 @@ M09g2b1 追加 schema v6 的独立 `price_revalue_jobs` / `price_revalue_plan`�
 自动请求身份包含价格修订、缓存版本和全部活跃账本证据，排除缓存就绪状态。取消 / 失败后同一输入不自动反复启动；新价格 / 证据可以建立新任务，用户也可发新手动请求。重启把未结束任务标为 interrupted，已持久化的取消保持 cancelled；自动补建仅重排缺失的 ready 缓存，先前发布结果保留。状态中的 uncached_ledgers 专指当前价格版本的 event_time 缓存缺口，不代表指定时点的覆盖。此阶段尚未启动线程、暴露前端命令或进度界面。
 - price_revision 改变通知前端刷新；查询响应同时带 data_revision 与 price_revision。构建期间显示重估状态，不能混用两个价格版本。
 
+M09g2b3 已把服务接正常启动 / 退出、价格与别名提交、休眠恢复及正式 main-only 重估入口；上述 M09g2a / b1 / b2 的“未接正式应用”是历史阶段记录。周期检测新消费证据，只补缺失的 event_time 缓存；手动可指定明确估价时点。任务自身的基本状态与进度独立持久化，状态读取在同一 SQLite 快照取得当前价格修订、活跃 / 最近任务和 event_time 缓存缺口。查询缓存仍按其自身版本与输入匹配，任务完成不强行切换消费 / 查询快照。
+
 M09g2b2 的 `RevalueService` 串行领取独立作业，自动缺口检测周期 5 秒，手动请求 / 取消与价格变化可发送有界唤醒信号。每个账本使用作业固定修订；进度回调仅经 Writer 提交，不持有额外读事务。退出设置独立 stop / 当前 cancel 信号、保存 interrupted 并 join，启动将残留 building 标为失败及未结束作业标为 interrupted，已请求 cancelling 保持 cancelled。失败 / 取消不反复重新排同一自动身份；当前服务还未接正式应用生命周期和前端。
 - 查询或租约捕获的 price_revision 固定规则与别名：`introduced_revision <= revision` 且 `retired_revision IS NULL OR retired_revision > revision`。内存 PricingService 必须按该版本取不可变规则，不能使用“最新规则”解释旧快照。
 

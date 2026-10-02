@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-price-revalue-status"
+description = "Enables the get_price_revalue_status command without any pre-configured scope."
+commands.allow = ["get_price_revalue_status"]
+
+[[permission]]
+identifier = "deny-get-price-revalue-status"
+description = "Denies the get_price_revalue_status command without any pre-configured scope."
+commands.deny = ["get_price_revalue_status"]
