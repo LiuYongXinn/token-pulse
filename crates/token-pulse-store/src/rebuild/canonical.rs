@@ -41,6 +41,7 @@ pub(super) fn alias_target(
     Ok(tx.query_row("SELECT canonical_session_key FROM candidate_session_aliases WHERE job_id=?1 AND alias_session_key=?2 UNION ALL SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=?2 LIMIT 1", params![job,session], |r|r.get(0)).optional()?)
 }
 pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
+    let selected = selected_generations(m)?;
     let mut query=tx.prepare("SELECT alias_session_key,canonical_session_key FROM candidate_session_aliases WHERE job_id=?1 ORDER BY alias_session_key")?;
     let aliases = query
         .query_map([&m.job_id], |r| {
@@ -59,9 +60,9 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
         // Move only derived logical keys. Physical positions and original usage fingerprints remain.
         let mut after = 0i64;
         loop {
-            let mut q=tx.prepare("SELECT rowid,observation_id,normalized_json FROM observations WHERE session_key=?1 AND rowid>?2 ORDER BY rowid LIMIT 256")?;
+            let mut q=tx.prepare("SELECT rowid,observation_id,normalized_json FROM observations WHERE session_key=?1 AND file_generation_id IN (SELECT value FROM json_each(?3)) AND rowid>?2 ORDER BY rowid LIMIT 256")?;
             let rows = q
-                .query_map(params![alias, after], |r| {
+                .query_map(params![alias, after, selected], |r| {
                     Ok((
                         r.get::<_, i64>(0)?,
                         r.get::<_, String>(1)?,
@@ -87,7 +88,7 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
                 after = rowid;
             }
         }
-        tx.execute("INSERT INTO file_session_bindings(file_generation_id,session_key,first_offset,identity_evidence) SELECT file_generation_id,?1,first_offset,'verified_mirror' FROM file_session_bindings WHERE session_key=?2 ON CONFLICT(file_generation_id,session_key) DO NOTHING",params![canonical,alias])?;
+        tx.execute("INSERT INTO file_session_bindings(file_generation_id,session_key,first_offset,identity_evidence) SELECT file_generation_id,?1,first_offset,'verified_mirror' FROM file_session_bindings WHERE session_key=?2 AND file_generation_id IN (SELECT value FROM json_each(?3)) ON CONFLICT(file_generation_id,session_key) DO NOTHING",params![canonical,alias,selected])?;
         tx.execute("UPDATE session_aliases SET canonical_session_key=?1,evidence_job_id=?2 WHERE canonical_session_key=?3",params![canonical,m.job_id,alias])?;
         tx.execute("INSERT INTO session_aliases VALUES(?1,?2,?3) ON CONFLICT(alias_session_key) DO UPDATE SET canonical_session_key=excluded.canonical_session_key,evidence_job_id=excluded.evidence_job_id",params![alias,canonical,m.job_id])?;
         tx.execute(
@@ -103,15 +104,16 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
     for canonical in changed_roots {
         // The collector must consult the aligned ordinal cursor before using the shared baseline.
         // Keeping this conservative flag also protects callers that do not load that evidence.
-        let overflow:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_generations WHERE state='current' AND checkpoint_revision=9223372036854775807 AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1))",[&canonical],|r|r.get(0))?;
+        let overflow:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM file_generations WHERE state='current' AND checkpoint_revision=9223372036854775807 AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1) AND file_generation_id IN (SELECT value FROM json_each(?2)))",params![canonical,selected],|r|r.get(0))?;
         if overflow {
             return Err(ErrorCode::NumericOverflow.into());
         }
-        tx.execute("UPDATE file_generations SET checkpoint_revision=checkpoint_revision+1,reader_context_json=json_set(reader_context_json,'$.session_key',?1,'$.requires_sequence_rebuild',json('true'),'$.independent_head_available',json('false')) WHERE state='current' AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1)",[&canonical])?;
+        tx.execute("UPDATE file_generations SET checkpoint_revision=checkpoint_revision+1,reader_context_json=json_set(reader_context_json,'$.session_key',?1,'$.requires_sequence_rebuild',json('true'),'$.independent_head_available',json('false')) WHERE state='current' AND file_generation_id IN (SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1) AND file_generation_id IN (SELECT value FROM json_each(?2))",params![canonical,selected])?;
     }
     Ok(())
 }
 fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalReplayPlan> {
+    let selected = selected_generations(m)?;
     let mut sequences: BTreeMap<String, PhysicalReplaySequence> = BTreeMap::new();
     let mut footprint = 0usize;
     for ledger in &m.ledgers {
@@ -119,8 +121,8 @@ fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalRepla
         if !m.ledgers.iter().any(|l| l.session_key == owner) {
             return Err(ErrorCode::CandidateObsolete.into());
         }
-        let mut query = tx.prepare("SELECT observation_id,normalized_json,file_generation_id,byte_offset,byte_end FROM observations WHERE session_key=?1 ORDER BY file_generation_id,byte_offset")?;
-        let mut rows = query.query([&ledger.session_key])?;
+        let mut query = tx.prepare("SELECT observation_id,normalized_json,file_generation_id,byte_offset,byte_end FROM observations WHERE session_key=?1 AND file_generation_id IN (SELECT value FROM json_each(?2)) ORDER BY file_generation_id,byte_offset")?;
+        let mut rows = query.query(params![ledger.session_key, selected])?;
         while let Some(row) = rows.next()? {
             let observation_id: String = row.get(0)?;
             let generation: String = row.get(2)?;

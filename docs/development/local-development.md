@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+M06f3 的 store / collector / desktop strict Clippy、fmt 与 Git diff 检查通过。
+
+M06f3：`cargo test -p token-pulse-store rebuild::tests --lib` 11 项及 `cargo test -p token-pulse-collector` 46 项功能检查通过。新增合成 SQLite 夹具保存冲突的历史 / 候选计数，验证冻结清单排除、未选定观察引用拒绝、晚到未选定证据不使候选过期、当前指针 / 状态变化保留旧消费、暂停 / 缺失来源保留历史，以及镜像发布不改写未选定观察 / 绑定 / 上下文 / 检查点。collector 回归使用隔离临时真实文件和 Windows watcher；未读取用户日志或账户，未运行性能测试。该增量未新增 UI 或实际替换后最终发布验收。
+
 M06f2：`cargo test -p token-pulse-collector --test replacement-read` 9 项、`cargo test -p token-pulse-store file_candidate --lib` 11 项通过；store / collector / desktop strict Clippy、fmt 通过。使用 Win10 临时真实日志及 SQLite 检查缩短 / 替换 / 同大小改写、重开库跨 500 行继续、追加 / 再次改写、未结束末行 / 超长行、只读属性 / 内容保持和原文不落库；大元数据及 17 MiB 超长行仅检查事务 / framing 边界，没有性能测量。独立接口尚未接正常后台调度与账本发布，不计作文件变化后最终统计或 UI 验收；没有读取用户日志或账户。
 
 M06f1：`cargo test -p token-pulse-store file_candidate --lib` 9 项、`cargo test -p token-pulse-store batch::tests --lib` 9 项及 `cargo test -p token-pulse-store source_scan --lib` 8 项通过；store / collector / desktop strict Clippy 与 fmt 通过。合成 SQLite 夹具验证候选暂存独立于旧消费 / 会话、真实旧快照、候选进度与 EOF、再次缩短、输入过期及原子回滚。该模块尚未接实际目录读取或 UI，不计作 Windows 文件改写验收；没有读取用户日志 / 账户或运行性能测试。

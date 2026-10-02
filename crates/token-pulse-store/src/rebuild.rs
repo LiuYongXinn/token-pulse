@@ -137,6 +137,20 @@ pub(crate) fn dependency_closure(
 fn input_file(tx: &Transaction<'_>, generation: &str) -> StoreResult<FileInput> {
     Ok(tx.query_row("SELECT f.file_id,g.file_generation_id,f.current_generation_id,g.committed_offset,g.checkpoint_revision,g.observed_size,g.identity_json,g.anchor_json FROM file_generations g JOIN source_files f ON f.file_id=g.file_id WHERE g.file_generation_id=?1",[generation],|r|Ok(FileInput{file_id:r.get(0)?,generation_id:r.get(1)?,current_generation_id:r.get(2)?,committed_offset:r.get(3)?,checkpoint_revision:r.get(4)?,observed_size:r.get(5)?,identity_json:r.get(6)?,anchors_json:r.get(7)?}))?)
 }
+// A binding is historical evidence, not permission to replay that physical generation.
+// Missing or paused sources retain their current pointer, so their stored history is included.
+fn current_inputs(tx: &Transaction<'_>, session: &str) -> StoreResult<Vec<String>> {
+    ids(
+        tx,
+        "SELECT b.file_generation_id FROM file_session_bindings b JOIN file_generations g ON g.file_generation_id=b.file_generation_id JOIN source_files f ON f.file_id=g.file_id AND f.current_generation_id=g.file_generation_id WHERE b.session_key=?1 AND g.state='current'",
+        session,
+    )
+}
+fn selected_generations(m: &RebuildManifest) -> StoreResult<String> {
+    Ok(serde_json::to_string(
+        &m.files.iter().map(|f| &f.generation_id).collect::<Vec<_>>(),
+    )?)
+}
 fn manifest(tx: &Transaction<'_>, job_id: &str) -> StoreResult<RebuildManifest> {
     let value:String=tx.query_row("SELECT input_manifest_json FROM ledger_generations WHERE ledger_id=(SELECT json_extract(resume_json,'$.candidate_ledger_ids[0]') FROM jobs WHERE job_id=?1)",[job_id],|r|r.get(0))?;
     let m: RebuildManifest = json(&value)?;
@@ -166,11 +180,7 @@ fn fresh(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
     }
     let mut actual_files = BTreeSet::new();
     for session in &actual_sessions {
-        actual_files.extend(ids(
-            tx,
-            "SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1",
-            session,
-        )?);
+        actual_files.extend(current_inputs(tx, session)?);
     }
     if actual_files != m.files.iter().map(|f| f.generation_id.clone()).collect() {
         return Err(ErrorCode::CandidateObsolete.into());
@@ -223,8 +233,8 @@ impl Database {
             let m=manifest(tx,job_id)?;fresh(tx,&m)?;
             if !m.ledgers.iter().any(|l|l.session_key==session) {return Err(ErrorCode::InvalidQuery.into());}
             let (generation,offset)=after.unwrap_or(("",-1));
-            let mut s=tx.prepare("SELECT observation_id,normalized_json,file_generation_id,byte_end FROM observations WHERE session_key=?1 AND (file_generation_id>?2 OR (file_generation_id=?2 AND byte_offset>?3)) ORDER BY file_generation_id,byte_offset LIMIT 256")?;
-            let mut rows=s.query(params![session,generation,offset])?;let mut result=vec![];let mut size=0usize;
+            let mut s=tx.prepare("SELECT observation_id,normalized_json,file_generation_id,byte_end FROM observations WHERE session_key=?1 AND file_generation_id IN (SELECT value FROM json_each(?4)) AND (file_generation_id>?2 OR (file_generation_id=?2 AND byte_offset>?3)) ORDER BY file_generation_id,byte_offset LIMIT 256")?;
+            let mut rows=s.query(params![session,generation,offset,selected_generations(&m)?])?;let mut result=vec![];let mut size=0usize;
             while let Some(row)=rows.next()? {
                 let encoded:String=row.get(1)?;let next=size.checked_add(encoded.len()).ok_or(ErrorCode::NumericOverflow)?;
                 if next>16*1024*1024 {if result.is_empty() {return Err(ErrorCode::InvalidQuery.into());}break;}
@@ -279,7 +289,7 @@ impl Database {
                 if parser!=PARSER_VERSION || (accounting!=ACCOUNTING_VERSION && !token_pulse_core::domain::can_upgrade_accounting_version(&accounting)) {return Err(ErrorCode::UnsupportedFormat.into());}
                 if tx.query_row("SELECT EXISTS(SELECT 1 FROM ledger_generations WHERE session_key=?1 AND state='candidate')",[&key],|r|r.get::<_,bool>(0))? {return Err(ErrorCode::RevisionConflict.into());}
                 let candidate=format!("candidate-{:x}",Sha256::digest(serde_json::to_vec(&(&job_id,&key))?));
-                for generation in ids(&tx,"SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1",&key)? {files.insert(generation.clone(),input_file(&tx,&generation)?);}
+                for generation in current_inputs(&tx,&key)? {files.insert(generation.clone(),input_file(&tx,&generation)?);}
                 ledgers.push(input_ledger(&tx,&key,candidate)?);
             }
             let m=RebuildManifest{version:1,job_id:job_id.clone(),parser_version:PARSER_VERSION.into(),accounting_version:ACCOUNTING_VERSION.into(),files:files.into_values().collect(),ledgers};
@@ -378,7 +388,7 @@ fn validate(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
                 return Err(ErrorCode::InvalidUsage.into());
             }
         }
-        let missing:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM observations o WHERE (o.session_key=?1 OR o.session_key IN (SELECT alias_session_key FROM candidate_session_aliases WHERE job_id=?3 AND canonical_session_key=?1)) AND o.kind='usage' AND NOT EXISTS(SELECT 1 FROM usage_events e WHERE e.ledger_id=?2 AND e.origin_observation_id=o.observation_id) AND NOT EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=?2 AND p.observation_id=o.observation_id))",params![ledger.session_key,ledger.candidate_ledger_id,m.job_id],|r|r.get(0))?;
+        let missing:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM observations o WHERE (o.session_key=?1 OR o.session_key IN (SELECT alias_session_key FROM candidate_session_aliases WHERE job_id=?3 AND canonical_session_key=?1)) AND o.file_generation_id IN (SELECT value FROM json_each(?4)) AND o.kind='usage' AND NOT EXISTS(SELECT 1 FROM usage_events e WHERE e.ledger_id=?2 AND e.origin_observation_id=o.observation_id) AND NOT EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=?2 AND p.observation_id=o.observation_id))",params![ledger.session_key,ledger.candidate_ledger_id,m.job_id,selected_generations(m)?],|r|r.get(0))?;
         let overlap:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM usage_events e JOIN pending_usage p ON p.observation_id=e.origin_observation_id AND p.ledger_id=e.ledger_id WHERE e.ledger_id=?1 AND p.kind<>'unattributed')",[&ledger.candidate_ledger_id],|r|r.get(0))?;
         if missing || overlap {
             return Err(ErrorCode::InvalidUsage.into());
