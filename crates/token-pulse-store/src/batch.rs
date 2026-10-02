@@ -212,6 +212,84 @@ fn project(tx: &Transaction<'_>, metadata: &EffectiveMetadata) -> StoreResult<Op
     tx.execute("INSERT INTO projects(project_id,canonical_cwd,display_name,normalization_version) VALUES(?1,?2,?3,1)", params![id,canonical,name])?;
     Ok(Some(id))
 }
+pub(crate) fn write_observation(
+    tx: &Transaction<'_>,
+    observation: &ObservationWrite,
+    generation: &str,
+    lower: i64,
+    upper: i64,
+) -> StoreResult<()> {
+    let (position, kind, time, metadata, record_session) = match &observation.record {
+        NormalizedObservation::SessionMetadata {
+            physical_position,
+            created_at_ms,
+            metadata,
+            ..
+        } => (
+            physical_position,
+            "session_meta",
+            *created_at_ms,
+            metadata,
+            observation.session_key.as_deref(),
+        ),
+        NormalizedObservation::TurnMetadata {
+            physical_position,
+            session_key,
+            metadata,
+        } => (
+            physical_position,
+            "turn_meta",
+            None,
+            metadata,
+            Some(session_key.as_str()),
+        ),
+        NormalizedObservation::Usage(u) => (
+            &u.physical_position,
+            "usage",
+            u.event_time_ms,
+            &u.effective_metadata,
+            Some(u.session_key.as_str()),
+        ),
+        NormalizedObservation::Context {
+            physical_position,
+            session_key,
+            observed_at_ms,
+            metadata,
+            ..
+        } => (
+            physical_position,
+            "context",
+            *observed_at_ms,
+            metadata,
+            Some(session_key.as_str()),
+        ),
+    };
+    position.validate()?;
+    if position.file_generation_id != generation
+        || position.byte_offset < (lower as u64)
+        || position.byte_end > (upper as u64)
+        || observation.session_key.as_deref() != record_session
+    {
+        return Err(ErrorCode::CheckpointConflict.into());
+    }
+    let project_id = project(tx, metadata)?;
+    let (stable, stream) = match &observation.record {
+        NormalizedObservation::Usage(u) => (
+            u.request_identity
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+            u.stream_hint.clone(),
+        ),
+        _ => (None, None),
+    };
+    tx.execute("INSERT INTO observations(observation_id,file_generation_id,byte_offset,byte_end,session_key,kind,observed_at_ms,stable_record_id,turn_id,stream_hint,model,project_id,normalized_json,payload_fingerprint,format_version) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",params![observation.observation_id,generation,position.byte_offset as i64,position.byte_end as i64,observation.session_key,kind,time,stable,metadata.turn_id,stream,metadata.model,project_id,serde_json::to_string(&observation.record)?,observation.payload_fingerprint,PARSER_VERSION])?;
+    if let Some(session) = &observation.session_key {
+        tx.execute("INSERT INTO file_session_bindings(file_generation_id,session_key,first_offset,identity_evidence) VALUES(?1,?2,?3,'adapter') ON CONFLICT(file_generation_id,session_key) DO NOTHING",params![generation,session,position.byte_offset as i64])?;
+    }
+    Ok(())
+}
+
 fn commit_batch(
     conn: &mut rusqlite::Connection,
     batch: WriteBatch,
@@ -334,74 +412,13 @@ fn commit_batch(
                 return Err(ErrorCode::CheckpointConflict.into());
             }
         }
-        let (position, kind, time, metadata, record_session) = match &observation.record {
-            NormalizedObservation::SessionMetadata {
-                physical_position,
-                created_at_ms,
-                metadata,
-                ..
-            } => (
-                physical_position,
-                "session_meta",
-                *created_at_ms,
-                metadata,
-                observation.session_key.as_deref(),
-            ),
-            NormalizedObservation::TurnMetadata {
-                physical_position,
-                session_key,
-                metadata,
-            } => (
-                physical_position,
-                "turn_meta",
-                None,
-                metadata,
-                Some(session_key.as_str()),
-            ),
-            NormalizedObservation::Usage(u) => (
-                &u.physical_position,
-                "usage",
-                u.event_time_ms,
-                &u.effective_metadata,
-                Some(u.session_key.as_str()),
-            ),
-            NormalizedObservation::Context {
-                physical_position,
-                session_key,
-                observed_at_ms,
-                metadata,
-                ..
-            } => (
-                physical_position,
-                "context",
-                *observed_at_ms,
-                metadata,
-                Some(session_key.as_str()),
-            ),
-        };
-        position.validate()?;
-        if position.file_generation_id != batch.file_generation_id
-            || position.byte_offset < (batch.expected_offset as u64)
-            || position.byte_end > (batch.next_offset as u64)
-            || observation.session_key.as_deref() != record_session
-        {
-            return Err(ErrorCode::CheckpointConflict.into());
-        }
-        let project_id = project(&tx, metadata)?;
-        let (stable, stream) = match &observation.record {
-            NormalizedObservation::Usage(u) => (
-                u.request_identity
-                    .as_ref()
-                    .map(serde_json::to_string)
-                    .transpose()?,
-                u.stream_hint.clone(),
-            ),
-            _ => (None, None),
-        };
-        tx.execute("INSERT INTO observations(observation_id,file_generation_id,byte_offset,byte_end,session_key,kind,observed_at_ms,stable_record_id,turn_id,stream_hint,model,project_id,normalized_json,payload_fingerprint,format_version) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",params![observation.observation_id,batch.file_generation_id,position.byte_offset as i64,position.byte_end as i64,observation.session_key,kind,time,stable,metadata.turn_id,stream,metadata.model,project_id,serde_json::to_string(&observation.record)?,observation.payload_fingerprint,PARSER_VERSION])?;
-        if let Some(session) = &observation.session_key {
-            tx.execute("INSERT INTO file_session_bindings(file_generation_id,session_key,first_offset,identity_evidence) VALUES(?1,?2,?3,'adapter') ON CONFLICT(file_generation_id,session_key) DO NOTHING",params![batch.file_generation_id,session,position.byte_offset as i64])?;
-        }
+        write_observation(
+            &tx,
+            observation,
+            &batch.file_generation_id,
+            batch.expected_offset,
+            batch.next_offset,
+        )?;
     }
     at(CommitStage::Observations)?;
     write_derived_with_hook(

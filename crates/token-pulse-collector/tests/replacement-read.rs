@@ -312,3 +312,70 @@ fn oversized_line_skip_survives_a_batch_boundary_without_persisting_raw_bytes() 
     assert_eq!(count(&db, "file_candidate_diagnostics"), 1);
     assert_eq!(old(&db, &path), before);
 }
+
+#[test]
+fn readonly_replacement_to_owned_registration_reopens_across_batches_without_publishing_new_usage()
+{
+    use token_pulse_core::{jobs::JobProgress, protocol::JobState};
+    use token_pulse_store::jobs::JobAdvance;
+    for provider in ["old", "new"] {
+        let (data, _logs, db, path) = setup();
+        let before = old(&db, &path);
+        let bytes = log(provider, 130, 8);
+        fs::write(&path, &bytes).unwrap();
+        let read = read_replacement_file(&db, "source", &path, 2).unwrap();
+        assert!(read.read_complete);
+        let job = db
+            .enqueue_file_candidate_rebuild(read.generation_id.clone(), read.checkpoint_revision, 3)
+            .unwrap();
+        let stored = db.get_job(&job.job_id).unwrap();
+        db.advance_job(
+            job.job_id.clone(),
+            JobAdvance {
+                expected: JobState::Queued,
+                next: JobState::Running,
+                progress: JobProgress::default(),
+                checkpoint: stored.checkpoint,
+                error: None,
+                at_ms: 4,
+            },
+        )
+        .unwrap();
+        let first = db
+            .register_file_candidate_inputs(read.generation_id.clone(), job.job_id.clone(), -1, 5)
+            .unwrap();
+        assert_eq!(first.registered_rows, 128);
+        assert!(!first.complete);
+        assert_eq!(old(&db, &path), before);
+        drop(db);
+        let db = Database::open(data.path()).unwrap();
+        let last = db
+            .register_file_candidate_inputs(
+                read.generation_id.clone(),
+                job.job_id.clone(),
+                first.after_offset,
+                6,
+            )
+            .unwrap();
+        assert_eq!(last.registered_rows, 3);
+        assert!(last.complete);
+        assert_eq!(old(&db, &path), before);
+        db.snapshot(|tx,_| {
+            let new_rows:i64=tx.query_row("SELECT COUNT(*) FROM observations WHERE file_generation_id=?1",[&read.generation_id],|r|r.get(0))?;
+            assert_eq!(new_rows,131);
+            let (session,created):(String,bool)=tx.query_row("SELECT session_key,created_at_ms IS NULL FROM file_rebuild_sessions WHERE generation_id=?1",[&read.generation_id],|r|Ok((r.get(0)?,r.get(1)?)))?;
+            assert!(created);
+            if provider=="new" {assert!(tx.query_row("SELECT active_ledger_id IS NULL FROM sessions WHERE session_key=?1",[session],|r|r.get::<_,bool>(0))?);}
+            Ok(())
+        }).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            db.prepare_rebuild(job.job_id.clone(), 7).unwrap_err().code,
+            ErrorCode::InvalidQuery
+        );
+        db.fail_rebuild(job.job_id, ErrorCode::JobInterrupted, 8)
+            .unwrap();
+        assert_eq!(old(&db, &path), before);
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+}

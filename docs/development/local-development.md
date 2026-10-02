@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+M06f5 补充：`cargo test -p token-pulse-collector` 全部 47 项功能检查通过，其中 replacement-read 为 10 项；store / collector / desktop `cargo clippy --all-targets -- -D warnings`、fmt 与 Git diff 检查通过。
+
+M06f5：`cargo test -p token-pulse-store file_candidate --lib` 22 项（新增所有权 / 登记 11 项）、普通采集 `batch::tests` 9 项及 `cargo test -p token-pulse-store --test jobs` 6 项通过；collector 新增 `readonly_replacement_to_owned_registration` 的真实临时日志组合检查通过。验证 128 记录及 16 MiB 登记边界、重开库继续、原子排队 / 竞争认领、header / 身份与旧游标拒绝、登记 / 取消失败回滚、终态释放、普通成功门禁及 v8 → v9 基本兼容。大指纹仅检查事务载荷边界，未测量性能；v8 夹具只验证本次正常 schema 增量，不扩展已取消的迁移保护或灾难恢复。尚未接正常替换重建发布，没有新 UI / 人工原生验收。
+
 M06f4：`cargo test -p token-pulse-store publication_visibility --lib` 3 项通过，`cargo test -p token-pulse-store --lib` 229 项普通检查通过 / 1 性能夹具 ignored。collector 的 canonical-live / canonical-proof / proof-jobs / replay / ingestion / job-service / accounting-upgrade 共 25 项定向回归通过；store / collector / desktop strict Clippy、fmt / Git diff 通过。合成 SQLite 夹具包含 NULL 活跃指针的新身份、候选账本 / 文件 / 事件，检查选择器、详情 / 轮次 / 上下文、父子关系、固定范围 CAS、普通依赖组 / 自动证明及真实分页快照的可见性；指针切换为测试内模拟，不冒充实际替换发布。没有前端布局改变、人工窗口验收、用户日志 / 账户读取或性能测试。
 
 M06f3 的 store / collector / desktop strict Clippy、fmt 与 Git diff 检查通过。

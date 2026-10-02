@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_initial.sql")),
     (
@@ -32,6 +32,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (
         8,
         include_str!("../migrations/0008_file_read_candidates.sql"),
+    ),
+    (
+        9,
+        include_str!("../migrations/0009_file_rebuild_ownership.sql"),
     ),
 ];
 static BACKUP_SERIAL: AtomicU64 = AtomicU64::new(0);

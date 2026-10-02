@@ -1,4 +1,5 @@
 //! Replacement reads are isolated from active observations, baselines and checkpoints.
+pub mod rebuild;
 use crate::{
     Database, ErrorCode, StoreResult,
     batch::{DiagnosticWrite, ObservationWrite},

@@ -120,6 +120,7 @@ impl Database {
             if finished(old.state) {return Ok(CancelJobResult::AlreadyFinished);}
             let next=if old.state==JobState::Queued {JobState::Cancelled} else {JobState::Cancelling};
             tx.execute("UPDATE jobs SET state=?1,cancel_requested=1,updated_at_ms=?2,error_code=?3 WHERE job_id=?4",params![text(&next)?,at_ms,if next==JobState::Cancelled {Some(text(&ErrorCode::JobCancelled)?)} else {None},id])?;
+            if next==JobState::Cancelled {crate::file_candidate::rebuild::fail_owned(&tx,Some(&id),ErrorCode::JobCancelled,at_ms)?;}
             tx.commit()?;Ok(CancelJobResult::Accepted)
         })
     }
@@ -143,8 +144,10 @@ impl Database {
             if old.job.state!=expected {return Err(if old.job.state==JobState::Cancelling {ErrorCode::JobCancelled} else {ErrorCode::RevisionConflict}.into());}
             let previous:JobProgress=decoded(&tx.query_row("SELECT progress_json FROM jobs WHERE job_id=?1",[&id],|r|r.get::<_,String>(0))?)?;progress.validate_after(&previous)?;
             if checkpoint.batch_position.value()<old.checkpoint.batch_position.value() {return Err(ErrorCode::RevisionConflict.into());}
+            if next==JobState::Succeeded && crate::file_candidate::rebuild::has_owned(&tx,&id)? {return Err(ErrorCode::InvalidQuery.into());}
             let error=error.or(if next==JobState::Cancelled {Some(ErrorCode::JobCancelled)} else {None});
             tx.execute("UPDATE jobs SET state=?1,progress_json=?2,resume_json=?3,error_code=?4,updated_at_ms=?5 WHERE job_id=?6",params![text(&next)?,serde_json::to_string(&progress)?,serde_json::to_string(&checkpoint)?,error.map(|e|text(&e)).transpose()?,at_ms,id])?;
+            if matches!(next,JobState::Cancelled|JobState::Failed|JobState::Interrupted) {crate::file_candidate::rebuild::fail_owned(&tx,Some(&id),error.unwrap_or(ErrorCode::JobInterrupted),at_ms)?;}
             let result=load(&tx,&id)?.job;tx.commit()?;Ok(result)
         })
     }
@@ -202,6 +205,7 @@ impl Database {
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let count=tx.execute("UPDATE jobs SET state='interrupted',error_code='JOB_INTERRUPTED',updated_at_ms=?1 WHERE state IN ('queued','running','validating','publishing','cancelling')",[at_ms])?;
             tx.execute("UPDATE ledger_generations SET state='failed' WHERE state='candidate'",[])?;
+            crate::file_candidate::rebuild::fail_owned(&tx,None,ErrorCode::JobInterrupted,at_ms)?;
             tx.execute("UPDATE source_scan_runs SET state='interrupted',finished_at_ms=?1 WHERE state='running'",[at_ms])?;
             tx.commit()?;Ok(count as u64)
         })

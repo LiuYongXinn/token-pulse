@@ -282,6 +282,9 @@ impl Database {
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             require_state(&tx,&job_id,JobState::Running)?;let job=jobs::load(&tx,&job_id)?;
             if job.job.kind!=JobKind::Rebuild || !job.checkpoint.candidate_ledger_ids.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
+            // Claimed replacements require an explicit replacement manifest. Ordinary replay
+            // must never report success after silently rebuilding only the old physical input.
+            if crate::file_candidate::rebuild::has_owned(&tx,&job_id)? {return Err(ErrorCode::InvalidQuery.into());}
             let closure=dependency_closure(&tx,&job.request.scope)?;
             if closure.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
             let mut files=BTreeMap::new();let mut ledgers=vec![];
@@ -347,7 +350,9 @@ impl Database {
             if token_pulse_core::jobs::finished(job.job.state) {return Err(ErrorCode::RevisionConflict.into());}
             for id in job.checkpoint.candidate_ledger_ids {tx.execute("UPDATE ledger_generations SET state='failed' WHERE ledger_id=?1 AND state='candidate'",[id])?;}
             let state=if code==ErrorCode::JobCancelled {"cancelled"} else if code==ErrorCode::JobInterrupted {"interrupted"} else {"failed"};
-            tx.execute("UPDATE jobs SET state=?1,error_code=?2,updated_at_ms=?3 WHERE job_id=?4",params![state,code.to_string(),at_ms,job_id])?;tx.commit()?;Ok(())
+            tx.execute("UPDATE jobs SET state=?1,error_code=?2,updated_at_ms=?3 WHERE job_id=?4",params![state,code.to_string(),at_ms,job_id])?;
+            crate::file_candidate::rebuild::fail_owned(&tx,Some(&job_id),code,at_ms)?;
+            tx.commit()?;Ok(())
         })
     }
     pub fn validate_candidate(&self, job_id: &str) -> StoreResult<()> {
