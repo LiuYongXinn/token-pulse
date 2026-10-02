@@ -30,6 +30,8 @@ cargo run -p token-pulse-quota --features local-account-check --example local_ac
 
 该命令仅输出程序和 Home 是否找到，不输出路径、身份或认证信息，不启动账户服务。实际账户读取仍是独立的显式 `--read-existing-account` 验收入口，不属于默认测试或 CI。
 
+持续读取的显式入口为 `cargo run -p token-pulse-quota --features local-account-check --example local_account_check -- --observe-local-existing-account`。它通过现有检测规则选择本机原生程序及已有 Home，再使用生产 owner 和可见入口轮询；首次 ready 后观察两次新的尝试时间及成功时间，单轮最多等待 90 秒。没有调用强制刷新或改动时钟，不开始登录 / 登出 / 模型回合。连接 epoch 改变或账户能力失效拒绝继续沿用旧证明；退出前断开并 shutdown。输出仅含阶段、周期数量、字段是否提供和同一连接标记，不记录身份、路径、真实百分比或原始服务消息。此命令会实际连接现有账户，只能显式运行，不属于默认测试和 CI。
+
 2026-10-02 完成以下功能验证，未进行性能测试：
 
 |验证类型|结果与范围|
@@ -41,4 +43,4 @@ cargo run -p token-pulse-quota --features local-account-check --example local_ac
 
 原生验收最初使用通用 3 秒界面等待，实际程序文件检查尚未完成时超时。实现去除了检测后的重复指纹读取；该项验收独立使用有界 15 秒界面等待和 20 秒结果等待，其他检查保留原上限。这是等待异步功能完成，未评估延迟或吞吐量。
 
-M12h 已通过四个独立正式应用进程的隔离合成账户冷启动，覆盖持久配置、自动连接关闭、指纹改变拒绝及子进程退出，详见[共享显示验证](account-quota-verification.md)。实际文件选择器交互、Windows 11 / ARM64 环境、真实账户冷启动和持续刷新仍需分别验收。检测本机程序仅为元数据检查，不能据此声称验证了本机账户连接或长期通知。
+M12h 已通过四个独立正式应用进程的隔离合成账户冷启动，覆盖持久配置、自动连接关闭、指纹改变拒绝及子进程退出；M12i 的独立真实账户入口已通过首次及两次后台读取，详见[共享显示验证](account-quota-verification.md)。实际文件选择器交互、Windows 11 / ARM64 环境、真实账户冷启动、身份变化 / 通知 / 过期 / 重置仍需分别验收。检测本机程序仅为元数据检查，持续读取另有实际证据，不能据此声称已验证长期通知。

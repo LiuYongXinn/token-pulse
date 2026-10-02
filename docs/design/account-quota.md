@@ -24,6 +24,8 @@
 
 官方 Codex App Server 提供 `account/rateLimits/read` 查询和 `account/rateLimits/updated` 变更通知；优先处理 `rateLimitsByLimitId`，兼容单桶 `rateLimits`。窗口字段包括 `usedPercent`、`windowDurationMins` 和以秒为单位的 `resetsAt`。[官方接口说明](https://learn.chatgpt.com/docs/app-server)
 
+2026-10-03 再核对官方协议：`account/read` 支持 `refreshToken=false`；`account/updated` 表示认证模式变化，不能凭该通知推测任意账户身份字段。服务收到该通知即旋转连接 epoch、清掉旧额度，再完成新的账户能力和额度读取证明。TokenPulse 不保存返回的 email / plan / 原始身份，不将通知数量或前端倒计时更新视为成功额度读取。[官方账户接口说明](https://learn.chatgpt.com/docs/app-server)
+
 接入通过用户明确配置的账户服务或受控 App Server 连接实现。账户信息读取属于可选能力，不要求本地日志采集器读取 `auth.json`、解析认证文件或推测账号。不能假定能直接连接 Codex 桌面应用内部服务。
 
 2026-10-02 用户确认：直接复用本地已登录的 Codex 账户，不在 TokenPulse 新建登录、设备码或取消登录流程。通过用户选择的原生 Codex 服务及现有 Codex Home，由服务读取其已管理的登录状态；TokenPulse 先用 account/read（refreshToken=false）判断可用性，再读取额度。缺少或失效登录时保留 null 和“本地登录态不可用”，允许改选已登录 Home / 重新连接，不自动发起授权。原型合成快照不代替正式读取，运行也不依赖当前 Codex 对话工具。

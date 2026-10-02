@@ -40,4 +40,12 @@ M12g 将正式账户快照接入总览右栏及独立小窗，继续沿用 [账�
 
 Win10 19045 上四阶段 `NATIVE_ACCOUNT_COLD_OK` 与 `NATIVE_ACCOUNT_COLD_SEQUENCE_OK`、退出 0；scene 参数自动检查 1 项、desktop strict Clippy 通过。WebView2 注销 1412 仍单独记录。这个场景使用合成账户，未读取真实认证或修改用户 Home，不代替真实账户冷启动、系统选择器及 Windows 11 验收。
 
-仍需完成真实账户持续轮询 / 通知 / 身份变化、真实账户冷启动、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。
+## M12i：真实已有账户持续读取（2026-10-03）
+
+显式 `local-account-check` 的 `--observe-local-existing-account` 使用元数据检测到的本机原生 Codex 和现有 Home，启动生产 `AccountQuotaService`，使主入口可见。首次读取成功后，等待两次生产后台刷新；没有调用 `refresh`、调整轮询间隔或时钟。每次必须同时观察新的 `last_attempt_at_ms` 和 `fetched_at_ms`，后一次尝试不早于前一次成功证明；连接 epoch 保持相同，单纯通知或前端快照重读不能代替这项证明。程序在有界窗口内失败会报失败，能力失效或连接改变不继续使用旧证明，最后断开和 shutdown。
+
+本机 Windows 10 上输出 initial_ready、subsequent_read_ready round 1 / 2，退出 0。三次均有一个实际周期，百分比字段存在；文档和新观察输出不保存实际百分比、身份、路径、认证或原始消息。沿用服务自己的已有登录，不发起模型回合、登录 / 登出，也不使用当前对话账户工具。这是三次真实账户读取的功能验收，不是性能测试或无限期运行证明。
+
+自动回归：领域 quota 14 / 配置 3 项、服务 8 项通过，覆盖可见 / 隐藏轮询、单飞 / 退避、真实零 / null、账户变化清空旧值、未证明通知拒绝及暂停恢复；quota all-targets / all-features strict Clippy、fmt / diff 通过。自动身份切换使用合成夹具；未切换用户真实账户。
+
+仍需完成真实账户通知 / 身份变化、登录过期 / 实际重置、真实账户冷启动、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。

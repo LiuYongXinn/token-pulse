@@ -272,9 +272,13 @@ M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普�
 
 -Taskbar 失败触发已从原不支持位置改为 debug-only 隔离目录的缺失宿主工厂，生产初始化不变、无外部配置入口、不改安装文件；通过正式启动失败验证非激活小窗 / 用户隐藏 / 重试 / 恢复保留。Win10 19045 / 150% 两场退出 0，WebView2 1412 保留。物理输入 / 焦点、实际拥挤 / 自动隐藏、完整 Explorer 重建、Win11 和物理多屏 DPI 仍待独立验收。没有性能测试。
 
-## 显式模型别名 IPC 验收
+## 账户独立冷启动与真实持续读取
 
 账户冷启动独立入口：`pwsh -NoProfile -File scripts/native-account-startup.ps1`。四个完整进程以同一 UUID 隔离库依次验证 seed / ready / disabled / changed，正常初始化读取已保存设置；脚本要求四阶段及 SEQUENCE_OK，并检查拥有的合成账户子进程已退出。不会打开用户账户、选择器或发送桌面输入。Windows 10 已通过，WebView2 注销 1412 保留；真实账户冷启动 / 持续读取及 Win11 分开记录，详见[账户共享显示验证](account-quota-verification.md)。
+
+真实已有账户持续读取的显式命令为 `cargo run -p token-pulse-quota --features local-account-check --example local_account_check -- --observe-local-existing-account`，要求 initial_ready 和两次 subsequent_read_ready、退出 0。此命令实际连接检测到的已有本地账户，不属于 CI；不调用强制刷新、不发起登录或模型回合。Win10 本机已完成三次读取；只输出净化存在性和连接标记，不保存实际百分比 / 身份。合成领域 / 服务回归分开记录，真实账户切换 / 重置等条件保留，详见[账户共享显示验证](account-quota-verification.md)。
+
+## 显式模型别名 IPC 验收
 
 pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceAliases 选择 debug-only、无来源 / 账户的隔离库及两个真实 WebView，实际核对 main-only create / replace / retire / 旧版本、CAS / 映射冲突、提交成功通知、隐私投影和 mini 拒绝。Win10 已输出 NATIVE_PRICE_ALIAS_OK、退出 0，WebView2 注销 1412 保留。此检查不启用任务栏、不读取真实日志 / 登录信息，不等同设置编辑器 UI 验收。定向自动检查 cargo test -p token-pulse-core --test pricing 和 cargo test -p token-pulse-store --lib pricing 均使用合成单价 / 模型、独立预期费用及消费不变；没有性能测试。
 
