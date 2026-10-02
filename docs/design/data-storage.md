@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M06f7 正常采集已接替换流水线。存储提供真实快照的 `file_has_frozen_rebuild`，以活动作业 manifest 的 file_id 判断整组依赖输入等待；候选 claimed 与冻结依赖均由所属作业发布 / 失败后释放，普通后台读取不会在期间推进原输入。结构未封存仅保持候选进度和 correction_pending；正式发布后普通读取使用新代次重新确认 source_scan，达到实际 EOF 才恢复 complete。M06f6 下述尚未接正常调度为该提交历史阶段。
+
 M06f6 schema v10 增加 `rebuild_manifests`，无会话 / 无账本的替换也能冻结输入，不制造占位身份。manifest v2 保存原文件冻结值、封存新代次及登记游标 / 完成、proposed header、ReaderContext；旧账本指针允许 null。闭包在普通已发布身份之外仅加入本作业 header，覆盖旧 / 新父关系、镜像及既有别名；回放移除被替换旧代次，保留其余当前输入。阶段写入、回放、验证和发布检查同一清单、作业账本集合与活动指针。旧 v1 清单继续兼容，不做全历史 parser 自动重解析。
 
 核算分类及实际物理前缀验证通过后，同一 Writer 事务发布整组账本与身份、旧代次 retired / 新代次 current、文件 identity / 指针、candidate published、必要诊断 / 旧诊断失效、审计和作业成功；data revision 仅增一次，价格与设置不变。失败保留整组旧状态及旧读快照。原 canonical 文件被替换时，已发布 mirror provenance 也作为可信历史依据；冲突新副本隔离。结构 EOF 不恢复目录证明，发布清空单文件确认并保持 incomplete。下述 M06f5 未接 manifest / 发布为历史阶段；正常 CollectorService 自动发现 / 继续 / 排队仍待 M06f7。

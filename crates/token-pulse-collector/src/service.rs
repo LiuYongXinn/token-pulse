@@ -1,4 +1,5 @@
-use crate::{collect_file, id};
+mod scheduled;
+use crate::id;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -461,9 +462,13 @@ impl CollectorService {
                             if let Some(file) = known.get_mut(&key) {
                                 did_work = true;
                                 let before = stamp(&file.path);
-                                match collect_file(&database, &file.source, &file.path, epoch_ms())
-                                {
-                                    Ok(receipt) => {
+                                match scheduled::collect(
+                                    &database,
+                                    &file.source,
+                                    &file.path,
+                                    epoch_ms(),
+                                ) {
+                                    Ok(scheduled::Read::Committed(receipt)) => {
                                         retries.remove(&key);
                                         file.stamp = before;
                                         let mut scan_error = None;
@@ -517,6 +522,29 @@ impl CollectorService {
                                             s.commits = s.commits.saturating_add(1);
                                             s.last_commit_at_ms = Some(epoch_ms());
                                             s.error = scan_error;
+                                        }
+                                    }
+                                    Ok(scheduled::Read::Pending { delay, error }) => {
+                                        // Reading, an unfinished tail and an owning job are normal
+                                        // correction phases. Never confirm the old file generation.
+                                        retries.insert(key.clone(), (0, Instant::now() + delay));
+                                        queue.enqueue(key, WorkPriority::Historical, now, delay);
+                                        let capability = abilities
+                                            .get(&file.source)
+                                            .cloned()
+                                            .unwrap_or_default();
+                                        let _ = database.update_source_runtime(
+                                            file.source.clone(),
+                                            scan_health
+                                                .get(&file.source)
+                                                .copied()
+                                                .unwrap_or(SourceReadability::Readable),
+                                            capability,
+                                            Some(epoch_ms()),
+                                            None,
+                                        );
+                                        if let Ok(mut status) = thread_status.lock() {
+                                            status.error = error;
                                         }
                                     }
                                     Err(error) => {

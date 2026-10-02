@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M06f7：新增 `cargo test -p token-pulse-collector --test replacement-service` 6 项通过；collector 完整 61 项、store / collector / desktop strict Clippy 和 fmt 通过。Win10 实际 native watcher（轮询设到 1 小时以区分）、无 watcher 轮询、启动 / 唤醒、601 行跨读取 / 登记批次、未结束末行重开数据库续读、认领等待、整组依赖等待 / 失败后续读、读取中再次改写及发布后的真实 source_scan 确认。全部合成日志，不读用户 Home / auth.json，不测性能；人工窗口、Win11、多屏、真实格式覆盖及归档 / 替换交错组合继续验收。
+
 M06f6：`cargo test -p token-pulse-store rebuild --lib` 29 项（新增替换清单 / 发布 6 项）、`file_candidate --lib` 22 项；`cargo test -p token-pulse-collector` 55 项（replacement-read 18 项，新增 8 项）通过。store / collector / desktop strict Clippy、fmt / Git diff 通过。合成 SQLite 检查整组发布回滚、真实旧快照、nullable 审计、跨来源旧 / 新关系、冻结输入过期、诊断 / 扫描门禁、无账本清单及 v1 兼容；Win10 临时 JSONL 检查真实只读读取、替换发布、追加及独立后台作业。源属性恢复原权限，不读取用户 Home / 账户 / auth.json；无 UI 变化、人工窗口 / 安装或性能验收。正常 CollectorService 自动触发仍待 M06f7。
 
 M06f5 补充：`cargo test -p token-pulse-collector` 全部 47 项功能检查通过，其中 replacement-read 为 10 项；store / collector / desktop `cargo clippy --all-targets -- -D warnings`、fmt 与 Git diff 检查通过。

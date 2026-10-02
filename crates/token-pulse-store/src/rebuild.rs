@@ -248,6 +248,10 @@ fn require_state(tx: &Transaction<'_>, id: &str, expected: JobState) -> StoreRes
     Ok(())
 }
 impl Database {
+    /// Scheduled collection waits for publication/failure, including otherwise empty reads.
+    pub fn file_has_frozen_rebuild(&self, file_id: &str) -> StoreResult<bool> {
+        self.snapshot(|tx,_|Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM rebuild_manifests m JOIN jobs j USING(job_id) JOIN json_each(m.manifest_json,'$.files') input WHERE j.state IN ('running','validating','publishing','cancelling') AND json_extract(input.value,'$.file_id')=?1)",[file_id],|r|r.get(0))?))
+    }
     pub fn rebuild_has_targets(&self, scope: &JobScope) -> StoreResult<bool> {
         self.snapshot(|tx, _| Ok(!dependency_closure(tx, scope)?.is_empty()))
     }
