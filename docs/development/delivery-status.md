@@ -2,6 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M13g2：真实 UI Automation 名称与原生菜单模式
+
+新增显式 `check_taskbar_accessibility --native-taskbar-accessibility-development-check`，默认测试 / CI 不嵌入 Explorer；使用正式独立宿主 / 受控管道和合成固定 fixture。查询线程不拥有窗口，以 COM MTA 初始化，IUIAutomation2 连接 / 事务各 1000 ms、AutoSetFocus=false，COM 对象不跨线程，查询按[官方 UIA 线程模型](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading)执行。读数必须唯一嵌入已验证的任务栏，查询前后检查自有 PID / 类，UIA ProcessId 同样匹配；不枚举其他应用名称、不读取真实日志或账户。
+
+实际 Win10 19045 / 150% 查询到原生 Pane（50033）、IsKeyboardFocusable=true / 非 offscreen，Name 包含独立期望的完整 683100、输入未知 —、缓存真实 0、USD 0.565000000000001 和合成范围 / 账户桶。不是复用 accessible_text 格式化器自行证明。通过自有 WM_CONTEXTMENU 展示真实原生菜单，UIA 查询五个有名称 / 启用的 MenuItem，均提供 Invoke 模式；只查询模式存在，不调用 Invoke 或 SetFocus。共享 Privacy ACK 返回时菜单已关闭、真实读数 provider Name 已变为 TokenPulse、原任务栏几何恢复；随后新的隐私快照 Name 不含旧金额 / 范围 / 账户名。明确 shutdown 再次验证整组原几何恢复。
+
+NATIVE_TASKBAR_UIA_PUBLIC_OK / MENU_OK / UIA_OK、退出 0；strict all-targets Clippy / fmt / diff 随提交复核。此模块只增加 opt-in 开发验收例程和文档，未改生产提供器或增加依赖 / IPC，未运行性能测试。实际 Narrator 朗读、Explorer 的物理键盘导航、菜单方向键、CoreWindow 遮挡下的真实输入、Win11 / 物理多屏仍独立验收；UIA 属性和模式存在不被记录为全部辅助技术使用体验完成。
+
 ## M15f4：同 DPI 显示器工作区切换检测
 
 补普通移动到同 DPI、较小工作区显示器时没有 ScaleFactorChanged 的入口。运行时保存上次成功适配的 monitor / 工作区坐标 / 尺寸 / 比例，仅在内存中；初始化恢复及 fit_current 成功后更新。普通 Moved / Resized 合并稳定后读取当前区域并比较，变化才重用 M15f3 尺寸 / 外框 / 位置适配。无需强制 DPI 事件；同一工作区的普通移动只保存位置，不在移动消息内同步夹紧。最大化 / 最小化不当作区域适配成功，失败不覆盖最后成功记录，原生 API 调用不持区域 mutex。没有新配置字段、前端几何 IPC、尺寸持久化或主窗口 UI 改动。
