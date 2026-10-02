@@ -1,4 +1,6 @@
 //! Shared native-host wire contract and fail-closed receiver. No Tauri, database or log access.
+#[cfg(windows)]
+pub mod windows;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -37,7 +39,7 @@ pub enum HostMessage {
     Heartbeat {},
     Shutdown {},
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostAction {
     OpenFloat {},
@@ -46,7 +48,7 @@ pub enum HostAction {
     SetPrivacy { enabled: bool },
     DisableTaskbar {},
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostReply {
     Ready {},

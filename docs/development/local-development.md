@@ -73,3 +73,14 @@ cargo run -p token-pulse-quota --features local-account-check --example local_ac
 ```
 
 该命令需要已支持 App Server 的本地程序和可用登录态；没有可用额度返回相应状态与非零退出码，不创建登录作业。单次成功不证明后台通知、跨账户、完整冷启动或其他系统版本已验收，实际结果见[交付记录](delivery-status.md)。
+
+## 任务栏独立宿主开发验证
+
+```powershell
+cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
+cargo test -p token-pulse-taskbar
+cargo run -p token-pulse-taskbar --example export_host_contract -- --check
+cargo clippy -p token-pulse-taskbar --all-targets -- -D warnings
+```
+
+Windows 测试自动启动 Cargo 构建的独立宿主，使用本次随机命名管道和合成协议，验证 DACL / PID / 正常及异常退出；心跳期限检查等待真实 15 秒。这是功能检查，不是性能测试。测试不读取真实账户、日志或统计库，也不调整 Explorer。当前宿主仅完成通信，未创建任务栏窗口；不手工传入或记录 nonce 参数。正式 Tauri 管理器与安装位置解析随后接入，独立程序将随应用打包，生产不依赖 Cargo 或开发环境。
