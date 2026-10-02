@@ -1,7 +1,21 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=TOKENPULSE_UPDATER_PUBLIC_KEY");
+    if std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows") {
+        // Cargo's tests-only flags omit the library unit-test harness. Embed its required
+        // Common Controls v6 manifest, then disable linker generation for the desktop bin:
+        // that bin already receives Tauri's resource.lib manifest (and icon/version data).
+        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        println!(
+            "cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+        );
+        println!("cargo:rustc-link-arg-bin=token-pulse-desktop=/MANIFEST:NO");
+    }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_update_status",
+            "check_for_updates",
+            "download_update",
             "get_notify_integrations",
             "prepare_notify_integration",
             "apply_notify_integration",

@@ -627,3 +627,13 @@ M09f2 的前端 mutateModelAlias 继续复用响应身份、显示策略戳与 e
 Rust / TS / schema 新增 UpdatePhase、UpdateIssue、UpdateRelease、UpdateSnapshot 和 UpdateActionRequest。阶段为 unavailable / idle / checking / current / available / downloading / verifying / ready_to_install / installing / error；缺失发布配置表达 unavailable + publication_not_configured，不可当成 current。更新修订与下载字节用 DecimalInt 字符串，未开始下载的 downloaded_bytes 及未知 total_bytes 为 null，真正开始后已下载为 0 才是字符串零。成功检查时间和发布时刻独立且可未知，不在失败时刷新成功时间。
 
 UpdateActionRequest 仅 expected_update_revision，deny_unknown_fields；网络结果与操作令牌只在 Rust 内部流转。新检查清除旧发布与进度，失败保留有限原因 / 已知进度但不能安装；迟到旧令牌被拒绝。元数据只含有界版本说明 / 日期，不返回认证、密钥、下载 URL、原生文件路径或底层错误原文；公开元数据不按用量隐私删除。该步骤仅为领域契约，未注册新的 Tauri 命令或 capability；真实网络 / 签名提供方、main-only IPC 与 UI 随后接入，不把状态机测试当作真实验签或安装证据。
+
+### M16b2：真实提供方与主窗口命令
+
+|命令|输入|成功响应|权限|
+|---|---|---|---|
+|get_update_status|requestId|PrivateResponse<UpdateSnapshot>|main|
+|check_for_updates|requestId|开始后的 Checking 快照；最终状态重新查询|main|
+|download_update|requestId、request: UpdateActionRequest|开始后的 Downloading 快照；最终状态重新查询|main|
+
+配置不可用返回 UPDATE_UNAVAILABLE，并可通过查询取得 unavailable + publication_not_configured；旧下载修订返回 REVISION_CONFLICT，已有操作返回 UPDATE_BUSY。非法 requestId 返回 INVALID_QUERY，未知请求字段反序列化拒绝。updates_changed 为空失效事件；前端必须重读，不从事件推定验签成功。元数据属于公开发布信息，但响应仍带最新共享隐私 stamp。mini 不登记以上权限，未授予通用 updater 插件命令权限。真实下载 / 签名 / 签名版本绑定在原生执行，ready 仅由实际成功的提供方生成；此阶段没有 install_update 命令。

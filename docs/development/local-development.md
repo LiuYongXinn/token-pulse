@@ -1,5 +1,13 @@
 # 本地开发与运行
 
+## 签名更新提供方验证
+
+原生提供方固定本仓库 GitHub Releases `latest.json`，发布安装器仅接受同仓库 HTTPS `.exe`，需要通过 `TOKENPULSE_UPDATER_PUBLIC_KEY` 在编译时提供 Tauri 公开验证密钥。该变量仅为公钥，不能填写私钥；当前未配置时应用不发更新请求、正式状态为更新不可用。私钥不进入源码、前端、安装包或运行时配置。签名必须绑定发布版本，禁止降级；真正发布、安装入口及 UI 尚在实施。
+
+普通定向测试：`cargo test -p token-pulse-desktop --lib update_transport`。显式真实签名夹具：`cargo test -p token-pulse-desktop --lib update_transport::tests::signed_local_download_checks_bytes_version_and_missing_version -- --ignored --exact`，需要已安装的 Node / 本仓库 Tauri CLI。只创建临时夹具密钥及自有 loopback HTTP，stdout / stderr 密钥输出不打印；下载文件是合成非可执行文本，不运行安装器，也不访问真实发布 / 账户。覆盖正确签名、篡改文件、声明版本不符、缺签名版本及原生 owner 状态 / CAS。
+
+真实 WebView 入口：`pwsh -NoProfile -File scripts/native-smoke.ps1 -Updates`；必须在未配置正式公钥的构建运行，UUID 隔离库不登记来源、不连接账户、不构建或启动任务栏宿主。验证三个主窗口命令、mini / 直接 updater 拒绝、null 状态、非法字段、共享隐私；通过标记为 NATIVE_UPDATES_IPC_OK 和退出 0。此入口没有下载 / 安装验收，不能代替正式更新。Windows lib test 链接器生成公共控件 v6 清单，desktop bin 使用已有 Tauri 资源清单，关闭另生成清单以避免重复；两类最终文件均需实际执行核对。
+
 ## 简单 Windows 安装包
 
 根目录运行 `npm run tauri:build`，加载 `src-tauri/tauri.bundle.conf.json`，编译前端 / 原生宿主并生成唯一 NSIS currentUser 安装包。默认 x64 文件 `target/release/bundle/nsis/TokenPulse_<version>_x64-setup.exe`。不要用裸 `npx tauri build` 代替此正式入口；基础配置不要求 externalBin，保持新检出后的普通 Cargo 验证可运行，开发数据隔离不变。

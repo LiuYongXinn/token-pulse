@@ -316,6 +316,8 @@ Windows 安装采用 Tauri 安装器能力，处理 WebView2 检测、离线安�
 
 M16b1 更新领域状态已实现：检查、可更新、下载、验签、可安装、安装中与失败分开。网络 EOF 只能进入 verifying，只有原生提供方完成签名及签名版本核对后才能发布 ready_to_install；纯状态机不执行密码学验证。原生 owner 私有持有更新对象 / 已验签字节，前端请求只携带精确 expected_update_revision，不能传 URL、公钥、路径、命令或 verified 标志。新检查废弃旧候选，迟到回调不能覆盖新代次；安装前再次核对用户看到的版本。仅提供方可执行 SemVer 新旧比较，不启用降级。状态不修改用量或账户，不引入备份 / 回滚。Tauri Windows install 会自动退出且提供同步 on_before_exit hook，后续原生安装接入必须审查任务栏恢复、后台停机与启动失败处理，不能直接从前端调用通用插件安装：[官方 updater](https://v2.tauri.app/plugin/updater/)。
 
+M16b2 已接真实提供方与 main-only 三命令：get_update_status、check_for_updates、download_update。固定 GitHub 仓库发布清单与 HTTPS 安装资产，原生编译公钥配置；缺配置不发请求。强制 requireSignedVersion，拒绝降级、被篡改文件、签名版本不符或缺少签名版本。前端无通用插件权限，持有的候选 / 已验证文件仅存在原生 owner；事件只失效，重新查询取得精确修订。下载流程不会改变用量 / 账户 / 价格。安装命令、UI 与真正发布通道继续实现，未配置正式发布公钥时不声称已更新到最新。
+
 ## 9. 性能与可观察性
 
 保留原方案指标：本地完整记录落盘至可见 P95 ≤2 s；30 万事件 mini 查询 P95 ≤150 ms，主页面 ≤500 ms；空闲 CPU <单核 1%，两个 WebView 隐藏且任务栏关闭时主应用私有内存目标 ≤180 MiB。启用任务栏时计入宿主和账户服务额外资源，分别记录，不隐藏成本。

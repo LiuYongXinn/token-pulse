@@ -2,6 +2,18 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16b2：真实签名提供方与正式更新 IPC
+
+接入锁定的 Tauri updater 2.12.0，发布清单固定为本仓库 GitHub Releases 的 `latest.json`，安装文件仅接受同仓库 release download 的 HTTPS `.exe`；重定向仅允许 GitHub 发布资产域，限制次数 / 期限，不关闭证书验证、不携带认证。构建时读取公开的 `TOKENPULSE_UPDATER_PUBLIC_KEY`，缺失或无效时不发起请求，保持 unavailable / publication_not_configured。当前尚未配置正式公钥，不能宣称实际发布通道就绪。
+
+原生 UpdateService 独占候选及验签后的不可序列化字节，使用真实提供方进行 SemVer 严格升级比较、minisign 文件签名和签名版本绑定；声明版本不符 / 旧无版本签名均拒绝。下载结束先表达 verifying，只有库实际校验成功且字节数 / 版本匹配才能 ready_to_install。新检查丢弃旧候选，繁忙操作及旧修订拒绝；回调失败不会在真实下载尚未结束时释放操作。失败只返回有限原因，不返回底层原文、密钥、URL 或路径。
+
+注册 main-only `get_update_status` / `check_for_updates` / `download_update` 和空载荷 `updates_changed` 失效通知；请求仅携带 requestId 及下载的 expected_update_revision。mini 无权限，通用 updater 插件没有前端 capability；最新隐私响应 stamp 与其他正式 IPC 一致。安装命令和正式更新 UI 尚未接入，不能将 ready 状态当作安装通过。
+
+自动验证：两项提供方边界 / 有限错误测试通过。显式 ignored 的本地签名验收单独执行并通过：临时夹具密钥、仅自有 127.0.0.1 端口、真实 HTTP 和 Tauri 签名库，分别验证正确文件、篡改字节、声明 / 签名版本不符、无签名版本；进一步通过真实异步 owner 检查 busy、精确 CAS、进度、Ready / Error、204 Current 清空旧候选及非法发布不刷新成功时间。夹具是明确合成的非可执行文本，未启动安装器，未使用真实发布密钥，也不替代正式 HTTPS 发布 / 实际安装验收。
+
+Windows 10 19045 / 150% 实际 `-Updates` 场景使用 UUID 隔离无来源 / 无账户库与两个真实 WebView，验证缺配置 / null、严格非法字段拒绝、旧修订拒绝、主窗三命令、mini 和通用插件拒绝、共享隐私及失败无状态 / 价格修订变化。NATIVE_UPDATES_IPC_OK、退出 0；既有 WebView2 注销 1412 保留。测试程序最初缺公共控件 v6 清单而在入口加载失败；构建脚本为 lib test 生成清单，desktop bin 明确关闭链接器另生成清单，继续使用已有 Tauri resource.lib，避免重复资源。正式 bin 与测试程序均重新构建和实际启动核对，提取正式资源确认公共控件 v6 / 原图标。严格 all-target Clippy、TS、契约前端 11 项、fmt / diff 和 release check 通过。无性能测试。下一步接正式 UI、安装退出收尾及签名发布，不扩展取消范围。
+
 ## M16b1：更新状态、精确进度与安装门禁
 
 新增 pure UpdateWorkflow 和五项 DTO，区分网络下载结束、正在验签及真正可安装；未知长度保持 null，字节与修订全程精确十进制。操作令牌不可从前端反序列化，一次仅一个操作；新检查废弃旧候选 / 进度，迟到回调拒绝，安装必须匹配刚发布 ready 修订。元数据限长 / 控制字符拒绝，请求不接受 URL / 公钥 / 原始文件 / verified 标志。缺少发布配置与实际 current 分开，检查失败不刷新先前成功时间。
