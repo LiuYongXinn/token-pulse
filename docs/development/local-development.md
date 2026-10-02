@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M06e2 定向命令：`cargo test -p token-pulse-store query::coverage --lib` 14 项、`cargo test -p token-pulse-collector` 37 项、`cargo test -p token-pulse-core --test discovery_scheduling` 7 项通过；store lib 最近基线 211 通过 / 1 性能夹具 ignored。core / store / collector / desktop `cargo clippy --all-targets -- -D warnings` 和 fmt 通过。新增 scan-evidence 使用临时合成日志、真实 SQLite / Windows watcher，验证未完成末行、归档、删除树、启动 / 暂停 / 恢复 / 重启及 129 项跨批次完整登记；discovery_scheduling 用隔离实际 junction 验证不跟随目标。Windows 原生检查与 SQLite 自动检查见交付记录，不读用户日志或账户，不运行性能测试。文件代次变化后的候选重建尚待实施。
+
 M06e1：`cargo test -p token-pulse-store source_scan --lib` 8 项通过，使用合成路径及真实 SQLite 检查枚举 / 读取分离、部分末行、旧回调与检查点、暂停 / 改根、已知 / 未知提示、中断重开、旧读快照及事务失败、缺失文件保留消费。store strict Clippy / fmt 通过；没有实际目录调度接入或新增 UI 验收，没有运行性能测试。
 
 离线价格目录内嵌于 core；更新事实时开发者执行 `node scripts/update-offline-prices.mjs --write YYYY-MM-DD openai-text-VERSION`，脚本只读官方公开 Markdown，并强制审查输出差异后再提交。应用启动不使用 Node 或联网抓价格。脚本保留十进制字符串，各档位直接引用官方表，不用折扣推算其他模式。M09g1a 的 store 发布暂未接生产启动，条件匹配 / 正式目录界面继续实施；自动检查使用合成更新、Writer 故障及实际 SQLite 快照，不读取用户日志或账户，不运行性能测试。

@@ -1,5 +1,6 @@
 //! Coverage gaps are independent of confirmed dated consumption.
 use super::Predicate;
+use crate::source_scan::BAD_ENTRY;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{Transaction, params_from_iter, types::Value};
 use token_pulse_core::{
@@ -70,16 +71,22 @@ pub fn coverage(
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
         })?;
     let source = source_selection(filter, "sf.source_id");
-    let pending_files:i64=tx.query_row(&format!("SELECT COUNT(*) FROM source_files sf LEFT JOIN file_generations fg ON fg.file_generation_id=sf.current_generation_id WHERE {} AND (fg.file_generation_id IS NULL OR fg.state<>'current' OR fg.committed_offset<fg.observed_size OR sf.status NOT IN ('present','known'))",source.sql),params_from_iter(source.values),|r|r.get(0))?;
+    let scan_source = source_selection(filter, "e.source_id");
+    let mut values = source.values;
+    values.extend(scan_source.values);
+    // Discovered-but-unregistered files count too. The union counts a known file only once.
+    let pending_files:i64=tx.query_row(&format!("SELECT COUNT(*) FROM (SELECT sf.source_id,'file:'||sf.file_id AS identity FROM source_files sf LEFT JOIN file_generations fg ON fg.file_generation_id=sf.current_generation_id WHERE {} AND (fg.file_generation_id IS NULL OR fg.state<>'current' OR fg.committed_offset<fg.observed_size OR sf.status NOT IN ('present','known')) UNION SELECT e.source_id,CASE WHEN e.file_id IS NULL THEN 'path:'||e.canonical_path ELSE 'file:'||e.file_id END FROM source_scan_files e JOIN source_scan_state ss USING(source_id,scan_revision) JOIN sources s ON s.source_id=e.source_id AND s.root_path=ss.source_root LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE {} AND ({BAD_ENTRY}))",source.sql,scan_source.sql),params_from_iter(values),|r|r.get(0))?;
 
     // A file with unknown time/identity can belong to the selected date/session.
     // Whole-source health gaps must not disappear behind a model/date filter.
-    let source = source_selection(filter, "source_id");
-    let mut statement=tx.prepare(&format!("SELECT source_id,enabled,readability,last_success_at_ms FROM sources WHERE {} ORDER BY source_id COLLATE BINARY",source.sql))?;
+    let source = source_selection(filter, "s.source_id");
+    let mut statement=tx.prepare(&format!("SELECT s.source_id,s.enabled,s.readability,s.last_success_at_ms,ss.state,ss.source_root=s.root_path,ss.discovery_complete,ss.invalidated,ss.issue_code,EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({BAD_ENTRY})) FROM sources s LEFT JOIN source_scan_state ss USING(source_id) WHERE {} ORDER BY s.source_id COLLATE BINARY",source.sql))?;
     let mut rows = statement.query(params_from_iter(source.values))?;
     let mut source_issues = Vec::new();
     let mut known_source_gap = false;
+    let mut selected_sources = 0;
     while let Some(row) = rows.next()? {
+        selected_sources += 1;
         let id: String = row.get(0)?;
         let enabled: bool = row.get(1)?;
         let readability: SourceReadability =
@@ -91,7 +98,33 @@ pub fn coverage(
             "source_paused"
         } else {
             match readability {
-                SourceReadability::Readable => "scan_evidence_missing",
+                SourceReadability::Readable => {
+                    let state: Option<String> = row.get(4)?;
+                    let same_root: Option<bool> = row.get(5)?;
+                    let complete: Option<bool> = row.get(6)?;
+                    let invalidated: Option<bool> = row.get(7)?;
+                    let issue: Option<String> = row.get(8)?;
+                    let pending_entries: bool = row.get(9)?;
+                    if same_root != Some(true) || state.is_none() {
+                        "scan_evidence_missing"
+                    } else if issue.is_some() {
+                        known_source_gap = true;
+                        "source_scan_incomplete"
+                    } else if state.as_deref() == Some("interrupted") {
+                        "source_scan_interrupted"
+                    } else if invalidated == Some(true) {
+                        "source_scan_changed"
+                    } else if complete != Some(true) {
+                        "source_scanning"
+                    } else if pending_entries {
+                        known_source_gap = true;
+                        "source_scan_pending"
+                    } else if state.as_deref() == Some("ready") {
+                        continue;
+                    } else {
+                        "source_scan_incomplete"
+                    }
+                }
                 SourceReadability::AwaitingDirectory => "source_awaiting_directory",
                 SourceReadability::PartiallyReadable => {
                     known_source_gap = true;
@@ -132,11 +165,11 @@ pub fn coverage(
         || !format_issues.is_empty()
     {
         CoverageState::Partial
+    } else if selected_sources > 0 && source_issues.is_empty() {
+        CoverageState::Complete
     } else {
         CoverageState::Unknown
     };
-    // Full scan manifests are not yet emitted by Collector. No current runtime
-    // path can claim Complete from mere successful reads or empty event totals.
     Ok(Coverage {
         state,
         pending_observation_count: DecimalInt::from_nonnegative(pending.into())?,
@@ -229,7 +262,11 @@ pub fn series_coverage(
         || base.source_issues.iter().any(|s| {
             matches!(
                 s.code.as_str(),
-                "source_paused" | "source_unreadable" | "source_partially_readable"
+                "source_paused"
+                    | "source_unreadable"
+                    | "source_partially_readable"
+                    | "source_scan_incomplete"
+                    | "source_scan_pending"
             )
         });
     let p = pending_predicate(filter)?;
@@ -264,6 +301,9 @@ pub fn series_coverage(
             };
             result.state = if common_gap || gap.pending > 0 || gap.unattributed > 0 {
                 CoverageState::Partial
+            } else if base.source_issues.is_empty() && !matches!(base.state, CoverageState::Unknown)
+            {
+                CoverageState::Complete
             } else {
                 CoverageState::Unknown
             };
@@ -280,6 +320,8 @@ pub fn series_coverage(
         })
         .collect()
 }
+#[cfg(test)]
+mod scan_tests;
 #[cfg(test)]
 mod series_tests;
 #[cfg(test)]

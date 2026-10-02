@@ -75,6 +75,39 @@ fn candidate_order_deduplicates_explicit_environment_and_default_paths() {
 }
 #[cfg(windows)]
 #[test]
+fn native_junction_is_not_followed_and_is_reported_as_a_scan_gap() {
+    use std::os::windows::process::CommandExt;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("home");
+    let target = dir.path().join("outside");
+    fs::create_dir_all(root.join("sessions")).unwrap();
+    fs::create_dir(root.join("archived_sessions")).unwrap();
+    fs::create_dir(&target).unwrap();
+    fs::write(target.join("excluded.jsonl"), b"SYNTHETIC_EXCLUDED\n").unwrap();
+    let link = root.join("sessions").join("linked");
+    let output=std::process::Command::new("powershell.exe").args(["-NoProfile","-NonInteractive","-Command","New-Item -ItemType Junction -Path $env:TOKENPULSE_TEST_LINK -Target $env:TOKENPULSE_TEST_TARGET -ErrorAction Stop | Out-Null"])
+        .env("TOKENPULSE_TEST_LINK",&link).env("TOKENPULSE_TEST_TARGET",&target).creation_flags(0x08000000).output().unwrap();
+    assert!(
+        output.status.success(),
+        "junction fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries: Vec<_> = SourceScanner::new(&root, SourceOrigin::Custom)
+        .unwrap()
+        .collect();
+    // Remove the junction itself before assertions / temporary-tree cleanup. Never delete its target.
+    fs::remove_dir(&link).unwrap();
+    assert!(entries.iter().all(|entry| entry.is_err()));
+    assert!(entries.iter().any(|entry| entry.as_ref().is_err_and(
+        |issue| issue.path == link && issue.readability == SourceReadability::Unreadable
+    )));
+    assert_eq!(
+        fs::read(target.join("excluded.jsonl")).unwrap(),
+        b"SYNTHETIC_EXCLUDED\n"
+    );
+}
+#[cfg(windows)]
+#[test]
 fn wsl_requires_explicit_origin_and_local_sources_reject_network_and_device_roots() {
     use std::path::Path;
     let wsl = Path::new(r"\\wsl.localhost\Ubuntu\home\synthetic\.codex");

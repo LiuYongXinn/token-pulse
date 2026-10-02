@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M06e2 沿用现有 Coverage DTO，不新增扫描历史接口。Complete 现在可由真实目录枚举与当前文件读取证明产生；无选中来源或缺失证明保持 Unknown，已知文件 / 格式 / 待归属缺口保持 Partial。source_issues 新增受控原因 `source_scanning`、`source_scan_interrupted`、`source_scan_changed`、`source_scan_incomplete`、`source_scan_pending`；查询在自己的 SQLite 快照验证证据，不能用最近成功时间或 ready 缓存标志替代。每个时间桶保留自身核算缺口，来源级缺口适用于所有桶，Token 分项完整性继续独立表达。DTO / TypeScript / schema 字段未变化。
+
 2026-10-02 范围确认见[实施计划第 7 节](../development/implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。不新增 manage_startup、额外快捷键、WSL / 网络来源或旧格式自动重解析命令；诊断仅保留基本状态、错误与定位。notify、计价 / 重估、账户、任务栏和更新契约继续保留。auto_connect 是软件启动后的账户连接偏好，与已取消的开机启动无关。后文已实现协议记录保留历史事实，不修改既有 schema。
 
 总入口：[详细开发设计](development-design.md)。本文定义目标 `api_version=1`，为接口草案而非现有命令。Rust DTO 是运行时协议权威，生成 TypeScript 类型 / JSON Schema 并提交；禁止两端分别手写不一致的字段定义。

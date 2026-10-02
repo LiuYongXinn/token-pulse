@@ -263,7 +263,12 @@ impl Iterator for SourceScanner {
                         }
                     };
                     if is_reparse(&metadata) {
-                        continue;
+                        // Junction metadata may report neither a directory nor a regular file.
+                        // Never follow it or silently certify the skipped subtree as complete.
+                        return Some(Err(DiscoveryIssue {
+                            path,
+                            readability: SourceReadability::Unreadable,
+                        }));
                     }
                     if metadata.is_dir() {
                         if self.stack.len() >= 64 {

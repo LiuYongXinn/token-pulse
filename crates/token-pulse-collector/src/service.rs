@@ -17,7 +17,7 @@ use token_pulse_core::{
     scheduling::{WorkPriority, WorkQueue},
     sources::*,
 };
-use token_pulse_store::{Database, StoreResult};
+use token_pulse_store::{Database, StoreResult, source_scan::ScanHandle};
 
 pub struct CollectorOptions {
     pub watcher: bool,
@@ -62,6 +62,7 @@ impl CollectorService {
         if options.active_poll.is_zero() || options.manifest_poll.is_zero() {
             return Err(ErrorCode::InvalidQuery.into());
         }
+        database.interrupt_source_scans()?;
         let (sender, receiver) = mpsc::sync_channel(1024);
         let status = Arc::new(Mutex::new(CollectorStatus::default()));
         let thread_status = status.clone();
@@ -78,7 +79,8 @@ impl CollectorService {
                 let overflow = Arc::new(AtomicBool::new(false));
                 let mut queue = WorkQueue::default();
                 let mut known: BTreeMap<String, KnownFile> = BTreeMap::new();
-                let mut scans: VecDeque<(String, SourceScanner)> = VecDeque::new();
+                let mut scans: VecDeque<ScanTask> = VecDeque::new();
+                let mut scan_handles = BTreeMap::<String, ScanHandle>::new();
                 let mut watchers = Vec::<RecommendedWatcher>::new();
                 let mut abilities: BTreeMap<String, SourceCapabilities> = BTreeMap::new();
                 let mut scan_health: BTreeMap<String, SourceReadability> = BTreeMap::new();
@@ -90,18 +92,27 @@ impl CollectorService {
                 let mut retries: BTreeMap<String, (usize, Instant)> = BTreeMap::new();
                 loop {
                     if stop.load(Ordering::Acquire) {
+                        let _ = database.interrupt_source_scans();
                         return;
                     }
                     if desired.load(Ordering::Acquire) != suspended {
                         suspended = desired.load(Ordering::Acquire);
                         watchers.clear();
+                        report(&thread_status, database.interrupt_source_scans());
+                        scan_handles.clear();
+                        scans.clear();
+                        queue = WorkQueue::default();
+                        retries.clear();
                         if !suspended {
-                            scans.clear();
                             reconcile = true;
                         }
                     }
                     if requested.swap(false, Ordering::AcqRel) {
+                        report(&thread_status, database.interrupt_source_scans());
                         scans.clear();
+                        queue = WorkQueue::default();
+                        retries.clear();
+                        scan_handles.clear();
                         reconcile = true;
                     }
                     let mut did_work = false;
@@ -111,12 +122,31 @@ impl CollectorService {
                         };
                         match command {
                             Command::Hint(source, path) => {
+                                if stamp(&path).is_none() {
+                                    reconcile = true;
+                                }
+                                match database.invalidate_source_scan_file(
+                                    source.clone(),
+                                    path.to_string_lossy().into_owned(),
+                                ) {
+                                    Ok(unknown) => reconcile |= unknown,
+                                    Err(error) => {
+                                        set_error(&thread_status, error.code);
+                                        reconcile = true;
+                                    }
+                                }
                                 let key = file_key(&source, &path);
                                 retries.remove(&key);
+                                let seen_revision = if stamp(&path).is_some() {
+                                    scan_handles.get(&source).map(|h| h.revision)
+                                } else {
+                                    None
+                                };
                                 known.entry(key.clone()).or_insert(KnownFile {
                                     source,
                                     path,
                                     stamp: None,
+                                    seen_revision,
                                 });
                                 queue.enqueue(
                                     key,
@@ -128,15 +158,19 @@ impl CollectorService {
                         }
                     }
                     let now = Instant::now();
-                    reconcile |=
-                        overflow.swap(false, Ordering::Relaxed) || queue.take_reconcile_required();
+                    if overflow.swap(false, Ordering::Relaxed) || queue.take_reconcile_required() {
+                        report(&thread_status, database.interrupt_source_scans());
+                        reconcile = true;
+                    }
                     if !suspended
                         && (reconcile || now.duration_since(manifest_at) >= options.manifest_poll)
                         && scans.is_empty()
+                        && queue.is_empty()
                     {
                         reconcile = false;
                         manifest_at = now;
                         scans.clear();
+                        scan_handles.clear();
                         watchers.clear();
                         match database.enabled_sources() {
                             Ok(sources) => {
@@ -198,7 +232,8 @@ impl CollectorService {
                                                             {
                                                                 full.store(true, Ordering::Relaxed);
                                                             }
-                                                        } else if path.is_dir() {
+                                                        } else {
+                                                            // Removed directories have no metadata to query.
                                                             full.store(true, Ordering::Relaxed);
                                                         }
                                                     }
@@ -254,7 +289,25 @@ impl CollectorService {
                                         ) {
                                             set_error(&thread_status, error.code);
                                         }
-                                        scans.push_back((source.source_id, scanner));
+                                        match database.begin_source_scan(
+                                            source.source_id.clone(),
+                                            source.root_path,
+                                            epoch_ms(),
+                                        ) {
+                                            Ok(handle) => {
+                                                scan_handles
+                                                    .insert(source.source_id, handle.clone());
+                                                scans.push_back(ScanTask {
+                                                    handle,
+                                                    root,
+                                                    scanner,
+                                                    issue: None,
+                                                });
+                                            }
+                                            Err(error) => set_error(&thread_status, error.code),
+                                        }
+                                    } else {
+                                        set_error(&thread_status, ErrorCode::SourceUnreadable);
                                     }
                                 }
                             }
@@ -264,18 +317,31 @@ impl CollectorService {
                     if !suspended {
                         // Feed a bounded slice per turn; import never occupies the entire live queue.
                         if queue.len() < 2048 {
-                            if let Some((source, mut scanner)) = scans.pop_front() {
+                            if let Some(mut task) = scans.pop_front() {
+                                let source = task.handle.source_id.clone();
                                 did_work = true;
                                 let mut complete = false;
+                                let mut discovered = Vec::with_capacity(128);
                                 for _ in 0..128 {
-                                    match scanner.next() {
+                                    match task.scanner.next() {
                                         Some(Ok(file)) => {
+                                            let Ok(size) = i64::try_from(file.size) else {
+                                                task.issue = Some(ErrorCode::NumericOverflow);
+                                                continue;
+                                            };
+                                            discovered.push((
+                                                file.path.to_string_lossy().into_owned(),
+                                                size,
+                                            ));
                                             let key = file_key(&source, &file.path);
-                                            known.entry(key.clone()).or_insert(KnownFile {
-                                                source: source.clone(),
-                                                path: file.path,
-                                                stamp: None,
-                                            });
+                                            let entry =
+                                                known.entry(key.clone()).or_insert(KnownFile {
+                                                    source: source.clone(),
+                                                    path: file.path,
+                                                    stamp: None,
+                                                    seen_revision: None,
+                                                });
+                                            entry.seen_revision = Some(task.handle.revision);
                                             queue.enqueue(
                                                 key,
                                                 WorkPriority::Historical,
@@ -284,6 +350,14 @@ impl CollectorService {
                                             );
                                         }
                                         Some(Err(issue)) => {
+                                            let optional_absence = issue.readability
+                                                == SourceReadability::AwaitingDirectory
+                                                && (issue.path == task.root.join("sessions")
+                                                    || issue.path
+                                                        == task.root.join("archived_sessions"));
+                                            if !optional_absence {
+                                                task.issue = Some(ErrorCode::SourceUnreadable);
+                                            }
                                             let health = scan_health
                                                 .entry(source.clone())
                                                 .or_insert(issue.readability);
@@ -311,8 +385,32 @@ impl CollectorService {
                                         }
                                     }
                                 }
-                                if !complete {
-                                    scans.push_back((source, scanner));
+                                if let Err(error) = database
+                                    .record_source_scan_files(task.handle.clone(), discovered)
+                                {
+                                    task.issue = Some(error.code);
+                                    set_error(&thread_status, error.code);
+                                }
+                                if complete {
+                                    let clean = task.issue.is_none();
+                                    match database.finish_source_scan(
+                                        task.handle.clone(),
+                                        task.issue,
+                                        epoch_ms(),
+                                    ) {
+                                        Ok(()) if clean => {
+                                            known.retain(|_, file| {
+                                                file.source != source
+                                                    || file.seen_revision
+                                                        == Some(task.handle.revision)
+                                            });
+                                            retries.retain(|key, _| known.contains_key(key));
+                                        }
+                                        Ok(()) => {}
+                                        Err(error) => set_error(&thread_status, error.code),
+                                    }
+                                } else {
+                                    scans.push_back(task);
                                 }
                             }
                         }
@@ -330,6 +428,17 @@ impl CollectorService {
                                     || current.is_some_and(|(_, time)| time.is_none())
                                     || current != file.stamp
                                 {
+                                    reconcile |= current.is_none();
+                                    match database.invalidate_source_scan_file(
+                                        file.source.clone(),
+                                        file.path.to_string_lossy().into_owned(),
+                                    ) {
+                                        Ok(unknown) => reconcile |= unknown,
+                                        Err(error) => {
+                                            set_error(&thread_status, error.code);
+                                            reconcile = true;
+                                        }
+                                    }
                                     queue.enqueue(
                                         key.clone(),
                                         WorkPriority::Live,
@@ -357,6 +466,31 @@ impl CollectorService {
                                     Ok(receipt) => {
                                         retries.remove(&key);
                                         file.stamp = before;
+                                        let mut scan_error = None;
+                                        if before == stamp(&file.path) {
+                                            if let Some(handle) = scan_handles.get(&file.source) {
+                                                match database.confirm_source_scan_file(
+                                                    handle.clone(),
+                                                    file.path.to_string_lossy().into_owned(),
+                                                    receipt.file_generation_id.clone(),
+                                                    receipt.commit.checkpoint_revision,
+                                                    epoch_ms(),
+                                                ) {
+                                                    Ok(known_path) => reconcile |= !known_path,
+                                                    Err(error) => scan_error = Some(error.code),
+                                                }
+                                            }
+                                        } else {
+                                            report(
+                                                &thread_status,
+                                                database
+                                                    .invalidate_source_scan_file(
+                                                        file.source.clone(),
+                                                        file.path.to_string_lossy().into_owned(),
+                                                    )
+                                                    .map(|_| ()),
+                                            );
+                                        }
                                         let capability =
                                             abilities.entry(file.source.clone()).or_default();
                                         capability.byte_seek = CapabilityState::Available;
@@ -382,7 +516,7 @@ impl CollectorService {
                                         if let Ok(mut s) = thread_status.lock() {
                                             s.commits = s.commits.saturating_add(1);
                                             s.last_commit_at_ms = Some(epoch_ms());
-                                            s.error = None;
+                                            s.error = scan_error;
                                         }
                                     }
                                     Err(error) => {
@@ -485,6 +619,18 @@ struct KnownFile {
     source: String,
     path: PathBuf,
     stamp: Option<(u64, Option<SystemTime>)>,
+    seen_revision: Option<i64>,
+}
+struct ScanTask {
+    handle: ScanHandle,
+    root: PathBuf,
+    scanner: SourceScanner,
+    issue: Option<ErrorCode>,
+}
+fn report(status: &Mutex<CollectorStatus>, result: StoreResult<()>) {
+    if let Err(error) = result {
+        set_error(status, error.code);
+    }
 }
 fn file_key(source: &str, path: &std::path::Path) -> String {
     id("work", &format!("{source}:{}", path.display()))

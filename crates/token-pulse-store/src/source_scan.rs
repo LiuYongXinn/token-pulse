@@ -10,7 +10,7 @@ pub struct ScanHandle {
 }
 
 // Reuse exactly this predicate for publication and snapshot coverage. A ready flag alone is not proof.
-pub(crate) const BAD_ENTRY: &str = "e.file_generation_id IS NULL OR g.file_generation_id IS NULL OR g.state<>'current' OR f.current_generation_id<>e.file_generation_id OR f.source_id<>e.source_id OR f.canonical_path<>e.canonical_path OR g.checkpoint_revision<>e.checkpoint_revision OR g.observed_size<>e.upper_bound OR g.committed_offset<>e.upper_bound";
+pub(crate) const BAD_ENTRY: &str = "e.file_generation_id IS NULL OR g.file_generation_id IS NULL OR g.state<>'current' OR f.current_generation_id IS NOT e.file_generation_id OR f.source_id IS NOT e.source_id OR f.canonical_path IS NOT e.canonical_path OR g.checkpoint_revision IS NOT e.checkpoint_revision OR g.observed_size IS NOT e.upper_bound OR g.committed_offset IS NOT e.upper_bound";
 fn text(value: &str) -> StoreResult<()> {
     if value.is_empty() || value.len() > 32768 || value.chars().any(char::is_control) {
         return Err(ErrorCode::InvalidQuery.into());
