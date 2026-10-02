@@ -15,7 +15,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 tokio = { version = "1", features = ["rt", "time", "sync", "net", "io-util", "macros"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Diagnostics_ToolHelp"] }
 
 [dev-dependencies]
 tempfile = "3"
@@ -26,4 +26,9 @@ test-fixture = []
 [[bin]]
 name = "notify-channel-fixture"
 path = "tests/support/notify-channel-fixture.rs"
+required-features = ["test-fixture"]
+
+[[bin]]
+name = "notify-original-fixture"
+path = "tests/support/notify-original-fixture.rs"
 required-features = ["test-fixture"]

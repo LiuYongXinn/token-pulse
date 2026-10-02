@@ -1,7 +1,8 @@
 use token_pulse_integration::notify_invocation::parse_invocation;
 
 pub fn run_if_requested() -> Option<i32> {
-    let invocation = match parse_invocation(std::env::args_os().skip(1)) {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    let invocation = match parse_invocation(arguments.iter().cloned()) {
         Ok(Some(invocation)) => invocation,
         Ok(None) => return None,
         Err(error) => {
@@ -15,7 +16,7 @@ pub fn run_if_requested() -> Option<i32> {
     #[cfg(windows)]
     {
         use token_pulse_integration::{
-            notify_invocation::windows::wake_only,
+            notify_invocation::windows::dispatch,
             notify_registry::{RegistryError, windows::NotifyRegistry},
         };
         let result = (|| {
@@ -47,21 +48,26 @@ pub fn run_if_requested() -> Option<i32> {
                 directory
             };
             let registry = NotifyRegistry::open(&directory)?;
-            // The original-command runner is not available yet. Never silently drop that choice
-            // or execute an unreviewed replacement; the formal enable UI remains unavailable.
-            if registry.get(invocation.registration_id())?.chain_original() {
-                eprintln!("notify_original_chain_unavailable");
-                return Err(RegistryError::InvalidRecord);
-            }
             let executable = std::env::current_exe().map_err(|_| RegistryError::Io)?;
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .map_err(|_| RegistryError::Io)?;
-            runtime.block_on(wake_only(&registry, &executable, &invocation))
+            runtime.block_on(dispatch(&registry, &executable, &invocation, &arguments[3]))
         })();
         match result {
-            Ok(_) => Some(0),
+            Ok(outcome) => {
+                let mut failed = false;
+                if let Err(error) = outcome.wake {
+                    eprintln!("{error}");
+                    failed = true;
+                }
+                if let Some(Err(error)) = outcome.original {
+                    eprintln!("{error}");
+                    failed = true;
+                }
+                Some(if failed { 1 } else { 0 })
+            }
             Err(error) => {
                 eprintln!("{error}");
                 Some(1)

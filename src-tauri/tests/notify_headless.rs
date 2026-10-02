@@ -23,6 +23,9 @@ fn executable() -> PathBuf {
 }
 impl Scene {
     fn new(exe: &Path, chain: bool) -> Self {
+        Self::with_original(exe, chain, &["original.exe".into()])
+    }
+    fn with_original(exe: &Path, chain: bool, original: &[String]) -> Self {
         let probe_name = format!("native-notify-{}", uuid::Uuid::new_v4().simple());
         let directory = dirs::data_local_dir()
             .unwrap()
@@ -33,9 +36,12 @@ impl Scene {
         let registry = NotifyRegistry::open(&directory).unwrap();
         let cap = NotifyCapability::new();
         let command = ManagedNotifyCommand::new(exe, cap.registration_id()).unwrap();
-        let before = b"notify=['original.exe'] # original\r\nmodel='leave alone'\r\n";
-        let plan = prepare_enable(before, &command).unwrap();
-        let installed = plan.apply_to(before).unwrap();
+        let before = format!(
+            "notify={} # original\r\nmodel='leave alone'\r\n",
+            serde_json::to_string(original).unwrap()
+        );
+        let plan = prepare_enable(before.as_bytes(), &command).unwrap();
+        let installed = plan.apply_to(before.as_bytes()).unwrap();
         std::fs::write(home.path().join("config.toml"), &installed).unwrap();
         let registration = NotifyRegistration::from_prepared(
             home.path(),
@@ -152,7 +158,7 @@ fn production_executable_coalesces_offline_notifications() {
     scene.require_no_gui_initialization_or_source_write();
 }
 #[test]
-fn stale_config_wrong_executable_legacy_choice_and_bad_args_never_launch_gui() {
+fn stale_config_wrong_executable_legacy_failure_and_bad_args_never_launch_gui() {
     let mut inactive = Scene::new(&executable(), false);
     inactive.installed = b"notify=['user-changed']\n".to_vec();
     std::fs::write(
@@ -183,13 +189,52 @@ fn stale_config_wrong_executable_legacy_choice_and_bad_args_never_launch_gui() {
     assert!(
         std::str::from_utf8(&output.stderr)
             .unwrap()
-            .contains("notify_original_chain_unavailable")
+            .contains("notify_original_program_unavailable")
     );
     legacy.require_no_gui_initialization_or_source_write();
+    assert!(
+        legacy
+            .registry
+            .has_pending(legacy.registration.capability().registration_id())
+            .unwrap()
+    );
     let output = inactive.invoke(&["extra-secret"]);
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(
         String::from_utf8(output.stderr).unwrap().trim(),
         "notify_invocation_invalid_arguments"
     );
+}
+#[test]
+fn production_executable_runs_only_explicitly_retained_original_and_still_wakes() {
+    // This shell is the exact synthetic prior notify program, explicitly retained; the product
+    // never inserts a shell for ordinary exe commands. Its fixed command discards final JSON.
+    let shell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+        .join("System32")
+        .join("cmd.exe");
+    let scene = Scene::with_original(
+        &executable(),
+        true,
+        &[
+            shell.to_str().unwrap().into(),
+            "/d".into(),
+            "/s".into(),
+            "/c".into(),
+            "exit 0".into(),
+        ],
+    );
+    let output = scene.invoke(&[]);
+    assert!(
+        output.status.success(),
+        "retained synthetic original failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty() && output.stderr.is_empty());
+    assert!(
+        scene
+            .registry
+            .has_pending(scene.registration.capability().registration_id())
+            .unwrap()
+    );
+    scene.require_no_gui_initialization_or_source_write();
 }

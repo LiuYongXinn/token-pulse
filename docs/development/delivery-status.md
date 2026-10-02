@@ -2,7 +2,13 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-03，M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+## 当前交付状态（2026-10-03，M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+
+M15b4 已接正式 headless 的原 notify 受控执行：只执行不可变登记中明确 chain=true 的原参数，完整通知 JSON 仅作为内存 / OS 的单个尾参数原样转发；不进入采集 DTO、数据库、登记或日志。先核对当前 exe / 配置归属，执行前再次核对，用户已改变 notify 时两条通路均不执行。继承调用者工作目录而不信任 JSON cwd；只解析本地 exe / 有界 PATH，不自动套 shell 或解释批处理。子进程先暂停创建、加入自有非继承 Job，再恢复；等待 5 秒，正常 / 失败 / 超时均关闭 Job 并收集本次子进程，后代不遗留。原程序输出丢弃，错误仅固定码。原命令失败不撤销已经提交的唤醒 / 离线标记，两项结果分别表达。主 owner 不再拒绝 chain=true 的健康登记。
+
+新增原命令合成 / 实际 Win10 检查 5 项，integration 全 42 项、正式 headless exe 4 项及两个包 strict Clippy / release check 通过。正式 `native-smoke.ps1 -Notify` 在隔离合成 Home 中明确保留旧 cmd.exe 的固定 `exit 0` 命令，经真实子进程 / 主 owner / SQLite 的 3→10→11、重复 / 暂停 / 隐藏主窗 / 源只读回归全部通过，退出 0；这不是自动加入 shell 或真实用户通知配置验收。WebView2 注销 1412 提示继续单列。M15b2–b3 中“原命令 runner 未就绪 / chain=true 拒绝”的历史限制由本增量收敛；保真配置文件启用 / 撤销、登记退休、main-only IPC / 设置 UI 仍未交付，真实 Home 未修改，没有性能测试。
+
+本轮按用户允许复测，再运行任务栏 `check_taskbar_wire`：全屏 `Windows.UI.Core.CoreWindow` 覆盖自有前台夹具，输出 FOREGROUND_FIXTURE_REFUSED，测试退出 101，发送输入之前已经拒绝。本次不计通过、不覆盖 M13e7 之前已通过的证据；正式 Tauri 真实输入到窗口、其他任务栏输入与兼容矩阵仍待实际桌面条件。
 
 M15b3 已接正式主进程 notify owner / CollectorService 原子补扫标志与离线 claim 消费，初始化未知侦听数保持 null，错误 / reload / 单 owner / 正常关闭就绪。新增实际 Win10 服务 4 项通过；正式 `native-smoke.ps1 -Notify` 从 headless 子进程经真实主 owner 到 SQLite 的 3→10→11、重复不重计 / 来源暂停、隐藏主窗不激活、源只读 / 配置不变全部通过，退出 0。integration 总 37 项、正式 headless 3 项及 strict Clippy / release check 通过；尚未改真实用户配置，文件启用 / 撤销、原命令 runner 和设置 UI 继续实现。下方 M15b2 的“主进程 / 离线消费待接入”按本增量收敛，完整目标保持进行中。
 
@@ -54,6 +60,20 @@ M06f1 最新增量：schema v8 已落地替换文件候选的隔离暂存区、�
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。历史 M14 / 导出副本及迁移保护 / 专门故障恢复待办已由上述范围修订撤销，既有实现和测试记录保留。
 
 账户服务已注册主窗口专用原生程序 / Home 选择、草稿释放、配置保存、连接 / 断开和额度桶选择命令，设置页接入实际 DTO、显示隐私门禁与精确修订。默认不连接，已保存的明确 auto_connect 偏好接启动钩子；程序变化拒绝，配置保存不替换当前连接。用户已确认复用本地已登录账户，新增登录 / 设备码 / 取消登录不在交付范围。本机已通过选定程序和已有 Home 读到真实 ready / 周额度，未发起新登录。主总览与小窗完整额度内容、真实账户持续刷新 / 身份变化、完整冷进程自动连接及 OS 文件选择对话框交互仍待后续；不以单次读取证明全部账户验收。
+
+## M15b4：受控保留原 notify 与独立唤醒结果
+
+正式 headless 分支调用统一 dispatch，在只读当前配置证明完整安装参数归属后发送最小 wake；有明确 chain_original=true 才读取恢复记录中的原参数并执行。执行前重新读取配置，期间已改动则不调用旧程序。未知事件仍忽略，原载荷必须重新通过有界领域读取且身份与 invocation 相同；raw JSON 不加到 NotifyInvocation 或其他可持久类型，错误不回显原命令 / 正文 / 路径。原程序沿用其既有完整单参数通知内容，不把正文提取成 TokenPulse 数据；不选择 JSON 的 cwd / 程序或任何其他命令字段。
+
+程序允许本地绝对 exe、调用进程目录下相对路径或最多 128 个本地绝对 PATH 目录的 exe 查找。裸名称只补 `.exe`，不使用 PATHEXT 隐式 cmd / bat / 脚本解释；原配置若就是明确保留的 cmd.exe / 解释器，则按其原数组调用。无法执行时返回有限不可用错误，不临时换用别的包装命令。规范路径大小写与 Win32 卷 / 文件身份检查拒绝当前 dispatcher 及其硬链接别名；程序文件只读句柄阻止普通写入 / 替换直到执行结束。继承实际调用者工作目录 / 环境，不从 payload 修改 Home 或 cwd。
+
+原进程 CREATE_SUSPENDED / CREATE_NO_WINDOW、null 三个标准流，在运行任何原代码前设置唯一非继承 Job 的 KILL_ON_JOB_CLOSE 并加入，再仅恢复本次 PID 唯一主线程。功能等待 5 秒，退出 / 错误 / 超时均关闭自有 Job，停止与收集子进程有界；这属于通知进程生命周期，不新增已取消的灾难恢复。成功、程序不存在、启动失败、非零退出与超时均有限表达。wake 和原程序结果独立，先提交的在线提示 / 零字节标记不因后续原程序失败而撤销；本地唤醒失败但配置归属仍明确时，也不静默吞掉已经选择保留的旧程序。
+
+自动检查新增 5 项：feature-only 独立 exe 接收含空格 / 引号 / 中文的原参数和确切一个完整合成 JSON、131072 字节输出被丢弃且 wake DTO 只有允许标识；程序失败保留离线标记与 chain=false 从不执行；用户修改配置 / 不同 payload 身份 / 当前 exe 大小写与同盘硬链接 / 隐式 cmd 文件拒绝；5 秒超时结束本次实际子进程树并保留 marker；相对程序基于继承目录、chain=true 登记得到真实监听。首轮相对路径检查错误假定 Cargo 测试 cwd 为仓库根，改为从实际工作目录构造相对路径；硬链接夹具最初位于另一磁盘，改为同盘临时目录。两者是夹具错误，修正后全 integration 42 项通过。新增 fixture 只供 test-fixture，不是生产安装资源，不保存通知正文。
+
+正式 exe 检查从 3 项扩展为 4 项：在线最小通道 / 离线合并继续通过，明确原程序不存在时有限错误但 marker 保留，显式合成旧 cmd.exe / 固定 exit 0 成功同时补扫，不产生 SQLite / Tauri 初始化。actual `native-smoke.ps1 -Notify` 使用正式主程序 / headless / owner / CollectorService / SQLite，watcher 关闭及一小时轮询，明确保留合成旧程序后仍完成 3→10→11 / 重复不计 / 暂停恢复 / 主窗隐藏 / 原日志只读 / 配置不变，NATIVE_NOTIFY_COLLECTOR_OK、退出 0。本机 Win10 19045；原有 WebView2 unregister 1412 提示保留，尚未发布环境复核。两个包 all-targets Clippy warnings denied、fmt / diff、desktop release check 通过。没有真实用户 Codex 回合 / 配置启用操作、UI 视觉或性能测试。
+
+后续继续保真文件应用 / 撤销与登记退休，再接 main-only IPC / 差异预览及正式设置；此前各阶段的 runner 不可用描述按本增量收敛，不据此宣称完整 notify 或全应用交付。
 
 ## M15b3：主进程 notify owner、离线消费与实际采集贯通
 

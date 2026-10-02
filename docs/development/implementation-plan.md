@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15b4（2026-10-03）已接明确保留的原 notify 到正式 headless：当前配置 / exe 所有权与执行前复核、本地 exe 解析 / 无隐式 shell、自有暂停进程 / Job / 5 秒等待、输出丢弃及唤醒与原程序独立结果。新增 5 项原程序检查、integration 总 42 / 正式 exe 4 项通过；保留合成原命令后的正式 Win10 `-Notify` 采集 3→10→11 与暂停 / 重复 / 隐藏窗口 / 源只读通过。strict Clippy / fmt / release check 通过，1412 诊断仍记录。真实配置没有修改；文件启用 / 撤销、登记退休、main-only IPC / UI 接下来继续。下方 chain=true 仍拒绝的历史说明按此收敛，无性能测试。任务栏本轮复测被全屏系统 CoreWindow 覆盖，在发送输入前拒绝，不记通过。详见[交付记录](delivery-status.md#m15b4受控保留原-notify-与独立唤醒结果)。
+
 M15b3（2026-10-03）已贯通主 notify owner / 合并补扫 / 离线消费与采集器，新增服务 4 项、integration 总 37 / headless 3 项与 strict Clippy / release check 通过。正式 Win10 `native-smoke.ps1 -Notify` 的 offline 3、online 10、暂停后恢复 11、重复不计 / 隐藏主窗不激活 / 源只读与配置不变通过，退出 0。初始化未知计数保留 null，坏记录隔离 / reload / 单 owner / 正常关闭验证。未改真实配置、无性能测试；保真文件操作、原通知 runner、正式 IPC / UI 接下来继续。详见[交付记录](delivery-status.md#m15b3主进程-notify-owner离线消费与实际采集贯通)。
 
 M15b2 已接正式 exe 的 headless wake-only 分支，先于 Tauri / 单实例；核对 exe / 当前 notify 归属、只读配置有界且拒绝链接，在线发送或离线合并标记。新增 invocation 4 项 / 正式 exe Win10 跨进程 3 项通过，integration 总 33 项与两包 strict Clippy / fmt / release check 通过。原命令链、主进程补扫 / 标记消费、配置文件启用 / 撤销与正式 UI 继续推进；当前 chain=true 明确拒绝，真实用户配置不变，没有性能测试。详见[交付记录](delivery-status.md#m15b2正式-exe-的只读-headless-唤醒入口)。

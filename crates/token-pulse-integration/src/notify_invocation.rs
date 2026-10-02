@@ -69,6 +69,7 @@ pub mod windows {
     use crate::{
         notify_channel::windows::send_hint,
         notify_config::{owns_current_notify, windows::read_config},
+        notify_original::{OriginalCommandError, run_original},
         notify_registry::{RegistryError, windows::NotifyRegistry},
     };
     use std::path::Path;
@@ -77,6 +78,62 @@ pub mod windows {
         Ignored,
         Delivered,
         Pending,
+    }
+    pub struct DispatchOutcome {
+        pub wake: Result<WakeOutcome, RegistryError>,
+        /// None means no explicitly retained original command was executed.
+        pub original: Option<Result<(), OriginalCommandError>>,
+    }
+    /// Own-command dispatch never trusts raw arguments from UI or notify payload fields.
+    /// Provider JSON exists only in the caller's OS argument; it is not added to the minimal DTO.
+    pub async fn dispatch(
+        registry: &NotifyRegistry,
+        current_executable: &Path,
+        invocation: &NotifyInvocation,
+        payload: &std::ffi::OsStr,
+    ) -> Result<DispatchOutcome, RegistryError> {
+        let checked = super::parse_invocation([
+            "--tokenpulse-notify".into(),
+            "--integration".into(),
+            invocation.registration_id().into(),
+            payload.to_owned(),
+        ])
+        .map_err(|_| RegistryError::InvalidRecord)?
+        .ok_or(RegistryError::InvalidRecord)?;
+        if checked.hint() != invocation.hint() {
+            return Err(RegistryError::InvalidRecord);
+        }
+        if invocation.hint().is_none() {
+            return Ok(DispatchOutcome {
+                wake: Ok(WakeOutcome::Ignored),
+                original: None,
+            });
+        }
+        let registered = registry.get(invocation.registration_id())?;
+        if Path::new(&registered.restore_record().installed_arguments()[0]) != current_executable {
+            return Err(RegistryError::Unauthorized);
+        }
+        let owned = || {
+            let config =
+                read_config(registered.codex_home()).map_err(|_| RegistryError::InvalidRecord)?;
+            owns_current_notify(&config, registered.restore_record())
+                .map_err(|_| RegistryError::InvalidRecord)
+        };
+        if !owned()? {
+            return Ok(DispatchOutcome {
+                wake: Ok(WakeOutcome::Ignored),
+                original: None,
+            });
+        }
+        // Either result remains observable: a local channel/marker failure must not silently
+        // suppress an explicitly retained legacy command, nor can legacy failure lose our wake.
+        let wake = wake_only(registry, current_executable, invocation).await;
+        let original = if registered.chain_original() && owned()? {
+            Some(run_original(&registered, current_executable, payload))
+        } else {
+            None
+        };
+        Ok(DispatchOutcome { wake, original })
     }
     /// Wake routing only; original-command execution is a separate explicitly authorized step.
     pub async fn wake_only(

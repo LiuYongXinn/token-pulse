@@ -24,7 +24,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_NOTIFY_COLLECTOR_OK: offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected, config unchanged"
+                "NATIVE_NOTIFY_COLLECTOR_OK: explicitly retained synthetic original, offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected, config unchanged"
             ),
             Err(error) => eprintln!("NATIVE_NOTIFY_COLLECTOR_FAILED: {error}"),
         }
@@ -146,12 +146,29 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         cap.registration_id(),
     )
     .map_err(|_| "owned command")?;
-    let before = b"# synthetic fixture\r\nmodel='unpriced-fixture'\r\n";
-    let plan = prepare_enable(before, &command).map_err(|_| "notify plan")?;
-    let config = plan.apply_to(before).map_err(|_| "notify fixture config")?;
+    // Exact prior command is explicit in this synthetic fixture, never silently inserted.
+    let original =
+        std::path::PathBuf::from(std::env::var_os("SystemRoot").ok_or("system directory")?)
+            .join("System32")
+            .join("cmd.exe");
+    let original = [
+        original.to_str().ok_or("original encoding")?,
+        "/d",
+        "/s",
+        "/c",
+        "exit 0",
+    ];
+    let before = format!(
+        "# synthetic fixture\r\nnotify={}\r\nmodel='unpriced-fixture'\r\n",
+        serde_json::to_string(&original).map_err(|_| "original encoding")?
+    );
+    let plan = prepare_enable(before.as_bytes(), &command).map_err(|_| "notify plan")?;
+    let config = plan
+        .apply_to(before.as_bytes())
+        .map_err(|_| "notify fixture config")?;
     fs::write(root.join("config.toml"), &config).map_err(|_| "fixture config write")?;
     let registration =
-        NotifyRegistration::from_prepared(&root, cap, plan.restore_record().clone(), false)
+        NotifyRegistration::from_prepared(&root, cap, plan.restore_record().clone(), true)
             .map_err(|_| "fixture registration")?;
     registry
         .create(&registration)

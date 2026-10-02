@@ -20,7 +20,6 @@ pub enum NotifyServiceError {
     Registry(RegistryError),
     ConfigUnreadable,
     WrongExecutable,
-    OriginalChainUnavailable,
     ChannelUnavailable,
     WorkerUnavailable,
 }
@@ -245,9 +244,6 @@ fn active(record: &NotifyRegistration, executable: &Path) -> Result<bool, Notify
         read_config(record.codex_home()).map_err(|_| NotifyServiceError::ConfigUnreadable)?;
     let owned = owns_current_notify(&bytes, record.restore_record())
         .map_err(|_| NotifyServiceError::ConfigUnreadable)?;
-    if owned && record.chain_original() {
-        return Err(NotifyServiceError::OriginalChainUnavailable);
-    }
     Ok(owned)
 }
 fn publish(
