@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M15b1：`cargo test -p token-pulse-integration --features test-fixture` 共 20 项通过，其中 M15a2 配置 10 项、最小唤醒协议 4 项，另 5 项真正创建 Win10 管道并检查 DACL / 去重 / 异常连接 / 超时 / 停止重开 / 旧客户端句柄，以及 1 项启动独立 feature-only 子进程发送。`cargo clippy -p token-pulse-integration --all-targets --features test-fixture -- -D warnings` / fmt 通过。测试 capability 经 stdin 传递，不从终端输出认证 nonce，也不运行真实 Codex 回合或改 config.toml。300 / 500 ms 等待检查用于协议功能，未做性能测试。当前是独立通道库，还没有生产 exe headless / 采集器 / 持久登记 / 离线标记 / 正式 UI。详见[交付记录](delivery-status.md#m15b1当前用户专属的有界-windows-唤醒通道)。
+
 M15a2 定向检查：`cargo test -p token-pulse-integration` 10 项纯配置预期通过；`cargo clippy -p token-pulse-integration --all-targets -- -D warnings` 检查新模块全部目标。配置计划不直接访问文件，测试不读取真实 Codex Home / auth.json。原数组语法 / 其他设置 / BOM / 行尾恢复、配置摘要冲突和归属冲突均明确断言；持久记录仅保留 notify，加载拒绝损坏与注入。当前没有正式启用入口，后续文件操作应在隔离 Home 验证，不能将这些纯检查记录为原生修改或整套 notify 验收。详见[交付记录](delivery-status.md#m15a2notify-配置保真计划与受控撤销)。
 
 M15a1 的定向命令：`cargo test -p token-pulse-core --test notify`，5 项纯合成载荷与独立预期通过；`cargo clippy -p token-pulse-core --all-targets -- -D warnings`、`cargo fmt --all -- --check` 和 `npm run contracts:check` 检查编译 / 格式 / 契约漂移。本增量只有允许字段读取器，尚无可启用的 notify 设置或 headless 通道，不修改真实 config.toml，不运行真实通知 / 性能验收。后续保真配置 / 撤销与链式执行应在隔离 Home 验证，避免覆盖用户后续改动。

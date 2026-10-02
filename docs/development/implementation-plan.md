@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15b1 已实现有界当前用户 notify 管道库，协议 4 项、实际 Win10 管道 5 项 / 独立子进程 1 项，连同配置 10 项共 20 项通过，strict Clippy all-targets / test-fixture / fmt 通过。连续连接旧 IO 状态与 ACK 关闭竞态已收敛；超时确认未知保留，提示只触发补扫。正式 exe headless / 采集回调、持久登记 / 离线标记、配置文件操作与 UI 接下来贯通，真实用户配置没有改变；未进行性能测试。详见[交付记录](delivery-status.md#m15b1当前用户专属的有界-windows-唤醒通道)。
+
 M15a2 已落实 notify 配置的纯保真计划 / 摘要条件应用 / 归属条件撤销与受限恢复记录。10 项独立配置预期、integration strict Clippy all-targets / fmt 通过，没有写真实用户配置或执行原命令；文件操作、持久登记、headless / 唤醒与正式 UI 继续推进。详见[交付记录](delivery-status.md#m15a2notify-配置保真计划与受控撤销)。本增量不改变已确认范围，不运行性能测试。
 
 M15a1 已开始 notify：纯领域载荷读取只保留 thread-id / nullable turn-id，剔除正文 / cwd / 认证、限制输入与标识、必要字段重复 / 错误拒绝、未知事件无提示，不创建消费 / 费用。新增合成 5 项及 core strict Clippy / fmt / 契约漂移检查通过；配置保真编辑 / 原 notify 保留与撤销、headless / 唤醒通道和正式 UI 接下来继续。真实用户配置没有改变。详见[交付记录](delivery-status.md#m15a1notify-载荷的纯领域读取边界)。
