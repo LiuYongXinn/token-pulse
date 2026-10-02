@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M15a2 定向检查：`cargo test -p token-pulse-integration` 10 项纯配置预期通过；`cargo clippy -p token-pulse-integration --all-targets -- -D warnings` 检查新模块全部目标。配置计划不直接访问文件，测试不读取真实 Codex Home / auth.json。原数组语法 / 其他设置 / BOM / 行尾恢复、配置摘要冲突和归属冲突均明确断言；持久记录仅保留 notify，加载拒绝损坏与注入。当前没有正式启用入口，后续文件操作应在隔离 Home 验证，不能将这些纯检查记录为原生修改或整套 notify 验收。详见[交付记录](delivery-status.md#m15a2notify-配置保真计划与受控撤销)。
+
 M15a1 的定向命令：`cargo test -p token-pulse-core --test notify`，5 项纯合成载荷与独立预期通过；`cargo clippy -p token-pulse-core --all-targets -- -D warnings`、`cargo fmt --all -- --check` 和 `npm run contracts:check` 检查编译 / 格式 / 契约漂移。本增量只有允许字段读取器，尚无可启用的 notify 设置或 headless 通道，不修改真实 config.toml，不运行真实通知 / 性能验收。后续保真配置 / 撤销与链式执行应在隔离 Home 验证，避免覆盖用户后续改动。
 
 M13e7 更新显式 taskbar wire 场景。先构建 `cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host`，再运行 `cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskbar-wire-development-check`。场景会打开一个明确标题的自有前台测试窗口，以真实 SendInput 激活，核对读数宿主 PID / 命中后实际悬停 / 单击 / 双击，结束后关闭测试窗口并恢复光标 / 线程 DPI / 任务栏矩形。须让桌面可交互，不能有系统面板遮挡或已有按键；失败拒绝向其他窗口发送输入。它不是默认 CI / 性能测试。

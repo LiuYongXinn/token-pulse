@@ -1,5 +1,5 @@
 [workspace]
-members = ["src-tauri", "crates/token-pulse-core", "crates/token-pulse-store", "crates/token-pulse-collector", "crates/token-pulse-quota", "crates/token-pulse-taskbar"]
+members = ["src-tauri", "crates/token-pulse-core", "crates/token-pulse-store", "crates/token-pulse-collector", "crates/token-pulse-quota", "crates/token-pulse-taskbar", "crates/token-pulse-integration"]
 resolver = "2"
 
 [workspace.package]
@@ -16,6 +16,7 @@ token-pulse-store = { path = "crates/token-pulse-store" }
 token-pulse-collector = { path = "crates/token-pulse-collector" }
 token-pulse-quota = { path = "crates/token-pulse-quota" }
 token-pulse-taskbar = { path = "crates/token-pulse-taskbar" }
+token-pulse-integration = { path = "crates/token-pulse-integration" }
 
 [profile.release]
 lto = "thin"

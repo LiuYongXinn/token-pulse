@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15a2 已落实 notify 配置的纯保真计划 / 摘要条件应用 / 归属条件撤销与受限恢复记录。10 项独立配置预期、integration strict Clippy all-targets / fmt 通过，没有写真实用户配置或执行原命令；文件操作、持久登记、headless / 唤醒与正式 UI 继续推进。详见[交付记录](delivery-status.md#m15a2notify-配置保真计划与受控撤销)。本增量不改变已确认范围，不运行性能测试。
+
 M15a1 已开始 notify：纯领域载荷读取只保留 thread-id / nullable turn-id，剔除正文 / cwd / 认证、限制输入与标识、必要字段重复 / 错误拒绝、未知事件无提示，不创建消费 / 费用。新增合成 5 项及 core strict Clippy / fmt / 契约漂移检查通过；配置保真编辑 / 原 notify 保留与撤销、headless / 唤醒通道和正式 UI 接下来继续。真实用户配置没有改变。详见[交付记录](delivery-status.md#m15a1notify-载荷的纯领域读取边界)。
 
 M13e7 已补真实任务栏输入：显式 wire 的独立非空前台 / 失活计数，实际 300 ms hover 打开详情及普通刷新不抢焦点、真实单击 / 双击正确动作、配置 / 隐私清除旧意图与全部原几何恢复。按设计将被动焦点与显式点击开窗分开，拒绝 0→0 假通过；正式宿主实现保持原样。Win10 19045 / 150% DPI 最终退出 0，strict Clippy all-targets / fmt 通过；正式 Tauri 真实点击开窗、其他输入 / Explorer / Win11 / 物理多屏仍继续验收。详见[交付记录](delivery-status.md#m13e7真实任务栏悬停与点击的独立前台验收)。
