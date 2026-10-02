@@ -113,7 +113,7 @@ fn v2_upgrade_initializes_only_rebuildable_versions_and_backs_up_the_actual_sche
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(copied_path.with_extension("json")).unwrap()).unwrap();
     assert_eq!(manifest["source_schema_version"], 2);
-    assert_eq!(manifest["target_schema_version"], 3);
+    assert_eq!(manifest["target_schema_version"], SCHEMA_VERSION);
 }
 
 #[test]

@@ -11,6 +11,7 @@ use token_pulse_core::{
 };
 
 const COLUMNS: &str = "rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms";
+mod offline;
 fn decimal(value: i64) -> StoreResult<DecimalInt> {
     DecimalInt::from_nonnegative(value.into()).map_err(|_| ErrorCode::DbCorrupt.into())
 }

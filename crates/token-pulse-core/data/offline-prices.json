@@ -1,0 +1,1731 @@
+{
+  "format_version": 1,
+  "catalog_id": "openai-text-2026-10-02",
+  "verified_at_ms": 1790899200000,
+  "provider": "openai",
+  "currency": "USD",
+  "short_context_max_input": 272000,
+  "reference_basis": "global_api_reference",
+  "entries": [
+    {
+      "model_exact": "babbage-002",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.20",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "babbage-002",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.40",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "chat-latest",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "codex-mini-latest",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.5",
+      "cached_per_million": "0.375",
+      "cache_write_per_million": null,
+      "output_per_million": "6",
+      "reference": "https://developers.openai.com/api/docs/models/codex-mini-latest"
+    },
+    {
+      "model_exact": "davinci-002",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "1.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "davinci-002",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "2.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo-0125",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.25",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.75",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo-0125",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "1.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo-1106",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo-1106",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo-instruct",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-3.5-turbo",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "1.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4-0613",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4-0613",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "30.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "60.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4-turbo-2024-04-09",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "5.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4-turbo-2024-04-09",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "10.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.20",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.80",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-mini",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "0.70",
+      "cached_per_million": "0.175",
+      "cache_write_per_million": null,
+      "output_per_million": "2.80",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.40",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": null,
+      "output_per_million": "1.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-nano",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.05",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-nano",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.05",
+      "cache_write_per_million": null,
+      "output_per_million": "0.80",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1-nano",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.025",
+      "cache_write_per_million": null,
+      "output_per_million": "0.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "4.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "3.50",
+      "cached_per_million": "0.875",
+      "cache_write_per_million": null,
+      "output_per_million": "14.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4.1",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "8.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-2024-05-13",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "2.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-2024-05-13",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "8.75",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "26.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-2024-05-13",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "5.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.075",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "0.30",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-mini",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "0.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "1.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.15",
+      "cached_per_million": "0.075",
+      "cache_write_per_million": null,
+      "output_per_million": "0.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "4.25",
+      "cached_per_million": "2.125",
+      "cache_write_per_million": null,
+      "output_per_million": "17.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-4o",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "2.50",
+      "cached_per_million": "1.25",
+      "cache_write_per_million": null,
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-codex",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5-codex"
+    },
+    {
+      "model_exact": "gpt-5-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.125",
+      "cached_per_million": "0.0125",
+      "cache_write_per_million": null,
+      "output_per_million": "1.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-mini",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "0.45",
+      "cached_per_million": "0.045",
+      "cache_write_per_million": null,
+      "output_per_million": "3.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-mini",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.125",
+      "cached_per_million": "0.0125",
+      "cache_write_per_million": null,
+      "output_per_million": "1.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.25",
+      "cached_per_million": "0.025",
+      "cache_write_per_million": null,
+      "output_per_million": "2.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-nano",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.025",
+      "cached_per_million": "0.0025",
+      "cache_write_per_million": null,
+      "output_per_million": "0.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-nano",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.025",
+      "cached_per_million": "0.0025",
+      "cache_write_per_million": null,
+      "output_per_million": "0.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-nano",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.05",
+      "cached_per_million": "0.005",
+      "cache_write_per_million": null,
+      "output_per_million": "0.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-pro",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "7.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "60.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-pro",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "120.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5-search-api",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.1-codex-max",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+    },
+    {
+      "model_exact": "gpt-5.1-codex-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.25",
+      "cached_per_million": "0.025",
+      "cache_write_per_million": null,
+      "output_per_million": "2",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+    },
+    {
+      "model_exact": "gpt-5.1-codex",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.1-codex"
+    },
+    {
+      "model_exact": "gpt-5.1",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.625",
+      "cached_per_million": "0.0625",
+      "cache_write_per_million": null,
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.1",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "20.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.1",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.625",
+      "cached_per_million": "0.0625",
+      "cache_write_per_million": null,
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.1",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2-codex",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.75",
+      "cached_per_million": "0.175",
+      "cache_write_per_million": null,
+      "output_per_million": "14",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+    },
+    {
+      "model_exact": "gpt-5.2-pro",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "10.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "84.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2-pro",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "21.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "168.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.875",
+      "cached_per_million": "0.0875",
+      "cache_write_per_million": null,
+      "output_per_million": "7.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "3.50",
+      "cached_per_million": "0.35",
+      "cache_write_per_million": null,
+      "output_per_million": "28.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.875",
+      "cached_per_million": "0.0875",
+      "cache_write_per_million": null,
+      "output_per_million": "7.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.2",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.75",
+      "cached_per_million": "0.175",
+      "cache_write_per_million": null,
+      "output_per_million": "14.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.3-codex",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "3.50",
+      "cached_per_million": "0.35",
+      "cache_write_per_million": null,
+      "output_per_million": "28.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.3-codex",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.75",
+      "cached_per_million": "0.175",
+      "cache_write_per_million": null,
+      "output_per_million": "14",
+      "reference": "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+    },
+    {
+      "model_exact": "gpt-5.4-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.375",
+      "cached_per_million": "0.0375",
+      "cache_write_per_million": null,
+      "output_per_million": "2.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-mini",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "1.50",
+      "cached_per_million": "0.15",
+      "cache_write_per_million": null,
+      "output_per_million": "9.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-mini",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.375",
+      "cached_per_million": "0.0375",
+      "cache_write_per_million": null,
+      "output_per_million": "2.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.75",
+      "cached_per_million": "0.075",
+      "cache_write_per_million": null,
+      "output_per_million": "4.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-nano",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": null,
+      "output_per_million": "0.625",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-nano",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": null,
+      "output_per_million": "0.625",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-nano",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": null,
+      "output_per_million": "1.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "30.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "135.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "90.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "30.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "135.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "90.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "60.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "270.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4-pro",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "30.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "180.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "11.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.13",
+      "cache_write_per_million": null,
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "11.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.13",
+      "cache_write_per_million": null,
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "22.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.4",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5-cyber",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "12.50",
+      "cached_per_million": "1.25",
+      "cache_write_per_million": null,
+      "output_per_million": "75.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5-pro",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "90.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5-pro",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "15.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "90.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5-pro",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "60.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "270.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5-pro",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "30.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "180.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "22.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "12.50",
+      "cached_per_million": "1.25",
+      "cache_write_per_million": null,
+      "output_per_million": "75.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "22.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "10.00",
+      "cached_per_million": "1.00",
+      "cache_write_per_million": null,
+      "output_per_million": "45.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.5",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-cyber",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "12.50",
+      "cached_per_million": "1.25",
+      "cache_write_per_million": "15.625",
+      "output_per_million": "75.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": "0.25",
+      "output_per_million": "0.90",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": "0.125",
+      "output_per_million": "0.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "0.80",
+      "cached_per_million": "0.08",
+      "cache_write_per_million": "1.00",
+      "output_per_million": "3.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "0.40",
+      "cached_per_million": "0.04",
+      "cache_write_per_million": "0.50",
+      "output_per_million": "2.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": "0.25",
+      "output_per_million": "0.90",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": "0.125",
+      "output_per_million": "0.60",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "0.40",
+      "cached_per_million": "0.04",
+      "cache_write_per_million": "0.50",
+      "output_per_million": "1.80",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-luna",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": "0.25",
+      "output_per_million": "1.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "16.00",
+      "cached_per_million": "1.60",
+      "cache_write_per_million": "20.00",
+      "output_per_million": "60.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "8.00",
+      "cached_per_million": "0.80",
+      "cache_write_per_million": "10.00",
+      "output_per_million": "40.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "8.00",
+      "cached_per_million": "0.80",
+      "cache_write_per_million": "10.00",
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-sol",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "20.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "9.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "6.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "8.00",
+      "cached_per_million": "0.80",
+      "cache_write_per_million": "10.00",
+      "output_per_million": "36.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "24.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "9.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "6.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "18.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5.6-terra",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "12.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.625",
+      "cached_per_million": "0.0625",
+      "cache_write_per_million": null,
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "2.50",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "20.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.625",
+      "cached_per_million": "0.0625",
+      "cache_write_per_million": null,
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-5",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.25",
+      "cached_per_million": "0.125",
+      "cache_write_per_million": null,
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "10.00",
+      "cached_per_million": "1.00",
+      "cache_write_per_million": "12.50",
+      "output_per_million": "37.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": "6.25",
+      "output_per_million": "25.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "40.00",
+      "cached_per_million": "4.00",
+      "cache_write_per_million": "50.00",
+      "output_per_million": "150.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "20.00",
+      "cached_per_million": "2.00",
+      "cache_write_per_million": "25.00",
+      "output_per_million": "100.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "10.00",
+      "cached_per_million": "1.00",
+      "cache_write_per_million": "12.50",
+      "output_per_million": "37.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "5.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": "6.25",
+      "output_per_million": "25.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "20.00",
+      "cached_per_million": "2.00",
+      "cache_write_per_million": "25.00",
+      "output_per_million": "75.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "10.00",
+      "cached_per_million": "1.00",
+      "cache_write_per_million": "12.50",
+      "output_per_million": "50.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "ultrafast",
+      "context": "long",
+      "input_per_million": "120.00",
+      "cached_per_million": "12.00",
+      "cache_write_per_million": "150.00",
+      "output_per_million": "450.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-astra",
+      "tier": "ultrafast",
+      "context": "short",
+      "input_per_million": "60.00",
+      "cached_per_million": "6.00",
+      "cache_write_per_million": "75.00",
+      "output_per_million": "300.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": "0.125",
+      "output_per_million": "0.375",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "0.05",
+      "cached_per_million": "0.005",
+      "cache_write_per_million": "0.0625",
+      "output_per_million": "0.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "0.40",
+      "cached_per_million": "0.04",
+      "cache_write_per_million": "0.50",
+      "output_per_million": "1.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": "0.25",
+      "output_per_million": "1.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": "0.125",
+      "output_per_million": "0.375",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "0.05",
+      "cached_per_million": "0.005",
+      "cache_write_per_million": "0.0625",
+      "output_per_million": "0.25",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "0.20",
+      "cached_per_million": "0.02",
+      "cache_write_per_million": "0.25",
+      "output_per_million": "0.75",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-luna",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "0.10",
+      "cached_per_million": "0.01",
+      "cache_write_per_million": "0.125",
+      "output_per_million": "0.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "8.00",
+      "cached_per_million": "0.80",
+      "cache_write_per_million": "10.00",
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "20.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6-sol",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "batch",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "batch",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.05",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "fast",
+      "context": "long",
+      "input_per_million": "8.00",
+      "cached_per_million": "0.40",
+      "cache_write_per_million": "10.00",
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "fast",
+      "context": "short",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "20.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "flex",
+      "context": "long",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "7.50",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "flex",
+      "context": "short",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.05",
+      "cache_write_per_million": "1.25",
+      "output_per_million": "5.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "standard",
+      "context": "long",
+      "input_per_million": "4.00",
+      "cached_per_million": "0.20",
+      "cache_write_per_million": "5.00",
+      "output_per_million": "15.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "gpt-6.1-sol",
+      "tier": "standard",
+      "context": "short",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.10",
+      "cache_write_per_million": "2.50",
+      "output_per_million": "10.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o1-pro",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "75.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "300.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o1-pro",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "150.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "600.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o1",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "7.50",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "30.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o1",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "15.00",
+      "cached_per_million": "7.50",
+      "cache_write_per_million": null,
+      "output_per_million": "60.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.55",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.10",
+      "cached_per_million": "0.55",
+      "cache_write_per_million": null,
+      "output_per_million": "4.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3-pro",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "10.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "40.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3-pro",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "20.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "80.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "4.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "3.50",
+      "cached_per_million": "0.875",
+      "cache_write_per_million": null,
+      "output_per_million": "14.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "1.00",
+      "cached_per_million": "0.25",
+      "cache_write_per_million": null,
+      "output_per_million": "4.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o3",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "8.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o4-mini",
+      "tier": "batch",
+      "context": "all",
+      "input_per_million": "0.55",
+      "cached_per_million": null,
+      "cache_write_per_million": null,
+      "output_per_million": "2.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o4-mini",
+      "tier": "fast",
+      "context": "all",
+      "input_per_million": "2.00",
+      "cached_per_million": "0.50",
+      "cache_write_per_million": null,
+      "output_per_million": "8.00",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o4-mini",
+      "tier": "flex",
+      "context": "all",
+      "input_per_million": "0.55",
+      "cached_per_million": "0.138",
+      "cache_write_per_million": null,
+      "output_per_million": "2.20",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "model_exact": "o4-mini",
+      "tier": "standard",
+      "context": "all",
+      "input_per_million": "1.10",
+      "cached_per_million": "0.275",
+      "cache_write_per_million": null,
+      "output_per_million": "4.40",
+      "reference": "https://developers.openai.com/api/docs/pricing"
+    }
+  ]
+}

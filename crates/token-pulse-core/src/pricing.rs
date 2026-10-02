@@ -15,6 +15,7 @@ pub const MAX_RATE_ATOMS: i128 = 1_000_000_000_000_000;
 
 mod summary;
 pub use summary::PricingAccumulator;
+pub mod offline;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]

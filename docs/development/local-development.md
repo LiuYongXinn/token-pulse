@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+离线价格目录内嵌于 core；更新事实时开发者执行 `node scripts/update-offline-prices.mjs --write YYYY-MM-DD openai-text-VERSION`，脚本只读官方公开 Markdown，并强制审查输出差异后再提交。应用启动不使用 Node 或联网抓价格。脚本保留十进制字符串，各档位直接引用官方表，不用折扣推算其他模式。M09g1a 的 store 发布暂未接生产启动，条件匹配 / 正式目录界面继续实施；自动检查使用合成更新、Writer 故障及实际 SQLite 快照，不读取用户日志或账户，不运行性能测试。
+
 当前交付环境为 Windows 10 / 11 与本地来源，多屏与各档 DPI 兼容继续验收。macOS、WSL / 网络来源、开机启动、额外快捷键及旧格式自动重解析不再新增；诊断简化、安装打包做简单版，notify、自动更新与完整计价功能保留。详见[已确认范围](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。
 
 实现依据：[开发总入口](../design/development-design.md)、[实施计划](implementation-plan.md)。当前进度与真实验收结果见[交付记录](delivery-status.md)。
