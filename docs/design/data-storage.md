@@ -517,3 +517,7 @@ coverage 定义为“已配置来源中当前可读取、已完成扫描且可�
 |价格重估|Token 不变，price revision、规则和金额可追溯|
 
 DDL 的语法和约束检查只能验证结构草案；不代替 Writer、重建、计价与系统部署验收。
+
+## M09f1：别名不可变发布
+
+已实现 model_aliases 用户 create / replace / retire，复用 price_revision CAS 和单写事务；introduced_revision / retired_revision 固定历史映射，事务内 rules_at 返回刚发布版本，写失败不退休旧行或推进修订。ID 的 alias-custom- 命名空间只由用户写入生成，导入目录不得使用该前缀，非用户 ID 拒绝编辑。活动映射上限 4096；provider / alias 精确匹配，canonical_model 可尚未有价格而保持未计价。新写入拒绝同键映射、链式两方向、循环和自映射，历史不明确映射继续按原计价歧义逻辑隔离。别名修改不创建消费、账本或 data_revision；旧查询仍采用捕获的价格版本，Token 不变。没有新增迁移或恢复范围。

@@ -10,6 +10,47 @@ use token_pulse_core::{
 fn n(value: i128) -> DecimalInt {
     DecimalInt::from_nonnegative(value).unwrap()
 }
+#[test]
+fn editable_alias_draft_and_mutation_are_strict_exact_keys() {
+    let valid = ModelAliasDraft {
+        provider: "synthetic".into(),
+        alias: "model-snapshot".into(),
+        canonical_model: "canonical".into(),
+    };
+    valid.validate().unwrap();
+    for draft in [
+        ModelAliasDraft {
+            alias: "canonical".into(),
+            ..valid.clone()
+        },
+        ModelAliasDraft {
+            provider: "".into(),
+            ..valid.clone()
+        },
+        ModelAliasDraft {
+            alias: "bad\nkey".into(),
+            ..valid.clone()
+        },
+        ModelAliasDraft {
+            canonical_model: "x".repeat(257),
+            ..valid.clone()
+        },
+    ] {
+        assert_eq!(draft.validate(), Err(ErrorCode::InvalidQuery));
+    }
+    assert!(
+        serde_json::from_str::<ModelAliasMutation>(
+            r#"{"kind":"retire","alias_id":"example","path":"arbitrary"}"#
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<ModelAliasDraft>(
+            r#"{"provider":"synthetic","alias":"a","canonical_model":"b","origin":"offline"}"#
+        )
+        .is_err()
+    );
+}
 fn t(value: i64) -> EpochMs {
     EpochMs::new(value).unwrap()
 }

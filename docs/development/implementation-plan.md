@@ -324,3 +324,7 @@ HostQuota 增加独立 last_attempt_at_ms 和受限 ErrorCode，成功读取时�
 自动任务栏 59 项 / 1 私有入口 ignored、后台服务 12 项、任务栏浏览器 6 项、宿主 schema、生产前端构建、strict Clippy / fmt 和任务栏 release check 通过。Win10 19045 / 150% 正式 WebView 保存、实际自有独立按钮增加 / 移除使读数移动和恢复、两位置往返及全部菜单 / 窗口 / 隐私 / 退出原几何恢复通过。-Taskbar 的失败夹具改为 debug 隔离 missing-host 工厂，回退 / 重试 / 恢复独立场景通过；WebView2 1412 保留。详见[交付记录](delivery-status.md#m13e6应用图标右侧位置与实际按钮变化)。
 
 真实输入 / 焦点 / 屏幕阅读器、实际拥挤 / 自动隐藏、完整 Explorer 生命周期、Win11 / 物理多屏 DPI 继续实施和验收；不得用合成 DPI 或自有消息替代。M14 / 迁移保护等取消项不重新引入，不运行性能测试。
+
+## M09f1：模型别名的写入基础
+
+用户别名版本化创建 / 替换 / 退休、精确修订 CAS、历史保持与正式 main-only IPC 已交付。领域 11 项、存储 / 查询计价 18 项及 strict Clippy / fmt / 契约 / typecheck 通过；Win10 隔离 -PriceAliases 的实际 WebView / SQLite / 成功通知 / 隐私和 mini 权限检查通过，退出 0。别名编辑 UI 接下来接入；实际离线目录、持久费用缓存和独立重估继续保留。细节见[交付记录](delivery-status.md#m09f1版本化模型别名写入与正式-ipc)。

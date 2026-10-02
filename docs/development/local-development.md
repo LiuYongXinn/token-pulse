@@ -195,3 +195,7 @@ M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普�
 -TaskbarActions 增加真实设置页保存应用图标右侧、实际自有独立分组测试窗口按钮增减、8 DIP 间距及 320 DIP 最小应用区域核对、两位置来回切换；随后窗口 / 菜单动作保持该位置。只创建和关闭本测试自有窗口，关闭前移除 AppUserModelID 属性。输出 NATIVE_TASKBAR_APPLICATION_POSITION_OK 后，仍需 DETAILS / RECREATE / MENU / ACTIONS 全部 OK 和退出 0。显示 / 隐藏窗口影响任务按钮时，等待实际矩形和发布稳定后才投递自有测试消息，旧几何手势继续按生产策略清除。
 
 -Taskbar 失败触发已从原不支持位置改为 debug-only 隔离目录的缺失宿主工厂，生产初始化不变、无外部配置入口、不改安装文件；通过正式启动失败验证非激活小窗 / 用户隐藏 / 重试 / 恢复保留。Win10 19045 / 150% 两场退出 0，WebView2 1412 保留。物理输入 / 焦点、实际拥挤 / 自动隐藏、完整 Explorer 重建、Win11 和物理多屏 DPI 仍待独立验收。没有性能测试。
+
+## 显式模型别名 IPC 验收
+
+pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceAliases 选择 debug-only、无来源 / 账户的隔离库及两个真实 WebView，实际核对 main-only create / replace / retire / 旧版本、CAS / 映射冲突、提交成功通知、隐私投影和 mini 拒绝。Win10 已输出 NATIVE_PRICE_ALIAS_OK、退出 0，WebView2 注销 1412 保留。此检查不启用任务栏、不读取真实日志 / 登录信息，不等同设置编辑器 UI 验收。定向自动检查 cargo test -p token-pulse-core --test pricing 和 cargo test -p token-pulse-store --lib pricing 均使用合成单价 / 模型、独立预期费用及消费不变；没有性能测试。

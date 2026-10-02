@@ -36,6 +36,7 @@
     "allow-get-context-snapshot",
     "allow-get-price-rules",
     "allow-save-price-rule",
+    "allow-mutate-model-alias",
     "allow-retire-price-rule",
     "allow-get-dashboard-bundle",
     "allow-get-grouped-usage",

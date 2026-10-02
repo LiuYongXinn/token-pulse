@@ -6897,6 +6897,111 @@
       "title": "ModelAlias",
       "type": "object"
     },
+    "ModelAliasDraft": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "type": "string"
+        },
+        "canonical_model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "alias",
+        "canonical_model"
+      ],
+      "title": "ModelAliasDraft",
+      "type": "object"
+    },
+    "ModelAliasMutation": {
+      "$defs": {
+        "ModelAliasDraft": {
+          "additionalProperties": false,
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "canonical_model": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "alias",
+            "canonical_model"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "draft": {
+              "$ref": "#/$defs/ModelAliasDraft"
+            },
+            "kind": {
+              "const": "create",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "alias_id": {
+              "type": "string"
+            },
+            "draft": {
+              "$ref": "#/$defs/ModelAliasDraft"
+            },
+            "kind": {
+              "const": "replace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "alias_id",
+            "draft"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "alias_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "retire",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "alias_id"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "ModelAliasMutation"
+    },
     "PriceBasis": {
       "$defs": {
         "EpochMs": {

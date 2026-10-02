@@ -51,6 +51,7 @@ fn main() {
             "close_query_snapshot",
             "get_price_rules",
             "save_price_rule",
+            "mutate_model_alias",
             "retire_price_rule",
         ]),
     ))

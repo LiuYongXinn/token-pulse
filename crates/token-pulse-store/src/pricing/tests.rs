@@ -9,7 +9,7 @@ use token_pulse_core::{
 fn n(value: i128) -> DecimalInt {
     DecimalInt::from_nonnegative(value).unwrap()
 }
-fn draft() -> PriceRuleDraft {
+pub(super) fn draft() -> PriceRuleDraft {
     // Synthetic atoms only. Production contains no seed from this fixture.
     PriceRuleDraft {
         provider: "fixture-provider".into(),
@@ -92,7 +92,7 @@ fn rate_limit_rejects_create_and_replace_without_retiring_or_advancing_revision(
     .unwrap();
     assert_eq!(db.price_rules().unwrap_err().code, ErrorCode::DbCorrupt);
 }
-fn estimate(catalog: PriceCatalog) -> String {
+pub(super) fn estimate(catalog: PriceCatalog) -> String {
     let e = PricingEvent {
         provider: Some("fixture-provider"),
         model: Some("fixture-model"),

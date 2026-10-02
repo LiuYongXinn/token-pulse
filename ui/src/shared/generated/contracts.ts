@@ -242,6 +242,10 @@ export type PriceRule = { rule_id: string, introduced_revision: DecimalInt, reti
 
 export type PriceRuleDraft = { provider: string, model_exact: string, source_id: string | null, currency: string, effective_from_ms: EpochMs, effective_to_ms: EpochMs | null, priority: number, input_rate_atoms: DecimalInt, cached_rate_atoms: DecimalInt | null, output_rate_atoms: DecimalInt, origin_reference: string | null, };
 
+export type ModelAliasDraft = { provider: string, alias: string, canonical_model: string, };
+
+export type ModelAliasMutation = { "kind": "create", draft: ModelAliasDraft, } | { "kind": "replace", alias_id: string, draft: ModelAliasDraft, } | { "kind": "retire", alias_id: string, };
+
 export type PriceRuleMutation = { "kind": "create", draft: PriceRuleDraft, } | { "kind": "replace", rule_id: string, draft: PriceRuleDraft, } | { "kind": "retire", rule_id: string, };
 
 export type PriceRulesSnapshot = { price_revision: DecimalInt, rules: Array<PriceRule>, aliases: Array<ModelAlias>, };

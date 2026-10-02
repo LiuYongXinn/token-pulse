@@ -58,6 +58,40 @@ pub struct ModelAlias {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
+pub struct ModelAliasDraft {
+    pub provider: String,
+    pub alias: String,
+    pub canonical_model: String,
+}
+impl ModelAliasDraft {
+    pub fn validate(&self) -> Result<(), ErrorCode> {
+        if ![&self.provider, &self.alias, &self.canonical_model]
+            .iter()
+            .all(|value| key(value))
+            || self.alias == self.canonical_model
+        {
+            return Err(ErrorCode::InvalidQuery);
+        }
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ModelAliasMutation {
+    Create {
+        draft: ModelAliasDraft,
+    },
+    Replace {
+        alias_id: String,
+        draft: ModelAliasDraft,
+    },
+    Retire {
+        alias_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
 pub struct PriceRuleDraft {
     pub provider: String,
     pub model_exact: String,

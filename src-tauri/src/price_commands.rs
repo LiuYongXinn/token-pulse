@@ -2,7 +2,7 @@ use tauri::{Emitter, State, WebviewWindow};
 use token_pulse_core::{
     error::{AppError, ErrorCode},
     numeric::DecimalInt,
-    pricing::{PriceChanged, PriceRuleMutation, PriceRulesSnapshot},
+    pricing::{ModelAliasMutation, PriceChanged, PriceRuleMutation, PriceRulesSnapshot},
     privacy::{PrivacyState, PrivateResponse},
     protocol::validate_request_id,
 };
@@ -86,6 +86,36 @@ async fn mutate(
         },
     );
     Ok(PrivateResponse::new(id, snapshot, policy))
+}
+
+#[tauri::command]
+pub async fn mutate_model_alias(
+    window: WebviewWindow,
+    app: tauri::AppHandle,
+    state: State<'_, super::RuntimeState>,
+    request: ModelAliasMutation,
+    expected_price_revision: String,
+    request_id: String,
+) -> Result<PrivateResponse<PriceRulesSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    let expected = revision(&expected_price_revision, &request_id)?;
+    let db = database(&state, &request_id)?;
+    let snapshot = blocking(&request_id, move || {
+        db.mutate_model_alias_snapshot(request, expected, token_pulse_collector::jobs::now_ms()?)
+    })
+    .await?;
+    let _ = app.emit(
+        "price_rules_changed",
+        PriceChanged {
+            price_revision: snapshot.price_revision.clone(),
+            all_models: true,
+        },
+    );
+    Ok(PrivateResponse::new(
+        request_id,
+        snapshot,
+        state.privacy.clone(),
+    ))
 }
 
 #[tauri::command]

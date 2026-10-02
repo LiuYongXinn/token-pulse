@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mutate-model-alias"
+description = "Enables the mutate_model_alias command without any pre-configured scope."
+commands.allow = ["mutate_model_alias"]
+
+[[permission]]
+identifier = "deny-mutate-model-alias"
+description = "Denies the mutate_model_alias command without any pre-configured scope."
+commands.deny = ["mutate_model_alias"]

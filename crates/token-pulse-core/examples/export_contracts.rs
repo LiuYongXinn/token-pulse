@@ -6,8 +6,8 @@ use token_pulse_core::calendar::{
 use token_pulse_core::jobs::*;
 use token_pulse_core::mini::*;
 use token_pulse_core::pricing::{
-    ModelAlias, PriceChanged, PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft,
-    PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
+    ModelAlias, ModelAliasDraft, ModelAliasMutation, PriceChanged, PriceOrigin, PriceOutcome,
+    PriceRule, PriceRuleDraft, PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
 };
 use token_pulse_core::query::{
     ClassificationKind, RawTokenCount, RawUsageVector, SessionActivity, SessionBundle,
@@ -153,6 +153,8 @@ fn main() {
         PriceOrigin,
         PriceRule,
         PriceRuleDraft,
+        ModelAliasDraft,
+        ModelAliasMutation,
         PriceRuleMutation,
         PriceRulesSnapshot,
         PriceChanged,
