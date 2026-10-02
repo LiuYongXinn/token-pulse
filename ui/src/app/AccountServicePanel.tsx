@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { cancelAccountServiceSelection, chooseAccountService, getAccountQuota, getAccountServiceConfig, manageAccountConnection, onAccountQuotaChanged, onSettingsChanged, refreshAccountQuota, runtimeError, saveAccountServiceConfig } from '../shared/runtime';
-import type { AccountConnectionRequest, AccountServiceConfigSnapshot, AccountServiceSelection, AccountServiceSelectionKind, QuotaSnapshot, QuotaState } from '../shared/generated/contracts';
+import type { AccountConnectionRequest, AccountServiceConfigSnapshot, AccountServiceSelection, AccountServiceSelectionKind, QuotaSnapshot } from '../shared/generated/contracts';
 
-const states: Record<QuotaState, string> = { disconnected: '未连接', connecting: '正在读取本地账户', authorization_required: '本地登录态不可用', unsupported: '当前连接不提供账户额度', ready: '额度已更新', stale: '旧额度快照', error: '额度读取失败' };
+import { quotaDate, quotaPeriod, quotaStates } from '../shared/quota-display';
 type Cached<T> = { epoch: number; value: T };
 type Draft = { selection: AccountServiceSelection; auto: boolean };
 
-function date(value: number | null, timezone: string | null): string {
-  if (value === null) return '—';
-  if (!timezone) return '等待设置显示时区';
-  try { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(value); }
-  catch { return '显示时区无效'; }
-}
 
 export function AccountServicePanel({ timezone }: { timezone: string | null }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
@@ -118,7 +112,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
       <div className="source-actions"><button className="primary" disabled={busy || !unhidden || !draft} onClick={() => void save()}>保存账户连接配置</button><button disabled={busy || !draft} onClick={() => void discard()}>放弃账户配置草稿</button></div>
     </article>
     <article className="source-card">
-      <h3>当前连接账户</h3><p role="status">{quota ? states[quota.state] : '尚未读取连接状态'}</p>
+      <h3>当前连接账户</h3><p role="status">{quota ? quotaStates[quota.state] : '尚未读取连接状态'}</p>
       {quota?.state === 'authorization_required' && <p className="muted">所选 Codex Home 没有可用的 ChatGPT 登录状态。请选择本地已登录账户使用的 Home，再重新连接；本地用量统计继续可用。</p>}
       {quota?.state === 'stale' && <p className="notice">保留上次成功额度。以下读数可能已过期，等待服务更新。</p>}
       {quota?.error_code && <p className="muted">服务状态：{quota.error_code}</p>}
@@ -126,8 +120,8 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
       <p className="muted">断开本次连接保留已保存的启动连接偏好。更换程序或 Home 后，请点击连接已保存服务。</p>
       {unhidden && quota && <>
         {quota.available_limits.length > 0 && <label>额度桶 <select aria-label="账户额度桶" value={quota.selected_limit_id ?? ''} disabled={busy} onChange={e => void connection({ kind: 'select_limit', expected_connection_epoch: quota.connection_epoch, expected_quota_revision: quota.quota_revision, limit_id: e.target.value })}><option value="" disabled>请选择额度桶</option>{quota.available_limits.map(limit => <option key={limit.limit_id} value={limit.limit_id}>{limit.display_name ?? limit.limit_id}</option>)}</select></label>}
-        <p className="muted">最近成功读取：{date(quota.fetched_at_ms, timezone)}</p>
-        <div className="account-windows">{quota.windows.map(window => <div key={window.window_id}><strong>{window.duration_mins === 10080 ? '周额度' : window.duration_mins === null ? '未知周期' : `${window.duration_mins} 分钟周期`}</strong><span>剩余 {window.remaining_percent === null ? '—' : `${window.remaining_percent.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`}</span><small>重置：{window.resets_at_ms !== null && window.resets_at_ms <= Math.max(clock, Date.now()) ? '等待额度更新' : date(window.resets_at_ms, timezone)}</small></div>)}</div>
+        <p className="muted">最近成功读取：{quotaDate(quota.fetched_at_ms, timezone)}</p>
+        <div className="account-windows">{quota.windows.map(window => <div key={window.window_id}><strong>{quotaPeriod(window)}</strong><span>剩余 {window.remaining_percent === null ? '—' : `${window.remaining_percent.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`}</span><small>重置：{window.resets_at_ms !== null && window.resets_at_ms <= Math.max(clock, Date.now()) ? '等待额度更新' : quotaDate(window.resets_at_ms, timezone)}</small></div>)}</div>
       </>}
     </article>
   </section>;

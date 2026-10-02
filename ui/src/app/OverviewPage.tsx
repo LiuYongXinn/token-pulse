@@ -5,6 +5,7 @@ import { compactTokens, fullTokens, percentage } from '../shared/format';
 import { availableGrain, calendarDateLabel } from '../shared/main-filter';
 import { useDashboard } from './useDashboard';
 import { Cost, coverageNames, reasonNames, when } from './usage-display';
+import { AccountQuotaOverview } from '../shared/AccountQuota';
 
 function Measure({ label, measure }: { label: string; measure: TokenMeasure }) { return <div className="measure"><dt>{label}</dt><dd>{fullTokens(measure.value)}<small>{measure.value === null ? '未知' : measure.complete ? '分项已知' : `部分已知 · 覆盖 ${fullTokens(measure.covered_total_tokens)} Token`}</small></dd></div>; }
 
@@ -32,10 +33,10 @@ function Heatmap({ buckets, timezone, onDay }: { buckets: UsageSeriesBucket[]; t
   })}</div><p className="chart-caption" aria-live="polite">{chosen ? `${chosen.display_label} · ${fullTokens(chosen.totals.total_tokens)} Token · ${coverageNames[chosen.coverage.state]}` : '零读数保留实际覆盖状态；悬停或聚焦查看完整消费。'}</p></>;
 }
 
-export function OverviewPage({ request, refreshRevision, sources, onSources, onPrices, onSessions, onGrain, onDay }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; onSources: () => void; onPrices: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void }) {
+export function OverviewPage({ request, refreshRevision, sources, accountTimezone, onSources, onPrices, onSessions, onGrain, onDay }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; accountTimezone: string | null; onSources: () => void; onPrices: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void }) {
   const { bundle, error, loading } = useDashboard(request, refreshRevision);
-  if (sources?.sources.length === 0) return <section className="empty panel"><div className="empty-symbol">▥</div><h2>添加 Codex 数据来源</h2><p>检测 Windows 本地 Codex Home 或选择自定义目录，开始导入历史用量。</p><p className="support-note">原始日志保持只读；账户额度连接可选。</p><button className="primary" onClick={onSources}>查看数据来源</button></section>;
-  if (!bundle) return <section className="empty panel"><h2>{loading ? '正在读取统计快照' : '统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}<p>可信消费、费用估算与覆盖将从同一读取事务返回。</p></section>;
+  if (sources?.sources.length === 0) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><div className="empty-symbol">▥</div><h2>添加 Codex 数据来源</h2><p>检测 Windows 本地 Codex Home 或选择自定义目录，开始导入历史用量。</p><p className="support-note">原始日志保持只读；账户额度连接可选。</p><button className="primary" onClick={onSources}>查看数据来源</button></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
+  if (!bundle) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><h2>{loading ? '正在读取统计快照' : '统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}<p>可信消费、费用估算与覆盖将从同一读取事务返回。</p></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
   const totals = bundle.summary, pricing = bundle.pricing;
   const fullBreakdown = totals.noncached_input.complete && totals.cached_input.complete && totals.output_total.complete;
   const cacheRate = totals.cached_input.complete && totals.input_total.complete ? percentage(totals.cached_input.value, totals.input_total.value) : null;
@@ -55,7 +56,7 @@ export function OverviewPage({ request, refreshRevision, sources, onSources, onP
     </div><div className="overview-right">
       <section className="panel recent-panel"><div className="panel-heading"><h2>最近会话</h2><button className="text-button" onClick={onSessions}>查看全部</button></div>{bundle.recent_sessions.length === 0 ? <p className="muted">当前范围暂无可信消费会话。</p> : <div className="recent-list">{bundle.recent_sessions.map(session => <article key={session.session_key}><strong title={session.display_name}>{session.display_name}</strong><p>{session.latest_project_name ?? '未知项目'} · {session.latest_model ?? '未知模型'}</p><div><span title={fullTokens(session.summary.total_tokens)}>{compactTokens(session.summary.total_tokens)} Token</span><time>{when(session.latest_at_ms, bundle.meta.display_timezone)}</time></div></article>)}</div>}</section>
       <section className="panel overview-details"><h2>统计口径</h2><dl><dt>可靠回合</dt><dd>{fullTokens(totals.reliable_turn_count)}<small>{totals.reliable_turns_complete ? '回合身份已完整识别' : '仅显示已识别回合'}</small></dd><dt>未计价 Token</dt><dd>{fullTokens(pricing.unpriced_total_tokens)}</dd><dt>未归属 Token</dt><dd>{fullTokens(bundle.coverage.unattributed_total_tokens)}</dd><dt>数据 / 价格修订</dt><dd>{bundle.meta.data_revision} / {bundle.meta.price_revision}</dd></dl>{pricing.reasons.length > 0 && <ul className="pricing-reasons">{pricing.reasons.map(reason => <li key={reason.code}>{reasonNames[reason.code] ?? reason.code}<span>{fullTokens(reason.total_tokens)} Token</span></li>)}</ul>}</section>
-      <section className="panel quota-overview"><h2>账户额度</h2><p className="muted">尚未连接账户服务</p><p className="chart-caption">剩余百分比与周期重置时间来自可选账户连接，本地消费无法推算。</p></section>
+      <AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} />
     </div></div>
   </>;
 }

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
+import { syntheticQuota } from './quota-fixture';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic UI DTO bridge. No fixture is imported into production.
@@ -10,6 +11,7 @@ test.beforeEach(async ({ page }) => {
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let lastDashboardRequest: unknown = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
+    let quota: Record<string, unknown> = { connection_epoch: 'synthetic-overview-disconnected', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], fetched_at_ms: null, last_attempt_at_ms: null, windows: [], error_code: null };
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>();
     const listeners = new Map<number, { event: string; handler: number }>();
@@ -28,6 +30,8 @@ test.beforeEach(async ({ page }) => {
       if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
       if (command === 'plugin:event|unlisten') return null;
+      if (command === 'get_account_quota') return response(structuredClone(quota));
+      if (command === 'refresh_account_quota') return response({ status: 'in_flight', retry_after_ms: null, quota });
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: privacy ? '应用数据目录（已隐藏）' : 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: policyRevision, sources: privacy ? sources.map(s => ({ ...s, root_path: '来源 #' + s.source_id })) : sources });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
@@ -50,6 +54,7 @@ test.beforeEach(async ({ page }) => {
       }
       throw new Error(`unexpected synthetic command ${command}`);
     } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
+    __setSyntheticQuota: (value: Record<string, unknown>) => { quota = structuredClone(value); for (const [id, listener] of listeners) if (listener.event === 'account_quota_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { connection_epoch: quota.connection_epoch, quota_revision: quota.quota_revision, state: quota.state } }); },
     __lastDashboardRequest: () => lastDashboardRequest,
     __requestSyntheticMiniStats: (all = false, id = 'synthetic-mini-open') => {
       miniIntent = { request_id: id, mini_scope: all ? { kind: 'today_all_sources' } : { kind: 'session', session_key: 'synthetic-fixed', start: { kind: 'fixed', start_ms: 1709179200123 } }, calendar: { range: { start_ms: 1709179200123, end_ms: 1709203200457, timezone: 'UTC' }, heatmap_range: { start_ms: Date.parse('2023-09-01T00:00:00Z'), end_ms: Date.parse('2024-03-01T00:00:00Z'), timezone: 'UTC' }, local_today: '2024-02-29' } };
@@ -69,7 +74,7 @@ test('overview preserves prototype layout, known breakdown and real unknown stat
   await expect(page.getByRole('heading', { name: '用量趋势' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '最近会话' })).toBeVisible();
   await expect(page.getByLabel('完整 Token 分解')).toBeVisible();
-  await expect(page.getByText('尚未连接账户服务')).toBeVisible();
+  await expect(page.getByRole('region', { name: '账户额度总览' })).toContainText('未连接');
   const bounds = await page.evaluate(() => ({ left: document.querySelector('.overview-left')!.getBoundingClientRect().right, right: document.querySelector('.overview-right')!.getBoundingClientRect().left }));
   expect(bounds.left).toBeLessThan(bounds.right);
   const activity = page.getByRole('group', { name: '近 26 周每日活动' });
@@ -241,4 +246,23 @@ test('explicit mini navigation imports exact milliseconds and session, resets pr
   await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('全部会话');
   await page.getByRole('button', { name: '重置筛选' }).click(); await expect(page.getByLabel('日期范围')).toHaveValue('today');
   await expect(page.getByLabel('从小窗带入的精确范围')).toHaveCount(0);
+});
+
+
+test('overview quota is account-scoped, actual-period aware and hidden by shared privacy', async ({ page }) => {
+  const card = page.getByRole('region', { name: '账户额度总览' });
+  await expect(card).toContainText('未连接');
+  await page.evaluate(value => (window as unknown as { __setSyntheticQuota(v: unknown): void }).__setSyntheticQuota(value), syntheticQuota());
+  await expect(card).toContainText('周额度剩余 14%');
+  await expect(card).toContainText('2 小时额度剩余 0%');
+  await expect(card).toContainText('未知周期剩余 —');
+  await card.getByRole('button', { name: '刷新账户额度' }).click(); await expect(card).toContainText('额度读取正在进行。');
+  await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
+  await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
+  await expect(card).toContainText('周额度剩余 14%');
+  await expect(card).toContainText('SYNTHETIC ACCOUNT BUCKET');
+  await page.screenshot({ path: 'test-results/overview-account-quota.png' });
+  await page.evaluate(() => (window as unknown as { __emitSyntheticPrivacyChange(v: boolean): void }).__emitSyntheticPrivacyChange(true));
+  await expect(card).toContainText('隐私模式已隐藏账户额度');
+  await expect(card).not.toContainText('14%'); await expect(card.getByRole('progressbar')).toHaveCount(0);
 });

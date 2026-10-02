@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { syntheticQuota } from './quota-fixture';
 
 // All prices, identities and counters in this bridge are explicitly synthetic browser QA data.
 async function bridge(page: Page) {
@@ -10,6 +11,9 @@ async function bridge(page: Page) {
     let scope: { kind: 'today_all_sources' } | { kind: 'session'; session_key: string; start: { kind: 'fixed'; start_ms: number } | { kind: 'today' } } = { kind: 'session', session_key: 'synthetic-session', start: { kind: 'fixed', start_ms: 1709179200123 } };
     const calls: { command: string; request: unknown }[] = [];
     const waits: (() => void)[] = [];
+    let quota: Record<string, unknown> = { connection_epoch: 'synthetic-mini-disconnected', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], fetched_at_ms: null, last_attempt_at_ms: null, windows: [], error_code: null };
+    let holdQuota = false, failQuota = false;
+    const quotaWaits: (() => void)[] = [];
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
     const emit = (event: string, payload: unknown) => { for (const [id, item] of listeners) if (item.event === event) callbacks.get(item.handler)?.({ event, id, payload }); };
@@ -17,12 +21,22 @@ async function bridge(page: Page) {
     const measure = (value: string | null) => ({ value, covered_total_tokens: value === null ? '0' : '683067', complete: value !== null });
     const snapshot = () => ({ meta: { snapshot_id: 'synthetic-mini', data_revision: '7', price_revision: '3', generated_at_ms: 1709203200456, parser_versions: ['synthetic-v1'], accounting_versions: ['synthetic-v1'], display_timezone: 'UTC' }, settings_revision: revision, mini_scope: structuredClone(scope), scope_display_name: scope.kind === 'session' ? privacy ? '会话 · 123456' : 'SYNTHETIC PRIVATE SESSION' : '全部来源 · 今日', range: { start_ms: scope.kind === 'session' && scope.start.kind === 'fixed' ? scope.start.start_ms : 1709164800000, end_ms: 1709203200457, timezone: 'UTC' }, usage: { total_tokens: '683067', input_total: measure('600000'), noncached_input: measure('180000'), cached_input: measure('420000'), output_total: measure('83067'), reasoning_output: measure(null), session_count: '1', usage_event_count: '5', reliable_turn_count: null, reliable_turns_complete: false }, coverage: { state: 'partial', pending_observation_count: '1', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false }, pricing: { redacted: privacy, basis: { mode: 'event_time' }, currencies: privacy ? [] : [{ currency: 'USD', estimated_cost: '0.573123456789012', priced_total_tokens: '600000' }], priced_total_tokens: '600000', unpriced_total_tokens: '83067', reasons: [], calculating: false } });
     const response = (requestId: unknown, data: unknown) => ({ api_version: 1, request_id: requestId, display_policy: { settings_revision: revision, privacy }, data });
-    Object.assign(window, { isTauri: true,
+    Object.assign(window, { isTauri: true, __miniQuotaQA: {
+      set: (value: Record<string, unknown>) => { quota = structuredClone(value); emit('account_quota_changed', { connection_epoch: quota.connection_epoch, quota_revision: quota.quota_revision, state: quota.state }); },
+      hold: () => { holdQuota = true; }, release: () => quotaWaits.splice(0).forEach(r => r()), fail: (value: boolean) => { failQuota = value; emit('account_quota_changed', { connection_epoch: quota.connection_epoch, quota_revision: quota.quota_revision, state: quota.state }); },
+    },
       __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } },
       __TAURI_INTERNALS__: { transformCallback: (fn: (event: unknown) => void) => { callbacks.set(++callbackId, fn); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
         calls.push({ command, request: args.request });
         if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
         if (command === 'plugin:event|unlisten') return null;
+        if (command === 'get_account_quota') {
+          if (failQuota) throw { code: 'QUOTA_TIMEOUT' };
+          const reply = response(args.requestId, structuredClone(quota));
+          if (holdQuota) { holdQuota = false; await new Promise<void>(r => quotaWaits.push(r)); }
+          return reply;
+        }
+        if (command === 'refresh_account_quota') return response(args.requestId, { status: 'rate_limited', retry_after_ms: 5000, quota });
         if (command === 'get_display_settings') return response(args.requestId, { settings_version: 1, settings_revision: revision, preferences: { theme, privacy, display_timezone: 'UTC' } });
         if (command === 'get_mini_usage') {
           if (fail) throw { code: 'DB_READ_FAILED' };
@@ -83,14 +97,58 @@ async function bridge(page: Page) {
   });
 }
 type QA = { __miniQA: { calls(): { command: string; request: unknown }[]; fail(v: boolean): void; theme(v: string): void; hold(): void; release(): void; privacy(v: boolean): void; listeners(): string[]; mode(v: string): void; rejectScope(v: boolean): void; expireCandidates(v: boolean): void; holdCandidates(): void; releaseCandidates(): void; candidateLeases(): number } };
+type QuotaQA = { __miniQuotaQA: { set(value: unknown): void; hold(): void; release(): void; fail(value: boolean): void } };
 test.beforeEach(async ({ page }) => { await bridge(page); await page.setViewportSize({ width: 280, height: 220 }); });
+
+test('account display has actual periods, zero, reset waiting, details and bounded layouts', async ({ page }) => {
+  const now = Date.UTC(2030, 0, 1, 8);
+  await page.clock.install({ time: now });
+  await page.goto('/?window=mini');
+  await expect(page.getByLabel('查看账户额度详情')).toContainText('未连接');
+  await page.evaluate(value => (window as unknown as QuotaQA).__miniQuotaQA.set(value), syntheticQuota(now));
+  const entry = page.getByLabel('查看账户额度详情');
+  await expect(entry).toContainText('2 小时剩余 0%'); await expect(entry).toContainText('周剩余 14%');
+  await expect(entry).toContainText('1分钟');
+  const bounds = await page.locator('.mini-health').boundingBox(); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(219);
+  await page.screenshot({ path: 'test-results/mini-quota-compact.png' });
+  await entry.click(); await page.setViewportSize({ width: 360, height: 380 });
+  const details = page.getByRole('dialog', { name: '账户额度详情' });
+  await expect(details).toContainText('SYNTHETIC ACCOUNT BUCKET'); await expect(details).toContainText('显示时区：UTC');
+  await expect(details.getByRole('progressbar', { name: '2 小时额度剩余' })).toHaveAttribute('value', '0');
+  await expect(details).toContainText('未知周期剩余 —'); await expect(details).toContainText('时间未提供');
+  await details.getByRole('button', { name: '刷新账户额度' }).click(); await expect(details).toContainText('请在 5 秒后刷新。');
+  await page.screenshot({ path: 'test-results/mini-quota-details.png' });
+  await page.keyboard.press('Escape'); await expect(details).toHaveCount(0); await expect(entry).toBeFocused();
+  await page.clock.fastForward(61_000); await expect(entry).toContainText('等待额度更新'); await expect(entry).toContainText('周剩余 14%');
+  await page.evaluate(value => { (window as unknown as QuotaQA).__miniQuotaQA.set(value); }, { ...syntheticQuota(now), quota_revision: '9007199254740994', state: 'stale' });
+  await expect(entry).toContainText('旧快照 · 更新失败'); await expect(entry).toContainText('周剩余 14%');
+});
+
+test('account invalidation rejects late identity and privacy responses, then supports only-week data', async ({ page }) => {
+  await page.goto('/?window=mini'); await expect(page.getByLabel('查看账户额度详情')).toContainText('未连接');
+  const first = syntheticQuota();
+  await page.evaluate(value => (window as unknown as QuotaQA).__miniQuotaQA.set(value), first);
+  const entry = page.getByLabel('查看账户额度详情'); await expect(entry).toContainText('周剩余 14%');
+  await page.evaluate(value => { const qa = (window as unknown as QuotaQA).__miniQuotaQA; qa.hold(); qa.set(value); }, first);
+  const next = { ...first, connection_epoch: 'synthetic-next-account', quota_revision: '1', windows: [{ ...first.windows[0], remaining_percent: 83, used_percent: 17 }] };
+  await page.evaluate(value => (window as unknown as QuotaQA).__miniQuotaQA.set(value), next);
+  await expect(entry).toContainText('周剩余 83%'); await expect(entry).toContainText('短周期剩余 —');
+  await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.release()); await expect(entry).toContainText('周剩余 83%');
+  await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.fail(true)); await expect(entry).toContainText('旧快照 · 更新失败');
+  await page.evaluate(value => { const qa = (window as unknown as QuotaQA).__miniQuotaQA; qa.fail(false); qa.hold(); qa.set(value); }, next);
+  await page.evaluate(() => (window as unknown as QA).__miniQA.privacy(true));
+  await expect(entry).toContainText('周剩余 已隐藏'); await expect(entry).toBeDisabled();
+  await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.release());
+  await expect(page.locator('.mini-window')).not.toContainText('83%');
+  await expect(page.locator('.mini-window')).not.toContainText('SYNTHETIC ACCOUNT BUCKET');
+});
 
 test('real DTO presentation has compact and expanded layouts, exact pricing and unknown account fields', async ({ page }) => {
   await page.goto('/?window=mini');
   await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
   await expect(page.getByLabel('费用估算详情')).toContainText('$0.57');
-  await expect(page.getByLabel('账户额度未连接')).toContainText('短周期剩余 —');
-  await expect(page.getByLabel('账户额度未连接')).toContainText('周重置 —');
+  await expect(page.getByLabel('查看账户额度详情')).toContainText('短周期剩余 —');
+  await expect(page.getByLabel('查看账户额度详情')).toContainText('周重置 —');
   await expect(page.locator('.mini-meta')).toContainText('输入缓存 70%');
   expect(await page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }))).toEqual({ width: 280, height: 220 });
   await page.screenshot({ path: 'test-results/mini-compact-dark.png' });
@@ -128,7 +186,7 @@ test('shared theme and privacy clear retained names, money details and reject a 
   await page.getByLabel('小窗隐私模式').click();
   await expect(page.getByLabel('费用估算详情')).toContainText('$0.57');
   await expect(page.locator('.mini-scope')).toContainText('SYNTHETIC PRIVATE SESSION');
-  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__miniQA.listeners().sort())).toEqual(['display_policy_changed', 'price_rules_changed', 'settings_changed']);
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__miniQA.listeners().sort())).toEqual(['account_quota_changed', 'display_policy_changed', 'price_rules_changed', 'settings_changed']);
 });
 
 test('failed refresh keeps an explicitly old success, scope reset carries precise revision and never queries main data', async ({ page }) => {
@@ -151,7 +209,8 @@ test('ordinary browser preview exposes no invented usage or account percentages'
   await page.goto('/?window=mini'); await expect(page.getByRole('alert')).toContainText('读取失败');
   await expect(page.getByLabel('可信 Token 分解')).toHaveText('—');
   await expect(page.getByLabel('费用估算详情')).toContainText('已隐藏');
-  await expect(page.getByLabel('账户额度未连接')).toContainText('账户未连接');
+  await expect(page.getByLabel('查看账户额度详情')).toContainText('周剩余 已隐藏');
+  await expect(page.getByLabel('查看账户额度详情')).toBeDisabled();
 });
 
 
@@ -184,7 +243,7 @@ test('session picker uses stable pages and explicit millisecond start, saving no
   await page.getByRole('button', { name: '应用小窗范围' }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   const call = await page.evaluate(() => (window as unknown as QA).__miniQA.calls().filter(c => c.command === 'set_mini_scope').at(-1));
   expect(call?.request).toEqual({ mini_scope: { kind: 'session', session_key: 'synthetic-candidate-30', start: { kind: 'fixed', start_ms: Date.parse('2024-02-29T01:02:03.123Z') } }, expected_settings_revision: '9007199254740993' });
-  await expect(page.getByLabel('账户额度未连接')).toContainText('周重置 —');
+  await expect(page.getByLabel('查看账户额度详情')).toContainText('周重置 —');
   const close = await page.evaluate(() => (window as unknown as QA).__miniQA.calls().filter(c => c.command === 'close_query_snapshot').at(-1)?.request);
   expect(close).toMatchObject({ kind: 'mini_sessions', request: { query: { search: '', page_size: 25 } } });
   await page.getByLabel('选择小窗会话与起点').click(); await page.getByLabel('小窗消耗起点').selectOption('today');

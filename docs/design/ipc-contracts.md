@@ -543,3 +543,10 @@ connect 复核 expected_settings_revision、acknowledged_executable_sha256、exp
 本节与开发总入口 §1.1 / §6.1 统一：不增加 authorize、浏览器登录、设备码登录或取消登录 IPC / 作业。manage_account_connection 保留已实现的 connect / disconnect / select_limit；connect 对用户确认的本地原生程序和 Home 建立受控服务，复用其现有登录状态。账户服务只发送 account/read（refreshToken=false）和 account/rateLimits/read，净化账户状态后才允许额度查询。TokenPulse 不获取或保存 access token、refresh token、原始认证文件或账户返回全文。
 
 authorization_required 保留 DTO 枚举和 QUOTA_AUTH_REQUIRED 错误以兼容领域状态，正式文案为“本地登录态不可用”，引导改选已登录账户使用的 Home 并重新连接。该状态不是待实现新登录入口；它仍与 disconnected / unsupported / error / stale 分开，不伪造额度，也不阻止本地用量统计。当前及旧文档中“后续登录 / 取消”条目由此用户修订撤销；真实已有账户的额度读取、跨入口共享与冷进程启动仍按实际证据验收。
+
+
+### 2.30 本地检测与共享账户显示
+
+AccountServiceSelectionKind 新增 detect_local，继续调用 main 专属 choose_account_service；后端按本机 PATH / npm 原生包及 Home 规则读取程序元数据与 SHA 返回有期限草稿能力，不启动服务、解析认证或自动保存。已有显式 Home（含服务默认 null）保持；首次使用 CODEX_HOME / 已存在用户 .codex。保存继续重新校验并执行原设置修订 CAS。详情见[检测验收](../development/local-account-detection.md)。
+
+总览与小窗共享 useAccountQuota，先订阅 account_quota_changed 再读取完整 QuotaSnapshot；事件只使旧缓存失效，epoch 切换 / 断开立即移除旧账户值。请求序号、生命周期、同连接精确修订和显示隐私 epoch 阻止迟到响应覆盖。可见轮询仅查询已有内存快照，用户刷新仍使用既有受限命令。无新增任意 RPC / 账户管理 / 路径权限，无账户与本地消费的联合范围请求；显示时区来自保存配置。实际周期、null、零、重置待更新及共享显示验收见[验证记录](../development/account-quota-verification.md)。

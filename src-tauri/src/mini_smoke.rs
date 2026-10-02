@@ -80,7 +80,8 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       if(quota.data.state!=='disconnected' || quota.data.windows.length!==0 || quota.data.fetched_at_ms!==null || !quota.display_policy)throw new Error('MINI_QUOTA_DEFAULT_INCORRECT');
       let disconnected=false;try{await invoke('refresh_account_quota',{requestId:'native-mini-quota-refresh'});}catch(error){disconnected=error.code==='QUOTA_DISCONNECTED';}
       if(!disconnected)throw new Error('MINI_QUOTA_REFRESH_FAKE');
-      if(document.querySelector('.mini-tokens')?.textContent!=='—' || !document.querySelector('.mini-quota')?.textContent.includes('账户未连接'))throw new Error('UNKNOWN_VALUES_REPLACED');
+      await wait(()=>document.querySelector('.mini-quota')?.textContent.includes('未连接'));
+      if(document.querySelector('.mini-tokens')?.textContent!=='—' || document.querySelector('.mini-quota')?.textContent.includes('0%'))throw new Error('UNKNOWN_VALUES_REPLACED');
       if(document.querySelector('.mini-cost')?.textContent.includes('$0.00'))throw new Error('UNKNOWN_COST_ZERO');
       for(const command of ['get_sources','get_price_rules','set_display_theme','perform_window_action']) {
         let denied=false;try{await invoke(command,{requestId:'mini-denied',action:'quit',revision:null,request:{theme:'light',expected_settings_revision:'13'}});}catch{denied=true;}

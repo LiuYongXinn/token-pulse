@@ -147,8 +147,8 @@ export function saveAccountServiceConfig(mutation: import('./generated/contracts
 export function manageAccountConnection(connection: import('./generated/contracts').AccountConnectionRequest): Promise<import('./generated/contracts').QuotaSnapshot> { return request('manage_account_connection', { request: connection }); }
 export function getAccountQuota(): Promise<import('./generated/contracts').QuotaSnapshot> { return request('get_account_quota'); }
 export function refreshAccountQuota(): Promise<import('./generated/contracts').QuotaRefreshResult> { return request('refresh_account_quota'); }
-export async function onAccountQuotaChanged(refresh: () => void): Promise<() => void> {
+export async function onAccountQuotaChanged(refresh: (change: import('./generated/contracts').QuotaChanged) => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<import('./generated/contracts').QuotaChanged>('account_quota_changed', refresh);
+  const stop = await listen<import('./generated/contracts').QuotaChanged>('account_quota_changed', event => refresh(event.payload));
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }

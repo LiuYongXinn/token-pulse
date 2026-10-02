@@ -191,11 +191,24 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let result = super::mini_smoke::evaluate(app, &mini, r#"
       const quota=await invoke('get_account_quota',{requestId:'native-mini-connected-quota'});
       if(quota.data.state!=='ready' || quota.data.windows[0].remaining_percent!==75)throw new Error('MINI_ACCOUNT_READ_FAILED');
+      await wait(()=>document.querySelector('.mini-quota')?.textContent.includes('5 小时剩余 75%'));
+      if(!document.querySelector('.mini-quota')?.textContent.includes('周剩余 —'))throw new Error('MINI_WEEK_FROM_POSITION');
+      document.querySelector('.mini-quota').click();
+      await wait(()=>document.querySelector('[aria-label="账户额度详情"]')?.textContent.includes('剩余 75%'));
+      const dialog=document.querySelector('[aria-label="账户额度详情"]');
+      if(dialog.querySelector('progress')?.value!==75 || !dialog.textContent.includes('账户范围'))throw new Error('MINI_ACCOUNT_DETAILS_FAILED');
+      dialog.querySelector('[aria-label="关闭账户额度详情"]').click();
       for(const command of ['get_account_service_config','choose_account_service','save_account_service_config','cancel_account_service_selection','manage_account_connection']) {
         let denied=false;try{await invoke(command,{requestId:'native-mini-account-denied',selectionHandle:'irrelevant',request:{kind:'disconnect',expected_connection_epoch:quota.data.connection_epoch}});}catch{denied=true;}
         if(!denied)throw new Error('MINI_ACCOUNT_PERMISSION_TOO_BROAD');
       }
     "#).and_then(|_| super::mini_smoke::evaluate(app, &main, r#"
+      [...document.querySelectorAll('nav[aria-label="主导航"] button')].find(b=>b.textContent==='总览').click();
+      await wait(()=>document.querySelector('[aria-label="账户额度总览"]')?.textContent.includes('剩余 75%'));
+      const card=document.querySelector('[aria-label="账户额度总览"]');
+      if(card.querySelector('progress')?.value!==75 || !card.textContent.includes('5 小时额度'))throw new Error('MAIN_ACCOUNT_OVERVIEW_FAILED');
+      [...card.querySelectorAll('button')].find(b=>b.textContent==='连接设置').click();
+      await wait(()=>document.querySelector('section[aria-label="账户额度连接"]'));
       const region=document.querySelector('section[aria-label="账户额度连接"]');
       const select=region.querySelector('select[aria-label="账户额度桶"]');
       if(!select || ![...select.options].some(o=>o.value==='other'))throw new Error('ACCOUNT_LIMIT_SELECT_MISSING');
@@ -203,6 +216,11 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await wait(()=>region.textContent.includes('剩余 20%'));
       const selected=await invoke('get_account_quota',{requestId:'native-account-selected'});
       if(selected.data.selected_limit_id!=='other' || selected.data.windows[0].duration_mins!==10080)throw new Error('ACCOUNT_BUCKET_MISMATCH');
+    "#)).and_then(|_| super::mini_smoke::evaluate(app, &mini, r#"
+      await wait(()=>document.querySelector('.mini-quota')?.textContent.includes('周剩余 20%'));
+      if(!document.querySelector('.mini-quota')?.textContent.includes('短周期剩余 —'))throw new Error('MINI_BUCKET_ROLES_INVALID');
+    "#)).and_then(|_| super::mini_smoke::evaluate(app, &main, r#"
+      const region=document.querySelector('section[aria-label="账户额度连接"]');
       [...region.querySelectorAll('button')].find(b=>b.textContent==='断开本次连接').click();
       await wait(()=>[...region.querySelectorAll('[role=status]')].some(s=>s.textContent==='未连接'));
       const cleared=await invoke('get_account_quota',{requestId:'native-account-cleared'});
@@ -216,6 +234,17 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if terminated != 0 {
         return Err("owned account process survived disconnect".into());
     }
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        r#"
+      await wait(()=>document.querySelector('.mini-quota')?.textContent.includes('未连接'));
+      if(document.querySelector('.mini-quota')?.textContent.includes('20%'))throw new Error('MINI_DISCONNECT_RETAINED_ACCOUNT');
+    "#,
+    )?;
+    println!(
+        "NATIVE_ACCOUNT_DISPLAY_OK: real main and mini WebViews share synthetic account snapshot, actual durations, only-week bucket, remaining progress, details and disconnect invalidation"
+    );
     if token_pulse_quota::detect_local_service(None).is_ok() {
         // Real installed binaries may be much larger than the synthetic test fixture.
         // This is a bounded functional wait for file inspection, not a latency benchmark.
