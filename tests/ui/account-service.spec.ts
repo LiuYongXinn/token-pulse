@@ -101,7 +101,9 @@ test('failed writes retain draft; revision conflict requires deliberate reselect
 test('privacy clears path and capabilities; authorization required stays distinct from quota', async ({ page }) => {
   await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click(); const region = page.getByRole('region', { name: '账户额度连接' });
   await region.getByRole('button', { name: '选择账户服务程序' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click();
-  await page.evaluate(() => (window as unknown as QA).__quotaQA.authorization()); await region.getByRole('button', { name: '连接已保存服务' }).click(); await expect(region.getByText('需要账户授权', { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__quotaQA.authorization()); await region.getByRole('button', { name: '连接已保存服务' }).click(); await expect(region.getByText('本地登录态不可用', { exact: true })).toBeVisible();
+  await expect(region.getByText('所选 Codex Home 没有可用的 ChatGPT 登录状态。请选择本地已登录账户使用的 Home，再重新连接；本地用量统计继续可用。')).toBeVisible();
+  await expect(region.getByRole('button', { name: /登录|授权/ })).toHaveCount(0);
   await region.getByRole('button', { name: '选择账户服务 Home' }).click();
   await page.evaluate(() => (window as unknown as QA).__quotaQA.privacy());
   await expect(region.getByText('E:\\synthetic-account\\home', { exact: true })).toHaveCount(0); await expect(region.getByText('E:\\synthetic-account\\codex.exe', { exact: true })).toHaveCount(0);

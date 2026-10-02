@@ -26,6 +26,7 @@
 |小窗约 280×160 / 360×320|紧凑 280×220 DIP，展开 360×380 DIP；随字体缩放测量并防止溢出|
 |只含主窗口与小窗|新增 Windows 任务栏模式，三个入口共享后台|
 |账户额度不属于工具职责|日志采集器仍不读取账户认证；新增独立、可选的额度服务连接|
+|TokenPulse 新登录 / 设备码流程|2026-10-02 用户确认复用本地已登录的 Codex 账户；不新增登录、设备码或取消登录功能|
 |两窗口共享外观|主窗口与小窗共享应用主题；任务栏文字融入系统背景；三者共享隐私|
 |设置四页签|数据来源、显示与窗口、任务栏显示、价格规则、数据与备份五页签|
 |原型固定今日和演示会话|正式应用采用配置时区和实时日期；演示工具栏及价格不进入生产|
@@ -251,13 +252,13 @@ sequenceDiagram
 
 首个适配器采用用户明确配置的 Codex 可执行文件启动受控 `codex app-server`，使用默认 stdio JSONL，完成 `initialize` / `initialized` 握手后检查账户与额度查询能力。二进制由用户配置或检测确认，不随主应用偷偷安装，也不假定所有安装版本支持同一字段。[Codex App Server 官方文档](https://learn.chatgpt.com/docs/app-server)
 
-连接状态为 `disconnected → connecting → authorization_required / ready / unsupported / error`。App Server 自行管理其合法认证流程；TokenPulse 不读写 `auth.json`。登录通过支持的服务登录接口交由用户完成，UI 展示可核实的登录目标；无法授权时保留断开态。
+连接状态为 `disconnected → connecting → authorization_required / ready / unsupported / error`。按 2026-10-02 用户确认，选定本地 Codex 程序及已有 Codex Home，App Server 复用该 Home 的现有登录状态。TokenPulse 只读取净化后的账户可用状态和额度，不读写 `auth.json`，不复制或保存凭据。`authorization_required` 保留协议兼容，但 UI 表达为“本地登录态不可用”，引导选择已登录账户使用的 Home；不增加新登录、设备码、授权 URL 或取消登录作业。用户明确连接或已保存的启动偏好授权服务读取，不要求再次登录。
 
-TokenPulse 只允许账户读取、登录流程所需方法与退出连接；不调用发消息、消费额度重置、开始模型回合或更改远端账户的方法。是否打包 Codex 二进制不是已确认选项，首版不打包。
+TokenPulse 只允许 `account/read`（refreshToken=false）、`account/rateLimits/read` 及退出自有连接；不调用发消息、消费额度重置、开始模型回合或更改远端账户的方法。是否打包 Codex 二进制不是已确认选项，首版不打包。
 
 ### 6.2 协议与失败处理
 
-请求 ID 与连接 epoch 对应；退出、超时或切换账户后拒绝旧响应。stdout 只处理限长协议消息，stderr 进入脱敏诊断；不要将消息整体写日志。握手 / 普通查询默认超时 10 秒，登录等待由独立作业管理。
+请求 ID 与连接 epoch 对应；退出、超时或切换账户后拒绝旧响应。stdout 只处理限长协议消息，stderr 进入脱敏诊断；不要将消息整体写日志。握手 / 普通查询默认超时 10 秒；没有登录等待作业。登录状态由用户本地 Codex 管理，重新连接后重新证明身份；不能把同 Home 或本地旧缓存当作账户证明。
 
 优先读取 `rateLimitsByLimitId`，兼容 `rateLimits`；从实际 `windowDurationMins` 识别短周期和周。多个桶不加总；选定桶标识进入 DTO。账户身份由服务可用身份确定，至少用本次连接 epoch 隔离，不能以订阅名称充当账户唯一 ID。
 
@@ -331,7 +332,7 @@ Windows 安装采用 Tauri 安装器能力，处理 WebView2 检测、离线安�
 |同 revision 分页|真实读事务租约；过期明确报错，不只标 revision|
 |原生日历边界|IANA 时区计算，跨午夜 / 夏令时 / 时区改变重新查询|
 |订阅费用与账户额度|分别实现和表达，不互相换算|
-|账户服务版本 / 登录|可选适配和能力检测，不依赖桌面应用内部工具|
+|账户服务版本 / 本地登录态|复用现有 Codex Home、可选能力检测，不依赖桌面应用内部工具或新增登录|
 |任务栏内部结构|版本适配与明确回退，Windows 11 独立验收|
 |旧库不可恢复 / 日志缺失|备份与缺口诊断，不能伪造完整历史|
 

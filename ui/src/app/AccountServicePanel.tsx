@@ -3,7 +3,7 @@ import { displayPolicy } from '../shared/display-policy';
 import { cancelAccountServiceSelection, chooseAccountService, getAccountQuota, getAccountServiceConfig, manageAccountConnection, onAccountQuotaChanged, onSettingsChanged, refreshAccountQuota, runtimeError, saveAccountServiceConfig } from '../shared/runtime';
 import type { AccountConnectionRequest, AccountServiceConfigSnapshot, AccountServiceSelection, AccountServiceSelectionKind, QuotaSnapshot, QuotaState } from '../shared/generated/contracts';
 
-const states: Record<QuotaState, string> = { disconnected: '未连接', connecting: '正在连接', authorization_required: '需要账户授权', unsupported: '当前连接不提供账户额度', ready: '额度已更新', stale: '旧额度快照', error: '额度读取失败' };
+const states: Record<QuotaState, string> = { disconnected: '未连接', connecting: '正在读取本地账户', authorization_required: '本地登录态不可用', unsupported: '当前连接不提供账户额度', ready: '额度已更新', stale: '旧额度快照', error: '额度读取失败' };
 type Cached<T> = { epoch: number; value: T };
 type Draft = { selection: AccountServiceSelection; auto: boolean };
 
@@ -107,7 +107,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
     {notice && <p role="status" className="notice">{notice}</p>}
     <article className="source-card">
       <h3>{draft ? '待保存的连接配置' : '已保存的连接配置'}</h3>
-      <p className="muted">选择本机原生 codex.exe，通过受控账户服务读取额度。选择和保存不会启动服务；点击连接后启动。</p>
+      <p className="muted">选择本机原生 codex.exe 和已登录的 Codex Home，复用现有登录状态读取额度，无需在 TokenPulse 重新登录。选择和保存不会启动服务；点击连接后读取。</p>
       {!preview ? <p className="muted">尚未读取连接配置</p> : !preview.configured ? <p className="muted">尚未配置账户服务</p> : <dl><dt>服务程序</dt><dd className="source-path">{unhidden ? preview.executable_display_path ?? '—' : '已隐藏'}</dd><dt>Codex Home</dt><dd className="source-path">{unhidden ? preview.home_display_path ?? '账户服务默认目录' : '已隐藏'}</dd><dt>程序指纹（SHA-256）</dt><dd className="source-path">{unhidden ? preview.executable_sha256 ?? '—' : '已隐藏'}</dd></dl>}
       <div className="source-actions"><button disabled={!selectable} onClick={() => void choose('executable')}>选择账户服务程序</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('home')}>选择账户服务 Home</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('default_home')}>使用服务默认 Home</button></div>
       <label className="account-auto"><input type="checkbox" checked={draft?.auto ?? config?.auto_connect ?? false} disabled={!selectable || !preview?.configured} onChange={e => { const auto = e.target.checked; if (draft) setDraft({ epoch: policy.epoch, value: { ...draft, auto } }); else void choose('current', auto); }} />启动 TokenPulse 时自动连接此服务</label>
@@ -115,7 +115,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
     </article>
     <article className="source-card">
       <h3>当前连接账户</h3><p role="status">{quota ? states[quota.state] : '尚未读取连接状态'}</p>
-      {quota?.state === 'authorization_required' && <p className="muted">账户服务需要登录授权；授权流程尚未接入，请勿将本地用量当作账户剩余额度。</p>}
+      {quota?.state === 'authorization_required' && <p className="muted">所选 Codex Home 没有可用的 ChatGPT 登录状态。请选择本地已登录账户使用的 Home，再重新连接；本地用量统计继续可用。</p>}
       {quota?.state === 'stale' && <p className="notice">保留上次成功额度。以下读数可能已过期，等待服务更新。</p>}
       {quota?.error_code && <p className="muted">服务状态：{quota.error_code}</p>}
       <div className="source-actions"><button className="primary" disabled={busy || !unhidden || !!draft || !config?.configured || !config.executable_sha256 || !quota || quota.state === 'connecting'} onClick={() => { if (config?.executable_sha256 && quota) void connection({ kind: 'connect', expected_settings_revision: config.settings_revision, expected_connection_epoch: quota.connection_epoch, acknowledged_executable_sha256: config.executable_sha256 }); }}>连接已保存服务</button><button disabled={busy || !quota || quota.state === 'disconnected'} onClick={() => { if (quota) void connection({ kind: 'disconnect', expected_connection_epoch: quota.connection_epoch }); }}>断开本次连接</button><button disabled={busy || !unhidden || !quota || !['ready', 'stale', 'error'].includes(quota.state)} onClick={() => void refresh()}>刷新账户额度</button></div>

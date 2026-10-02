@@ -284,7 +284,7 @@ type MiniSnapshot = {
 |`get_mini_snapshot`|主窗口、小窗；返回独立用量与额度修订|
 |`set_mini_scope`|主窗口、小窗；后台保存并通知所有入口|
 |`get_account_quota` / `refresh_account_quota`|主窗口、小窗；刷新返回受限请求状态，保留旧快照|
-|`manage_account_connection`|仅主窗口；connect / authorize / disconnect / select_limit，受控配置|
+|`manage_account_connection`|仅主窗口；connect / disconnect / select_limit，复用本地登录态与受控配置|
 |`set_display_privacy`|主窗口、小窗、原生动作；返回 settings revision，所有入口同步|
 |`perform_window_action`|主窗口、小窗；受限打开统计、展开、隐藏、置顶、恢复交互|
 |`get_taskbar_status`|偏好与实际宿主状态、能力、版本、失败原因|
@@ -541,3 +541,10 @@ get_account_service_config / choose_account_service / cancel_account_service_sel
 connect 复核 expected_settings_revision、acknowledged_executable_sha256、expected_connection_epoch，从已保存内部目标构造 NativeService 后交由 owner；不存在任意可执行路径 / 参数 / RPC / token 接口。disconnect 只要求当前 epoch，不依赖 SQLite 可读，也不修改启动偏好；select_limit 额外要求 expected_quota_revision。管理响应是最新 PrivateResponse<QuotaSnapshot>。启动只执行已保存 auto_connect=true；配置 / 程序失效保留配置，目标验证失败发布 error / QUOTA_SERVICE_UNAVAILABLE，默认不建立外部连接。完整冷启动和在线账户仍待验收。
 
 正式设置页获取配置与额度，不使用主筛选推导账户；选择 / 保存 / 连接由明确用户操作触发。原生私有响应迟到时隐私门禁拒绝并释放选择，当前可见缓存绑定隐私 epoch，事件属于失效提示。授权 / 取消命令继续在后续实际登录模块定义；本节取代前面历史模块中“管理命令未注册”的阶段描述。
+
+
+### 2.29 本地现有登录态复用（2026-10-02 用户修订）
+
+本节与开发总入口 §1.1 / §6.1 统一：不增加 authorize、浏览器登录、设备码登录或取消登录 IPC / 作业。manage_account_connection 保留已实现的 connect / disconnect / select_limit；connect 对用户确认的本地原生程序和 Home 建立受控服务，复用其现有登录状态。账户服务只发送 account/read（refreshToken=false）和 account/rateLimits/read，净化账户状态后才允许额度查询。TokenPulse 不获取或保存 access token、refresh token、原始认证文件或账户返回全文。
+
+authorization_required 保留 DTO 枚举和 QUOTA_AUTH_REQUIRED 错误以兼容领域状态，正式文案为“本地登录态不可用”，引导改选已登录账户使用的 Home 并重新连接。该状态不是待实现新登录入口；它仍与 disconnected / unsupported / error / stale 分开，不伪造额度，也不阻止本地用量统计。当前及旧文档中“后续登录 / 取消”条目由此用户修订撤销；真实已有账户的额度读取、跨入口共享与冷进程启动仍按实际证据验收。

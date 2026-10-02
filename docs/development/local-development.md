@@ -58,3 +58,16 @@ DTO 权威位于 `crates/token-pulse-core/src/protocol.rs`，`npm run contracts`
 `ui/` 为正式前端；`prototypes/` 保留设计原型，不进入生产包。`token-pulse-core` 无窗口依赖；`token-pulse-store` 仅写应用数据；`src-tauri` 装配生命周期与受限 IPC。主窗口自定义命令在 AppManifest 和 capability 中枚举，并在后台检查窗口 label；无通用 shell、SQL 或前端文件读写权限。
 
 关闭窗口隐藏到托盘；托盘“打开统计”恢复窗口，“退出 TokenPulse”结束进程。单实例只激活统计窗口，忽略第二实例的其他参数。
+
+
+## 复用本地已登录账户的显式验收
+
+账户能力使用已有 Codex Home 登录状态，设计见[账户专题](../design/account-quota.md)和[统一开发设计](../design/development-design.md)。TokenPulse 不新增登录流程；所选 Home 不可用时改选已有登录 Home。生产应用通过设置页选择 / 保存程序与 Home 后连接，不依赖这个开发 example。
+
+只有用户明确要求检查真实本地账户时运行以下可选验收；替换为已经选择的本机原生程序和已有 Home。该 feature 不属于默认测试 / CI，也不应放入自动验收脚本。只发送账户状态与额度读取，正常断开退出；验收程序本身仅输出净化后的额度 DTO 字段，不输出身份 / 路径 / 原始认证或服务消息；Cargo 的运行提示会显示传入的程序和 Home 路径。
+
+```powershell
+cargo run -p token-pulse-quota --features local-account-check --example local_account_check -- --read-existing-account 'C:\实际安装目录\codex.exe' 'C:\已登录的CodexHome'
+```
+
+该命令需要已支持 App Server 的本地程序和可用登录态；没有可用额度返回相应状态与非零退出码，不创建登录作业。单次成功不证明后台通知、跨账户、完整冷启动或其他系统版本已验收，实际结果见[交付记录](delivery-status.md)。

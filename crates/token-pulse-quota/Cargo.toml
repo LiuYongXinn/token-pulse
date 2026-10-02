@@ -23,3 +23,8 @@ required-features = ["test-fixture"]
 
 [features]
 test-fixture = []
+local-account-check = []
+
+[[example]]
+name = "local_account_check"
+required-features = ["local-account-check"]
