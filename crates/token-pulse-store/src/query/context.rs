@@ -13,7 +13,7 @@ pub fn latest_context(tx: &Transaction<'_>, session_key: &str) -> StoreResult<Co
         include_unknown: false,
     }
     .validate()?;
-    let ledger:Option<String>=tx.query_row("SELECT s.active_ledger_id FROM sessions s WHERE s.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=?1),?1)",[session_key],|r|r.get(0)).optional()?.ok_or(ErrorCode::InvalidQuery)?;
+    let ledger:String=tx.query_row("SELECT s.active_ledger_id FROM sessions s WHERE s.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=?1),?1) AND s.active_ledger_id IS NOT NULL",[session_key],|r|r.get(0)).optional()?.ok_or(ErrorCode::InvalidQuery)?;
     let row=tx.query_row("SELECT context_tokens,model_context_window,observed_at_ms,quality_json FROM context_snapshots WHERE ledger_id=?1 ORDER BY observed_at_ms DESC,context_id COLLATE BINARY ASC LIMIT 1",[ledger],|r|Ok((r.get::<_,Option<i64>>(0)?,r.get::<_,Option<i64>>(1)?,r.get::<_,i64>(2)?,r.get::<_,String>(3)?))).optional()?;
     let Some((tokens, capacity, time, quality)) = row else {
         return Ok(ContextSnapshot {

@@ -71,7 +71,7 @@ impl Database {
     pub fn session_has_usage(&self, session: &str) -> StoreResult<bool> {
         self.snapshot(|tx, _| {
             Ok(tx.query_row(
-                "SELECT EXISTS(SELECT 1 FROM observations WHERE session_key=?1 AND kind='usage')",
+                "SELECT EXISTS(SELECT 1 FROM observations o JOIN file_generations g ON g.file_generation_id=o.file_generation_id JOIN source_files f ON f.current_generation_id=g.file_generation_id AND f.file_id=g.file_id WHERE o.session_key=?1 AND o.kind='usage' AND g.state='current')",
                 [session],
                 |r| r.get(0),
             )?)
@@ -111,7 +111,7 @@ impl Database {
         provider_id: &str,
         exclude_session: &str,
     ) -> StoreResult<bool> {
-        self.snapshot(|tx,_|Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions s LEFT JOIN session_aliases a ON a.alias_session_key=s.session_key WHERE s.provider='codex' AND s.provider_session_id=?1 AND COALESCE(a.canonical_session_key,s.session_key)<>?2)",params![provider_id,exclude_session],|r|r.get(0))?))
+        self.snapshot(|tx,_|Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions s LEFT JOIN session_aliases a ON a.alias_session_key=s.session_key WHERE s.active_ledger_id IS NOT NULL AND s.provider='codex' AND s.provider_session_id=?1 AND COALESCE(a.canonical_session_key,s.session_key)<>?2)",params![provider_id,exclude_session],|r|r.get(0))?))
     }
     pub fn resolve_session(&self, session: &str) -> StoreResult<String> {
         self.snapshot(|tx,_|{

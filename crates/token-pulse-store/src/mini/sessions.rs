@@ -1,4 +1,4 @@
-//! All registered canonical sessions, including sessions without confirmed consumption.
+//! Published canonical sessions, including sessions without confirmed consumption.
 use crate::{
     Database, ErrorCode, StoreResult,
     leases::{LeaseHandle, cursor::QueryBinding},
@@ -61,7 +61,7 @@ impl Database {
                 values.push(Value::Text(position.session_key.clone())); " AND s.session_key COLLATE BINARY > ?"
             } else { "" };
             values.push(Value::Integer(i64::from(query.page_size) + 1));
-            let sql = format!("SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key) AS label FROM sessions s WHERE NOT EXISTS(SELECT 1 FROM session_aliases a WHERE a.alias_session_key=s.session_key AND a.canonical_session_key<>s.session_key) AND (usage_search_contains(COALESCE(s.provider_session_id,s.session_key),?)){continuation} ORDER BY s.session_key COLLATE BINARY LIMIT ?");
+            let sql = format!("SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key) AS label FROM sessions s WHERE s.active_ledger_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM session_aliases a WHERE a.alias_session_key=s.session_key AND a.canonical_session_key<>s.session_key) AND (usage_search_contains(COALESCE(s.provider_session_id,s.session_key),?)){continuation} ORDER BY s.session_key COLLATE BINARY LIMIT ?");
             let mut statement = tx.prepare(&sql)?;
             let options = statement.query_map(params_from_iter(values), |row| Ok(MiniSessionOption { session_key: row.get(0)?, display_name: row.get(1)? }))?.collect::<Result<Vec<_>,_>>()?;
             let id = snapshot_id(handle);

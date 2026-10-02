@@ -87,3 +87,6 @@ impl From<serde_json::Error> for StoreError {
 pub fn prepare_data_directory(path: &Path) -> io::Result<()> {
     std::fs::create_dir_all(path)
 }
+
+#[cfg(test)]
+mod publication_visibility_tests;

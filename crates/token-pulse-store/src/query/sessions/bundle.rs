@@ -22,7 +22,7 @@ fn identity(row: &Row<'_>) -> rusqlite::Result<SessionIdentity> {
         parent_provider_id: row.get(4)?,
     })
 }
-const IDENTITY: &str = "SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key),parent.session_key,COALESCE(parent.provider_session_id,parent.session_key),s.parent_provider_id FROM sessions s LEFT JOIN sessions parent ON parent.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key)";
+const IDENTITY: &str = "SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key),parent.session_key,COALESCE(parent.provider_session_id,parent.session_key),s.parent_provider_id FROM sessions s LEFT JOIN sessions parent ON parent.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key) AND parent.active_ledger_id IS NOT NULL";
 
 pub(super) fn scoped_filter(
     tx: &Transaction<'_>,
@@ -31,7 +31,7 @@ pub(super) fn scoped_filter(
 ) -> StoreResult<(String, token_pulse_core::protocol::UsageFilter)> {
     let key = canonical(tx, session_key)?;
     let exists: bool = tx.query_row(
-        "SELECT EXISTS(SELECT 1 FROM sessions WHERE session_key=?1)",
+        "SELECT EXISTS(SELECT 1 FROM sessions WHERE session_key=?1 AND active_ledger_id IS NOT NULL)",
         [&key],
         |r| r.get(0),
     )?;
@@ -94,7 +94,7 @@ pub(super) fn bundle(
         project_id: row.latest_project_id,
         project_display_name: row.latest_project_name,
     });
-    let children_where = "COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key)=?1 AND NOT EXISTS(SELECT 1 FROM session_aliases WHERE alias_session_key=s.session_key)";
+    let children_where = "s.active_ledger_id IS NOT NULL AND COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key)=?1 AND NOT EXISTS(SELECT 1 FROM session_aliases WHERE alias_session_key=s.session_key)";
     let child_count: i64 = tx.query_row(
         &format!("SELECT COUNT(*) FROM sessions s WHERE {children_where}"),
         [&key],

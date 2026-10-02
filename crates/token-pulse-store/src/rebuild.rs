@@ -86,7 +86,8 @@ pub(crate) fn dependency_closure(
     let mut selected = BTreeSet::new();
     match scope {
         JobScope::All {} => {
-            let mut s = tx.prepare("SELECT session_key FROM sessions")?;
+            let mut s =
+                tx.prepare("SELECT session_key FROM sessions WHERE active_ledger_id IS NOT NULL")?;
             for row in s.query_map([], |r| r.get::<_, String>(0))? {
                 selected.insert(row?);
             }
@@ -94,7 +95,7 @@ pub(crate) fn dependency_closure(
         JobScope::Sessions { session_keys } => {
             for key in session_keys {
                 if !tx.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM sessions WHERE session_key=?1)",
+                    "SELECT EXISTS(SELECT 1 FROM sessions WHERE session_key=?1 AND active_ledger_id IS NOT NULL)",
                     [key],
                     |r| r.get::<_, bool>(0),
                 )? {
@@ -112,7 +113,7 @@ pub(crate) fn dependency_closure(
                 )? {
                     return Err(ErrorCode::InvalidQuery.into());
                 }
-                selected.extend(ids(tx,"SELECT DISTINCT b.session_key FROM file_session_bindings b JOIN file_generations g ON b.file_generation_id=g.file_generation_id JOIN source_files f ON f.file_id=g.file_id WHERE f.source_id=?1",source)?);
+                selected.extend(ids(tx,"SELECT DISTINCT b.session_key FROM file_session_bindings b JOIN sessions s ON s.session_key=b.session_key JOIN file_generations g ON b.file_generation_id=g.file_generation_id JOIN source_files f ON f.file_id=g.file_id WHERE f.source_id=?1 AND s.active_ledger_id IS NOT NULL",source)?);
             }
         }
     }
@@ -123,7 +124,7 @@ pub(crate) fn dependency_closure(
         }
         let neighbors = ids(
             tx,
-            "SELECT DISTINCT other.session_key FROM sessions seed JOIN sessions other ON other.provider=seed.provider AND (other.session_key=seed.parent_key OR other.parent_key=seed.session_key OR (seed.provider_session_id IS NOT NULL AND (other.provider_session_id=seed.provider_session_id OR other.parent_provider_id=seed.provider_session_id)) OR (seed.parent_provider_id IS NOT NULL AND other.provider_session_id=seed.parent_provider_id)) WHERE seed.session_key=?1",
+            "SELECT DISTINCT other.session_key FROM sessions seed JOIN sessions other ON other.provider=seed.provider AND (other.session_key=seed.parent_key OR other.parent_key=seed.session_key OR (seed.provider_session_id IS NOT NULL AND (other.provider_session_id=seed.provider_session_id OR other.parent_provider_id=seed.provider_session_id)) OR (seed.parent_provider_id IS NOT NULL AND other.provider_session_id=seed.parent_provider_id)) WHERE seed.session_key=?1 AND other.active_ledger_id IS NOT NULL",
             &key,
         )?;
         for other in neighbors {
@@ -139,7 +140,7 @@ fn input_file(tx: &Transaction<'_>, generation: &str) -> StoreResult<FileInput> 
 }
 // A binding is historical evidence, not permission to replay that physical generation.
 // Missing or paused sources retain their current pointer, so their stored history is included.
-fn current_inputs(tx: &Transaction<'_>, session: &str) -> StoreResult<Vec<String>> {
+pub(crate) fn current_inputs(tx: &Transaction<'_>, session: &str) -> StoreResult<Vec<String>> {
     ids(
         tx,
         "SELECT b.file_generation_id FROM file_session_bindings b JOIN file_generations g ON g.file_generation_id=b.file_generation_id JOIN source_files f ON f.file_id=g.file_id AND f.current_generation_id=g.file_generation_id WHERE b.session_key=?1 AND g.state='current'",

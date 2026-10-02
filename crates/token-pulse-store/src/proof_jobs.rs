@@ -28,7 +28,7 @@ fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String
     }
     let seeds = match trigger {
         Trigger::Proof => {
-            let mut q=tx.prepare("SELECT s.session_key FROM sessions s WHERE s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) AND EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=s.active_ledger_id AND p.kind='pending') AND (EXISTS(SELECT 1 FROM file_usage_cursors c WHERE c.ledger_id=s.active_ledger_id AND c.state='rebuild_required') OR EXISTS(SELECT 1 FROM sessions peer LEFT JOIN session_aliases a ON a.alias_session_key=peer.session_key WHERE peer.provider=s.provider AND peer.provider_session_id=s.provider_session_id AND COALESCE(a.canonical_session_key,peer.session_key)<>s.session_key) OR EXISTS(SELECT 1 FROM sessions parent WHERE parent.provider=s.provider AND (parent.session_key=s.parent_key OR parent.provider_session_id=s.parent_provider_id))) ORDER BY s.session_key LIMIT 32768")?;
+            let mut q=tx.prepare("SELECT s.session_key FROM sessions s WHERE s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) AND EXISTS(SELECT 1 FROM pending_usage p WHERE p.ledger_id=s.active_ledger_id AND p.kind='pending') AND (EXISTS(SELECT 1 FROM file_usage_cursors c WHERE c.ledger_id=s.active_ledger_id AND c.state='rebuild_required') OR EXISTS(SELECT 1 FROM sessions peer LEFT JOIN session_aliases a ON a.alias_session_key=peer.session_key WHERE peer.active_ledger_id IS NOT NULL AND peer.provider=s.provider AND peer.provider_session_id=s.provider_session_id AND COALESCE(a.canonical_session_key,peer.session_key)<>s.session_key) OR EXISTS(SELECT 1 FROM sessions parent WHERE parent.active_ledger_id IS NOT NULL AND parent.provider=s.provider AND (parent.session_key=s.parent_key OR parent.provider_session_id=s.parent_provider_id))) ORDER BY s.session_key LIMIT 32768")?;
             q.query_map([], |r| r.get::<_, String>(0))?
                 .collect::<crate::rusqlite::Result<Vec<_>>>()?
         }
@@ -72,11 +72,7 @@ fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String
                 }
                 hash.update(serde_json::to_vec(&ledger)?);
             }
-            let mut q=tx.prepare("SELECT file_generation_id FROM file_session_bindings WHERE session_key=?1 ORDER BY file_generation_id")?;
-            files.extend(
-                q.query_map([&session], |r| r.get::<_, String>(0))?
-                    .collect::<crate::rusqlite::Result<Vec<_>>>()?,
-            );
+            files.extend(crate::rebuild::current_inputs(tx, &session)?);
         }
         let mut complete =
             complete_parser && (matches!(trigger, Trigger::AccountingUpgrade) || !files.is_empty());

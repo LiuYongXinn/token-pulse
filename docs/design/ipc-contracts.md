@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M06f4 不增加 DTO 或新命令。普通会话读取以已拥有活跃账本为发布边界；选择器排除未发布身份，直接详情 / 轮次 / 上下文及固定范围提交返回 INVALID_QUERY。父子工具内部键 / 名称与 child_count 仅包含已发布会话，已确认的 provider 父标识继续保留；真实空账本的上下文未知字段保持 null。选择器分页继续由原 SQLite 租约固定可见性，候选身份发布后只有新快照可见。
+
 M06e2 沿用现有 Coverage DTO，不新增扫描历史接口。Complete 现在可由真实目录枚举与当前文件读取证明产生；无选中来源或缺失证明保持 Unknown，已知文件 / 格式 / 待归属缺口保持 Partial。source_issues 新增受控原因 `source_scanning`、`source_scan_interrupted`、`source_scan_changed`、`source_scan_incomplete`、`source_scan_pending`；查询在自己的 SQLite 快照验证证据，不能用最近成功时间或 ready 缓存标志替代。每个时间桶保留自身核算缺口，来源级缺口适用于所有桶，Token 分项完整性继续独立表达。DTO / TypeScript / schema 字段未变化。
 
 2026-10-02 范围确认见[实施计划第 7 节](../development/implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。不新增 manage_startup、额外快捷键、WSL / 网络来源或旧格式自动重解析命令；诊断仅保留基本状态、错误与定位。notify、计价 / 重估、账户、任务栏和更新契约继续保留。auto_connect 是软件启动后的账户连接偏好，与已取消的开机启动无关。后文已实现协议记录保留历史事实，不修改既有 schema。
