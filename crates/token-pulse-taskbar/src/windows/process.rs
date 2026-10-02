@@ -1,4 +1,4 @@
-use super::{RestoreDisposition, recover_terminated_host, topology::ProbeError};
+use super::{RestoreDisposition, guardian::Guardian, topology::ProbeError};
 use super::{Startup, TransportError};
 use std::{
     os::windows::{io::AsRawHandle, process::CommandExt},
@@ -35,11 +35,11 @@ impl Drop for Job {
 pub struct HostProcess {
     child: Child,
     job: Option<Job>,
-    instance: String,
     cleanup: Option<Result<RestoreDisposition, ProbeError>>,
+    guardian: Option<Guardian>,
 }
 impl HostProcess {
-    pub fn spawn(executable: &Path, startup: &Startup) -> Result<Self, TransportError> {
+    pub async fn spawn(executable: &Path, startup: &Startup) -> Result<Self, TransportError> {
         startup.validate()?;
         if !executable.is_absolute()
             || executable
@@ -67,7 +67,7 @@ impl HostProcess {
             token_pulse_core::sources::SourceOrigin::Custom,
         )
         .map_err(|_| TransportError::InvalidStartup)?;
-        let child = Command::new(executable)
+        let child = Command::new(&executable)
             .args(startup.arguments())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -78,8 +78,8 @@ impl HostProcess {
         let mut owned = Self {
             child,
             job: None,
-            instance: startup.instance.clone(),
             cleanup: None,
+            guardian: None,
         };
         unsafe {
             let raw = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -101,6 +101,7 @@ impl HostProcess {
             }
             owned.job = Some(job);
         }
+        owned.guardian = Some(Guardian::launch(&executable, startup, &owned.child).await?);
         owned.resume()?;
         Ok(owned)
     }
@@ -148,6 +149,9 @@ impl HostProcess {
     pub fn id(&self) -> u32 {
         self.child.id()
     }
+    pub fn guardian_id(&self) -> Option<u32> {
+        self.guardian.as_ref().map(Guardian::id)
+    }
     pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
         self.child.try_wait()
     }
@@ -159,10 +163,22 @@ impl HostProcess {
         }
         self.job.take();
         let _ = self.child.kill();
-        let result = if self.child.wait().is_ok() {
-            recover_terminated_host(&self.instance, &self.child)
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let ended = loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break true,
+                Err(_) => break false,
+                Ok(None) if std::time::Instant::now() >= until => break false,
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            }
+        };
+        let result = if ended {
+            self.guardian
+                .as_mut()
+                .map(|g| g.finish())
+                .unwrap_or(Ok(RestoreDisposition::NoRecord))
         } else {
-            Err(ProbeError::Os)
+            Err(ProbeError::CleanupTimeout)
         };
         self.cleanup = Some(result);
         result

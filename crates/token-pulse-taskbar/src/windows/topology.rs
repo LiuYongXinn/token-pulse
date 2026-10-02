@@ -36,6 +36,8 @@ pub enum ProbeError {
     UnsafeGeometry,
     InsufficientSpace,
     BackgroundUnavailable,
+    CleanupTimeout,
+    GuardianUnavailable,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScreenRect {

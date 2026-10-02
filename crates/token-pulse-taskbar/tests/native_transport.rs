@@ -93,6 +93,8 @@ fn native_controllers(pid: u32) -> Vec<bool> {
 async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_process() {
     let mut connection = HostConnection::launch(executable()).await.unwrap();
     let process = ProcessWait::open(connection.process_id());
+    let guardian = ProcessWait::open(connection.guardian_id());
+    assert_ne!(connection.guardian_id(), connection.process_id());
     assert_eq!(native_controllers(connection.process_id()), [false]);
     assert!(matches!(
         connection
@@ -137,6 +139,7 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     connection.shutdown().await.unwrap();
     assert!(connection.last_cleanup().is_some());
     process.terminated().await;
+    guardian.terminated().await;
     assert!(native_controllers(connection.process_id()).is_empty());
     assert_eq!(
         connection.exchange(HostMessage::Heartbeat {}).await.err(),
@@ -186,7 +189,7 @@ async fn actual_host_rejects_wrong_parent_nonce_and_partial_frames() {
             startup.parent_pid = std::process::id() + 1;
         }
         let mut pipe = transport::create_server(&startup).unwrap();
-        let owned = HostProcess::spawn(executable(), &startup).unwrap();
+        let owned = HostProcess::spawn(executable(), &startup).await.unwrap();
         let process = ProcessWait::open(owned.id());
         timeout(Duration::from_secs(3), pipe.connect())
             .await
@@ -231,7 +234,7 @@ async fn actual_host_rejects_wrong_parent_nonce_and_partial_frames() {
 async fn idle_heartbeat_deadline_exits_actual_host_without_parent_kill() {
     let startup = Startup::new();
     let mut pipe = transport::create_server(&startup).unwrap();
-    let owned = HostProcess::spawn(executable(), &startup).unwrap();
+    let owned = HostProcess::spawn(executable(), &startup).await.unwrap();
     let process = ProcessWait::open(owned.id());
     timeout(Duration::from_secs(3), pipe.connect())
         .await
@@ -265,8 +268,8 @@ async fn idle_heartbeat_deadline_exits_actual_host_without_parent_kill() {
     process.terminated().await;
     drop(owned);
 }
-#[test]
-fn startup_is_narrow_and_native_executable_path_cannot_be_a_shell_or_network() {
+#[tokio::test(flavor = "current_thread")]
+async fn startup_is_narrow_and_native_executable_path_cannot_be_a_shell_or_network() {
     let startup = Startup::new();
     Startup::parse(startup.arguments()).unwrap();
     let mut extra = startup.arguments().to_vec();
@@ -275,12 +278,17 @@ fn startup_is_narrow_and_native_executable_path_cannot_be_a_shell_or_network() {
     let mut wrong = startup.clone();
     wrong.instance = "../foreign".into();
     assert!(wrong.validate().is_err());
-    assert!(HostProcess::spawn(Path::new(r"C:\windows\system32\cmd.exe"), &startup).is_err());
+    assert!(
+        HostProcess::spawn(Path::new(r"C:\windows\system32\cmd.exe"), &startup)
+            .await
+            .is_err()
+    );
     assert!(
         HostProcess::spawn(
             Path::new(r"\\foreign\share\token-pulse-taskbar-host.exe"),
             &startup
         )
+        .await
         .is_err()
     );
 }

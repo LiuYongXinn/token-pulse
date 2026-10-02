@@ -183,6 +183,7 @@ pub struct HostConnection {
     pipe: NamedPipeServer,
     process: Option<HostProcess>,
     process_id: u32,
+    guardian_id: u32,
     startup: Startup,
     sent: i128,
     received: i128,
@@ -193,7 +194,7 @@ impl HostConnection {
     pub async fn launch(executable: &Path) -> Result<Self, TransportError> {
         let startup = Startup::new();
         let pipe = create_server(&startup)?;
-        let process = HostProcess::spawn(executable, &startup)?;
+        let process = HostProcess::spawn(executable, &startup).await?;
         timeout(IO_TIMEOUT, pipe.connect())
             .await
             .map_err(|_| TransportError::Timeout)??;
@@ -201,6 +202,7 @@ impl HostConnection {
         let mut connection = Self {
             pipe,
             process_id: process.id(),
+            guardian_id: process.guardian_id().ok_or(TransportError::Native)?,
             process: Some(process),
             startup,
             sent: 0,
@@ -218,6 +220,9 @@ impl HostConnection {
     }
     pub fn process_id(&self) -> u32 {
         self.process_id
+    }
+    pub fn guardian_id(&self) -> u32 {
+        self.guardian_id
     }
     pub fn last_cleanup(&self) -> Option<Result<RestoreDisposition, ProbeError>> {
         self.last_cleanup
