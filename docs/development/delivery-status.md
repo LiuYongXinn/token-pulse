@@ -2,6 +2,20 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M06g：真实文件夹选择与来源普通流程
+
+新增显式 `native-smoke.ps1 -SourceDialogs`，使用 UUID native-probe 隔离库及自有合成 Home，从实际 React 设置按钮打开正式 `choose_source_directory` 的 Windows Common Item Dialog；取消返回 null，不增加来源或推进配置。选择通过实际原生 Edit / Button 控件消息完成，核对应用 PID、精确对话框标题、控件类别 / ID、输入值及对话框关闭。辅助进程只操作本测试的窗口、不发送全局输入，失败尝试关闭自己的对话框，父端只收有限错误码，并等待 / 收集自己的辅助进程；不依赖真实账户或生产数据。
+
+仅此 debug 验收场景在正式选择回调内核对 canonical 目录等于本次 synthetic-dialog-home，然后才签发原有不透明句柄；误选真实目录不能进入来源登记或采集。没有增加 renderer 路径参数 / 新 IPC / 生产依赖，release 排除场景和门禁。返回存在性 / 匹配标记不输出所选路径或日志内容；首次运行空态的旧开发进度文案改为实际导入、持续更新及独立账户连接说明，主窗口布局保持。
+
+实际 Win10 19045 / 150% DPI：最终完整场景输出 NATIVE_SOURCE_DIALOG_CANCELLED / SELECTED、FIXTURE_MATCH true、NATIVE_SOURCE_DIALOGS_OK，退出 0。经正常后台只读导入合成 17 Token，React 暂停 / 恢复 / 移除保留历史按钮通过；移除后正式总览 DTO 在明确 UTC 日期范围仍返回 17 Token、输入分项 null、未计价 17 Token，直接 SQLite 及源完整字节复核一致。这里是实际系统选择器和 WebView 的程序化交互，不是物理鼠标 / 键盘或其他系统版本的验收。WebView2 注销类 1412 提示继续保留。
+
+初轮驱动错误地按 UI Automation 数字 ID 匹配 Shell 列表项，且当前标准控件投影为 Pane；改为核对实际原生窗口控件。跨进程 Edit 读取改用有界 WM_GETTEXT，符合 [Microsoft GetWindowText 说明](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw)。随后来源数量断言误把账户配置卡片计算在内；数据库已证实一个正确来源后，修正为仅来源列表。失败各轮未计成功，也未放宽目录 / 精确统计 / 源只读断言。
+
+自动：来源页面一项合成 DTO Playwright 回归、TS / Vite 生产构建、desktop all-targets strict Clippy、release check、fmt 通过。辅助脚本解析 / diff 检查随后记录。未运行性能测试，不恢复取消范围。账户 / notify 自身选择器、物理输入 / Explorer / Win11 / 多屏 DPI、正式签名发布与实际完整升级仍分别待验收；最新本地安装包仍是 M16d 当时的构建，本步骤尚未重新打包该空态文案。
+
+最终两份 PowerShell 脚本 AST 解析及 diff 检查通过，探测结束 TokenPulse 应用 / 宿主进程数量 0。原用户未提交文件保持原样，验证脚本和文案 / 文档作为同一普通来源流程模块提交。
+
 ## M16d：本地签名发布资产准备
 
 新增 release-only 维护入口，实际桌面 exe 在初始化前核对编译公钥 / 版本、全局签名及可信版本字段，缺失 / 重复 / 版本不符拒绝；create_new 验证记录包含编译 target、公钥摘要、安装包 / 原签名哈希及十进制字节，不包含私钥、认证、来源或本机路径。不启动桌面服务、数据库、网络或安装器，debug 构建没有可用发布验证入口；主窗与 mini 未增加 IPC 权限。已有 notify 维护入口和正常运行顺序保持。

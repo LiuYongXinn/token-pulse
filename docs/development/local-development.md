@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+## Windows 来源选择器验收
+
+先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -SourceDialogs`。仅 debug、显式 native-smoke 及 UUID native-probe 数据目录可运行；辅助脚本打开并操作测试进程自己的真实 Windows 文件夹选择器，取消 / 输入 / 确认后检查 React 来源管理和只读后台导入。控件定位核对 PID / 标题 / 类别 / ID，使用有界原生消息，不进行全局输入、抢其他进程焦点或操作其他窗口。误选路径在正式回调签发句柄之前必须拒绝，源码中这一限制仅用于本显式验收场景。
+
+Win10 19045 / 150% 已完整通过：NATIVE_SOURCE_DIALOGS_OK / 退出 0，17 Token、暂停 / 恢复、移除保留历史、真实总览 DTO 的未知分项 / 未计价及源字节检查一致；1412 退出提示仍保留。实际系统选择器的程序化操作与物理鼠标 / 键盘分别记录；此入口不验证账户程序 / Home 或 notify 的选择器，不读真实来源或认证，不运行性能测试。`npx playwright test tests/ui/sources.spec.ts` 是单独的合成 UI 回归。此源码修改尚未覆盖下方 M16d 安装包的既有哈希。
+
 ## 本地签名发布准备
 
 `npm run release:prepare -- --desktop <同次构建的桌面exe> --installer <NSIS安装包> --signature <安装包.sig> --output <尚不存在的输出目录> --published-at <UTC时间> [--notes <UTF-8说明文件>]` 只生成本地资产，不上传 GitHub、不生成密钥、不读取认证或正式数据。UTC 时间采用 `2026-10-03T00:00:00.000Z` 形式；版本必须在 Cargo workspace、package.json、tauri.conf.json 一致，安装器名称必须为 `TokenPulse_<版本>_x64-setup.exe` 或对应 arm64。生成清单固定使用本仓库 `releases/download/v<版本>/`，无任意发布 URL 参数。

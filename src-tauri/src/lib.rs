@@ -281,6 +281,8 @@ pub fn run() {
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {notify_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-updates-smoke") {update_smoke::start(app.handle().clone());return Ok(());}
                 #[cfg(windows)]
+                if std::env::args().any(|arg|arg=="--native-source-dialogs-smoke") {source_dialog_smoke::start(app.handle().clone());return Ok(());}
+                #[cfg(windows)]
                 if std::env::args().any(|arg| arg == "--native-recovery-routes-smoke") {shortcuts_smoke::start_routes(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-diagnostics-smoke") {diagnostics_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::start(app.handle().clone());return Ok(());}
@@ -434,6 +436,8 @@ mod shortcuts_smoke;
 #[cfg(debug_assertions)]
 mod smoke;
 mod source_commands;
+#[cfg(all(debug_assertions, windows))]
+mod source_dialog_smoke;
 mod taskbar_commands;
 mod taskbar_service;
 #[cfg(all(debug_assertions, windows))]

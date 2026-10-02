@@ -96,6 +96,18 @@ pub async fn choose_source_directory(
         )));
     }
     let selections = Arc::clone(&state.selections);
+    #[cfg(all(debug_assertions, windows))]
+    let fixture_root = if std::env::args().any(|a| a == "--native-smoke")
+        && std::env::args().any(|a| a == "--native-source-dialogs-smoke")
+        && state
+            .data_directory
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("native-probe-"))
+    {
+        Some(state.data_directory.join("synthetic-dialog-home"))
+    } else {
+        None
+    };
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<Option<SourceDirectorySelection>, ErrorCode> {
             let Some(selected) = app
@@ -109,8 +121,16 @@ pub async fn choose_source_directory(
                 })
                 .blocking_pick_folder()
             else {
+                #[cfg(all(debug_assertions, windows))]
+                if fixture_root.is_some() {
+                    println!("NATIVE_SOURCE_DIALOG_CANCELLED");
+                }
                 return Ok(None);
             };
+            #[cfg(all(debug_assertions, windows))]
+            if fixture_root.is_some() {
+                println!("NATIVE_SOURCE_DIALOG_SELECTED");
+            }
             let origin = if kind == SourceDirectoryKind::Wsl {
                 SourceOrigin::Wsl
             } else {
@@ -122,6 +142,15 @@ pub async fn choose_source_directory(
             let path = std::fs::canonicalize(path).map_err(|_| ErrorCode::SourceUnreadable)?;
             let path = displayable_path(path, origin)?;
             validate_root(&path, origin)?;
+            #[cfg(all(debug_assertions, windows))]
+            if let Some(expected) = fixture_root {
+                let matches = path
+                    == std::fs::canonicalize(expected).map_err(|_| ErrorCode::SourceUnreadable)?;
+                println!("NATIVE_SOURCE_DIALOG_FIXTURE_MATCH: {matches}");
+                if !matches {
+                    return Err(ErrorCode::PermissionDenied);
+                }
+            }
             let handle = uuid::Uuid::new_v4().to_string();
             let root_path = path.to_str().ok_or(ErrorCode::InvalidQuery)?.to_owned();
             selections
