@@ -1,5 +1,6 @@
 //! Independent collection service; no renderer, IDE, authentication or external CLI dependencies.
 pub mod jobs;
+pub mod replacement;
 pub mod replay;
 pub mod service;
 use sha2::{Digest, Sha256};

@@ -225,6 +225,72 @@ fn shrinking_candidate_bound_is_a_new_change_even_when_committed_offset_still_fi
     assert_eq!(c.checkpoint.checkpoint_revision, 0);
 }
 #[test]
+fn active_lookup_validation_and_reopening_ready_candidate_keep_checkpoint_and_facts() {
+    let (_d, db) = populated();
+    let before = active(&db);
+    assert!(db.active_file_read_candidate("file").unwrap().is_none());
+    db.begin_file_read_candidate(request()).unwrap();
+    db.stage_file_candidate_batch(batch()).unwrap();
+    db.seal_file_read_candidate("replacement".into(), 1, 4)
+        .unwrap();
+    assert_eq!(
+        db.active_file_read_candidate("file")
+            .unwrap()
+            .unwrap()
+            .state,
+        "ready"
+    );
+    db.validate_file_read_candidate("replacement").unwrap();
+    assert_eq!(
+        db.reopen_file_read_candidate("replacement".into(), 0, 5)
+            .unwrap_err()
+            .code,
+        ErrorCode::RevisionConflict
+    );
+    db.reopen_file_read_candidate("replacement".into(), 1, 5)
+        .unwrap();
+    let c = db.file_read_candidate("replacement").unwrap();
+    assert_eq!(c.state, "reading");
+    assert_eq!(c.checkpoint.committed_offset, 100);
+    assert_eq!(c.checkpoint.checkpoint_revision, 1);
+    assert_eq!(active(&db), before);
+    db.fail_file_read_candidate("replacement".into(), ErrorCode::CandidateObsolete, 6)
+        .unwrap();
+    assert!(db.active_file_read_candidate("file").unwrap().is_none());
+}
+#[test]
+fn claimed_candidate_cannot_be_reopened_or_cancelled_by_the_file_reader() {
+    let (_d, db) = populated();
+    db.begin_file_read_candidate(request()).unwrap();
+    db.stage_file_candidate_batch(batch()).unwrap();
+    db.seal_file_read_candidate("replacement".into(), 1, 4)
+        .unwrap();
+    db.write(|conn| {
+        conn.execute("UPDATE file_read_candidates SET state='claimed'", [])?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        db.active_file_read_candidate("file")
+            .unwrap()
+            .unwrap()
+            .state,
+        "claimed"
+    );
+    assert_eq!(
+        db.reopen_file_read_candidate("replacement".into(), 1, 5)
+            .unwrap_err()
+            .code,
+        ErrorCode::RevisionConflict
+    );
+    assert_eq!(
+        db.fail_file_read_candidate("replacement".into(), ErrorCode::JobCancelled, 5)
+            .unwrap_err()
+            .code,
+        ErrorCode::RevisionConflict
+    );
+}
+#[test]
 fn staged_observations_diagnostics_and_candidate_checkpoint_rollback_together() {
     let (_d, db) = populated();
     db.begin_file_read_candidate(request()).unwrap();

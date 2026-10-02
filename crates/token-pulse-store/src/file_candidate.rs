@@ -161,6 +161,28 @@ impl Database {
     pub fn file_read_candidate(&self, generation: &str) -> StoreResult<FileReadCandidate> {
         self.snapshot(|tx, _| load(tx, generation))
     }
+    pub fn active_file_read_candidate(&self, file: &str) -> StoreResult<Option<FileReadCandidate>> {
+        self.snapshot(|tx,_| {
+            let id:Option<String>=tx.query_row("SELECT generation_id FROM file_read_candidates WHERE file_id=?1 AND state IN ('reading','ready','claimed')",[file],|r|r.get(0)).optional()?;
+            id.map(|id|load(tx,&id)).transpose()
+        })
+    }
+    pub fn validate_file_read_candidate(&self, generation: &str) -> StoreResult<()> {
+        self.snapshot(|tx, _| fresh(tx, &load(tx, generation)?))
+    }
+    pub fn reopen_file_read_candidate(
+        &self,
+        generation: String,
+        expected_revision: i64,
+        at_ms: i64,
+    ) -> StoreResult<()> {
+        EpochMs::new(at_ms)?;
+        self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let c=load(&tx,&generation)?;fresh(&tx,&c)?;
+            if c.state!="ready"||c.checkpoint.checkpoint_revision!=expected_revision {return Err(ErrorCode::RevisionConflict.into());}
+            tx.execute("UPDATE file_read_candidates SET state='reading',updated_at_ms=?1 WHERE generation_id=?2",params![at_ms,generation])?;tx.commit()?;Ok(())
+        })
+    }
     pub fn stage_file_candidate_batch(&self, batch: FileCandidateBatch) -> StoreResult<i64> {
         EpochMs::new(batch.at_ms)?;
         if batch.expected_offset < 0
