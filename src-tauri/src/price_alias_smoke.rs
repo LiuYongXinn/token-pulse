@@ -6,7 +6,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_PRICE_ALIAS_OK: real main WebView versioned create/replace/retire/history/CAS/conflicts, committed notifications, mini denied, shared privacy projection; UI editing acceptance separate"
+                "NATIVE_PRICE_ALIAS_OK: real main WebView versioned create/replace/retire/history/CAS/conflicts, committed notifications, mini denied, shared privacy projection, actual React alias form create/replace/history/retire and captured stale draft"
             ),
             Err(error) => eprintln!("NATIVE_PRICE_ALIAS_FAILED: {error}"),
         }
@@ -59,6 +59,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     "#).and_then(|_| super::mini_smoke::evaluate(app, &mini, r#"
       let denied=false;try{await invoke('mutate_model_alias',{requestId:'alias-mini-denied',request:{kind:'create',draft:{provider:'synthetic',alias:'a',canonical_model:'b'}},expectedPriceRevision:'4'});}catch{denied=true;}if(!denied)throw new Error('ALIAS_MINI_ALLOWED');
     "#));
+    let result = result.and_then(|_| verify_editor(app, &main));
     app.unlisten(subscription);
     result?;
     let revisions: Vec<String> = receiver
@@ -69,10 +70,55 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 .map_err(|e| e.to_string())
         })
         .collect::<Result<_, _>>()?;
-    if revisions != ["1", "2", "3", "4"] {
+    if revisions != ["1", "2", "3", "4", "5", "6", "7", "8"] {
         return Err(format!(
             "alias committed notifications mismatch: {revisions:?}"
         ));
     }
     Ok(())
+}
+fn verify_editor(app: &tauri::AppHandle, main: &tauri::WebviewWindow) -> Result<(), String> {
+    super::mini_smoke::evaluate(
+        app,
+        main,
+        r#"
+      [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='设置').click();
+      await wait(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='价格规则'));
+      [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='价格规则').click();
+      const find=(text,root=document)=>[...root.querySelectorAll('button')].find(n=>n.textContent===text);
+      const input=(label,root=document)=>[...root.querySelectorAll('label')].find(n=>n.firstChild?.textContent===label)?.querySelector('input');
+      const fill=(node,value)=>{if(!node)throw new Error('ALIAS_UI_INPUT_MISSING');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));};
+      const version=(n)=>document.querySelector('.price-version')?.textContent.startsWith('当前价格版本 '+n);
+      await wait(()=>find('新增别名')?.disabled===false&&version(4));
+      find('新增别名').click();
+      await wait(()=>document.querySelector('form[aria-label="新增模型别名"]'));
+      let form=document.querySelector('form[aria-label="新增模型别名"]');
+      fill(input('提供方',form),'synthetic-ui');fill(input('日志模型标识',form),'synthetic-ui-snapshot');fill(input('标准模型标识',form),'synthetic-ui-canonical');
+      await new Promise(resolve=>setTimeout(resolve,50));
+      find('保存别名并发布版本',form).click();await wait(()=>version(5)&&find('编辑别名'));
+      find('编辑别名').click();await wait(()=>document.querySelector('form[aria-label="替换模型别名"]'));
+      form=document.querySelector('form[aria-label="替换模型别名"]');fill(input('标准模型标识',form),'synthetic-ui-changed');
+      await new Promise(resolve=>setTimeout(resolve,50));find('保存别名并发布版本',form).click();
+      await wait(()=>version(6)&&document.querySelector('.model-alias-table')?.textContent.includes('synthetic-ui-changed'));
+      fill(document.querySelector('[aria-label="历史价格版本"]'),'5');await new Promise(resolve=>setTimeout(resolve,50));find('查看').click();
+      await wait(()=>document.querySelector('.price-version')?.textContent.startsWith('历史价格版本 5'));
+      if(!document.querySelector('.model-alias-table')?.textContent.includes('synthetic-ui-canonical')||find('新增别名').disabled!==true||find('编辑别名'))throw new Error('ALIAS_UI_HISTORY_NOT_READONLY');
+      find('刷新当前版本').click();await wait(()=>version(6)&&find('退休别名'));
+      find('退休别名').click();await wait(()=>version(7)&&document.querySelector('.model-alias-empty'));
+      find('新增别名').click();await wait(()=>document.querySelector('form[aria-label="新增模型别名"]'));
+      form=document.querySelector('form[aria-label="新增模型别名"]');fill(input('提供方',form),'synthetic-ui');fill(input('日志模型标识',form),'unsaved-ui');fill(input('标准模型标识',form),'unsaved-canonical');
+      await invoke('mutate_model_alias',{requestId:'alias-ui-external',request:{kind:'create',draft:{provider:'synthetic-external',alias:'external',canonical_model:'external-canonical'}},expectedPriceRevision:'7'});
+      find('刷新当前版本').click();await wait(()=>version(8));find('保存别名并发布版本',form).click();
+      await wait(()=>document.querySelector('.price-panel [role=alert]')?.textContent.includes('配置或作业状态已发生变化'));
+      if(!form.isConnected||input('日志模型标识',form).value!=='unsaved-ui'||!form.textContent.includes('基于版本 7 发布'))throw new Error('ALIAS_UI_STALE_DRAFT_LOST');
+      const settings=await invoke('get_display_settings',{requestId:'alias-ui-policy'});
+      await invoke('set_display_privacy',{requestId:'alias-ui-policy-hide',request:{privacy:true,expected_settings_revision:settings.data.settings_revision}});
+      await wait(()=>!document.querySelector('.price-panel')&&document.body.textContent.includes('价格规则已隐藏'));
+      if(document.body.textContent.includes('unsaved-ui')||document.querySelector('input[value="unsaved-ui"]'))throw new Error('ALIAS_UI_PRIVATE_DRAFT_NOT_CLEARED');
+      const hiddenSettings=await invoke('get_display_settings',{requestId:'alias-ui-hidden-policy'});
+      await invoke('set_display_privacy',{requestId:'alias-ui-policy-show',request:{privacy:false,expected_settings_revision:hiddenSettings.data.settings_revision}});
+      await wait(()=>version(8)&&find('新增别名')?.disabled===false);
+      if(document.querySelector('form[aria-label="新增模型别名"]')||document.body.textContent.includes('unsaved-ui'))throw new Error('ALIAS_UI_PRIVATE_DRAFT_RESTORED');
+    "#,
+    )
 }

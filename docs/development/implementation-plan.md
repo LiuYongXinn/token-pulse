@@ -328,3 +328,7 @@ HostQuota 增加独立 last_attempt_at_ms 和受限 ErrorCode，成功读取时�
 ## M09f1：模型别名的写入基础
 
 用户别名版本化创建 / 替换 / 退休、精确修订 CAS、历史保持与正式 main-only IPC 已交付。领域 11 项、存储 / 查询计价 18 项及 strict Clippy / fmt / 契约 / typecheck 通过；Win10 隔离 -PriceAliases 的实际 WebView / SQLite / 成功通知 / 隐私和 mini 权限检查通过，退出 0。别名编辑 UI 接下来接入；实际离线目录、持久费用缓存和独立重估继续保留。细节见[交付记录](delivery-status.md#m09f1版本化模型别名写入与正式-ipc)。
+
+## M09f2：模型别名设置入口
+
+版本化别名已接正式价格页，支持新增 / 替换 / 退休、历史只读、原修订草稿和失败保持、共享隐私清除及重新读取。4 项价格 / 别名浏览器检查、生产前端构建和 strict Clippy / fmt 通过；Win10 -PriceAliases 实际 WebView 表单 / 历史 / 外部更新冲突 / 隐私清除回归通过、退出 0。模型别名普通使用流程已贯通；离线价格目录、持久费用缓存及独立后台重估为接下来 M09 工作，不以此宣称完整计价模块完成。范围与证据见[交付记录](delivery-status.md#m09f2正式模型别名编辑器)。

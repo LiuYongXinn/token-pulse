@@ -581,3 +581,5 @@ M13e6 不新增前端命令，既有 TaskbarPreferences.position 的 application
 ### M09f1：模型别名写入
 
 主窗口专用 mutate_model_alias(request: ModelAliasMutation, expectedPriceRevision: DecimalInt, requestId)，request 为 create { draft } / replace { alias_id, draft } / retire { alias_id }，draft 包含 provider、alias、canonical_model，拒绝未知字段。返回 PriceRulesSnapshot（price_revision / rules / aliases）及最新隐私策略戳。成功提交发既有 price_rules_changed { price_revision, all_models: true }，失败不发；重复 / 链式冲突 PRICE_RULE_CONFLICT，旧价格修订 REVISION_CONFLICT，非法标识 / 非用户映射 INVALID_QUERY。mini capability 无此命令；不提供任意 SQL / 模型查询 / 路径接口。Rust / TS / schema 同步；设置编辑器随后接入，不将隐私下空数组解释为配置不存在。
+
+M09f2 的前端 mutateModelAlias 继续复用响应身份、显示策略戳与 epoch 门禁，主窗口别名表单保持捕获的 expectedPriceRevision；刷新当前快照不悄悄改成最新写入基线。成功采用事务内完整 PriceRulesSnapshot，价格通知继续触发既有统计失效；错误保留草稿，隐私卸载并清空编辑器，关闭后重新查询。无新增 IPC 或 schema，历史 / 目录只读不是后台权限缺失。

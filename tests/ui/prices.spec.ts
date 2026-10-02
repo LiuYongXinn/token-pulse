@@ -7,18 +7,30 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     let revision = 0, nextId = 0;
     let rules: Record<string, unknown>[] = [];
+    let aliases: Record<string, unknown>[] = [];
     const history = new Map<number, Record<string, unknown>[]>([[0, []]]);
+    const aliasHistory = new Map<number, Record<string, unknown>[]>([[0, []]]);
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
       if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data });
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
-      const current = () => ({ price_revision: String(revision), rules: structuredClone(rules), aliases: [] });
+      const current = () => ({ price_revision: String(revision), rules: structuredClone(rules), aliases: structuredClone(aliases) });
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
       if (command === 'get_price_rules') {
         if (args.revision === null) return response(current());
         const value = Number(args.revision); if (!history.has(value)) throw { code: 'INVALID_QUERY' };
-        return response({ price_revision: String(value), rules: structuredClone(history.get(value)), aliases: [] });
+        return response({ price_revision: String(value), rules: structuredClone(history.get(value)), aliases: structuredClone(aliasHistory.get(value)) });
+      }
+      if (command === 'mutate_model_alias') {
+        if (args.expectedPriceRevision !== String(revision)) throw { code: 'REVISION_CONFLICT' };
+        const request = args.request as { kind: string; alias_id?: string; draft?: Record<string, unknown> };
+        const remaining = aliases.filter(alias => alias.alias_id !== request.alias_id);
+        const draft = request.draft;
+        if (draft && remaining.some(alias => alias.provider === draft.provider && (alias.alias === draft.alias || alias.alias === draft.canonical_model || alias.canonical_model === draft.alias))) throw { code: 'PRICE_RULE_CONFLICT' };
+        aliases = remaining; revision += 1;
+        if (draft) aliases.push({ ...draft, alias_id: `alias-custom-synthetic-${++nextId}`, introduced_revision: String(revision), retired_revision: null });
+        history.set(revision, structuredClone(rules)); aliasHistory.set(revision, structuredClone(aliases)); return response(current());
       }
       if (command === 'save_price_rule' || command === 'retire_price_rule') {
         if (args.expectedPriceRevision !== String(revision)) throw { code: 'REVISION_CONFLICT' };
@@ -28,14 +40,83 @@ test.beforeEach(async ({ page }) => {
         if (id !== undefined) rules = rules.filter(rule => rule.rule_id !== id);
         revision += 1;
         if (request) rules.push({ ...request.draft, rule_id: `synthetic-${++nextId}`, introduced_revision: String(revision), retired_revision: null, created_at_ms: 1000, origin: 'custom' });
-        history.set(revision, structuredClone(rules)); return response(current());
+        history.set(revision, structuredClone(rules)); aliasHistory.set(revision, structuredClone(aliases)); return response(current());
       }
       throw new Error(`unexpected synthetic command ${command}`);
-    } }, __advanceSyntheticPriceRevision: () => { revision += 1; history.set(revision, structuredClone(rules)); } });
+    } }, __advanceSyntheticPriceRevision: () => { revision += 1; history.set(revision, structuredClone(rules)); aliasHistory.set(revision, structuredClone(aliases)); } });
   });
   await page.goto('/');
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('tab', { name: '价格规则', exact: true }).click();
+});
+
+test('model aliases publish, replace, preserve history and retire with ordinary layout', async ({ page }) => {
+  const panel = page.getByRole('tabpanel', { name: '价格规则设置' });
+  const aliases = panel.getByRole('region', { name: '模型别名', exact: true });
+  await aliases.getByRole('button', { name: '新增别名', exact: true }).click();
+  const editor = aliases.getByRole('form', { name: '新增模型别名' });
+  await editor.getByLabel('提供方', { exact: true }).fill('synthetic-provider');
+  await editor.getByLabel('日志模型标识', { exact: true }).fill('snapshot-fixture');
+  await editor.getByLabel('标准模型标识', { exact: true }).fill('canonical-fixture');
+  await expect(panel.getByRole('button', { name: '新增规则', exact: true })).toBeDisabled();
+  await page.screenshot({ path: 'test-results/model-alias-editor-dark-1280.png', fullPage: true });
+  await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await expect(panel.getByText('当前价格版本 1', { exact: true })).toBeVisible();
+  const row = aliases.getByRole('row').filter({ hasText: 'snapshot-fixture' });
+  await expect(row.getByText('canonical-fixture', { exact: true })).toBeVisible();
+  await row.getByRole('button', { name: '编辑别名' }).click();
+  const replacement = aliases.getByRole('form', { name: '替换模型别名' });
+  await replacement.getByLabel('标准模型标识', { exact: true }).fill('new-canonical-fixture');
+  await replacement.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await expect(panel.getByText('当前价格版本 2', { exact: true })).toBeVisible();
+  await panel.getByRole('textbox', { name: '历史价格版本' }).fill('1');
+  await panel.getByRole('button', { name: '查看', exact: true }).click();
+  await expect(row.getByText('canonical-fixture', { exact: true })).toBeVisible();
+  await expect(aliases.getByRole('button', { name: '新增别名' })).toBeDisabled();
+  await expect(row.getByText('只读', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: '刷新当前版本' }).click();
+  await expect(row.getByText('new-canonical-fixture', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 960, height: 680 });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await page.screenshot({ path: 'test-results/model-alias-history-light-960.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await row.getByRole('button', { name: '退休别名' }).click();
+  await expect(panel.getByText('当前价格版本 3', { exact: true })).toBeVisible();
+  await expect(aliases.getByText('此版本暂无模型别名。')).toBeVisible();
+});
+
+test('alias self mapping and CAS conflict preserve draft and exact captured revision', async ({ page }) => {
+  const panel = page.getByRole('tabpanel', { name: '价格规则设置' });
+  const aliases = panel.getByRole('region', { name: '模型别名', exact: true });
+  await aliases.getByRole('button', { name: '新增别名' }).click();
+  const editor = aliases.getByRole('form', { name: '新增模型别名' });
+  await editor.getByLabel('提供方', { exact: true }).fill('synthetic-provider');
+  await editor.getByLabel('日志模型标识', { exact: true }).fill('a');
+  await editor.getByLabel('标准模型标识', { exact: true }).fill('a');
+  await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await expect(panel.getByRole('alert')).toContainText('别名须指向不同');
+  await expect(panel.getByText('当前价格版本 0', { exact: true })).toBeVisible();
+  await editor.getByLabel('标准模型标识', { exact: true }).fill('b');
+  await page.evaluate(() => (window as unknown as { __advanceSyntheticPriceRevision: () => void }).__advanceSyntheticPriceRevision());
+  await panel.getByRole('button', { name: '刷新当前版本' }).click();
+  await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await expect(panel.getByRole('alert')).toContainText('配置或作业状态已发生变化');
+  await expect(editor.getByText('基于版本 0 发布；失败或冲突会保留草稿。')).toBeVisible();
+  await expect(editor.getByLabel('标准模型标识', { exact: true })).toHaveValue('b');
+  await editor.getByRole('button', { name: '取消别名编辑' }).click();
+  await aliases.getByRole('button', { name: '新增别名' }).click();
+  await editor.getByLabel('提供方', { exact: true }).fill('synthetic-provider');
+  await editor.getByLabel('日志模型标识', { exact: true }).fill('a');
+  await editor.getByLabel('标准模型标识', { exact: true }).fill('b');
+  await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await aliases.getByRole('button', { name: '新增别名' }).click();
+  await editor.getByLabel('提供方', { exact: true }).fill('synthetic-provider');
+  await editor.getByLabel('日志模型标识', { exact: true }).fill('incoming');
+  await editor.getByLabel('标准模型标识', { exact: true }).fill('a');
+  await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
+  await expect(panel.getByRole('alert')).toContainText('模型别名与现有映射冲突');
+  await expect(editor.getByLabel('日志模型标识', { exact: true })).toHaveValue('incoming');
+  await expect(panel.getByText('当前价格版本 2', { exact: true })).toBeVisible();
 });
 
 test('price editor preserves precise rates, null cache prices, immutable history and retirement', async ({ page }) => {

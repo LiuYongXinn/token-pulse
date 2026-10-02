@@ -1,0 +1,8 @@
+.model-aliases { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.model-aliases > .panel-heading { margin-bottom: 20px; }
+.model-alias-empty { padding: 14px 0; }
+.model-alias-table th:nth-child(2) { width: 30%; }
+.price-table.model-alias-table th:last-child { width: 24%; }
+.model-alias-table button { white-space: nowrap; }
+.price-table.model-alias-table { min-width: 0; }
+.model-aliases .price-editor > .muted { margin-bottom: 16px; }

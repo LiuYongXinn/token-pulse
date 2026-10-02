@@ -7,6 +7,7 @@ import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage
 
 import type { AppStatus, Response, WindowAction, SourcesSnapshot, SourceDirectorySelection, SourceDirectoryKind, ManageSourceAction, Job, JobRequest, CancelJobResult, ContextSnapshot, PriceRuleMutation, PriceRulesSnapshot, DashboardRequest, DashboardBundle, GroupedUsageRequest, GroupedUsageBundle } from './generated/contracts';
 import type { PriceChanged } from './generated/contracts';
+import type { ModelAliasMutation } from './generated/contracts';
 import type { SessionsPage, SessionsRequest } from './generated/contracts';
 import type { SessionBundle, SessionBundleRequest } from './generated/contracts';
 import type { TurnsPage, TurnsRequest } from './generated/contracts';
@@ -117,6 +118,7 @@ export function resolveCalendarSelection(query: CalendarSelectionRequest): Promi
 export function queryUsageEvents(query: UsageEventsRequest): Promise<UsageEventsPage> { return request('query_usage_events', { request: query }); }
 export async function closeQuerySnapshot(query: CloseQuerySnapshotRequest): Promise<void> { await request<null>('close_query_snapshot', { request: query }); }
 export function getPriceRules(revision: string | null = null): Promise<PriceRulesSnapshot> { return request('get_price_rules', { revision }); }
+export function mutateModelAlias(aliasRequest: ModelAliasMutation, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('mutate_model_alias', { request: aliasRequest, expectedPriceRevision }); }
 export function savePriceRule(priceRequest: Exclude<PriceRuleMutation, { kind: 'retire' }>, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('save_price_rule', { request: priceRequest, expectedPriceRevision }); }
 export function retirePriceRule(ruleId: string, expectedPriceRevision: string): Promise<PriceRulesSnapshot> { return request('retire_price_rule', { ruleId, expectedPriceRevision }); }
 export function runtimeError(error: unknown): string {
