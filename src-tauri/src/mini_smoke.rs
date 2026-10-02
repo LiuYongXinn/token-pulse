@@ -7,6 +7,14 @@ pub(super) fn evaluate(
     window: &WebviewWindow,
     script: &str,
 ) -> Result<(), String> {
+    evaluate_with_timeout(app, window, script, Duration::from_secs(8))
+}
+pub(super) fn evaluate_with_timeout(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+    script: &str,
+    timeout: Duration,
+) -> Result<(), String> {
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     let event = format!("native-mini-probe-{}", uuid::Uuid::new_v4());
     let listener = app.listen(event.clone(), move |e| {
@@ -16,13 +24,13 @@ pub(super) fn evaluate(
     let code = format!(
         r#"(async()=>{{
       const invoke=window.__TAURI_INTERNALS__.invoke;
-      const wait=async check=>{{for(let i=0;i<100;i++){{if(check())return;await new Promise(r=>setTimeout(r,30));}}throw new Error('UI_WAIT_FAILED:'+check.toString());}};
+      const wait=async (check,attempts=100)=>{{for(let i=0;i<attempts;i++){{if(check())return;await new Promise(r=>setTimeout(r,30));}}throw new Error('UI_WAIT_FAILED:'+check.toString());}};
       let result=true;try{{ {script} }}catch(error){{result={{error:error instanceof Error ? error.message : error.code ?? 'IPC_REJECTED'}};}}
       await invoke('plugin:event|emit',{{event:{event_json},payload:result}});
     }})();"#
     );
     window.eval(code).map_err(|e| e.to_string())?;
-    let result = receiver.recv_timeout(Duration::from_secs(8));
+    let result = receiver.recv_timeout(timeout);
     app.unlisten(listener);
     if result.as_deref() == Ok("true") {
         Ok(())

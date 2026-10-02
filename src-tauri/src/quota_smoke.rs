@@ -216,8 +216,38 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if terminated != 0 {
         return Err("owned account process survived disconnect".into());
     }
+    if token_pulse_quota::detect_local_service(None).is_ok() {
+        // Real installed binaries may be much larger than the synthetic test fixture.
+        // This is a bounded functional wait for file inspection, not a latency benchmark.
+        super::mini_smoke::evaluate_with_timeout(
+            app,
+            &main,
+            r#"
+          const before=await invoke('get_account_service_config',{requestId:'native-detect-before'});
+          const region=document.querySelector('section[aria-label="账户额度连接"]');
+          await wait(()=>[...region.querySelectorAll('button')].some(b=>b.textContent==='检测本地 Codex'&&!b.disabled));
+          [...region.querySelectorAll('button')].find(b=>b.textContent==='检测本地 Codex').click();
+          try { await wait(()=>region.textContent.includes('已检测到本地程序，请核对程序和 Home 后保存。'),500); }
+          catch { throw new Error('LOCAL_DETECTION_UI_FAILED:'+JSON.stringify({alerts:[...region.querySelectorAll('[role=alert]')].map(e=>e.textContent),busy:[...region.querySelectorAll('button')].find(b=>b.textContent==='检测本地 Codex').disabled})); }
+          if(![...region.querySelectorAll('button')].find(b=>b.textContent==='连接已保存服务').disabled)throw new Error('DETECTION_DRAFT_CONNECTED');
+          const after=await invoke('get_account_service_config',{requestId:'native-detect-after'});
+          const quota=await invoke('get_account_quota',{requestId:'native-detect-no-launch'});
+          if(JSON.stringify(before.data)!==JSON.stringify(after.data) || quota.data.state!=='disconnected')throw new Error('DETECTION_CHANGED_SAVED_STATE');
+          [...region.querySelectorAll('button')].find(b=>b.textContent==='放弃账户配置草稿').click();
+          await wait(()=>[...region.querySelectorAll('button')].some(b=>b.textContent==='保存账户连接配置'&&b.disabled));
+        "#,
+            Duration::from_secs(20),
+        )?;
+        println!(
+            "NATIVE_LOCAL_DETECTION_OK: actual installed native program metadata, real WebView detection draft, saved configuration and quota unchanged, no account launched"
+        );
+    } else {
+        println!(
+            "NATIVE_LOCAL_DETECTION_UNAVAILABLE: no installed native program/Home; local discovery fixture checks are independent"
+        );
+    }
     println!(
-        "NATIVE_ACCOUNT_CONFIG_OK: synthetic native executable, exact IPC guards, atomic Writer failure and retry, persisted startup hook (same process), real WebView configuration/save/connect/select/disconnect, mini permissions, owned process termination; OS picker and live login remain unverified"
+        "NATIVE_ACCOUNT_CONFIG_OK: synthetic native executable, exact IPC guards, atomic Writer failure and retry, persisted startup hook (same process), real WebView configuration/save/connect/select/disconnect, mini permissions, owned process termination; OS picker and long-running real-account scenarios remain unverified"
     );
     Ok(())
 }

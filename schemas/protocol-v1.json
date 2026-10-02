@@ -238,6 +238,7 @@
     "AccountServiceSelectionKind": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
+        "detect_local",
         "current",
         "executable",
         "home",
@@ -250,6 +251,7 @@
       "$defs": {
         "AccountServiceSelectionKind": {
           "enum": [
+            "detect_local",
             "current",
             "executable",
             "home",

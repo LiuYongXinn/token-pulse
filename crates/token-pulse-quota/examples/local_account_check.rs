@@ -10,7 +10,19 @@ use token_pulse_quota::{NativeService, service::AccountQuotaService};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
-    if args.next().as_deref() != Some(std::ffi::OsStr::new("--read-existing-account")) {
+    let action = args.next();
+    if action.as_deref() == Some(std::ffi::OsStr::new("--inspect-local")) {
+        if args.next().is_some() {
+            return Err("unexpected inspection argument".into());
+        }
+        let target = token_pulse_quota::detect_local_service(None)?;
+        println!(
+            "{}",
+            serde_json::json!({"probe":"local-service-detection","native_program_found":true,"existing_home_found":target.home_path.is_some()})
+        );
+        return Ok(());
+    }
+    if action.as_deref() != Some(std::ffi::OsStr::new("--read-existing-account")) {
         return Err(
             "explicit --read-existing-account and native executable / Home paths required".into(),
         );

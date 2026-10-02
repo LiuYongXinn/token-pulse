@@ -32,7 +32,8 @@ test.beforeEach(async ({ page }) => {
           if (request.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
           const base = selections.get(String(request.base_selection_handle)) ?? config;
           const selected = { ...base, settings_revision: revision };
-          if (request.kind === 'executable') Object.assign(selected, { executable_display_path: 'E:\\synthetic-account\\codex.exe', executable_sha256: 'a'.repeat(64), configured: true });
+          if (request.kind === 'executable' || request.kind === 'detect_local') Object.assign(selected, { executable_display_path: 'E:\\synthetic-account\\codex.exe', executable_sha256: 'a'.repeat(64), configured: true });
+          if (request.kind === 'detect_local' && !base.configured) selected.home_display_path = 'E:\\synthetic-account\\existing-home';
           if (request.kind === 'home') selected.home_display_path = 'E:\\synthetic-account\\home';
           if (request.kind === 'default_home') selected.home_display_path = null;
           const handle = `synthetic-capability-${++serial}`; selections.set(handle, selected); if (request.base_selection_handle) selections.delete(String(request.base_selection_handle));
@@ -96,6 +97,19 @@ test('failed writes retain draft; revision conflict requires deliberate reselect
   await region.getByRole('button', { name: '刷新连接状态' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click(); await expect(region.getByRole('alert')).toContainText('已发生变化');
   await region.getByRole('button', { name: '放弃账户配置草稿' }).click(); await region.getByRole('button', { name: '选择账户服务程序' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click();
   await expect(region.getByText('连接配置已保存；用于下次连接或启动，当前连接保持原状。')).toBeVisible();
+});
+
+test('local detection returns a reviewable draft without connecting and preserves the explicit Home', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click(); const region = page.getByRole('region', { name: '账户额度连接' });
+  await region.getByRole('button', { name: '检测本地 Codex' }).click();
+  await expect(region.getByText('E:\\synthetic-account\\existing-home', { exact: true })).toBeVisible();
+  await expect(region.getByRole('button', { name: '连接已保存服务' })).toBeDisabled();
+  await region.getByRole('button', { name: '选择账户服务 Home' }).click();
+  await region.getByRole('button', { name: '检测本地 Codex' }).click();
+  await expect(region.getByText('E:\\synthetic-account\\home', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as QA).__quotaQA.calls().filter(v => ['manage_account_connection', 'save_account_service_config'].includes(v.command)))).toEqual([]);
+  await region.getByRole('button', { name: '保存账户连接配置' }).click();
+  await expect(region.getByRole('button', { name: '连接已保存服务' })).toBeEnabled();
 });
 
 test('privacy clears path and capabilities; authorization required stays distinct from quota', async ({ page }) => {

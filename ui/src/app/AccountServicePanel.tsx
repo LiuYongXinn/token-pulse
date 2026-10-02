@@ -70,11 +70,15 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
   };
   const choose = (kind: AccountServiceSelectionKind, auto?: boolean) => run(async (generation, epoch) => {
     if (!config || !unhidden) return;
-    const selected = await chooseAccountService({ kind, base_selection_handle: draft?.selection.selection_handle ?? null, expected_settings_revision: draft?.selection.preview.settings_revision ?? config.settings_revision });
+    const selected = await chooseAccountService({ kind, base_selection_handle: draft?.selection.selection_handle ?? null, expected_settings_revision: draft?.selection.preview.settings_revision ?? config.settings_revision }).catch(error => {
+      if (kind === 'detect_local' && typeof error === 'object' && error !== null && 'code' in error && error.code === 'QUOTA_SERVICE_UNAVAILABLE') throw new Error('未检测到可用的本地原生 Codex 程序或现有 Home。请手动选择程序和已登录的 Home。');
+      throw error;
+    });
     if (!selected) return;
     if (!current(generation, epoch)) { await cancelAccountServiceSelection(selected.selection_handle).catch(() => {}); return; }
     lease.current = selected.selection_handle;
     setDraft({ epoch, value: { selection: selected, auto: auto ?? draft?.auto ?? config.auto_connect } });
+    if (kind === 'detect_local') setNotice('已检测到本地程序，请核对程序和 Home 后保存。检测不会建立账户连接。');
   });
   const discard = async () => {
     const handle = lease.current; lease.current = null; setDraft(null);
@@ -109,7 +113,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
       <h3>{draft ? '待保存的连接配置' : '已保存的连接配置'}</h3>
       <p className="muted">选择本机原生 codex.exe 和已登录的 Codex Home，复用现有登录状态读取额度，无需在 TokenPulse 重新登录。选择和保存不会启动服务；点击连接后读取。</p>
       {!preview ? <p className="muted">尚未读取连接配置</p> : !preview.configured ? <p className="muted">尚未配置账户服务</p> : <dl><dt>服务程序</dt><dd className="source-path">{unhidden ? preview.executable_display_path ?? '—' : '已隐藏'}</dd><dt>Codex Home</dt><dd className="source-path">{unhidden ? preview.home_display_path ?? '账户服务默认目录' : '已隐藏'}</dd><dt>程序指纹（SHA-256）</dt><dd className="source-path">{unhidden ? preview.executable_sha256 ?? '—' : '已隐藏'}</dd></dl>}
-      <div className="source-actions"><button disabled={!selectable} onClick={() => void choose('executable')}>选择账户服务程序</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('home')}>选择账户服务 Home</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('default_home')}>使用服务默认 Home</button></div>
+      <div className="source-actions"><button className="primary" disabled={!selectable} onClick={() => void choose('detect_local')}>检测本地 Codex</button><button disabled={!selectable} onClick={() => void choose('executable')}>选择账户服务程序</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('home')}>选择账户服务 Home</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('default_home')}>使用服务默认 Home</button></div>
       <label className="account-auto"><input type="checkbox" checked={draft?.auto ?? config?.auto_connect ?? false} disabled={!selectable || !preview?.configured} onChange={e => { const auto = e.target.checked; if (draft) setDraft({ epoch: policy.epoch, value: { ...draft, auto } }); else void choose('current', auto); }} />启动 TokenPulse 时自动连接此服务</label>
       <div className="source-actions"><button className="primary" disabled={busy || !unhidden || !draft} onClick={() => void save()}>保存账户连接配置</button><button disabled={busy || !draft} onClick={() => void discard()}>放弃账户配置草稿</button></div>
     </article>

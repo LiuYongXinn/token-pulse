@@ -32,6 +32,13 @@ impl NativeService {
             return Err(ErrorCode::InvalidQuery);
         }
         #[cfg(windows)]
+        for path in std::iter::once(executable).chain(home) {
+            token_pulse_core::sources::validate_root(
+                path,
+                token_pulse_core::sources::SourceOrigin::Custom,
+            )?;
+        }
+        #[cfg(windows)]
         if !executable
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
@@ -41,6 +48,11 @@ impl NativeService {
         let executable = executable
             .canonicalize()
             .map_err(|_| ErrorCode::QuotaServiceUnavailable)?;
+        #[cfg(windows)]
+        token_pulse_core::sources::validate_root(
+            &executable,
+            token_pulse_core::sources::SourceOrigin::Custom,
+        )?;
         #[cfg(windows)]
         if !executable
             .extension()
@@ -58,6 +70,13 @@ impl NativeService {
                     .map_err(|_| ErrorCode::QuotaServiceUnavailable)
             })
             .transpose()?;
+        #[cfg(windows)]
+        if let Some(home) = &home {
+            token_pulse_core::sources::validate_root(
+                home,
+                token_pulse_core::sources::SourceOrigin::Custom,
+            )?;
+        }
         if home.as_ref().is_some_and(|p| !p.is_dir()) {
             return Err(ErrorCode::InvalidQuery);
         }

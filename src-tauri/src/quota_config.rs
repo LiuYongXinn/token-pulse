@@ -99,58 +99,65 @@ pub async fn choose_account_service(
             } else {
                 preferences.target
             };
-            let (exe, home) = match request.kind {
-                AccountServiceSelectionKind::Executable => {
-                    let Some(file) = app
-                        .dialog()
-                        .file()
-                        .set_parent(&window)
-                        .set_title("选择 Codex 原生 codex.exe")
-                        .add_filter("原生程序", &["exe"])
-                        .blocking_pick_file()
-                    else {
-                        return Ok(None);
-                    };
-                    (
-                        file.into_path().map_err(|_| ErrorCode::InvalidQuery)?,
-                        base.as_ref()
-                            .and_then(|target| target.home_path.as_ref())
-                            .map(PathBuf::from),
-                    )
-                }
-                AccountServiceSelectionKind::Home => {
-                    let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
-                    let Some(folder) = app
-                        .dialog()
-                        .file()
-                        .set_parent(&window)
-                        .set_title("选择此账户服务的 Codex Home")
-                        .blocking_pick_folder()
-                    else {
-                        return Ok(None);
-                    };
-                    (
-                        PathBuf::from(&base.executable_path),
-                        Some(folder.into_path().map_err(|_| ErrorCode::InvalidQuery)?),
-                    )
-                }
-                AccountServiceSelectionKind::DefaultHome => {
-                    let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
-                    (PathBuf::from(&base.executable_path), None)
-                }
-                AccountServiceSelectionKind::Current => {
-                    let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
-                    (
-                        PathBuf::from(&base.executable_path),
-                        base.home_path.as_ref().map(PathBuf::from),
-                    )
-                }
+            let target = if matches!(request.kind, AccountServiceSelectionKind::DetectLocal) {
+                token_pulse_quota::detect_local_service(base.as_ref())?
+            } else {
+                let (exe, home) = match request.kind {
+                    AccountServiceSelectionKind::DetectLocal => unreachable!(),
+                    AccountServiceSelectionKind::Executable => {
+                        let Some(file) = app
+                            .dialog()
+                            .file()
+                            .set_parent(&window)
+                            .set_title("选择 Codex 原生 codex.exe")
+                            .add_filter("原生程序", &["exe"])
+                            .blocking_pick_file()
+                        else {
+                            return Ok(None);
+                        };
+                        (
+                            file.into_path().map_err(|_| ErrorCode::InvalidQuery)?,
+                            base.as_ref()
+                                .and_then(|target| target.home_path.as_ref())
+                                .map(PathBuf::from),
+                        )
+                    }
+                    AccountServiceSelectionKind::Home => {
+                        let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
+                        let Some(folder) = app
+                            .dialog()
+                            .file()
+                            .set_parent(&window)
+                            .set_title("选择此账户服务的 Codex Home")
+                            .blocking_pick_folder()
+                        else {
+                            return Ok(None);
+                        };
+                        (
+                            PathBuf::from(&base.executable_path),
+                            Some(folder.into_path().map_err(|_| ErrorCode::InvalidQuery)?),
+                        )
+                    }
+                    AccountServiceSelectionKind::DefaultHome => {
+                        let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
+                        (PathBuf::from(&base.executable_path), None)
+                    }
+                    AccountServiceSelectionKind::Current => {
+                        let base = base.as_ref().ok_or(ErrorCode::QuotaDisconnected)?;
+                        (
+                            PathBuf::from(&base.executable_path),
+                            base.home_path.as_ref().map(PathBuf::from),
+                        )
+                    }
+                };
+                NativeService::inspect(&exe, home.as_deref())?
             };
-            let target = NativeService::inspect(&exe, home.as_deref())?;
-            if !matches!(request.kind, AccountServiceSelectionKind::Executable)
-                && base
-                    .as_ref()
-                    .is_some_and(|base| base.executable_sha256 != target.executable_sha256)
+            if !matches!(
+                request.kind,
+                AccountServiceSelectionKind::Executable | AccountServiceSelectionKind::DetectLocal
+            ) && base
+                .as_ref()
+                .is_some_and(|base| base.executable_sha256 != target.executable_sha256)
             {
                 return Err(ErrorCode::StaleConfirmation);
             }
