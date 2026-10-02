@@ -10,8 +10,11 @@ use token_pulse_taskbar::{
 };
 use tokio::{io::AsyncWriteExt, net::windows::named_pipe::ClientOptions, time::timeout};
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE},
+    Foundation::{CloseHandle, HANDLE, HWND, LPARAM},
     System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject},
+    UI::WindowsAndMessaging::{
+        EnumWindows, GetClassNameW, GetWindowThreadProcessId, IsWindowVisible,
+    },
 };
 
 fn executable() -> &'static Path {
@@ -51,11 +54,69 @@ impl Drop for ProcessWait {
         }
     }
 }
+fn native_controllers(pid: u32) -> Vec<bool> {
+    struct Probe {
+        pid: u32,
+        visibility: Vec<bool>,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut actual = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut actual);
+        }
+        if actual == probe.pid {
+            let mut class = [0; 128];
+            let count = unsafe { GetClassNameW(window, class.as_mut_ptr(), 128) };
+            if count > 0
+                && String::from_utf16_lossy(&class[..count as usize])
+                    .starts_with("TokenPulse.Taskbar.Control.")
+            {
+                probe
+                    .visibility
+                    .push(unsafe { IsWindowVisible(window) != 0 });
+            }
+        }
+        1
+    }
+    let mut probe = Probe {
+        pid,
+        visibility: vec![],
+    };
+    unsafe {
+        EnumWindows(Some(collect), (&mut probe as *mut Probe) as LPARAM);
+    }
+    probe.visibility
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_process() {
     let mut connection = HostConnection::launch(executable()).await.unwrap();
     let process = ProcessWait::open(connection.process_id());
+    assert_eq!(native_controllers(connection.process_id()), [false]);
+    assert!(matches!(
+        connection
+            .exchange(HostMessage::Privacy {
+                settings_revision: DecimalInt::parse("1").unwrap(),
+                enabled: false
+            })
+            .await
+            .unwrap(),
+        HostReply::PrivacyApplied { enabled: false }
+    ));
+    let view = serde_json::from_value(serde_json::json!({
+        "settings_revision":"1","usage_revision":"9007199254740993","price_revision":"3","generated_at_ms":1000,"privacy":false,"scope_label":"SYNTHETIC PRIVATE SCOPE","timezone":"UTC",
+        "total_tokens":null,"input_tokens":null,"cached_tokens":"0","output_tokens":null,"usage_status":"unknown","costs":[],"priced_tokens":"0","unpriced_tokens":"0","quota":null
+    })).unwrap();
+    assert!(matches!(
+        connection
+            .exchange(HostMessage::Snapshot {
+                view: Box::new(view)
+            })
+            .await
+            .unwrap(),
+        HostReply::Heartbeat {}
+    ));
     assert!(matches!(
         connection
             .exchange(HostMessage::Heartbeat {})
@@ -75,6 +136,7 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     ));
     connection.shutdown().await.unwrap();
     process.terminated().await;
+    assert!(native_controllers(connection.process_id()).is_empty());
     assert_eq!(
         connection.exchange(HostMessage::Heartbeat {}).await.err(),
         Some(TransportError::Protocol(WireError::Closed))

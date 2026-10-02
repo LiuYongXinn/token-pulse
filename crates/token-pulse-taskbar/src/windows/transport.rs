@@ -26,6 +26,7 @@ pub enum TransportError {
     Timeout,
     InvalidStartup,
     Spawn,
+    Native,
 }
 impl From<std::io::Error> for TransportError {
     fn from(error: std::io::Error) -> Self {
@@ -287,6 +288,7 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
         .open(startup.channel_name())?;
     verify_peer(&pipe, startup.parent_pid, false)?;
     let mut session = HostSession::new(startup.instance.clone(), startup.nonce.clone())?;
+    let mut native = None;
     let mut sequence = 0i128;
     loop {
         let incoming = timeout(HEARTBEAT_DEADLINE, read::<_, HostMessage>(&mut pipe))
@@ -296,7 +298,22 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
             session.close();
             return Ok(());
         };
+        let update_native = matches!(
+            incoming.body,
+            HostMessage::Snapshot { .. } | HostMessage::Privacy { .. } | HostMessage::Shutdown {}
+        );
         let reply = session.apply(incoming)?;
+        if matches!(reply, HostReply::Ready {}) {
+            native = Some(super::control::NativeController::start()?);
+        }
+        if update_native {
+            // Native cache changes finish on the UI thread before any privacy/shutdown ACK.
+            native
+                .as_ref()
+                .ok_or(TransportError::Native)?
+                .replace(session.view().cloned())
+                .await?;
+        }
         let stopped = matches!(reply, HostReply::Stopped {});
         sequence = sequence
             .checked_add(1)

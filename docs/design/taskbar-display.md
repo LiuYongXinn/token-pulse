@@ -4,7 +4,7 @@
 
 本设计补充[完整设计方案](token-pulse-design.md)、[UI 设计](token-pulse-ui.md)和[账户额度设计](account-quota.md)。新增类似 TrafficMonitor 的任务栏内显示模式，与统计主窗口、桌面悬浮窗共享后台快照。任务栏与悬浮窗可独立开启，也可同时显示。
 
-当前已实现 M13a 共享宿主协议、受限展示投影与接收器状态，以及 M13b1 独立 Windows 程序、当前用户管道、双向 PID 校验和自有进程退出，详见[原生宿主协议](taskbar-host-protocol.md)。Windows 任务栏嵌入、原生绘制和主应用管理器尚未接入。[HTML 交互原型](../../prototypes/token-pulse-ui.html)底部的 Windows 任务栏为示意区域，全部数值为演示数据。
+当前已实现 M13a 共享宿主协议、受限展示投影与接收器状态，M13b1 独立 Windows 程序、当前用户管道、双向 PID 校验和自有进程退出，以及 M13b2 隐藏控制窗口、原生缓存屏障、只读 Explorer 探测与纯空间计划，详见[原生宿主协议](taskbar-host-protocol.md)。Windows 任务栏嵌入、原生读数绘制和主应用管理器尚未接入。[HTML 交互原型](../../prototypes/token-pulse-ui.html)底部的 Windows 任务栏为示意区域，全部数值为演示数据。
 
 ## 1. 目标与入口
 

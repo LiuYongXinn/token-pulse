@@ -84,3 +84,11 @@ cargo clippy -p token-pulse-taskbar --all-targets -- -D warnings
 ```
 
 Windows 测试自动启动 Cargo 构建的独立宿主，使用本次随机命名管道和合成协议，验证 DACL / PID / 正常及异常退出；心跳期限检查等待真实 15 秒。这是功能检查，不是性能测试。测试不读取真实账户、日志或统计库，也不调整 Explorer。当前宿主仅完成通信，未创建任务栏窗口；不手工传入或记录 nonce 参数。正式 Tauri 管理器与安装位置解析随后接入，独立程序将随应用打包，生产不依赖 Cargo 或开发环境。
+
+宿主现已创建隐藏控制窗口和 UI 线程，但仍未绘制或嵌入。可显式运行以下只读探测，不调整系统布局、不读取窗口标题或账户数据：
+
+```powershell
+cargo run -p token-pulse-taskbar --example inspect_taskbar -- --inspect-taskbar
+```
+
+输出仅含系统 build、DPI、任务栏区域与纯候选计划；能力不足返回错误，不伪装成功。当前只接受 Win10 build 19045；Win11 适配随后单独落实。默认 tests 包含实际自有隐藏窗口 / 合成系统消息路由，以及四档合成几何；不会发送系统广播、切换 DPI 或重启 Explorer。
