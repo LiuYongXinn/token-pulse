@@ -4142,6 +4142,8 @@ dependencies = [
 name = "token-pulse-taskbar"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "schemars 1.2.2",
  "serde",
  "serde_json",

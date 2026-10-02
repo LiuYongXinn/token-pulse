@@ -1,0 +1,28 @@
+{
+  "settings_revision": "9007199254740993",
+  "usage_revision": "9007199254740993",
+  "price_revision": "3",
+  "generated_at_ms": 1790899200000,
+  "privacy": false,
+  "scope_label": "SYNTHETIC DEVELOPMENT FIXTURE",
+  "timezone": "Asia/Shanghai",
+  "total_tokens": "683100",
+  "input_tokens": null,
+  "cached_tokens": "0",
+  "output_tokens": null,
+  "usage_status": "complete",
+  "costs": [{ "currency": "USD", "estimated_cost": "0.565000000000001" }],
+  "priced_tokens": "683100",
+  "unpriced_tokens": "0",
+  "quota": {
+    "connection_epoch": "synthetic-development-account",
+    "revision": "9007199254740993",
+    "state": "ready",
+    "limit_label": "SYNTHETIC DEVELOPMENT BUCKET",
+    "fetched_at_ms": 1790899200000,
+    "windows": [
+      { "window_id": "secondary", "duration_mins": 300, "used_percent": 28, "remaining_percent": 72, "resets_at_ms": null },
+      { "window_id": "primary", "duration_mins": 10080, "used_percent": 62, "remaining_percent": 38, "resets_at_ms": 1791080700000 }
+    ]
+  }
+}

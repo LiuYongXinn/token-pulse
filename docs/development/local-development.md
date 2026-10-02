@@ -92,3 +92,13 @@ cargo run -p token-pulse-taskbar --example inspect_taskbar -- --inspect-taskbar
 ```
 
 输出仅含系统 build、DPI、任务栏区域与纯候选计划；能力不足返回错误，不伪装成功。当前只接受 Win10 build 19045；Win11 适配随后单独落实。默认 tests 包含实际自有隐藏窗口 / 合成系统消息路由，以及四档合成几何；不会发送系统广播、切换 DPI 或重启 Explorer。
+
+## 原生任务栏文字与开发视觉检查
+
+宿主已创建自有读数子窗口并按真实 DTO 准备文字 / 系统字体布局，当前仍隐藏且未挂入 Explorer。以下显式开发命令只使用仓库合成夹具，不访问真实账户 / 日志，不改变任务栏：
+
+```powershell
+cargo run -p token-pulse-taskbar --example render_taskbar -- --render-development-fixtures
+```
+
+原生 GDI BMP 输出在被 Git 忽略的 test-results/taskbar-native-visual，文件名及 README 明确 DEVELOPMENT-FIXTURE。默认应用不链接这些值，正常测试不生成视觉文件；使用图像查看器检查，无需 Python / Pillow。实际绘制代码与宿主共用，但图片不证明系统任务栏嵌入、实际账户或物理 DPI 切换已经验收。

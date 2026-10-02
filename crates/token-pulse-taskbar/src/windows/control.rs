@@ -2,11 +2,16 @@
 //! It never claims embedding and does not modify Explorer in this module.
 use super::{
     TransportError,
+    canvas::NativeCanvas,
     topology::{ProbeError, TaskbarTopology, inspect_primary_taskbar, wide},
     transport::IO_TIMEOUT,
 };
-use crate::TaskbarView;
+use crate::{
+    TaskbarView,
+    display::{Density, DisplayPreferences},
+};
 use std::{
+    cell::UnsafeCell,
     mem, ptr,
     sync::mpsc::{self, Receiver, SyncSender},
     thread::{self, JoinHandle},
@@ -35,7 +40,7 @@ enum Operation {
 }
 struct Request {
     operation: Operation,
-    reply: oneshot::Sender<NativeReceipt>,
+    reply: oneshot::Sender<Result<NativeReceipt, TransportError>>,
 }
 #[derive(Debug, Clone)]
 pub struct NativeReceipt {
@@ -44,6 +49,10 @@ pub struct NativeReceipt {
     pub control_visible: bool,
     pub system_revision: u64,
     pub topology: Result<TaskbarTopology, ProbeError>,
+    pub readout_visible: bool,
+    pub measured_width: Option<i32>,
+    pub measured_density: Option<Density>,
+    pub paint_failed: bool,
 }
 struct State {
     receiver: Receiver<Request>,
@@ -51,6 +60,8 @@ struct State {
     topology: Result<TaskbarTopology, ProbeError>,
     system_revision: u64,
     taskbar_created: u32,
+    canvas: Option<NativeCanvas>,
+    native_failed: bool,
 }
 impl State {
     fn receipt(&self, window: HWND) -> NativeReceipt {
@@ -62,11 +73,52 @@ impl State {
             control_visible: unsafe { IsWindowVisible(window) != 0 },
             system_revision: self.system_revision,
             topology: self.topology.clone(),
+            readout_visible: self.canvas.as_ref().is_some_and(|c| c.visible()),
+            measured_width: self.canvas.as_ref().and_then(|c| c.plan().map(|p| p.width)),
+            measured_density: self
+                .canvas
+                .as_ref()
+                .and_then(|c| c.plan().map(|p| p.density)),
+            paint_failed: self.native_failed
+                || self.canvas.as_ref().is_some_and(|c| c.paint_failed()),
         }
     }
     fn system_changed(&mut self) {
         self.system_revision = self.system_revision.saturating_add(1);
         self.topology = inspect_primary_taskbar();
+        if self.prepare().is_err() {
+            self.native_failed = true;
+        }
+    }
+    fn prepare(&mut self) -> Result<(), TransportError> {
+        if let Some(canvas) = self.canvas.as_mut() {
+            canvas.clear().map_err(|_| TransportError::Native)?;
+            if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
+                let available = topology.task_switch.width() - (320 * topology.dpi / 96) as i32;
+                let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    Ok(duration) => {
+                        i64::try_from(duration.as_millis()).map_err(|_| TransportError::Native)?
+                    }
+                    Err(before) => -i64::try_from(before.duration().as_millis())
+                        .map_err(|_| TransportError::Native)?,
+                };
+                canvas
+                    .prepare(
+                        view,
+                        DisplayPreferences::default(),
+                        topology.dpi,
+                        available,
+                        topology.rebar.height(),
+                        now,
+                    )
+                    .map_err(|_| TransportError::Native)?;
+            }
+        }
+        if self.native_failed || self.canvas.as_ref().is_none_or(|c| c.paint_failed()) {
+            Err(TransportError::Native)
+        } else {
+            Ok(())
+        }
     }
 }
 unsafe extern "system" fn procedure(
@@ -89,15 +141,24 @@ unsafe extern "system" fn procedure(
                 // A posted message carries no pointers or commands; only this private bounded
                 // Rust queue owns the request. External WM_APP messages cannot create an action.
                 while let Ok(request) = state.receiver.try_recv() {
-                    if let Operation::Replace(view) = request.operation {
+                    let result = if let Operation::Replace(view) = request.operation {
                         state.view = view;
+                        state.prepare()
+                    } else {
+                        Ok(())
+                    };
+                    if result.is_err() {
+                        state.native_failed = true;
                     }
-                    let _ = request.reply.send(state.receipt(window));
+                    let _ = request.reply.send(result.map(|_| state.receipt(window)));
                 }
                 return 0;
             }
             WM_CLOSE => {
                 state.view = None;
+                if let Some(canvas) = state.canvas.as_mut() {
+                    canvas.clear().ok();
+                }
                 unsafe {
                     DestroyWindow(window);
                 }
@@ -105,6 +166,9 @@ unsafe extern "system" fn procedure(
             }
             WM_DESTROY => {
                 state.view = None;
+                if let Some(canvas) = state.canvas.as_mut() {
+                    canvas.clear().ok();
+                }
                 unsafe {
                     PostQuitMessage(0);
                 }
@@ -165,7 +229,7 @@ impl NativeController {
         timeout(IO_TIMEOUT, response)
             .await
             .map_err(|_| TransportError::Timeout)?
-            .map_err(|_| TransportError::Native)
+            .map_err(|_| TransportError::Native)?
     }
     pub async fn replace(
         &self,
@@ -207,13 +271,15 @@ unsafe fn native_thread(
     if module.is_null() || taskbar_created == 0 {
         return Err(TransportError::Native);
     }
-    let mut state = Box::new(State {
+    let state = Box::new(UnsafeCell::new(State {
         receiver,
         view: None,
         topology: inspect_primary_taskbar(),
         system_revision: 0,
         taskbar_created,
-    });
+        canvas: None,
+        native_failed: false,
+    }));
     let window_class = WNDCLASSEXW {
         cbSize: mem::size_of::<WNDCLASSEXW>() as u32,
         lpfnWndProc: Some(procedure),
@@ -237,7 +303,7 @@ unsafe fn native_thread(
             ptr::null_mut(),
             ptr::null_mut(),
             module,
-            (&mut *state as *mut State).cast(),
+            state.get().cast(),
         )
     };
     if window.is_null() {
@@ -245,6 +311,21 @@ unsafe fn native_thread(
             UnregisterClassW(class.as_ptr(), module);
         }
         return Err(TransportError::Native);
+    }
+    let canvas_dpi = unsafe { &*state.get() }
+        .topology
+        .as_ref()
+        .map(|t| t.dpi)
+        .unwrap_or(96);
+    match unsafe { NativeCanvas::create(window, canvas_dpi) } {
+        Ok(canvas) => unsafe { (*state.get()).canvas = Some(canvas) },
+        Err(_) => {
+            unsafe {
+                DestroyWindow(window);
+                UnregisterClassW(class.as_ptr(), module);
+            }
+            return Err(TransportError::Native);
+        }
     }
     if ready.send(Ok(window as usize)).is_ok() {
         let mut message: MSG = unsafe { mem::zeroed() };
@@ -259,7 +340,12 @@ unsafe fn native_thread(
             }
         }
     }
-    state.view = None;
+    unsafe {
+        (*state.get()).view = None;
+    }
+    // Move the child owner out before dropping it; WM_PARENTNOTIFY can reenter the controller.
+    let canvas = unsafe { (*state.get()).canvas.take() };
+    drop(canvas);
     // State outlives all WM_NCDESTROY access even when initialization or pumping failed.
     if unsafe { IsWindow(window) } != 0 {
         unsafe {
@@ -281,7 +367,8 @@ mod tests {
         protocol::CoverageState,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetClassNameW, GetParent, GetWindowThreadProcessId, WM_APP,
+        GW_CHILD, GetClassNameW, GetParent, GetWindow, GetWindowTextW, GetWindowThreadProcessId,
+        WM_APP,
     };
     fn view() -> TaskbarView {
         TaskbarView {
@@ -317,8 +404,23 @@ mod tests {
         let visible = controller.replace(Some(view())).await.unwrap();
         assert!(visible.cached_view_present && visible.private_fields_present);
         assert!(!visible.control_visible);
+        assert!(!visible.readout_visible && !visible.paint_failed);
+        let canvas = unsafe { GetWindow(window, GW_CHILD) };
+        assert!(!canvas.is_null());
+        let caption = |window| {
+            let mut text = [0; 4096];
+            let length = unsafe { GetWindowTextW(window, text.as_mut_ptr(), 4096) };
+            String::from_utf16(&text[..length as usize]).unwrap()
+        };
+        if initial.topology.is_ok() {
+            assert!(visible.measured_width.is_some());
+            assert!(caption(canvas).contains("SYNTHETIC PRIVATE SCOPE"));
+            assert!(caption(canvas).contains("缓存 0"));
+        }
         let clear = controller.replace(None).await.unwrap();
         assert!(!clear.cached_view_present && !clear.private_fields_present);
+        assert!(clear.measured_width.is_none());
+        assert_eq!(caption(canvas), "TokenPulse");
         let mut invalid = view();
         invalid.privacy = true;
         assert!(controller.replace(Some(invalid)).await.is_err());
@@ -334,6 +436,7 @@ mod tests {
         assert!(length > 0);
         drop(controller);
         assert_eq!(unsafe { IsWindow(window) }, 0);
+        assert_eq!(unsafe { IsWindow(canvas) }, 0);
         let mut info: WNDCLASSEXW = unsafe { mem::zeroed() };
         let class = wide(&String::from_utf16(&name[..length as usize]).unwrap());
         assert_eq!(

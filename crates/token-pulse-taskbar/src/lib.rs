@@ -1,4 +1,5 @@
 //! Shared native-host wire contract and fail-closed receiver. No Tauri, database or log access.
+pub mod display;
 #[cfg(windows)]
 pub mod windows;
 use schemars::JsonSchema;
@@ -155,8 +156,13 @@ impl TaskbarView {
         {
             return Err(WireError::PrivacyViolation);
         }
-        for cost in &self.costs {
-            if cost.currency.len() != 3 || !cost.currency.bytes().all(|c| c.is_ascii_uppercase()) {
+        for (index, cost) in self.costs.iter().enumerate() {
+            if cost.currency.len() != 3
+                || !cost.currency.bytes().all(|c| c.is_ascii_uppercase())
+                || self.costs[..index]
+                    .iter()
+                    .any(|earlier| earlier.currency == cost.currency)
+            {
                 return Err(WireError::InvalidFrame);
             }
         }
