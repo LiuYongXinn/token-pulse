@@ -354,5 +354,72 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if registry.has_pending(id).map_err(|_| "after undo marker")? {
         return Err("inactive config still queued notification".into());
     }
+    // Actual WebView IPC / app capability, not a direct call to manager or command functions.
+    super::mini_smoke::evaluate_with_timeout(
+        app,
+        &main,
+        r#"
+      const request={kind:'enable_source',source_id:'native-notify',chain_original:null};
+      let status=await invoke('get_notify_integrations',{requestId:'notify-ipc-initial'});
+      if(status.data.registrations?.length!==0 || status.data.listener_count!==0)throw new Error('NOTIFY_INITIAL_STATUS');
+      let rejected=false;try{await invoke('prepare_notify_integration',{requestId:'notify-bad-source',request:{...request,source_id:'../auth.json'}});}catch(e){rejected=e.code==='INVALID_QUERY';}if(!rejected)throw new Error('NOTIFY_ARBITRARY_SOURCE');
+      rejected=false;try{await invoke('prepare_notify_integration',{requestId:'notify-bad-path',request:{...request,path:'private-synthetic'}});}catch{rejected=true;}if(!rejected)throw new Error('NOTIFY_ARBITRARY_PATH');
+      const cancelled=await invoke('prepare_notify_integration',{requestId:'notify-release-prepare',request});
+      if(!cancelled.data.can_chain_original||!cancelled.data.chain_original||cancelled.data.redacted||!cancelled.data.before_notify||!cancelled.data.after_notify)throw new Error('NOTIFY_REVIEW_FIELDS');
+      await invoke('release_notify_preview',{requestId:'notify-release',planId:cancelled.data.plan_id});
+      rejected=false;try{await invoke('apply_notify_integration',{requestId:'notify-released-apply',planId:cancelled.data.plan_id});}catch(e){rejected=e.details?.notify_issue==='plan_not_found';}if(!rejected)throw new Error('NOTIFY_RELEASED_PLAN_ACCEPTED');
+      const stale=await invoke('prepare_notify_integration',{requestId:'notify-stale-prepare',request});
+      const s=await invoke('get_display_settings',{requestId:'notify-privacy-read'});
+      await invoke('set_display_privacy',{requestId:'notify-private',request:{privacy:true,expected_settings_revision:s.data.settings_revision}});
+      const hidden=await invoke('get_notify_integrations',{requestId:'notify-hidden-read'});
+      if(!hidden.data.redacted || hidden.data.registrations.some(r=>r.home_path!==null))throw new Error('NOTIFY_PRIVATE_PATH');
+      rejected=false;try{await invoke('apply_notify_integration',{requestId:'notify-hidden-apply',planId:stale.data.plan_id});}catch(e){rejected=e.code==='PERMISSION_DENIED';}if(!rejected)throw new Error('NOTIFY_PRIVATE_APPLY');
+      rejected=false;try{await invoke('prepare_notify_integration',{requestId:'notify-hidden-prepare',request});}catch(e){rejected=e.code==='PERMISSION_DENIED';}if(!rejected)throw new Error('NOTIFY_PRIVATE_PREPARE');
+      const p=await invoke('get_display_settings',{requestId:'notify-visible-read'});
+      await invoke('set_display_privacy',{requestId:'notify-visible',request:{privacy:false,expected_settings_revision:p.data.settings_revision}});
+      rejected=false;try{await invoke('apply_notify_integration',{requestId:'notify-stale-apply',planId:stale.data.plan_id});}catch(e){rejected=e.code==='STALE_CONFIRMATION';}if(!rejected)throw new Error('NOTIFY_PRIVACY_EPOCH_PLAN_ACCEPTED');
+      const fresh=await invoke('prepare_notify_integration',{requestId:'notify-fresh-prepare',request});
+      const enabled=await invoke('apply_notify_integration',{requestId:'notify-enable',planId:fresh.data.plan_id});
+      if(enabled.data.configured!==true||enabled.data.retired||enabled.data.cleanup_issue!==null)throw new Error('NOTIFY_IPC_ENABLE');
+      const active=await invoke('get_notify_integrations',{requestId:'notify-active-read'});
+      if(active.data.registrations.length!==1||active.data.registrations[0].configured!==true||active.data.registrations[0].home_path===null)throw new Error('NOTIFY_ACTIVE_STATUS');
+      rejected=false;try{await invoke('retire_notify_integration',{requestId:'notify-active-retire',registrationId:fresh.data.registration_id});}catch(e){rejected=e.details?.notify_issue==='active_configuration';}if(!rejected)throw new Error('NOTIFY_ACTIVE_RETIRE');
+      const s2=await invoke('get_display_settings',{requestId:'notify-path-hide-read'});
+      await invoke('set_display_privacy',{requestId:'notify-path-hide',request:{privacy:true,expected_settings_revision:s2.data.settings_revision}});
+      const privateActive=await invoke('get_notify_integrations',{requestId:'notify-private-active'});
+      if(!privateActive.data.redacted||privateActive.data.registrations[0].home_path!==null||privateActive.data.registrations[0].configured!==true)throw new Error('NOTIFY_ACTIVE_PATH_LEAK');
+      const s3=await invoke('get_display_settings',{requestId:'notify-path-show-read'});
+      await invoke('set_display_privacy',{requestId:'notify-path-show',request:{privacy:false,expected_settings_revision:s3.data.settings_revision}});
+      const undo=await invoke('prepare_notify_integration',{requestId:'notify-undo-prepare',request:{kind:'disable',registration_id:fresh.data.registration_id}});
+      const disabled=await invoke('apply_notify_integration',{requestId:'notify-undo',planId:undo.data.plan_id});
+      if(disabled.data.configured!==false||!disabled.data.retired||disabled.data.cleanup_issue!==null)throw new Error('NOTIFY_IPC_UNDO');
+      const gone=await invoke('get_notify_integrations',{requestId:'notify-retired-read'});
+      if(gone.data.registrations.length!==0)throw new Error('NOTIFY_IPC_RETIREMENT');
+      const retired=await invoke('retire_notify_integration',{requestId:'notify-idempotent-retire',registrationId:fresh.data.registration_id});
+      if(!retired.data.retired||retired.data.configured!==null)throw new Error('NOTIFY_IPC_ABSENT_CONFIG_UNKNOWN');
+    "#,
+        Duration::from_secs(20),
+    )?;
+    if read_config(&root).map_err(|_| "IPC restored config")? != expected.as_bytes()
+        || fs::read(&path).map_err(|_| "IPC source readonly")? != bytes
+    {
+        return Err("IPC changed unrelated config or source".into());
+    }
+    super::mini_window::show(app)?;
+    let mini = app
+        .get_webview_window("mini")
+        .ok_or("notify mini missing")?;
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        r#"
+      const calls=[['get_notify_integrations',{}],['prepare_notify_integration',{request:{kind:'choose_home',chain_original:null}}],['apply_notify_integration',{planId:'a'.repeat(32)}],['release_notify_preview',{planId:'a'.repeat(32)}],['retire_notify_integration',{registrationId:'a'.repeat(32)}]];
+      for(const [command,args] of calls){let denied=false;try{await invoke(command,{...args,requestId:'notify-mini-denied'});}catch{denied=true;}if(!denied)throw new Error('NOTIFY_MINI_CAPABILITY:'+command);}
+    "#,
+    )?;
+    mini.hide().map_err(|_| "notify mini hide")?;
+    println!(
+        "NATIVE_NOTIFY_IPC_OK: actual main WebView five commands, readonly review/release, default original, privacy redaction/write gate/stale preview, active retirement refused, conditional enable/undo, null absent configuration, mini capability denied, source bytes unchanged"
+    );
     Ok(())
 }

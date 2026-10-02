@@ -249,6 +249,11 @@ impl NotifyManager {
     pub fn release(&mut self, plan_id: &str) -> bool {
         self.plans.remove(plan_id).is_some()
     }
+    pub fn has_current_plan(&self, plan_id: &str) -> bool {
+        self.plans
+            .get(plan_id)
+            .is_some_and(|plan| Instant::now() < plan.deadline)
+    }
     pub fn release_all(&mut self) {
         self.plans.clear();
     }

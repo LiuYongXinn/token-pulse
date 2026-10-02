@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15a6（2026-10-03）已接主窗口 notify 五项 IPC、DTO / schema / TS 和受限 capability，Home 只来自登记本地来源或后台系统选择器；不接受前端路径 / 命令 / capability。最新共享隐私序列化和配置操作门禁、数据库 / 显示修订绑定旧预览拒绝、有限错误 / 清理结果与 null 状态就绪。新增 core 3 / app 2 / schema 1 项通过；隐私 5 / manager 6、schema 共 11、TS / 契约漂移、三个包 strict Clippy / release check / fmt / diff 通过。实际 Win10 `-Notify` 已通过 main WebView 五命令 / 隐私 / 失效预览 / active 拒绝 / enable / undo / mini 权限及采集 3→10→11，退出 0、1412 提示仍记录。正式设置 UI / 系统目录选择交互和真实 Codex 回合继续；不改真实 Home、无性能测试。详见[交付记录](delivery-status.md#m15a6主窗口-notify-ipc与共享隐私门禁)。
+
 M15a5（2026-10-03）已实现只读预览 / 有限内存计划、默认保留原命令、条件启用与保真撤销的操作管理器，以及私有跨进程锁下的登记 / marker 退休。配置成功与清理失败分别表达，可重试；晚到旧回调、未完成 claim 不再复活标记，坏 / 不可读状态保持 null。新增 11 项，integration 总 63 / 正式 exe 5 项及 strict Clippy / release check 通过；实际 Win10 `-Notify` 管理器生命周期与采集 3→10→11 通过，退出 0，1412 提示保留。真实 Home 未改，无性能测试。登记退休 / 管理器旧待办收敛，main-only IPC / 共享隐私 / 正式设置继续。任务栏复测再次被全屏系统 CoreWindow 覆盖，发送输入前拒绝、退出 101，不计通过。详见[交付记录](delivery-status.md#m15a5配置操作管理器与登记退休)。
 
 M15a4（2026-10-03）已实现配置文件条件启用 / 撤销，目录 / 文件身份、缺省 vs 空、完整摘要与当前 notify 归属检查，保真字节 / 原 ACL / 用户新设置。当前写入 provider 依赖可选 NTFS 事务，动态加载，不支持时明确有限错误，不把本机支持推断为所有 Windows / 文件系统支持。新增 10 项、integration 总 52 / 正式 exe 4 项和两包 strict Clippy / release check 通过；实际 Win10 `-Notify` 已完成真实文件启用 → 原命令 / 正式采集 3→10→11 → 保真撤销 / 监听关闭 / 旧提示忽略，退出 0，1412 仍记录。未改真实 Home、无性能测试；登记退休 / 操作管理器、正式 IPC / UI 接下来继续。旧文件操作待办按此收敛，provider 的 Microsoft TxF 限制与其他环境待验证保留，见[交付记录](delivery-status.md#m15a4配置文件的条件启用与保真撤销)。

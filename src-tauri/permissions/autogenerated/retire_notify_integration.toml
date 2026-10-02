@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-retire-notify-integration"
+description = "Enables the retire_notify_integration command without any pre-configured scope."
+commands.allow = ["retire_notify_integration"]
+
+[[permission]]
+identifier = "deny-retire-notify-integration"
+description = "Denies the retire_notify_integration command without any pre-configured scope."
+commands.deny = ["retire_notify_integration"]

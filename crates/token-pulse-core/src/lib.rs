@@ -15,6 +15,7 @@ pub mod mini_opacity;
 pub mod mini_passthrough;
 pub mod navigation;
 pub mod notify;
+pub mod notify_integration;
 pub mod numeric;
 pub mod placement;
 pub mod pricing;

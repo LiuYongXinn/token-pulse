@@ -8,6 +8,24 @@ export type EpochMs = number;
 
 export type ServiceState = "not_configured" | "not_implemented" | "ready" | "error";
 
+export type NotifyIssue = "unavailable" | "transaction_unavailable" | "busy" | "permission_denied" | "unsafe_path" | "unsafe_file" | "unsafe_permissions" | "invalid_config" | "invalid_notify" | "already_managed" | "config_changed" | "ownership_changed" | "invalid_registration" | "invalid_marker" | "limit_reached" | "already_exists" | "not_found" | "no_original_command" | "plan_not_found" | "plan_expired" | "plan_limit" | "active_configuration" | "cleanup_failed" | "wrong_executable" | "channel_unavailable" | "worker_unavailable";
+
+export type NotifyConfigOperation = "enable" | "disable";
+
+export type NotifyPrepareAction = { "kind": "enable_source", source_id: string, chain_original: boolean | null, } | { "kind": "choose_home", chain_original: boolean | null, } | { "kind": "disable", registration_id: string, };
+
+export type NotifyIntegrationRow = { registration_id: string, home_path: string | null, configured: boolean | null, current_executable: boolean | null, chain_original: boolean | null, issue: NotifyIssue | null, };
+
+export type NotifyIntegrationsSnapshot = { ready: boolean, listener_count: number | null, service_issue: NotifyIssue | null,
+/**
+ * null means enumeration failed, distinct from no registrations.
+ */
+registrations: Array<NotifyIntegrationRow> | null, registry_issue: NotifyIssue | null, redacted: boolean, };
+
+export type NotifyConfigPreview = { plan_id: string, registration_id: string, operation: NotifyConfigOperation, home_path: string | null, before_notify: string | null, after_notify: string | null, creates_config: boolean, can_chain_original: boolean, chain_original: boolean, settings_revision: DecimalInt, expires_in_seconds: number, redacted: boolean, };
+
+export type NotifyApplyResult = { registration_id: string, configured: boolean | null, retired: boolean, cleanup_issue: NotifyIssue | null, };
+
 export type DisplayPolicyStamp = { settings_revision: DecimalInt, privacy: boolean, };
 
 export type DisplayPreferences = {
@@ -90,7 +108,7 @@ export type MiniSessionOption = { session_key: string, display_name: string, };
 
 export type MiniSessionsPage = { meta: SnapshotMeta, options: Array<MiniSessionOption>, next_cursor: string | null, };
 
-export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "QUOTA_PROTOCOL_ERROR" | "QUOTA_SERVICE_UNAVAILABLE" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE" | "SHORTCUT_CONFLICT" | "SHORTCUT_UNAVAILABLE";
+export type ErrorCode = "INVALID_QUERY" | "UNSUPPORTED_API" | "SOURCE_UNREADABLE" | "UNSUPPORTED_FORMAT" | "UNSUPPORTED_SETTINGS_VERSION" | "AMBIGUOUS_USAGE" | "CHECKPOINT_CONFLICT" | "CANDIDATE_OBSOLETE" | "DB_WRITE_FAILED" | "DISK_FULL" | "DB_CORRUPT" | "MIGRATION_FAILED" | "SNAPSHOT_EXPIRED" | "CURSOR_INVALID" | "REVISION_CONFLICT" | "STALE_CONFIRMATION" | "REQUEST_KEY_CONFLICT" | "PRICE_RULE_CONFLICT" | "JOB_CANCELLED" | "JOB_INTERRUPTED" | "QUOTA_DISCONNECTED" | "QUOTA_UNSUPPORTED" | "QUOTA_TIMEOUT" | "QUOTA_AUTH_REQUIRED" | "QUOTA_PROTOCOL_ERROR" | "QUOTA_SERVICE_UNAVAILABLE" | "TASKBAR_UNSUPPORTED" | "TASKBAR_NO_SPACE" | "TASKBAR_EMBED_FAILED" | "NUMERIC_OVERFLOW" | "PERMISSION_DENIED" | "INVALID_USAGE" | "WINDOW_UNAVAILABLE" | "SHORTCUT_CONFLICT" | "SHORTCUT_UNAVAILABLE" | "NOTIFY_INTEGRATION_FAILED";
 
 export type ErrorDetail = string | number | boolean | null;
 

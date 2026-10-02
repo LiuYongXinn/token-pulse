@@ -327,7 +327,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -433,7 +434,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -601,7 +603,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -2409,7 +2412,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         }
@@ -2601,7 +2605,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         }
@@ -2904,7 +2909,8 @@
         "INVALID_USAGE",
         "WINDOW_UNAVAILABLE",
         "SHORTCUT_CONFLICT",
-        "SHORTCUT_UNAVAILABLE"
+        "SHORTCUT_UNAVAILABLE",
+        "NOTIFY_INTEGRATION_FAILED"
       ],
       "title": "ErrorCode",
       "type": "string"
@@ -4266,7 +4272,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -7276,6 +7283,499 @@
       ],
       "title": "ModelAliasMutation"
     },
+    "NotifyApplyResult": {
+      "$defs": {
+        "NotifyIssue": {
+          "enum": [
+            "unavailable",
+            "transaction_unavailable",
+            "busy",
+            "permission_denied",
+            "unsafe_path",
+            "unsafe_file",
+            "unsafe_permissions",
+            "invalid_config",
+            "invalid_notify",
+            "already_managed",
+            "config_changed",
+            "ownership_changed",
+            "invalid_registration",
+            "invalid_marker",
+            "limit_reached",
+            "already_exists",
+            "not_found",
+            "no_original_command",
+            "plan_not_found",
+            "plan_expired",
+            "plan_limit",
+            "active_configuration",
+            "cleanup_failed",
+            "wrong_executable",
+            "channel_unavailable",
+            "worker_unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "cleanup_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotifyIssue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configured": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "registration_id": {
+          "type": "string"
+        },
+        "retired": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "registration_id",
+        "configured",
+        "retired",
+        "cleanup_issue"
+      ],
+      "title": "NotifyApplyResult",
+      "type": "object"
+    },
+    "NotifyConfigOperation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "enable",
+        "disable"
+      ],
+      "title": "NotifyConfigOperation",
+      "type": "string"
+    },
+    "NotifyConfigPreview": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "NotifyConfigOperation": {
+          "enum": [
+            "enable",
+            "disable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "after_notify": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before_notify": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "can_chain_original": {
+          "type": "boolean"
+        },
+        "chain_original": {
+          "type": "boolean"
+        },
+        "creates_config": {
+          "type": "boolean"
+        },
+        "expires_in_seconds": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "home_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation": {
+          "$ref": "#/$defs/NotifyConfigOperation"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "registration_id": {
+          "type": "string"
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "plan_id",
+        "registration_id",
+        "operation",
+        "home_path",
+        "before_notify",
+        "after_notify",
+        "creates_config",
+        "can_chain_original",
+        "chain_original",
+        "settings_revision",
+        "expires_in_seconds",
+        "redacted"
+      ],
+      "title": "NotifyConfigPreview",
+      "type": "object"
+    },
+    "NotifyIntegrationRow": {
+      "$defs": {
+        "NotifyIssue": {
+          "enum": [
+            "unavailable",
+            "transaction_unavailable",
+            "busy",
+            "permission_denied",
+            "unsafe_path",
+            "unsafe_file",
+            "unsafe_permissions",
+            "invalid_config",
+            "invalid_notify",
+            "already_managed",
+            "config_changed",
+            "ownership_changed",
+            "invalid_registration",
+            "invalid_marker",
+            "limit_reached",
+            "already_exists",
+            "not_found",
+            "no_original_command",
+            "plan_not_found",
+            "plan_expired",
+            "plan_limit",
+            "active_configuration",
+            "cleanup_failed",
+            "wrong_executable",
+            "channel_unavailable",
+            "worker_unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "chain_original": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "configured": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "current_executable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "home_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotifyIssue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registration_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "registration_id",
+        "home_path",
+        "configured",
+        "current_executable",
+        "chain_original",
+        "issue"
+      ],
+      "title": "NotifyIntegrationRow",
+      "type": "object"
+    },
+    "NotifyIntegrationsSnapshot": {
+      "$defs": {
+        "NotifyIntegrationRow": {
+          "additionalProperties": false,
+          "properties": {
+            "chain_original": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "configured": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "current_executable": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "home_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "issue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NotifyIssue"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "registration_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "registration_id",
+            "home_path",
+            "configured",
+            "current_executable",
+            "chain_original",
+            "issue"
+          ],
+          "type": "object"
+        },
+        "NotifyIssue": {
+          "enum": [
+            "unavailable",
+            "transaction_unavailable",
+            "busy",
+            "permission_denied",
+            "unsafe_path",
+            "unsafe_file",
+            "unsafe_permissions",
+            "invalid_config",
+            "invalid_notify",
+            "already_managed",
+            "config_changed",
+            "ownership_changed",
+            "invalid_registration",
+            "invalid_marker",
+            "limit_reached",
+            "already_exists",
+            "not_found",
+            "no_original_command",
+            "plan_not_found",
+            "plan_expired",
+            "plan_limit",
+            "active_configuration",
+            "cleanup_failed",
+            "wrong_executable",
+            "channel_unavailable",
+            "worker_unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "listener_count": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "registrations": {
+          "description": "null means enumeration failed, distinct from no registrations.",
+          "items": {
+            "$ref": "#/$defs/NotifyIntegrationRow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "registry_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotifyIssue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NotifyIssue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ready",
+        "listener_count",
+        "service_issue",
+        "registrations",
+        "registry_issue",
+        "redacted"
+      ],
+      "title": "NotifyIntegrationsSnapshot",
+      "type": "object"
+    },
+    "NotifyIssue": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "unavailable",
+        "transaction_unavailable",
+        "busy",
+        "permission_denied",
+        "unsafe_path",
+        "unsafe_file",
+        "unsafe_permissions",
+        "invalid_config",
+        "invalid_notify",
+        "already_managed",
+        "config_changed",
+        "ownership_changed",
+        "invalid_registration",
+        "invalid_marker",
+        "limit_reached",
+        "already_exists",
+        "not_found",
+        "no_original_command",
+        "plan_not_found",
+        "plan_expired",
+        "plan_limit",
+        "active_configuration",
+        "cleanup_failed",
+        "wrong_executable",
+        "channel_unavailable",
+        "worker_unavailable"
+      ],
+      "title": "NotifyIssue",
+      "type": "string"
+    },
+    "NotifyPrepareAction": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "chain_original": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "enable_source",
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_id",
+            "chain_original"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "chain_original": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "choose_home",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "chain_original"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "disable",
+              "type": "string"
+            },
+            "registration_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "registration_id"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "NotifyPrepareAction"
+    },
     "OfflineContextBand": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
@@ -7870,7 +8370,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -8180,7 +8681,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -12969,7 +13471,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -13147,7 +13650,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },
@@ -13682,7 +14186,8 @@
             "INVALID_USAGE",
             "WINDOW_UNAVAILABLE",
             "SHORTCUT_CONFLICT",
-            "SHORTCUT_UNAVAILABLE"
+            "SHORTCUT_UNAVAILABLE",
+            "NOTIFY_INTEGRATION_FAILED"
           ],
           "type": "string"
         },

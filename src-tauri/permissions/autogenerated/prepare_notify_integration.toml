@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-prepare-notify-integration"
+description = "Enables the prepare_notify_integration command without any pre-configured scope."
+commands.allow = ["prepare_notify_integration"]
+
+[[permission]]
+identifier = "deny-prepare-notify-integration"
+description = "Denies the prepare_notify_integration command without any pre-configured scope."
+commands.deny = ["prepare_notify_integration"]

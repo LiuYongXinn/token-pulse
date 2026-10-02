@@ -2,6 +2,11 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_notify_integrations",
+            "prepare_notify_integration",
+            "apply_notify_integration",
+            "release_notify_preview",
+            "retire_notify_integration",
             "get_taskbar_preferences",
             "set_taskbar_preferences",
             "get_taskbar_status",

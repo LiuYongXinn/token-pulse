@@ -27,6 +27,22 @@ impl PrivacyState {
             .clone()
             .ok_or(crate::error::ErrorCode::DbCorrupt)
     }
+    /// Hold the latest policy through an identifying operation. Callers must not re-enter this
+    /// state from the closure; committed privacy changes wait until the operation completes.
+    pub fn with_visible_operation<T, E: From<crate::error::ErrorCode>>(
+        &self,
+        operation: impl FnOnce(&DisplayPolicyStamp) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let guard = self
+            .0
+            .lock()
+            .map_err(|_| crate::error::ErrorCode::DbCorrupt)?;
+        let stamp = guard.as_ref().ok_or(crate::error::ErrorCode::DbCorrupt)?;
+        if stamp.privacy {
+            return Err(crate::error::ErrorCode::PermissionDenied.into());
+        }
+        operation(stamp)
+    }
     pub fn publish(&self, stamp: DisplayPolicyStamp) -> Result<(), crate::error::ErrorCode> {
         let mut current = self
             .0

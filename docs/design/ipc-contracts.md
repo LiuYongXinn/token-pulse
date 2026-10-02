@@ -218,9 +218,21 @@ cursor 为服务端签发的不透明游标：snapshot / filter hash、sort、�
 |`get_settings`|结构版本、revision、生效值|
 |`update_settings`|受控 patch、expected_settings_revision；校验后返回生效值与冲突|
 |`open_source_location`|diagnostic_id 或 source_id；后台定位，不接受任意路径|
-|`manage_notify_integration`|prepare / apply / restore；显示保真配置差异，校验当前内容归属|
+|`get_notify_integrations`|主窗口：owner 状态、真实 nullable 监听数与登记状态；未知枚举保留 null|
+|`prepare_notify_integration`|主窗口：enable_source(source_id, chain_original) / choose_home(chain_original) / disable(registration_id)；只读差异计划|
+|`apply_notify_integration`|主窗口：仅 plan_id；条件修改与独立登记清理结果|
+|`release_notify_preview`|主窗口：仅 plan_id，关闭内存预览；隐私开启时也可释放|
+|`retire_notify_integration`|主窗口：仅 registration_id；证明已 inactive 后清理自己的登记，不写用户配置|
 
-M15b2 的 notify 内部 CLI 不是前端 IPC：正式 exe 在 Tauri 创建前识别严格的 headless 参数，只有当前用户私有登记 ID 可选择能力，不接受通道 nonce、Home、程序或路径参数。错误输出固定有限代码，不包含原 JSON / 路径 / 参数；有效未支持事件与失效配置不创建消费。debug 原生测试仅允许 AppData 下 `native-notify-<32 hex>` 子目录名，release 排除该入口。主窗口 `manage_notify_integration` 仍是待接入契约，没有为前端暴露任意命令执行或原始通知入口；链式原通知执行、主采集服务和正式配置 / UI 继续实施。
+M15a6 已将上述五项接入实际 Rust handler、AppManifest 与 main capability；mini 不获权限，后端也验证 label=`main`。旧 `manage_notify_integration` 草案由这些具体命令替代，不开放任意程序、路径、nonce、完整通知 JSON 或配置文本输入。启用路径只能取现存未移除的本地 source_id，或后台带父窗口的系统目录选择器；不使用来源的 enabled 作为配置归属授权，不新增 WSL。选择取消返回 data=null；未知字段、无效来源、非 32 位小写十六进制 plan / registration 标识拒绝。
+
+NotifyConfigPreview 包含 plan_id / registration_id、enable 或 disable、nullable home_path / before_notify / after_notify、creates_config、can_chain_original / chain_original、精确字符串 settings_revision、expires_in_seconds=120、redacted。路径、原 notify 与安装值在序列化时按最新共享隐私全部置 null；不返回 nonce、其他配置或正文。准备不修改配置，只有后台保留的不可变计划可 apply；计划绑定当时数据库设置修订及显示策略修订，任一变化后旧计划 StaleConfirmation 并释放，文件变化仍由完整字节 / 身份条件校验拒绝。应用与退休在共享隐私锁内检查最新策略并执行，隐私已提交时不能继续旧操作；系统目录选择等待不持有这些锁。
+
+NotifyIntegrationsSnapshot 包含 ready、nullable listener_count / service_issue、nullable registrations / registry_issue 与 redacted；枚举失败和空列表分别表达。单条 NotifyIntegrationRow 的 configured / current_executable / chain_original 允许 null，坏记录保持自己的有限 issue，不污染健康条目；隐私只隐藏路径。NotifyApplyResult 包含 configured: boolean|null、retired、cleanup_issue，成功撤销但登记占用明确 configured=false / retired=false / cleanup_issue；单独退休已不存在登记不推断配置，configured=null / retired=true。成功操作 reload owner，读取仍是独立当前状态，不伪装监听已立即建立。
+
+所有操作错误只传 NOTIFY_INTEGRATION_FAILED 和 details.notify_issue 的有限 NotifyIssue；Busy、配置变化、归属变化、provider 不支持、权限、过期 / 未知计划、清理失败分别表达，不回显 OS / TOML 文本或命令。当前 NTFS 事务 provider 限制见[采集设计](collection-accounting.md#8-notify-唤醒与恢复路径)。正式设置 UI、实际系统目录选择对话框、真实 Codex 回合继续验收，IPC 开放不代表 notify 完整交付。五命令实际主 WebView与 mini 权限、隐私 / 旧预览以及启用撤销已通过 Win10 合成 Home 场景，详见[交付记录](../development/delivery-status.md#m15a6主窗口-notify-ipc与共享隐私门禁)。
+
+M15b2 的 notify 内部 CLI 不是前端 IPC：正式 exe 在 Tauri 创建前识别严格的 headless 参数，只有当前用户私有登记 ID 可选择能力，不接受通道 nonce、Home、程序或路径参数。错误输出固定有限代码，不包含原 JSON / 路径 / 参数；有效未支持事件与失效配置不创建消费。debug 原生测试仅允许 AppData 下 `native-notify-<32 hex>` 子目录名，release 排除该入口。该阶段的主端 IPC 待办已由 M15a6 五命令收敛，原命令 / owner / 文件操作分别由后续增量完成；不暴露任意命令执行或原始通知入口，正式设置 UI 继续实施。
 
 selection_handle 绑定选择用途、当前窗口与 canonical target，5 分钟过期；消费一次，不能改成删除 / 任意执行目标。不提供 `choose_output_file`、`prepare_data_action` 或 `commit_data_action`，也不开放导出、手动备份、备份恢复与数据清除作业。账户程序选择与指纹确认继续使用独立受控契约。
 

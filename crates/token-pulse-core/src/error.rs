@@ -41,6 +41,7 @@ pub enum ErrorCode {
     WindowUnavailable,
     ShortcutConflict,
     ShortcutUnavailable,
+    NotifyIntegrationFailed,
 }
 
 impl std::fmt::Display for ErrorCode {

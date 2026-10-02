@@ -5,6 +5,23 @@ import type { TokenMeasure, MiniScope, DecimalInt, DashboardBundle } from './gen
 
 const ajv = new Ajv({ strict: false });
 
+test('notify contracts retain unknown state and restrict management to source or native selection', () => {
+  const status = ajv.compile(protocol.schemas.NotifyIntegrationsSnapshot);
+  const unknown = { ready: false, listener_count: null, service_issue: 'unavailable', registrations: null, registry_issue: 'unavailable', redacted: false };
+  expect(status(unknown)).toBe(true);
+  expect(status({ ...unknown, listener_count: '0' })).toBe(false);
+  expect(status({ ...unknown, registry_issue: 'private parser text' })).toBe(false);
+  const prepare = ajv.compile(protocol.schemas.NotifyPrepareAction);
+  const request = { kind: 'enable_source', source_id: 'source', chain_original: null };
+  expect(prepare(request)).toBe(true);
+  expect(prepare({ kind: 'choose_home', chain_original: false })).toBe(true);
+  expect(prepare({ ...request, path: 'private home' })).toBe(false);
+  expect(prepare({ ...request, command: ['arbitrary.exe'] })).toBe(false);
+  const apply = ajv.compile(protocol.schemas.NotifyApplyResult);
+  expect(apply({ registration_id: 'a'.repeat(32), configured: false, retired: false, cleanup_issue: 'busy' })).toBe(true);
+  expect(apply({ registration_id: 'a'.repeat(32), configured: null, retired: true, cleanup_issue: null })).toBe(true);
+});
+
 test('display settings preserve uninitialized null, exact revision and strict timezone mutations', () => {
   const validate = ajv.compile(protocol.schemas.DisplaySettingsSnapshot);
   const snapshot = { settings_version: 1, settings_revision: '9007199254740993', preferences: { theme: 'dark', privacy: false, display_timezone: null } };

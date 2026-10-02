@@ -2,7 +2,9 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-03，M15a5 / M15a4 / M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+## 当前交付状态（2026-10-03，M15a6 / M15a5 / M15a4 / M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+
+M15a6 已接 notify 主窗口五项 IPC、真实 DTO / schema / TS、main capability 和 Rust label 检查。已有本地 source_id 或后台系统目录选择器选择 Home，前端没有路径 / 程序 / nonce 输入。共享隐私在序列化时隐藏路径与差异，在文件操作期间阻止已提交隐私后的旧写入；计划绑定设置和显示修订，恢复显示后旧计划仍失效。未知状态与清理失败分别表达。新增 core 3 / app 2 / schema 1 项和相关回归 / TS / 契约 / 三包 strict Clippy / release check / fmt / diff 通过；实际 Win10 main WebView 五命令、mini 权限、隐私 / 旧预览、启用 / 撤销 / active 退休拒绝与采集 3→10→11 通过，退出 0，1412 仍记录。下述 IPC 待办按此收敛；正式设置 UI、实际系统目录选择交互和真实 Codex 回合继续，不改真实 Home、不运行性能测试。
 
 M15a5 已完成配置操作管理器和受控登记退休，原命令默认保留；启用复核 / 暂存配置后登记、提交，失败不发布半份配置。撤销配置成功和后续清理失败分别表达、可重试。私有跨进程锁阻止晚到 marker 与退休交错，已领取对象释放不复活 wake；坏登记隔离、未知配置保持 null。新增 11 项，integration 总 63 / 正式 headless 5 项通过，两包 strict Clippy / release check / fmt / diff 通过。实际 Win10 `-Notify` 管理器启用 → 正式采集 3→10→11 → 保留用户新设置的撤销 → 登记退休 / 监听关闭 / 旧提示无 marker 通过，退出 0；WebView2 1412 仍记录。登记退休 / 操作管理器已收敛，正式 main-only IPC / 共享隐私 / 差异预览 / 设置 UI 继续，TxF 和其他环境限制保持。真实 Home 未改，无性能测试。
 
@@ -68,6 +70,18 @@ M06f1 最新增量：schema v8 已落地替换文件候选的隔离暂存区、�
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。历史 M14 / 导出副本及迁移保护 / 专门故障恢复待办已由上述范围修订撤销，既有实现和测试记录保留。
 
 账户服务已注册主窗口专用原生程序 / Home 选择、草稿释放、配置保存、连接 / 断开和额度桶选择命令，设置页接入实际 DTO、显示隐私门禁与精确修订。默认不连接，已保存的明确 auto_connect 偏好接启动钩子；程序变化拒绝，配置保存不替换当前连接。用户已确认复用本地已登录账户，新增登录 / 设备码 / 取消登录不在交付范围。本机已通过选定程序和已有 Home 读到真实 ready / 周额度，未发起新登录。主总览与小窗完整额度内容、真实账户持续刷新 / 身份变化、完整冷进程自动连接及 OS 文件选择对话框交互仍待后续；不以单次读取证明全部账户验收。
+
+## M15a6：主窗口 notify IPC与共享隐私门禁
+
+已新增 `get_notify_integrations`、`prepare_notify_integration`、`apply_notify_integration`、`release_notify_preview`、`retire_notify_integration` 的 AppManifest / 自动权限 / main capability / handler。mini 没有 capability，后端统一校验 main 标签与请求标识。只读准备从现存未移除本地来源获取 Home，或后台父窗口系统目录选择器；前端只提交来源或登记标识与可选原命令链选择，不接受路径 / 程序 / nonce / 配置文本 / 完整通知。系统选择等待不持有隐私 / 管理器锁，取消返回 null，返回前重新检查隐私修订。
+
+后台绑定 plan_id 与数据库设置 / 显示策略修订，配置真实文件条件检查仍保留；设置变化使计划 StaleConfirmation 并释放。过期 / 未知计划和 release 走既有有界管理器，修订映射按实际有效计划清理。准备、应用与退休在最新共享隐私锁内执行，已提交隐私时拒绝动作；release 在隐藏状态也允许关闭草稿。PrivateResponse 序列化时再按最新策略隐藏 Home 与 before / after notify，防止慢响应带出旧路径；nonce、全配置与正文不进入 DTO。
+
+状态枚举失败 registrations=null / registry_issue，空列表与其区分；单条坏登记 / 配置 configured=null，不制造零或 false。监听数保持真实 nullable owner 快照，不宣称 apply 返回时监听已就绪。结果 configured=true / false 表示真实配置变更，retired / cleanup_issue 单独表达；对已不存在登记的单独退休 configured=null，不能据没有记录推断用户配置。错误仅 NOTIFY_INTEGRATION_FAILED + 有限 details.notify_issue，Busy / provider 不支持 / 文件变化 / 归属 / active / 清理等不同原因没有 OS / parser 文本。成功应用和退休 reload owner。TxF 限制继续保留，不将本机支持推断到其他环境。
+
+新增 core 3 项验证严格输入拒绝任意路径 / 命令 / nonce、无效标识、延迟隐私差异与路径脱敏 / 精确修订 / null 保留、隐藏时操作不执行；app 2 项验证主标签与请求标识 / 有限错误与 retryable；schema 1 项验证 null 枚举 / 状态、有限 issue、严格输入和成功撤销但清理失败结果。core 既有隐私 5、manager 6、schema 总 11 项通过；TS / generated 契约漂移、core / integration / desktop strict Clippy all-targets（test-fixture）、desktop release check / fmt / diff 通过。
+
+实际 Win10 19045 `native-smoke.ps1 -Notify` 在合成 Home 继续原采集 3→10→11 验收，并从真实 main WebView 调用五项命令：来源 / 额外路径拒绝、只读前后值 / 默认原命令、release 后不可 apply、隐私路径隐藏 / 禁止准备与写入、恢复显示旧计划失效、条件启用 / active 退休拒绝、保真撤销 / 登记退休、已不存在登记配置 null。mini 真实 WebView 对五命令均被 capability 拒绝；最终源日志字节与用户新设置仍保持。NATIVE_NOTIFY_IPC_OK / NATIVE_NOTIFY_COLLECTOR_OK、退出 0；已知 WebView2 1412 单列。无真实用户 Home 修改或性能测试。正式设置 UI / 视觉检查、系统目录选择器实际交互、真实 Codex 通知及 Windows 11 / 其他卷继续验收，整体目标仍进行中。
 
 ## M15a5：配置操作管理器与登记退休
 
