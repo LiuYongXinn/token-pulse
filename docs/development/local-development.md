@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M15b2：`cargo test -p token-pulse-integration --test notify_invocation` 4 项通过；`cargo test -p token-pulse-desktop --test notify_headless` 3 项实际启动正式 exe。后者只在 debug / Windows 执行，使用 LocalAppData/com.tokenpulse.desktop.dev 下独立 `native-notify-<uuid>`，不会改真实 Codex Home 或启动正常 GUI；夹具 config 的安装数组由测试准备，不能记录为配置编辑器通过。integration `--features test-fixture` 合计 33 项、两个包 strict Clippy all-targets / fmt、`cargo check -p token-pulse-desktop --release` 通过。原命令 runner 未就绪时 chain=true 有限拒绝，正式启用入口尚未开放；后续接主进程补扫 / 离线消费、原命令、保真文件操作和 UI。详见[交付记录](delivery-status.md#m15b2正式-exe-的只读-headless-唤醒入口)。
+
 M15a3：`cargo test -p token-pulse-integration --test notify_registry` 新增 9 项通过（契约 2、真实 Win10 临时文件 7）。全模块 `--features test-fixture` 共 29 项，strict Clippy all-targets / fmt 通过。测试创建隔离 temp 应用目录与合成 Home，私有文件使用实际 Win32 owner / DACL / 不覆盖改名，不读取真实 auth.json。登记不可变，离线标记零字节；文件上限 / 16 条登记上限 / 8 写入并发为功能限制验证，没有做性能测试。正式进程尚未使用该库，启用 / 撤销和 UI 继续接入。详见[交付记录](delivery-status.md#m15a3私有持久登记与并发离线唤醒标记)。
 
 M15b1：`cargo test -p token-pulse-integration --features test-fixture` 共 20 项通过，其中 M15a2 配置 10 项、最小唤醒协议 4 项，另 5 项真正创建 Win10 管道并检查 DACL / 去重 / 异常连接 / 超时 / 停止重开 / 旧客户端句柄，以及 1 项启动独立 feature-only 子进程发送。`cargo clippy -p token-pulse-integration --all-targets --features test-fixture -- -D warnings` / fmt 通过。测试 capability 经 stdin 传递，不从终端输出认证 nonce，也不运行真实 Codex 回合或改 config.toml。300 / 500 ms 等待检查用于协议功能，未做性能测试。当前是独立通道库，还没有生产 exe headless / 采集器 / 持久登记 / 离线标记 / 正式 UI。详见[交付记录](delivery-status.md#m15b1当前用户专属的有界-windows-唤醒通道)。

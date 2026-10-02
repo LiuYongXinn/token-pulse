@@ -220,6 +220,8 @@ cursor 为服务端签发的不透明游标：snapshot / filter hash、sort、�
 |`open_source_location`|diagnostic_id 或 source_id；后台定位，不接受任意路径|
 |`manage_notify_integration`|prepare / apply / restore；显示保真配置差异，校验当前内容归属|
 
+M15b2 的 notify 内部 CLI 不是前端 IPC：正式 exe 在 Tauri 创建前识别严格的 headless 参数，只有当前用户私有登记 ID 可选择能力，不接受通道 nonce、Home、程序或路径参数。错误输出固定有限代码，不包含原 JSON / 路径 / 参数；有效未支持事件与失效配置不创建消费。debug 原生测试仅允许 AppData 下 `native-notify-<32 hex>` 子目录名，release 排除该入口。主窗口 `manage_notify_integration` 仍是待接入契约，没有为前端暴露任意命令执行或原始通知入口；链式原通知执行、主采集服务和正式配置 / UI 继续实施。
+
 selection_handle 绑定选择用途、当前窗口与 canonical target，5 分钟过期；消费一次，不能改成删除 / 任意执行目标。不提供 `choose_output_file`、`prepare_data_action` 或 `commit_data_action`，也不开放导出、手动备份、备份恢复与数据清除作业。账户程序选择与指纹确认继续使用独立受控契约。
 
 对长操作 request_key 幂等：相同 key + 相同请求返回同 job；同 key 不同 payload 拒绝 REQUEST_KEY_CONFLICT。查询 request_id 只用于关联，不承诺写幂等。应用重启后作业状态可查，无法继续的任务明确 interrupted。

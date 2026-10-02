@@ -3,6 +3,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fmt, ops::Range, path::Path};
 
+#[cfg(windows)]
+pub mod windows;
+
 pub const MAX_CONFIG_BYTES: usize = 1024 * 1024;
 const MAX_ARGUMENTS: usize = 64;
 const MAX_ARGUMENT_BYTES: usize = 16 * 1024;
@@ -246,6 +249,18 @@ pub fn restore(current: &[u8], record: &NotifyRestoreRecord) -> Result<Vec<u8>, 
         return Err(ConfigError::TooLarge);
     }
     Ok(restored.into_bytes())
+}
+
+/// A prepared registry entry is not active until the current config contains its exact command.
+pub fn owns_current_notify(
+    current: &[u8],
+    record: &NotifyRestoreRecord,
+) -> Result<bool, ConfigError> {
+    record.validate()?;
+    let parsed = parse(config_text(current)?)?;
+    Ok(parsed
+        .field
+        .is_some_and(|field| field.arguments == record.installed_arguments))
 }
 
 struct ParsedConfig {

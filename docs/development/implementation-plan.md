@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15b2 已接正式 exe 的 headless wake-only 分支，先于 Tauri / 单实例；核对 exe / 当前 notify 归属、只读配置有界且拒绝链接，在线发送或离线合并标记。新增 invocation 4 项 / 正式 exe Win10 跨进程 3 项通过，integration 总 33 项与两包 strict Clippy / fmt / release check 通过。原命令链、主进程补扫 / 标记消费、配置文件启用 / 撤销与正式 UI 继续推进；当前 chain=true 明确拒绝，真实用户配置不变，没有性能测试。详见[交付记录](delivery-status.md#m15b2正式-exe-的只读-headless-唤醒入口)。
+
 M15a3 已完成私有登记 / 离线 dirty bit 库，新增记录契约 2 项、Win10 实际临时文件 7 项，integration 合计 29 项及 strict Clippy / fmt 通过。原 notify / capability / 显式链选择有界持久保存，登记不覆盖、并发提示合并 / 领取后新提示保留、权限 / 链接 / 损坏拒绝。没有修改真实 Home；正式 headless / 采集服务、配置文件启用 / 撤销及 UI 继续推进，未做性能测试。详见[交付记录](delivery-status.md#m15a3私有持久登记与并发离线唤醒标记)。
 
 M15b1 已实现有界当前用户 notify 管道库，协议 4 项、实际 Win10 管道 5 项 / 独立子进程 1 项，连同配置 10 项共 20 项通过，strict Clippy all-targets / test-fixture / fmt 通过。连续连接旧 IO 状态与 ACK 关闭竞态已收敛；超时确认未知保留，提示只触发补扫。正式 exe headless / 采集回调、持久登记 / 离线标记、配置文件操作与 UI 接下来贯通，真实用户配置没有改变；未进行性能测试。详见[交付记录](delivery-status.md#m15b1当前用户专属的有界-windows-唤醒通道)。

@@ -4099,14 +4099,17 @@ dependencies = [
 name = "token-pulse-desktop"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-single-instance",
+ "tempfile",
  "token-pulse-collector",
  "token-pulse-core",
+ "token-pulse-integration",
  "token-pulse-quota",
  "token-pulse-store",
  "token-pulse-taskbar",

@@ -2,7 +2,9 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02，M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+## 当前交付状态（2026-10-02，M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+
+M15b2 已接正式 exe 在 Tauri 之前的严格 headless 唤醒入口：当前 exe / 当前配置所有权核对、允许字段 / 有界只读配置、在线通道 / 离线零字节标记。新增 integration 4 项、正式 exe Win10 跨进程 3 项通过，integration 合计 33 项 / desktop headless 3 项；两模块 strict Clippy all-targets / fmt / release check 通过。原命令链 runner、正式主进程补扫 / 标记消费、配置文件启用 / 撤销和 UI 继续实施，chain_original=true 明确拒绝而不静默跳过或执行新程序。真实用户配置未修改，完整目标仍进行中。
 
 M15a3 已实现当前用户私有的不可变登记与离线 dirty bit，原 notify 恢复值 / 本地 capability / 显式原命令链选择持久保存，其他配置不复制。领取改名 / 完成 / 未完成释放保证新提示保留；新增合成 2 项、Win10 实际文件 7 项通过，integration 合计 29 项和 strict Clippy / fmt 通过。原子写入、权限拒绝、并发合并、损坏 / 超限与登记上限实际检查通过，没有改真实 Codex Home。正式 headless、采集服务、配置启用 / 撤销和 UI 继续接入，完整目标保持进行中。
 
@@ -50,6 +52,14 @@ M06f1 最新增量：schema v8 已落地替换文件候选的隔离暂存区、�
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。历史 M14 / 导出副本及迁移保护 / 专门故障恢复待办已由上述范围修订撤销，既有实现和测试记录保留。
 
 账户服务已注册主窗口专用原生程序 / Home 选择、草稿释放、配置保存、连接 / 断开和额度桶选择命令，设置页接入实际 DTO、显示隐私门禁与精确修订。默认不连接，已保存的明确 auto_connect 偏好接启动钩子；程序变化拒绝，配置保存不替换当前连接。用户已确认复用本地已登录账户，新增登录 / 设备码 / 取消登录不在交付范围。本机已通过选定程序和已有 Home 读到真实 ready / 周额度，未发起新登录。主总览与小窗完整额度内容、真实账户持续刷新 / 身份变化、完整冷进程自动连接及 OS 文件选择对话框交互仍待后续；不以单次读取证明全部账户验收。
+
+## M15b2：正式 exe 的只读 headless 唤醒入口
+
+生产 `main` 先识别 notify 参数，再进入正常 Tauri：严格旗标 / 32 hex ID / 单一 JSON、缺失或额外参数 / 旗标错位拒绝，错误均有限且不回显输入。纯读取返回 nullable hint，raw JSON 不持久保存，未支持事件不访问登记 / 初始化 GUI。Windows 按与当前 Tauri 相同的 dirs LocalAppData + profile identifier 定位私有登记；读取能力不接受外部路径 / nonce。debug 原生验收目录仅允许固定前缀 + 32 hex 单个子目录名，release 不含该环境入口。
+
+唤醒前检查登记的安装 exe 与当前 exe 相同，再只读明确 Home/config.toml，拒绝重解析点 / 目录或硬链接，文件 / 读取均限 1 MiB。当前根 notify 的完整解码参数属于该登记才发送；旧预览但未启用、用户改过或删除 notify 均不唤醒。在线提示成功返回，连接 / 确认失败将零字节 dirty bit 合并，日志仍为核算依据。当前只有 wake-only 路由：chain_original=true 明确返回有限不可用错误，受控原命令 runner 尚需接入，不能开放有旧通知授权链的正式启用 UI。
+
+新增检查：integration 4 项（严格模式 / 最小身份 / 错误与无效 UTF-16 / 实际只读配置 / 所有权 / 硬链接和文件上限）。正式 `cargo test -p token-pulse-desktop --test notify_headless` 3 项，实际启动本项目正式 exe，经 debug-only 隔离 AppData 目录，在线把最小 DTO 送到真实管道、离线两次仅一个零字节标记、失效配置不标记、错误 exe / 原命令链选择 / 多余参数有限退出。源 config 字节不变、无 SQLite / 正常 Tauri 启动产物；没有调用正常 GUI 路径，不等同手工 UI / 真实 Codex 回合验收。合成配置由夹具写入，不是配置启用编辑器的证明。未改真实 Home / 账户状态；integration 合计 33 项、desktop 3 项，两个包 strict Clippy all-targets、fmt / diff 和 release check 通过，无性能测试。主进程 listener / 补扫 / 标记消费、原命令 runner、配置文件操作和正式设置继续实施。
 
 ## M15a3：私有持久登记与并发离线唤醒标记
 
