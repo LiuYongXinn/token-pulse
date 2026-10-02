@@ -7,13 +7,16 @@ async fn main() {
         HostConfiguration, HostDisplayState, HostMessage, HostReply, TaskbarView,
         windows::{topology::inspect_primary_taskbar, transport::HostConnection},
     };
-    if std::env::args().skip(1).collect::<Vec<_>>()
-        != ["--native-taskbar-accessibility-development-check"]
-    {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let validate_actions = if args == ["--native-taskbar-accessibility-development-check"] {
+        false
+    } else if args == ["--native-taskbar-accessibility-actions-development-check"] {
+        true
+    } else {
         std::process::exit(2);
-    }
+    };
     println!(
-        "DEVELOPMENT ONLY: owned synthetic host, actual UI Automation properties; no SendInput or external window names"
+        "DEVELOPMENT ONLY: owned synthetic host, actual UI Automation properties; no direct SendInput or external window names"
     );
     let before = inspect_primary_taskbar().expect("supported baseline");
     let executable = std::env::current_exe()
@@ -75,6 +78,62 @@ async fn main() {
         "NATIVE_TASKBAR_UIA_PUBLIC_OK: exact synthetic integers/amounts/null, scope/account name, focusable={}, control_type={}",
         full.focusable, full.control_type
     );
+    if validate_actions {
+        use token_pulse_taskbar::HostAction;
+        println!(
+            "DEVELOPMENT ACTION MODE: invoke only five owned synthetic host menu items; intents consumed by this probe, no production application receives them"
+        );
+        for (name, expected) in [
+            ("显示悬浮窗", HostAction::OpenFloat {}),
+            ("打开当前范围统计", HostAction::OpenStats {}),
+            ("任务栏设置", HostAction::OpenTaskbarSettings {}),
+            ("隐私模式", HostAction::SetPrivacy { enabled: true }),
+            ("隐藏任务栏显示", HostAction::DisableTaskbar {}),
+        ] {
+            let menu = open_menu(window, connection.process_id()).await;
+            invoke_menu_action(menu.entry, menu.popup, connection.process_id(), name);
+            let mut received = false;
+            for _ in 0..40 {
+                let HostReply::Actions {
+                    settings_revision,
+                    actions,
+                } = connection
+                    .exchange(HostMessage::GetActions {})
+                    .await
+                    .unwrap()
+                else {
+                    panic!("action reply");
+                };
+                assert_eq!(settings_revision.unwrap().as_str(), "1");
+                if !actions.is_empty() {
+                    assert_eq!(actions.as_slice(), std::slice::from_ref(&expected));
+                    received = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            assert!(
+                received,
+                "native UIA Invoke did not produce the expected action"
+            );
+            let HostReply::Actions { actions, .. } = connection
+                .exchange(HostMessage::GetActions {})
+                .await
+                .unwrap()
+            else {
+                panic!("action reply");
+            };
+            assert!(actions.is_empty(), "UIA action consumed exactly once");
+            assert!(
+                own_popup(connection.process_id()).is_none(),
+                "invoked menu must end"
+            );
+            drop(menu);
+        }
+        println!(
+            "NATIVE_TASKBAR_UIA_ACTIONS_OK: five actual owned UIA Invoke calls produced precisely the whitelisted single-consumption intents over the production host pipe"
+        );
+    }
     let menu = open_menu(window, connection.process_id()).await;
     read_menu(menu.popup, connection.process_id());
     connection
@@ -126,6 +185,159 @@ async fn main() {
     println!(
         "NATIVE_TASKBAR_UIA_OK: actual owned provider/menu names and invocation patterns, full precision, null/zero, privacy ACK and fresh private name, native geometry restored; physical Narrator/keyboard acceptance separate"
     );
+}
+
+#[cfg(windows)]
+fn invoke_menu_action(
+    entry: windows_sys::Win32::Foundation::HWND,
+    popup: windows_sys::Win32::Foundation::HWND,
+    pid: u32,
+    name: &str,
+) {
+    use windows::{
+        Win32::{
+            Foundation::HWND,
+            System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
+            UI::Accessibility::{
+                CUIAutomation8, IUIAutomation, IUIAutomation2, IUIAutomationInvokePattern,
+                TreeScope_Children, UIA_InvokePatternId, UIA_MenuItemControlTypeId,
+            },
+        },
+        core::Interface,
+    };
+    assert_eq!(own_popup(pid), Some(popup));
+    unsafe {
+        let automation: IUIAutomation2 =
+            CoCreateInstance(&CUIAutomation8, None, CLSCTX_INPROC_SERVER).unwrap();
+        automation.SetConnectionTimeout(1000).unwrap();
+        automation.SetTransactionTimeout(1000).unwrap();
+        automation.SetAutoSetFocus(false).unwrap();
+        let automation: IUIAutomation = automation.cast().unwrap();
+        let root = automation.ElementFromHandle(HWND(popup)).unwrap();
+        assert_eq!(root.CurrentProcessId().unwrap(), pid as i32);
+        let elements = root
+            .FindAll(
+                TreeScope_Children,
+                &automation.CreateTrueCondition().unwrap(),
+            )
+            .unwrap();
+        let count = elements.Length().unwrap();
+        assert!((5..=8).contains(&count));
+        let mut selected = None;
+        for index in 0..count {
+            let item = elements.GetElement(index).unwrap();
+            if item.CurrentControlType().unwrap() == UIA_MenuItemControlTypeId
+                && item.CurrentName().unwrap().to_string().starts_with(name)
+            {
+                assert!(selected.is_none(), "unique owned menu action");
+                assert_eq!(item.CurrentProcessId().unwrap(), pid as i32);
+                selected = Some(item);
+            }
+        }
+        let item = selected.expect("owned named menu item");
+        assert!(item.CurrentIsEnabled().unwrap().as_bool());
+        assert!(!item.CurrentIsOffscreen().unwrap().as_bool());
+        let bounds = item.CurrentBoundingRectangle().unwrap();
+        // Windows menu proxies may synthesize selection/Enter internally. Owner identity
+        // alone is insufficient: never invoke through a covered or inactive input surface.
+        ensure_menu_input(
+            entry,
+            popup,
+            pid,
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom,
+        );
+        let invoke: IUIAutomationInvokePattern = item
+            .GetCurrentPattern(UIA_InvokePatternId)
+            .unwrap()
+            .cast()
+            .unwrap();
+        if let Err(error) = invoke.Invoke() {
+            panic!(
+                "NATIVE_TASKBAR_UIA_INVOKE_FAILED: HRESULT={:08x}",
+                error.code().0 as u32
+            );
+        }
+    }
+    verify_owned(entry, pid);
+}
+
+#[cfg(windows)]
+fn ensure_menu_input(
+    entry: windows_sys::Win32::Foundation::HWND,
+    popup: windows_sys::Win32::Foundation::HWND,
+    pid: u32,
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+) {
+    use windows_sys::Win32::{
+        Foundation::POINT,
+        System::StationsAndDesktops::{CloseDesktop, DESKTOP_READOBJECTS, OpenInputDesktop},
+        UI::{
+            HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
+            WindowsAndMessaging::{
+                GA_ROOT, GUITHREADINFO, GetAncestor, GetClassNameW, GetForegroundWindow,
+                GetGUIThreadInfo, GetWindowThreadProcessId, WindowFromPoint,
+            },
+        },
+    };
+    let desktop = unsafe { OpenInputDesktop(0, 0, DESKTOP_READOBJECTS) };
+    assert!(
+        !desktop.is_null(),
+        "NATIVE_TASKBAR_UIA_INPUT_REFUSED: input desktop unavailable"
+    );
+    assert_ne!(unsafe { CloseDesktop(desktop) }, 0);
+    struct DpiContext(windows_sys::Win32::Foundation::HANDLE);
+    impl Drop for DpiContext {
+        fn drop(&mut self) {
+            unsafe {
+                SetThreadDpiAwarenessContext(self.0);
+            }
+        }
+    }
+    let previous =
+        unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    assert!(!previous.is_null());
+    let _dpi = DpiContext(previous);
+    assert!(right > left && bottom > top);
+    let point = POINT {
+        x: left + (right - left) / 2,
+        y: top + (bottom - top) / 2,
+    };
+    let hit = unsafe { WindowFromPoint(point) };
+    if hit != popup {
+        let mut class = [0; 128];
+        let length = unsafe { GetClassNameW(hit, class.as_mut_ptr(), class.len() as i32) };
+        eprintln!(
+            "NATIVE_TASKBAR_UIA_INPUT_REFUSED: owned menu item covered; hit_class={}",
+            String::from_utf16_lossy(&class[..length.max(0) as usize])
+        );
+        panic!("refuse native Invoke outside owned menu hit surface");
+    }
+    let mut actual = 0;
+    let thread = unsafe { GetWindowThreadProcessId(popup, &mut actual) };
+    assert_eq!(actual, pid);
+    let mut info = GUITHREADINFO {
+        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+        ..unsafe { std::mem::zeroed() }
+    };
+    assert_ne!(unsafe { GetGUIThreadInfo(thread, &mut info) }, 0);
+    assert_eq!(
+        info.hwndMenuOwner, entry,
+        "NATIVE_TASKBAR_UIA_INPUT_REFUSED: menu owner changed"
+    );
+    let foreground = unsafe { GetForegroundWindow() };
+    assert!(
+        !foreground.is_null()
+            && (foreground == popup || foreground == unsafe { GetAncestor(entry, GA_ROOT) }),
+        "NATIVE_TASKBAR_UIA_INPUT_REFUSED: menu is not foreground"
+    );
+    verify_owned(entry, pid);
+    assert_eq!(own_popup(pid), Some(popup));
 }
 
 #[cfg(windows)]

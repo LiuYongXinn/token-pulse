@@ -2,6 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M13g3：受输入归属保护的 UIA 菜单动作验收入口
+
+为 M13g2 追加独立显式 `--native-taskbar-accessibility-actions-development-check`，原只读标志仍只查询属性 / 模式。动作模式只允许本次自有合成宿主的五个命名菜单项，通过 UIA Invoke 后要求正式管道返回唯一对应白名单意图及精确设置修订，再读取必须为空；探针消费意图，不向正式 Tauri 应用转发、不改变用户配置。此动作路径尚未完成环境验收，不能把以下代码存在或模式存在视为菜单可执行通过。
+
+首次直接 Invoke 返回 0x80131509（[UIA_E_INVALIDOPERATION](https://learn.microsoft.com/zh-cn/windows/win32/winauto/uiauto-error-codes)），未产生成功证据。最初只验证自有菜单 PID / 名称，未先检查真实输入命中，保护不足；已修正。参考[官方开源 WindowsMenu 代理](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/UIAutomation/UIAutomationClientSideProviders/MS/Internal/AutomationProxies/WindowsMenu.cs)的 Invoke 会经过 SetFocus / Enter 输入，新探针在调用前还要求可读输入桌面、项可见 / 启用、线程 PMv2 下实际 WindowFromPoint 命中自有 popup、菜单线程 hwndMenuOwner 匹配自有入口以及前台归属；调用后仍检查 HWND / PID。只读属性查询不需要这些输入条件。
+
+本机最终动作模式明确输出 NATIVE_TASKBAR_UIA_INPUT_REFUSED / hit_class=Windows.UI.Core.CoreWindow，Invoke 前拒绝、退出 101；没有绕过遮挡、选择其他系统菜单或用自有消息伪造 Invoke 成功。首次 HRESULT 的具体 OS 根因未据此完全证明，完整可交互桌面下仍需再验证。默认只读模式回归与 strict Clippy / fmt / diff 随提交检查；所有自有宿主及菜单退出，几何按既有 owner / guardian 恢复。生产菜单、管道与 DTO 未改，无真实来源 / 账户 / 性能测试。Narrator、真实键盘、Windows 11 和物理多屏仍保留。
+
 ## M13g2：真实 UI Automation 名称与原生菜单模式
 
 新增显式 `check_taskbar_accessibility --native-taskbar-accessibility-development-check`，默认测试 / CI 不嵌入 Explorer；使用正式独立宿主 / 受控管道和合成固定 fixture。查询线程不拥有窗口，以 COM MTA 初始化，IUIAutomation2 连接 / 事务各 1000 ms、AutoSetFocus=false，COM 对象不跨线程，查询按[官方 UIA 线程模型](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading)执行。读数必须唯一嵌入已验证的任务栏，查询前后检查自有 PID / 类，UIA ProcessId 同样匹配；不枚举其他应用名称、不读取真实日志或账户。

@@ -18,6 +18,8 @@ M15f3 已追加合成 960×600 DIP 工作区在真实主窗口上的尺寸适配
 
 先 `cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host`，再运行 `cargo run -p token-pulse-taskbar --example check_taskbar_accessibility -- --native-taskbar-accessibility-development-check`。显式场景会用合成固定夹具临时嵌入真实独立宿主、通过自有 WM_CONTEXTMENU 打开标准菜单，并只查询 UIA 名称 / 焦点属性 / Invoke 模式，不调用模式或发送输入。原生 Privacy ACK、私有字段移除和退出后的原任务栏几何必须通过，最后 NATIVE_TASKBAR_UIA_OK / 退出 0。Win10 19045 / 150% 已验证；实际 Narrator / 物理键盘 / Win11 保留。详见[交付记录](delivery-status.md#m13g2真实-ui-automation-名称与原生菜单模式)。
 
+将唯一标志换为 `--native-taskbar-accessibility-actions-development-check` 才尝试实际 UIA Invoke / 五个受限意图，要求菜单真实可命中并处于当前输入 / 前台归属；不向正式应用转发动作。该模式在本机 CoreWindow 覆盖时调用前拒绝，退出 101，不计动作验收通过。默认只读模式保持独立，详见[动作入口与限制](delivery-status.md#m13g3受输入归属保护的-uia-菜单动作验收入口)。
+
 当前最新完整 NSIS 包（M16e）：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,605,439 字节，SHA-256 `2e8eb45072009cd9ae862afb604a09d07a6e3429ba2dce6169896fbbfe63410b`。同次正式 TS / Vite、release 宿主 / 桌面、334 项第三方声明和 makensis 全部通过；旧段落中的包哈希按历史保留。包含最新正式空态说明，账户 / notify 选择器验收代码只在 debug 中。此轮未覆盖现有正式数据进行安装，未生成正式签名或发布；干净安装 / 卸载及完整更新不能由打包通过替代。
 
 本轮按用户允许重试任务栏 wire，输入桌面可打开，但自有前台夹具仍被全屏 Windows.UI.Core.CoreWindow 覆盖，命中保护在发送输入之前拒绝 / 退出 101；不计真实输入通过、不绕过保护，历史 M13e7 通过证据保留。详见[本轮记录](delivery-status.md#2026-10-03本轮任务栏真实输入复测)。
