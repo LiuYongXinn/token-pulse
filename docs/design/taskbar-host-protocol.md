@@ -168,3 +168,11 @@ OpenFloat 复用 mini 的创建 / 交互恢复 / 展开持久保存与回滚逻�
 主端 Settings 复用窗口门禁；SetPrivacy / DisableTaskbar 先等待发布暂停与原生清屏，检查唯一暂停归属、有效期限 / 非退出 / 非休眠及精确 SQLite 修订后提交。自己的清屏会取消普通动作，因此协调写入结果单独标记，实际写入失败仍表达 action_error；未进入事务的过期或外部取消意图不执行。仍只一个异步动作工作，不阻塞宿主 I/O。窗口统计 / 设置采用统一保留导航，见 IPC 契约。
 
 实际 Win10 菜单结构、五项自有助记消息通路及菜单打开时清屏 / shutdown 恢复几何通过；真实鼠标 / 方向键与焦点仍单独待验收。自动 / 实际系统证据见交付记录 M13e3。
+
+## M13e4a：悬停详情显示投影
+
+TaskbarView.details: HostDetails | null 增加 theme、range、scope、source_last_success_at_ms、source_statuses、pending_observations、pending_files、breakdown_complete、input_complete / cached_complete / output_complete、pricing_calculating。range 必须为合法半开时间范围且时区等于外层 timezone；source_statuses 是最多六个无重复受限枚举，不传来源 ID / 路径或任意错误原文。生产主端在同一 SQLite 快照取得主题 / 隐私 / 范围和设置修订，源成功时间取该快照已知成功时间的最大值，并按“来源最近成功核对”解释，不声称所有来源最新。
+
+HostQuota 增加 nullable last_attempt_at_ms / ErrorCode error_code，fetched_at_ms 仍是独立成功读取时间；未知码保留 null，QuotaState 继续表达失败。隐私边界仍删除整个账户 / 成本和原范围名称，details 只保留无敏感名称的枚举、数字和日期。details 未提供时解释为未提供，不默认成功时间或主题。新版应用与宿主成对部署，旧宿主拒绝不支持字段后走既有失败处理。
+
+details::content 生成只读显示与可访问全文，不查数据库 / 源日志或连接账户。完整 Token、部分分项、精确金额和有界整数百分比保持精度；所有实际额度窗口逐项表达、unknown 与零不同、到期不改为 100%、账户时间不随本地查询更新。本步骤没有可见悬停窗，实际面板绘制与生命周期接入在下一模块验收。

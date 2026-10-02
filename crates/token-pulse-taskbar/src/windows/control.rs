@@ -655,6 +655,7 @@ mod tests {
             priced_tokens: DecimalInt::parse("0").unwrap(),
             unpriced_tokens: DecimalInt::parse("0").unwrap(),
             quota: None,
+            details: None,
         }
     }
     #[tokio::test(flavor = "current_thread")]

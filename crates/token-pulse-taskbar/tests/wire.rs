@@ -205,6 +205,7 @@ fn view(privacy: bool, revision: &str) -> TaskbarView {
         priced_tokens: number("0"),
         unpriced_tokens: number("9007199254740993"),
         quota: None,
+        details: None,
     }
 }
 
@@ -436,6 +437,8 @@ fn quota_metadata_cannot_smuggle_invalid_percentages_or_duplicate_windows() {
         state: QuotaState::Ready,
         limit_label: None,
         fetched_at_ms: None,
+        last_attempt_at_ms: None,
+        error_code: None,
         windows: vec![window.clone()],
     });
     display.validate().unwrap();
@@ -463,8 +466,18 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
         "connection_epoch":"synthetic-account","quota_revision":"9007199254740993","state":"ready","selected_limit_id":"codex","available_limits":[{"limit_id":"codex","display_name":"SYNTHETIC PRIVATE BUCKET"}],"fetched_at_ms":1000,"last_attempt_at_ms":1000,"error_code":null,
         "windows":[{"window_id":"primary","duration_mins":10080,"used_percent":100,"remaining_percent":0,"resets_at_ms":null}]
     })).unwrap();
-    let projected = TaskbarView::from_snapshots(&usage, &quota, false);
-    let without_account = TaskbarView::from_optional_snapshots(&usage, None, false);
+    let projected = TaskbarView::from_snapshots(
+        &usage,
+        &quota,
+        false,
+        token_pulse_core::settings::AppTheme::Dark,
+    );
+    let without_account = TaskbarView::from_optional_snapshots(
+        &usage,
+        None,
+        false,
+        token_pulse_core::settings::AppTheme::Dark,
+    );
     without_account.validate().unwrap();
     assert!(without_account.quota.is_none());
     assert_eq!(without_account.usage_revision, projected.usage_revision);
@@ -473,6 +486,18 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
         projected.costs[0].estimated_cost
     );
     projected.validate().unwrap();
+    assert_eq!(
+        projected.details.as_ref().unwrap().range.end_ms.value(),
+        1001
+    );
+    assert!(
+        projected
+            .details
+            .as_ref()
+            .unwrap()
+            .source_last_success_at_ms
+            .is_none()
+    );
     assert!(projected.total_tokens.is_none());
     assert!(projected.input_tokens.is_none());
     assert_eq!(
@@ -481,16 +506,48 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
     );
     usage.coverage.state = CoverageState::Complete;
     assert_eq!(
-        TaskbarView::from_snapshots(&usage, &quota, false)
-            .total_tokens
-            .unwrap()
-            .as_str(),
+        TaskbarView::from_snapshots(
+            &usage,
+            &quota,
+            false,
+            token_pulse_core::settings::AppTheme::Dark
+        )
+        .total_tokens
+        .unwrap()
+        .as_str(),
         "0"
     );
     usage.usage.usage_event_count = number("1");
     usage.usage.total_tokens = number("9007199254740993");
-    let hidden = TaskbarView::from_snapshots(&usage, &quota, true);
+    usage
+        .coverage
+        .source_issues
+        .push(token_pulse_core::protocol::SourceIssue {
+            source_id: "SYNTHETIC PRIVATE SOURCE".into(),
+            code: "source_unreadable".into(),
+            last_success_ms: Some(EpochMs::new(500).unwrap()),
+        });
+    let hidden = TaskbarView::from_snapshots(
+        &usage,
+        &quota,
+        true,
+        token_pulse_core::settings::AppTheme::Dark,
+    );
     hidden.validate().unwrap();
+    assert_eq!(
+        hidden
+            .details
+            .as_ref()
+            .unwrap()
+            .source_last_success_at_ms
+            .unwrap()
+            .value(),
+        500
+    );
+    assert_eq!(
+        hidden.details.as_ref().unwrap().source_statuses,
+        vec![HostSourceStatus::Unreadable]
+    );
     let json = serde_json::to_string(&hidden).unwrap();
     assert!(json.contains("9007199254740993"));
     assert!(!json.contains("SYNTHETIC PRIVATE"));

@@ -39,6 +39,7 @@ pub(super) fn initialize(app: &tauri::AppHandle) {
                     usage,
                     quota.as_ref(),
                     input.privacy,
+                    input.theme,
                 )
             });
             Ok(super::taskbar_service::Input {

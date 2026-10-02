@@ -1,6 +1,7 @@
 //! Shared native-host wire contract and fail-closed receiver. No Tauri, database or log access.
 #[cfg(any(windows, test))]
 mod click;
+pub mod details;
 pub mod display;
 #[cfg(windows)]
 pub mod windows;
@@ -8,9 +9,14 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use token_pulse_core::{
+    error::ErrorCode,
     mini::MiniUsageSnapshot,
     numeric::{DecimalInt, DecimalMoney, EpochMs},
-    protocol::{CoverageState, QuotaSnapshot, QuotaState, QuotaWindow, validate_request_id},
+    protocol::{
+        CoverageState, DateRange, MiniScope, QuotaSnapshot, QuotaState, QuotaWindow, ScopeStart,
+        validate_request_id,
+    },
+    settings::AppTheme,
 };
 
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -171,7 +177,46 @@ pub struct HostQuota {
     pub state: QuotaState,
     pub limit_label: Option<String>,
     pub fetched_at_ms: Option<EpochMs>,
+    pub last_attempt_at_ms: Option<EpochMs>,
+    pub error_code: Option<ErrorCode>,
     pub windows: Vec<QuotaWindow>,
+}
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum HostSourceStatus {
+    Paused,
+    AwaitingDirectory,
+    PartiallyReadable,
+    Unreadable,
+    ScanEvidenceMissing,
+    Unknown,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostScope {
+    TodayAllSources,
+    TodaySession,
+    FixedSession,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HostDetails {
+    pub theme: AppTheme,
+    pub range: DateRange,
+    pub scope: HostScope,
+    /// Most recent successful source check, never the generation time of the usage query.
+    pub source_last_success_at_ms: Option<EpochMs>,
+    #[schemars(length(max = 6))]
+    pub source_statuses: Vec<HostSourceStatus>,
+    pub pending_observations: DecimalInt,
+    pub pending_files: DecimalInt,
+    pub breakdown_complete: bool,
+    pub input_complete: bool,
+    pub cached_complete: bool,
+    pub output_complete: bool,
+    pub pricing_calculating: bool,
 }
 /// Display-only projection: no paths, SQL, credentials, conversation text or executable arguments.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -193,15 +238,22 @@ pub struct TaskbarView {
     pub priced_tokens: DecimalInt,
     pub unpriced_tokens: DecimalInt,
     pub quota: Option<HostQuota>,
+    pub details: Option<HostDetails>,
 }
 impl TaskbarView {
-    pub fn from_snapshots(usage: &MiniUsageSnapshot, quota: &QuotaSnapshot, privacy: bool) -> Self {
-        Self::from_optional_snapshots(usage, Some(quota), privacy)
+    pub fn from_snapshots(
+        usage: &MiniUsageSnapshot,
+        quota: &QuotaSnapshot,
+        privacy: bool,
+        theme: AppTheme,
+    ) -> Self {
+        Self::from_optional_snapshots(usage, Some(quota), privacy, theme)
     }
     pub fn from_optional_snapshots(
         usage: &MiniUsageSnapshot,
         quota: Option<&QuotaSnapshot>,
         privacy: bool,
+        theme: AppTheme,
     ) -> Self {
         let known = usage.usage.usage_event_count.as_str() != "0"
             || matches!(usage.coverage.state, CoverageState::Complete);
@@ -248,11 +300,69 @@ impl TaskbarView {
                 state: quota.state,
                 limit_label: label,
                 fetched_at_ms: quota.fetched_at_ms,
+                last_attempt_at_ms: quota.last_attempt_at_ms,
+                error_code: quota.error_code.as_ref().and_then(|code| {
+                    serde_json::from_value(serde_json::Value::String(code.clone())).ok()
+                }),
                 windows: quota.windows.clone(),
+            }),
+            details: Some(HostDetails {
+                theme,
+                range: usage.range.clone(),
+                scope: match usage.mini_scope {
+                    MiniScope::TodayAllSources {} => HostScope::TodayAllSources,
+                    MiniScope::Session {
+                        start: ScopeStart::Today {},
+                        ..
+                    } => HostScope::TodaySession,
+                    MiniScope::Session { .. } => HostScope::FixedSession,
+                },
+                source_last_success_at_ms: usage
+                    .coverage
+                    .source_issues
+                    .iter()
+                    .filter_map(|issue| issue.last_success_ms)
+                    .max(),
+                source_statuses: usage
+                    .coverage
+                    .source_issues
+                    .iter()
+                    .filter_map(|issue| match issue.code.as_str() {
+                        "scan_evidence_missing" if issue.last_success_ms.is_some() => None,
+                        "scan_evidence_missing" => Some(HostSourceStatus::ScanEvidenceMissing),
+                        "source_paused" => Some(HostSourceStatus::Paused),
+                        "source_awaiting_directory" => Some(HostSourceStatus::AwaitingDirectory),
+                        "source_partially_readable" => Some(HostSourceStatus::PartiallyReadable),
+                        "source_unreadable" => Some(HostSourceStatus::Unreadable),
+                        _ => Some(HostSourceStatus::Unknown),
+                    })
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect(),
+                pending_observations: usage.coverage.pending_observation_count.clone(),
+                pending_files: usage.coverage.pending_file_count.clone(),
+                breakdown_complete: usage.coverage.breakdown_complete,
+                input_complete: usage.usage.input_total.complete,
+                cached_complete: usage.usage.cached_input.complete,
+                output_complete: usage.usage.output_total.complete,
+                pricing_calculating: usage.pricing.calculating,
             }),
         }
     }
     pub fn validate(&self) -> Result<(), WireError> {
+        if let Some(details) = &self.details {
+            if details.range.validate().is_err()
+                || details.range.timezone != self.timezone
+                || details.source_statuses.len() > 6
+                || details
+                    .source_statuses
+                    .iter()
+                    .enumerate()
+                    .any(|(index, status)| details.source_statuses[..index].contains(status))
+            {
+                return Err(WireError::InvalidFrame);
+            }
+        }
         if !text(&self.timezone, 128)
             || self.scope_label.as_ref().is_some_and(|s| !text(s, 256))
             || self.costs.len() > 16

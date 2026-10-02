@@ -571,3 +571,5 @@ M13e2b 扩展 TaskbarRuntimeSnapshot.action_error（nullable ErrorCode），为�
 mini-only open_mini_stats、原生双击 / 菜单统计和菜单设置经同一保留意图发布器递增后发送 main_navigation_changed，事件载荷不导航。主窗口先订阅再读取，以查询序号与 BigInt 修订拒绝迟到 / 低修订；重复事件和可见性恢复仅重读，不重新执行已接受意图。main-only get_mini_stats_request 保留兼容，当前最后意图不是统计则返回 null；mini_stats_requested 不再发出。
 
 原生菜单隐私 / 隐藏不增加前端任意写接口，继续复用已有精确设置修订和发布清屏协调器。实际写失败使用独立 taskbar.action_error；自己的暂停取消不吞掉协调写入结果，退出 / 休眠仍拒绝旧结果。Rust / TypeScript / schema 同步，mini capability 不包含 get_main_navigation。
+
+M13e4a 不增加前端命令。主端 taskbar_input 在既有 SQLite 快照中同时取得应用 theme 与隐私 / 用量 / 修订，作为独立宿主 HostDetails 投影输入；HostQuota 新增独立成功 / 尝试时间和受限错误码，账户查询仍走已有用户选择的本地服务。主题、来源成功时间、完整范围与分项完整性字段详见宿主协议，不能用查询生成时间替换来源 / 账户成功时间。隐私仍先清屏再发布，同一屏障将用于下一步原生悬停面板。

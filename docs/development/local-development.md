@@ -177,3 +177,5 @@ pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions
 M13e3 扩展上述 -TaskbarActions：实际弹出独立宿主的标准 Windows 菜单，核对 PID / 菜单归属及文字，再用明确标记的自有 WM_CHAR 助记消息选择小窗、统计、设置、隐私和隐藏；核对共享隐私与 SQLite 持久关闭。重新启用后，在菜单打开时提交主窗口隐私，确认菜单结束 / 未产生导航；再次打开菜单后 shutdown，验证模态循环内退出不悬挂且原全部几何恢复。新增 NATIVE_TASKBAR_MENU_OK，仍须最终 NATIVE_TASKBAR_ACTIONS_OK / 退出 0 才算场景通过。
 
 本机 Win10 19045 / 150% 已通过，仍有 WebView2 退出 1412。先前自有 Home / Down / Enter 消息未改变原生菜单选中项，改为助记字符做通路验证；真实鼠标、方向键、入口键盘可达性、焦点与屏幕阅读器分别待交互桌面验收。此场景不读取日志或登录凭据，不更改系统 DPI，不重启 Explorer。定向前端导航检查：npx playwright test tests/ui/overview.spec.ts tests/ui/taskbar.spec.ts，共 16 项；未运行性能测试。
+
+M13e4a 的定向检查：cargo test -p token-pulse-taskbar --test details --test wire 和 cargo test -p token-pulse-store --lib settings::taskbar；宿主 schema 使用 cargo run -p token-pulse-taskbar --example export_host_contract 生成，附加 -- --check 核对漂移。详情全部合成夹具，独立预期验证完整整数 / 部分分项 / 精确金额 / 有界整数覆盖率 / 实际周期 / null 与零 / 到期与隐私；不接真实日志或账户。生产快照新增详情字段后仍以 -TaskbarActions 回归正式双进程通信；该场景没有悬停面板，不作为可见悬停验收。没有新增前端布局或执行性能测试。

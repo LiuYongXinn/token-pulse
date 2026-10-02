@@ -3,6 +3,7 @@ use token_pulse_core::{mini::MiniUsageSnapshot, taskbar::*};
 pub struct TaskbarInput {
     pub configuration: TaskbarPreferencesSnapshot,
     pub privacy: bool,
+    pub theme: token_pulse_core::settings::AppTheme,
     pub usage: Option<MiniUsageSnapshot>,
 }
 fn preferences(
@@ -48,6 +49,7 @@ impl Database {
                     settings_revision: settings.settings_revision,
                 },
                 privacy: settings.preferences.privacy,
+                theme: settings.preferences.theme,
                 usage,
             })
         })
@@ -79,6 +81,54 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_input_theme_privacy_and_usage_share_the_same_committed_revision() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let at = EpochMs::new(1000).unwrap();
+        db.mutate_display_timezone(
+            TimezoneMutation::Initialize {
+                system_timezone: "UTC".into(),
+            },
+            at,
+        )
+        .unwrap();
+        db.mutate_taskbar_preferences(
+            request(
+                TaskbarPreferences {
+                    enabled: true,
+                    ..Default::default()
+                },
+                "1",
+            ),
+            at,
+        )
+        .unwrap();
+        db.mutate_display_theme(
+            token_pulse_core::settings::DisplayThemeMutation {
+                theme: token_pulse_core::settings::AppTheme::Light,
+                expected_settings_revision: DecimalInt::parse("2").unwrap(),
+            },
+            at,
+        )
+        .unwrap();
+        db.mutate_display_privacy(
+            token_pulse_core::settings::DisplayPrivacyMutation {
+                privacy: true,
+                expected_settings_revision: DecimalInt::parse("3").unwrap(),
+            },
+            at,
+        )
+        .unwrap();
+        let input = db.taskbar_input(at, "synthetic-native-details").unwrap();
+        assert_eq!(input.theme, token_pulse_core::settings::AppTheme::Light);
+        assert!(input.privacy);
+        assert_eq!(input.configuration.settings_revision.as_str(), "4");
+        assert_eq!(
+            input.usage.unwrap().settings_revision,
+            input.configuration.settings_revision
+        );
+    }
     fn request(preferences: TaskbarPreferences, revision: &str) -> TaskbarPreferencesMutation {
         TaskbarPreferencesMutation {
             preferences,

@@ -364,6 +364,14 @@
   },
   "main_to_host": {
     "$defs": {
+      "AppTheme": {
+        "enum": [
+          "dark",
+          "light",
+          "system"
+        ],
+        "type": "string"
+      },
       "CoverageState": {
         "enum": [
           "complete",
@@ -371,6 +379,26 @@
           "unknown"
         ],
         "type": "string"
+      },
+      "DateRange": {
+        "additionalProperties": false,
+        "properties": {
+          "end_ms": {
+            "$ref": "#/$defs/EpochMs"
+          },
+          "start_ms": {
+            "$ref": "#/$defs/EpochMs"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_ms",
+          "end_ms",
+          "timezone"
+        ],
+        "type": "object"
       },
       "DecimalInt": {
         "maxLength": 39,
@@ -386,6 +414,46 @@
         "maximum": 8640000000000000,
         "minimum": -8640000000000000,
         "type": "integer"
+      },
+      "ErrorCode": {
+        "enum": [
+          "INVALID_QUERY",
+          "UNSUPPORTED_API",
+          "SOURCE_UNREADABLE",
+          "UNSUPPORTED_FORMAT",
+          "UNSUPPORTED_SETTINGS_VERSION",
+          "AMBIGUOUS_USAGE",
+          "CHECKPOINT_CONFLICT",
+          "CANDIDATE_OBSOLETE",
+          "DB_WRITE_FAILED",
+          "DISK_FULL",
+          "DB_CORRUPT",
+          "MIGRATION_FAILED",
+          "SNAPSHOT_EXPIRED",
+          "CURSOR_INVALID",
+          "REVISION_CONFLICT",
+          "STALE_CONFIRMATION",
+          "REQUEST_KEY_CONFLICT",
+          "PRICE_RULE_CONFLICT",
+          "JOB_CANCELLED",
+          "JOB_INTERRUPTED",
+          "QUOTA_DISCONNECTED",
+          "QUOTA_UNSUPPORTED",
+          "QUOTA_TIMEOUT",
+          "QUOTA_AUTH_REQUIRED",
+          "QUOTA_PROTOCOL_ERROR",
+          "QUOTA_SERVICE_UNAVAILABLE",
+          "TASKBAR_UNSUPPORTED",
+          "TASKBAR_NO_SPACE",
+          "TASKBAR_EMBED_FAILED",
+          "NUMERIC_OVERFLOW",
+          "PERMISSION_DENIED",
+          "INVALID_USAGE",
+          "WINDOW_UNAVAILABLE",
+          "SHORTCUT_CONFLICT",
+          "SHORTCUT_UNAVAILABLE"
+        ],
+        "type": "string"
       },
       "HostConfiguration": {
         "additionalProperties": false,
@@ -427,6 +495,74 @@
         "required": [
           "currency",
           "estimated_cost"
+        ],
+        "type": "object"
+      },
+      "HostDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "breakdown_complete": {
+            "type": "boolean"
+          },
+          "cached_complete": {
+            "type": "boolean"
+          },
+          "input_complete": {
+            "type": "boolean"
+          },
+          "output_complete": {
+            "type": "boolean"
+          },
+          "pending_files": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "pending_observations": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "pricing_calculating": {
+            "type": "boolean"
+          },
+          "range": {
+            "$ref": "#/$defs/DateRange"
+          },
+          "scope": {
+            "$ref": "#/$defs/HostScope"
+          },
+          "source_last_success_at_ms": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EpochMs"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Most recent successful source check, never the generation time of the usage query."
+          },
+          "source_statuses": {
+            "items": {
+              "$ref": "#/$defs/HostSourceStatus"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "theme": {
+            "$ref": "#/$defs/AppTheme"
+          }
+        },
+        "required": [
+          "theme",
+          "range",
+          "scope",
+          "source_last_success_at_ms",
+          "source_statuses",
+          "pending_observations",
+          "pending_files",
+          "breakdown_complete",
+          "input_complete",
+          "cached_complete",
+          "output_complete",
+          "pricing_calculating"
         ],
         "type": "object"
       },
@@ -560,7 +696,27 @@
           "connection_epoch": {
             "type": "string"
           },
+          "error_code": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "fetched_at_ms": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EpochMs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_attempt_at_ms": {
             "anyOf": [
               {
                 "$ref": "#/$defs/EpochMs"
@@ -595,9 +751,30 @@
           "state",
           "limit_label",
           "fetched_at_ms",
+          "last_attempt_at_ms",
+          "error_code",
           "windows"
         ],
         "type": "object"
+      },
+      "HostScope": {
+        "enum": [
+          "today_all_sources",
+          "today_session",
+          "fixed_session"
+        ],
+        "type": "string"
+      },
+      "HostSourceStatus": {
+        "enum": [
+          "paused",
+          "awaiting_directory",
+          "partially_readable",
+          "unreadable",
+          "scan_evidence_missing",
+          "unknown"
+        ],
+        "type": "string"
       },
       "QuotaState": {
         "enum": [
@@ -714,6 +891,16 @@
             },
             "type": "array"
           },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HostDetails"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "generated_at_ms": {
             "$ref": "#/$defs/EpochMs"
           },
@@ -804,7 +991,8 @@
           "costs",
           "priced_tokens",
           "unpriced_tokens",
-          "quota"
+          "quota",
+          "details"
         ],
         "type": "object"
       }
