@@ -8,12 +8,33 @@ use token_pulse_core::{
 };
 
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
+    show_internal(app, None)
+}
+pub(super) fn show_fallback(
+    app: &tauri::AppHandle,
+    request: &super::taskbar_service::FallbackRequest,
+) -> Result<(), String> {
+    show_internal(app, Some(request))
+}
+fn show_internal(
+    app: &tauri::AppHandle,
+    fallback: Option<&super::taskbar_service::FallbackRequest>,
+) -> Result<(), String> {
     let runtime = app.state::<super::RuntimeState>();
     let _creation = runtime
         .mini_creation
         .lock()
         .map_err(|_| "WINDOW_STATE_UNAVAILABLE")?;
+    if fallback.is_some_and(|request| !request.current()) {
+        if let Some(request) = fallback {
+            request.cancel();
+        }
+        return Ok(());
+    }
     let window = if let Some(window) = app.get_webview_window("mini") {
+        if fallback.is_some() && window.is_visible().map_err(|e| e.to_string())? {
+            return Ok(());
+        }
         if fit_current(&window).is_err() {
             eprintln!("MINI_PLACEMENT_UNAVAILABLE");
         }
@@ -53,6 +74,7 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
         .always_on_top(interaction.pinned)
         .theme(theme)
         .center()
+        .focused(fallback.is_none())
         .visible(false)
         .build()
         .map_err(|e| e.to_string())?;
@@ -67,14 +89,152 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
         }
         window
     };
+    if fallback.is_some_and(|request| !request.current()) {
+        if let Some(request) = fallback {
+            request.cancel();
+        }
+        return Ok(());
+    }
     // Explicit show, tray and recovery key all restore interaction, including when saving fails.
     super::mini_passthrough::recover(&window).map_err(|e| e.to_string())?;
     if save_current_placement(&window).is_err() {
         eprintln!("MINI_PLACEMENT_SAVE_FAILED");
     }
-    window.show().map_err(|e| e.to_string())?;
+    if let Some(request) = fallback {
+        show_without_activation(&window, request)?;
+    } else {
+        window.show().map_err(|e| e.to_string())?;
+    }
     super::quota_commands::update_visibility(&window);
-    window.set_focus().map_err(|e| e.to_string())
+    if fallback.is_some() {
+        Ok(())
+    } else {
+        window.set_focus().map_err(|e| e.to_string())
+    }
+}
+#[cfg(windows)]
+fn show_without_activation(
+    window: &WebviewWindow,
+    request: &super::taskbar_service::FallbackRequest,
+) -> Result<(), String> {
+    let target = window.clone();
+    let owned_request = request.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    window
+        .app_handle()
+        .run_on_main_thread(move || {
+            let result = (|| {
+                if !owned_request.current() {
+                    owned_request.cancel();
+                    return Ok(());
+                }
+                nonactivating_show_owned(&target).map_err(|_| "WINDOW_STATE_UNAVAILABLE")
+            })();
+            let _ = sender.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+    match receiver.recv_timeout(std::time::Duration::from_secs(5)) {
+        Ok(result) => result.map_err(str::to_owned),
+        Err(_) => {
+            request.cancel();
+            Err("WINDOW_STATE_UNAVAILABLE".into())
+        }
+    }
+}
+#[cfg(windows)]
+const NONACTIVATING_SHOW_SUBCLASS: usize = 0x54504642;
+#[cfg(windows)]
+unsafe extern "system" fn keep_nonactivating_show(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    _id: usize,
+    _data: usize,
+) -> isize {
+    use windows_sys::Win32::UI::{Shell::*, WindowsAndMessaging::*};
+    let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+    if message == WM_STYLECHANGING && wparam as isize == GWL_EXSTYLE as isize && lparam != 0 {
+        unsafe {
+            (&mut *(lparam as *mut STYLESTRUCT)).styleNew |= WS_EX_NOACTIVATE;
+        }
+    }
+    if message == WM_NCDESTROY {
+        unsafe {
+            RemoveWindowSubclass(
+                hwnd,
+                Some(keep_nonactivating_show),
+                NONACTIVATING_SHOW_SUBCLASS,
+            );
+        }
+    }
+    result
+}
+#[cfg(windows)]
+fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
+    use windows_sys::Win32::{
+        Foundation::{GetLastError, SetLastError},
+        UI::{Shell::*, WindowsAndMessaging::*},
+    };
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0.cast();
+    unsafe {
+        SetLastError(0);
+        let previous = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        if previous == 0 && GetLastError() != 0 {
+            return Err("WINDOW_STATE_UNAVAILABLE".into());
+        }
+        if SetWindowSubclass(
+            hwnd,
+            Some(keep_nonactivating_show),
+            NONACTIVATING_SHOW_SUBCLASS,
+            0,
+        ) == 0
+        {
+            return Err("WINDOW_STATE_UNAVAILABLE".into());
+        }
+        SetLastError(0);
+        let old = SetWindowLongPtrW(hwnd, GWL_EXSTYLE, previous | WS_EX_NOACTIVATE as isize);
+        let prepared = old != 0 || GetLastError() == 0;
+        // Tauri/tao must observe the visibility transition so later hide/style changes work.
+        // The temporary subclass retains NOACTIVATE through tao's style reconstruction.
+        let result = if prepared {
+            window.show().map_err(|e| e.to_string())
+        } else {
+            Err("WINDOW_STATE_UNAVAILABLE".into())
+        };
+        let removed = RemoveWindowSubclass(
+            hwnd,
+            Some(keep_nonactivating_show),
+            NONACTIVATING_SHOW_SUBCLASS,
+        ) != 0;
+        SetLastError(0);
+        let current = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let readable = current != 0 || GetLastError() == 0;
+        let restored = if readable && removed {
+            let restored =
+                (current & !(WS_EX_NOACTIVATE as isize)) | (previous & WS_EX_NOACTIVATE as isize);
+            SetLastError(0);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, restored) != 0 || GetLastError() == 0
+        } else {
+            false
+        };
+        if !removed || !restored {
+            return Err("WINDOW_STATE_UNAVAILABLE".into());
+        }
+        result?;
+    }
+    if window.is_visible().map_err(|e| e.to_string())? {
+        Ok(())
+    } else {
+        Err("WINDOW_STATE_UNAVAILABLE".into())
+    }
+}
+#[cfg(not(windows))]
+fn show_without_activation(
+    _window: &WebviewWindow,
+    _request: &super::taskbar_service::FallbackRequest,
+) -> Result<(), String> {
+    Err("WINDOW_STATE_UNAVAILABLE".into())
 }
 fn dimensions(expanded: bool) -> (f64, f64) {
     if expanded {

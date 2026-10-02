@@ -555,3 +555,6 @@ AccountServiceSelectionKind 新增 detect_local，继续调用 main 专属 choos
 ### 6.1 M13a 实际宿主契约
 
 任务栏跨进程契约权威位于 token-pulse-taskbar，从 Rust 生成独立 schemas/taskbar-host-v1.json。Envelope / HostMessage / HostReply / HostAction、TaskbarView 与 HostSession 的实际字段、64 KiB 分帧、严格空结构消息、实例 / nonce / 递增序号和隐私清空规则见[宿主协议](taskbar-host-protocol.md)。当前仅共享协议库和接收状态；第 6 节命名管道 ACL / 子进程验证 / 心跳期限 / 实际画面清除仍须在原生管理器实现，不属于已完成证据。
+
+
+M13e1 扩展正式 TaskbarRuntimeSnapshot：fallback_visible 为实际回退观察 bool / null，fallback_error 为独立 ErrorCode / null。回退成功仍保留任务栏原生 unavailable / 原因，失败不能用 false 表示没有窗口。设置的 fallback_to_mini 已接正式开关和后台一次尝试策略；这类状态 / 开关响应不包含消费、费用、路径或账户标识。生成 TypeScript / protocol-v1 schema 已同步。

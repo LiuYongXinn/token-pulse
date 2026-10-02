@@ -156,3 +156,6 @@ pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar
 本机 Win10 19045 / 150% DPI 通过。电源检查仅向自有主窗口发送合成消息，不代表机器实际休眠；未做系统按钮实际点击、Win11 或完整物理多屏 / DPI。关闭时 WebView2 可能输出 Chrome_WidgetWin_0 注销错误 1412，本次场景断言及进程退出均成功，记录此诊断而不将其隐藏。当前综合原生回归另有真实键盘恢复失败，尚需复核，不能用任务栏独立通过代替综合回归通过。未运行性能测试。
 
 M13d4 为 -Taskbar 增加真实设置页状态及保存关闭检查：通过实际 WebView DOM 事件操作正式 React 页面，读回 SQLite 偏好并核对原任务栏几何。这不替代原生鼠标与菜单验收。定向前端检查：`npx playwright test tests/ui/taskbar.spec.ts tests/ui/shell.spec.ts tests/ui/jobs.spec.ts --workers=1`；任务栏视觉截图在忽略的 test-results 目录中，仅为显式合成 DTO 检查。
+
+
+M13e1 的 -Taskbar 场景新增非激活回退：使用本应用已明确拒绝的位置配置触发，不改系统任务栏形态；销毁本测试自有 mini 后自动创建，核对前台 HWND 与交互样式，再经正式命令隐藏 / 重试及设置 UI 关闭回退，验证不重复弹窗且恢复嵌入不关闭小窗。这里验证的是实际主端回退与原生窗口，尚不代替 Win11 / 实际拥挤 / 宿主异常及全兼容矩阵。

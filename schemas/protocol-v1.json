@@ -12106,6 +12106,16 @@
             }
           ]
         },
+        "fallback_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "fallback_visible": {
           "type": [
             "boolean",
@@ -12157,6 +12167,7 @@
         "error",
         "compact",
         "fallback_visible",
+        "fallback_error",
         "last_cleanup",
         "last_snapshot_at_ms"
       ],

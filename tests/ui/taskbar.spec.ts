@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     let revision = '9007199254740993', reject = false, failRead = false;
     let preferences = { enabled: false, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true }, position: 'notification_left', fallback_to_mini: true };
-    let status = { revision: '9007199254740993', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, last_cleanup: null, last_snapshot_at_ms: null };
+    let status = { revision: '9007199254740993', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, last_cleanup: null, last_snapshot_at_ms: null };
     const calls: { command: string; request: unknown }[] = [], callbacks = new Map<number, (value: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
     let callbackId = 0, eventId = 0;
     const notify = (event: string) => { for (const [id, listener] of listeners) if (listener.event === event) callbacks.get(listener.handler)?.({ event, id, payload: event === 'taskbar_status_changed' ? status : { settings_revision: revision } }); };
@@ -104,4 +104,17 @@ test('read failure preserves explicit draft and layout fits dark and light at or
   await page.setViewportSize({ width: 960, height: 900 }); await page.evaluate(() => document.documentElement.dataset.theme = 'light');
   await page.screenshot({ path: 'test-results/taskbar-settings-light-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('fallback preference persists independently; failed fallback remains unknown and success preserves native failure', async ({ page }) => {
+  const panel = await open(page);
+  await panel.getByRole('checkbox', { name: '任务栏不可用时显示悬浮窗', exact: true }).uncheck();
+  await panel.getByRole('button', { name: '保存任务栏设置' }).click();
+  await expect(panel.getByRole('checkbox', { name: '任务栏不可用时显示悬浮窗', exact: true })).not.toBeChecked();
+  expect(await page.evaluate(() => ((window as unknown as QA).__taskbarQA.calls().filter(v => v.command === 'set_taskbar_preferences').at(-1)?.request as { preferences: TaskbarPreferences }).preferences.fallback_to_mini)).toBe(false);
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740994', state: 'unavailable', issue: 'host_unavailable', error: 'TASKBAR_EMBED_FAILED', fallback_visible: null, fallback_error: 'WINDOW_UNAVAILABLE' }));
+  await expect(panel.getByRole('alert')).toContainText('小窗回退失败'); await expect(panel.getByRole('status')).toHaveText('任务栏显示不可用');
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740995', fallback_visible: true, fallback_error: null }));
+  await expect(panel.getByRole('alert')).toHaveCount(0); await expect(panel.getByRole('status')).toHaveText('任务栏显示不可用'); await expect(panel).toContainText('回退小窗已显示');
+  await page.screenshot({ path: 'test-results/taskbar-fallback-state-dark-1280.png', fullPage: true });
 });

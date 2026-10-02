@@ -48,7 +48,8 @@ export function TaskbarSettingsPanel({ timezone }: { timezone: string | null }) 
       <div className="taskbar-selects"><label>显示布局<select aria-label="任务栏显示布局" value={preferences?.display.layout ?? ''} disabled={!snapshot || busy} onChange={e => edit(v => ({ ...v, display: { ...v.display, layout: e.target.value as TaskbarPreferences['display']['layout'] } }))}>{!preferences && <option value="">尚未读取</option>}<option value="two_rows">两行</option><option value="single_row">单行</option></select></label>
         <label>显示位置<select aria-label="任务栏显示位置" value={preferences?.position ?? ''} disabled={!snapshot || busy} onChange={e => edit(v => ({ ...v, position: e.target.value as TaskbarPreferences['position'] }))}>{!preferences && <option value="">尚未读取</option>}<option value="notification_left">通知区域左侧</option><option value="application_right" disabled>应用图标右侧（暂不可用）</option></select></label></div>
       <p className="muted">隐私模式与主窗口、小窗同步；账户未连接或价格未知时保留未知状态。空间不足时会按实际可用宽度精简。</p>
-      <p className="muted">自动回退尚不可用。{snapshot ? `已保存的回退偏好：${snapshot.preferences.fallback_to_mini ? '开启' : '关闭'}。` : ''}</p>
+      <label><input type="checkbox" checked={preferences?.fallback_to_mini ?? false} disabled={!snapshot || busy} onChange={e => edit(v => ({ ...v, fallback_to_mini: e.target.checked }))} />任务栏不可用时显示悬浮窗</label>
+      <p className="muted">自动回退不抢焦点；同一失败期间隐藏小窗后不会反复弹出。关闭回退或恢复任务栏不会自动关闭已显示的小窗。</p>
       <div className="display-setting-actions"><button className="primary" disabled={!draft || !valid || busy} onClick={() => void save()}>{busy ? '正在处理…' : '保存任务栏设置'}</button><button disabled={!draft || busy} onClick={() => { setDraft(null); setError(null); }}>重置任务栏草稿</button></div>
       <p className="chart-caption">{snapshot ? `已保存修订 ${snapshot.settings_revision}。保存成功不代表嵌入成功。` : '正在读取任务栏偏好…'}{draft ? ` 编辑基于修订 ${draft.revision}；刷新保留草稿。` : ''}</p>
       {error && <p className="notice" role="alert">{error}{draft ? ' 草稿已保留，重置草稿后可基于最新配置编辑。' : ''}</p>}

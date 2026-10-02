@@ -18,6 +18,83 @@ pub struct Input {
 pub type Reader = Arc<dyn Fn() -> Result<Input, ErrorCode> + Send + Sync>;
 pub type Changed = Arc<dyn Fn(TaskbarRuntimeSnapshot) + Send + Sync>;
 pub type Visible = Arc<dyn Fn(bool) + Send + Sync>;
+pub type Fallback = Arc<dyn Fn(FallbackRequest) -> Result<bool, ErrorCode> + Send + Sync>;
+#[cfg(windows)]
+struct Callbacks {
+    changed: Changed,
+    visible: Visible,
+    fallback: Fallback,
+}
+#[derive(Clone)]
+pub struct FallbackRequest {
+    pub show: bool,
+    flags: Arc<Flags>,
+    generation: u64,
+    snapshot: Arc<Mutex<TaskbarRuntimeSnapshot>>,
+    cancelled: Arc<AtomicBool>,
+}
+impl FallbackRequest {
+    pub fn valid(&self) -> bool {
+        !self.cancelled.load(Ordering::Acquire) && self.live_generation()
+    }
+    fn live_generation(&self) -> bool {
+        !self.flags.stopping.load(Ordering::Acquire)
+            && !self.flags.paused.load(Ordering::Acquire)
+            && !self.flags.suspended.load(Ordering::Acquire)
+            && self.generation == self.flags.generation.load(Ordering::Acquire)
+    }
+    pub fn current(&self) -> bool {
+        self.valid()
+            && (!self.show
+                || self
+                    .snapshot
+                    .lock()
+                    .ok()
+                    .is_some_and(|s| needs_fallback(&s)))
+    }
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+}
+fn needs_fallback(snapshot: &TaskbarRuntimeSnapshot) -> bool {
+    snapshot.state == TaskbarRuntimeState::Unavailable
+        || (snapshot.state == TaskbarRuntimeState::Recovering && snapshot.issue.is_some())
+}
+#[cfg(windows)]
+#[derive(Default)]
+struct FallbackPolicy {
+    attempted: bool,
+    active: bool,
+}
+#[cfg(windows)]
+impl FallbackPolicy {
+    fn action(&mut self, enabled: bool, snapshot: &TaskbarRuntimeSnapshot) -> Option<bool> {
+        if !enabled {
+            self.attempted = false;
+            self.active = false;
+            return None;
+        }
+        if matches!(
+            snapshot.state,
+            TaskbarRuntimeState::Embedded | TaskbarRuntimeState::Disabled
+        ) {
+            self.attempted = false;
+        }
+        if needs_fallback(snapshot) && !self.attempted {
+            Some(true)
+        } else if self.active {
+            Some(false)
+        } else {
+            None
+        }
+    }
+    fn completed(&mut self, show: bool, result: &Result<bool, ErrorCode>) {
+        if show {
+            self.attempted = true;
+        }
+        self.active = result.as_ref().is_ok_and(|visible| *visible);
+    }
+}
 enum Command {
     Clear(mpsc::SyncSender<Result<(), ErrorCode>>),
 }
@@ -48,6 +125,7 @@ impl TaskbarService {
         reader: Reader,
         changed: Changed,
         visible: Visible,
+        fallback: Fallback,
     ) -> Result<Self, ErrorCode> {
         let flags = Arc::new(Flags {
             stopping: AtomicBool::new(false),
@@ -63,6 +141,7 @@ impl TaskbarService {
             error: None,
             compact: None,
             fallback_visible: None,
+            fallback_error: None,
             last_cleanup: None,
             last_snapshot_at_ms: None,
         }));
@@ -81,8 +160,11 @@ impl TaskbarService {
                         runtime.block_on(run(
                             executable,
                             reader,
-                            changed,
-                            visible,
+                            Callbacks {
+                                changed,
+                                visible,
+                                fallback,
+                            },
                             owned_flags,
                             owned_snapshot,
                             receiver,
@@ -101,7 +183,7 @@ impl TaskbarService {
                 }
                 #[cfg(not(windows))]
                 {
-                    let _ = (executable, visible);
+                    let _ = (executable, visible, fallback);
                     while !owned_flags.stopping.load(Ordering::Acquire) {
                         while let Ok(Command::Clear(reply)) = receiver.try_recv() {
                             let _ = reply.send(Ok(()));
@@ -210,6 +292,7 @@ fn publish(
             error,
             compact,
             fallback_visible: current.fallback_visible,
+            fallback_error: current.fallback_error,
             last_cleanup: current.last_cleanup,
             last_snapshot_at_ms: current.last_snapshot_at_ms,
         };
@@ -233,12 +316,16 @@ fn publish(
 async fn run(
     executable: std::path::PathBuf,
     reader: Reader,
-    changed: Changed,
-    visible: Visible,
+    callbacks: Callbacks,
     flags: Arc<Flags>,
     snapshot: Arc<Mutex<TaskbarRuntimeSnapshot>>,
     receiver: mpsc::Receiver<Command>,
 ) {
+    let Callbacks {
+        changed,
+        visible,
+        fallback,
+    } = callbacks;
     use std::time::Instant;
     use token_pulse_taskbar::{
         HostConfiguration, HostMessage, HostReply, windows::transport::HostConnection,
@@ -255,6 +342,13 @@ async fn run(
     let mut last_poll = Instant::now();
     let mut render_backoff = false;
     let mut native_revision = None;
+    let mut fallback_enabled = None;
+    let mut fallback_policy = FallbackPolicy::default();
+    let mut fallback_work: Option<(
+        FallbackRequest,
+        tokio::task::JoinHandle<Result<bool, ErrorCode>>,
+    )> = None;
+    let mut next_fallback = Instant::now();
     while !flags.stopping.load(Ordering::Acquire) {
         let current_generation = flags.generation.load(Ordering::Acquire);
         if current_generation != observed_generation {
@@ -263,6 +357,7 @@ async fn run(
             next_read = Instant::now();
             failures = 0;
             render_backoff = false;
+            fallback_policy.attempted = false;
         }
         while let Ok(Command::Clear(reply)) = receiver.try_recv() {
             if retired.as_ref().is_none_or(|work| work.is_finished()) {
@@ -320,6 +415,45 @@ async fn run(
             tokio::time::sleep(Duration::from_millis(20)).await;
             continue;
         }
+        if fallback_work
+            .as_ref()
+            .is_some_and(|(_, work)| work.is_finished())
+        {
+            let (request, work) = fallback_work.take().expect("finished fallback");
+            let result = work.await.unwrap_or(Err(ErrorCode::WindowUnavailable));
+            if request.valid() || (result.is_err() && request.live_generation()) {
+                fallback_policy.completed(request.show, &result);
+                publish_fallback(&snapshot, &changed, result);
+            }
+        }
+        if fallback_enabled == Some(false) {
+            fallback_policy = FallbackPolicy::default();
+            publish_fallback(&snapshot, &changed, Ok(false));
+        } else if fallback_enabled == Some(true)
+            && fallback_work.is_none()
+            && Instant::now() >= next_fallback
+        {
+            let action = snapshot
+                .lock()
+                .ok()
+                .and_then(|s| fallback_policy.action(true, &s));
+            if let Some(show) = action {
+                let request = FallbackRequest {
+                    show,
+                    flags: flags.clone(),
+                    generation: current_generation,
+                    snapshot: snapshot.clone(),
+                    cancelled: Arc::new(AtomicBool::new(false)),
+                };
+                let work_request = request.clone();
+                let callback = fallback.clone();
+                fallback_work = Some((
+                    request,
+                    tokio::task::spawn_blocking(move || callback(work_request)),
+                ));
+            }
+            next_fallback = Instant::now() + Duration::from_secs(1);
+        }
         if retired.as_ref().is_some_and(|work| work.is_finished()) {
             retired.take();
         }
@@ -358,6 +492,10 @@ async fn run(
                     continue;
                 }
             };
+            fallback_enabled = Some(
+                input.configuration.preferences.enabled
+                    && input.configuration.preferences.fallback_to_mini,
+            );
             if !input.configuration.preferences.enabled
                 || input.configuration.preferences.position != TaskbarPosition::NotificationLeft
             {
@@ -562,6 +700,9 @@ async fn run(
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     visible(false);
+    if let Some((request, _)) = fallback_work.take() {
+        request.cancel();
+    }
     close_host(&mut connection, &snapshot, &changed).await;
     let uncertain = snapshot.lock().ok().is_none_or(|s| {
         matches!(
@@ -587,6 +728,30 @@ async fn run(
         uncertain.then_some(ErrorCode::TaskbarEmbedFailed),
         None,
     );
+}
+#[cfg(windows)]
+fn publish_fallback(
+    snapshot: &Mutex<TaskbarRuntimeSnapshot>,
+    changed: &Changed,
+    result: Result<bool, ErrorCode>,
+) {
+    let (visible, error) = match result {
+        Ok(visible) => (Some(visible), None),
+        Err(error) => (None, Some(error)),
+    };
+    let update = snapshot.lock().ok().and_then(|mut current| {
+        if current.fallback_visible == visible && current.fallback_error == error {
+            return None;
+        }
+        current.fallback_visible = visible;
+        current.fallback_error = error;
+        current.revision = DecimalInt::from_nonnegative(current.revision.value().saturating_add(1))
+            .expect("bounded service revision");
+        Some(current.clone())
+    });
+    if let Some(update) = update {
+        changed(update);
+    }
 }
 fn retry_delay(failures: usize) -> Duration {
     Duration::from_millis([500, 1000, 2000, 5000, 10000][failures.saturating_sub(1).min(4)])
@@ -678,6 +843,179 @@ async fn close_host(
 mod tests {
     use super::*;
     use std::time::Instant;
+    fn state(state: TaskbarRuntimeState) -> TaskbarRuntimeSnapshot {
+        TaskbarRuntimeSnapshot {
+            revision: DecimalInt::parse("1").unwrap(),
+            state,
+            applied_settings_revision: None,
+            issue: None,
+            error: None,
+            compact: None,
+            fallback_visible: None,
+            fallback_error: None,
+            last_cleanup: None,
+            last_snapshot_at_ms: None,
+        }
+    }
+    #[test]
+    fn fallback_policy_observes_without_reopening_hidden_window_and_recovery_renews_episode() {
+        let mut policy = FallbackPolicy::default();
+        let failure = state(TaskbarRuntimeState::Unavailable);
+        assert_eq!(policy.action(true, &failure), Some(true));
+        policy.completed(true, &Ok(true));
+        assert_eq!(policy.action(true, &failure), Some(false));
+        policy.completed(false, &Ok(false));
+        assert_eq!(policy.action(true, &failure), None);
+        assert_eq!(
+            policy.action(true, &state(TaskbarRuntimeState::Recovering)),
+            None
+        );
+        assert_eq!(
+            policy.action(true, &state(TaskbarRuntimeState::Embedded)),
+            None
+        );
+        assert_eq!(policy.action(true, &failure), Some(true));
+        policy.completed(true, &Err(ErrorCode::WindowUnavailable));
+        assert_eq!(policy.action(true, &failure), None);
+        assert_eq!(policy.action(false, &failure), None);
+        assert_eq!(policy.action(true, &failure), Some(true));
+        let data = Mutex::new(failure);
+        let notify: Changed = Arc::new(|_| {});
+        publish_fallback(&data, &notify, Err(ErrorCode::WindowUnavailable));
+        let result = data.lock().unwrap();
+        assert_eq!(result.state, TaskbarRuntimeState::Unavailable);
+        assert_eq!(result.fallback_visible, None);
+        assert_eq!(result.fallback_error, Some(ErrorCode::WindowUnavailable));
+    }
+    #[test]
+    fn fallback_guard_rejects_stale_generation_pause_suspend_exit_cancel_and_recovered_state() {
+        let flags = Arc::new(Flags {
+            stopping: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
+            suspended: AtomicBool::new(false),
+            generation: AtomicU64::new(4),
+        });
+        let data = Arc::new(Mutex::new(state(TaskbarRuntimeState::Unavailable)));
+        let request = FallbackRequest {
+            show: true,
+            flags: flags.clone(),
+            generation: 4,
+            snapshot: data.clone(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        };
+        assert!(request.current());
+        for flag in [&flags.paused, &flags.suspended, &flags.stopping] {
+            flag.store(true, Ordering::Release);
+            assert!(!request.current());
+            flag.store(false, Ordering::Release);
+        }
+        flags.generation.store(5, Ordering::Release);
+        assert!(!request.valid());
+        flags.generation.store(4, Ordering::Release);
+        data.lock().unwrap().state = TaskbarRuntimeState::Embedded;
+        assert!(request.valid());
+        assert!(!request.current());
+        request.cancel();
+        assert!(!request.valid());
+    }
+    #[test]
+    fn blocked_fallback_does_not_hold_privacy_barrier_or_publish_success_after_disable() {
+        let enabled = Arc::new(AtomicBool::new(true));
+        let read_enabled = enabled.clone();
+        let (entered, notified) = mpsc::sync_channel(1);
+        let (release, gate) = mpsc::sync_channel(1);
+        let gate = Mutex::new(gate);
+        let service = TaskbarService::start(
+            std::path::PathBuf::from("unused-no-host.exe"),
+            Arc::new(move || {
+                let mut input = disabled("1");
+                input.configuration.preferences.enabled = read_enabled.load(Ordering::Acquire);
+                input.configuration.preferences.position = TaskbarPosition::ApplicationRight;
+                Ok(input)
+            }),
+            Arc::new(|_| {}),
+            Arc::new(|_| {}),
+            Arc::new(move |request| {
+                entered.send(request.clone()).unwrap();
+                let _ = gate.lock().unwrap().recv();
+                Ok(true)
+            }),
+        )
+        .unwrap();
+        let old = notified.recv_timeout(Duration::from_secs(3)).unwrap();
+        let pause = service.pause_publication().unwrap();
+        assert!(!old.current());
+        enabled.store(false, Ordering::Release);
+        drop(pause);
+        wait(&service, |s| {
+            s.state == TaskbarRuntimeState::Disabled && s.fallback_visible == Some(false)
+        });
+        release.send(()).unwrap();
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(service.snapshot().unwrap().fallback_visible, Some(false));
+        service.shutdown();
+    }
+    #[test]
+    fn fallback_is_attempted_once_then_reports_user_hide_without_reopening() {
+        let shown = Arc::new(AtomicBool::new(false));
+        let native_visible = shown.clone();
+        let attempts = Arc::new(AtomicU64::new(0));
+        let observed_attempts = attempts.clone();
+        let service = TaskbarService::start(
+            std::path::PathBuf::from("unused-no-host.exe"),
+            Arc::new(|| {
+                let mut input = disabled("1");
+                input.configuration.preferences.enabled = true;
+                input.configuration.preferences.position = TaskbarPosition::ApplicationRight;
+                Ok(input)
+            }),
+            Arc::new(|_| {}),
+            Arc::new(|_| {}),
+            Arc::new(move |request| {
+                if request.show {
+                    observed_attempts.fetch_add(1, Ordering::AcqRel);
+                    native_visible.store(true, Ordering::Release);
+                }
+                Ok(native_visible.load(Ordering::Acquire))
+            }),
+        )
+        .unwrap();
+        wait(&service, |s| s.fallback_visible == Some(true));
+        shown.store(false, Ordering::Release);
+        wait(&service, |s| s.fallback_visible == Some(false));
+        thread::sleep(Duration::from_millis(1200));
+        assert_eq!(attempts.load(Ordering::Acquire), 1);
+        service.shutdown();
+    }
+    #[test]
+    fn failed_fallback_with_cancelled_ui_dispatch_exposes_unknown_and_does_not_loop() {
+        let attempts = Arc::new(AtomicU64::new(0));
+        let calls = attempts.clone();
+        let service = TaskbarService::start(
+            std::path::PathBuf::from("unused-no-host.exe"),
+            Arc::new(|| {
+                let mut input = disabled("1");
+                input.configuration.preferences.enabled = true;
+                input.configuration.preferences.position = TaskbarPosition::ApplicationRight;
+                Ok(input)
+            }),
+            Arc::new(|_| {}),
+            Arc::new(|_| {}),
+            Arc::new(move |request| {
+                calls.fetch_add(1, Ordering::AcqRel);
+                request.cancel();
+                Err(ErrorCode::WindowUnavailable)
+            }),
+        )
+        .unwrap();
+        wait(&service, |s| {
+            s.fallback_error == Some(ErrorCode::WindowUnavailable)
+        });
+        assert_eq!(service.snapshot().unwrap().fallback_visible, None);
+        thread::sleep(Duration::from_millis(1200));
+        assert_eq!(attempts.load(Ordering::Acquire), 1);
+        service.shutdown();
+    }
     fn disabled(revision: &str) -> Input {
         Input {
             configuration: TaskbarPreferencesSnapshot {
@@ -714,6 +1052,7 @@ mod tests {
             }),
             Arc::new(|_| {}),
             Arc::new(|_| {}),
+            Arc::new(|_| Ok(false)),
         )
         .unwrap();
         notified.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -754,6 +1093,7 @@ mod tests {
             Arc::new(|| Ok(disabled("3"))),
             Arc::new(|_| {}),
             Arc::new(|_| {}),
+            Arc::new(|_| Ok(false)),
         )
         .unwrap();
         wait(&service, |s| {
@@ -785,6 +1125,7 @@ mod tests {
                 }
             }),
             Arc::new(|_| {}),
+            Arc::new(|_| Ok(false)),
         )
         .unwrap();
         let until = Instant::now() + Duration::from_secs(15);

@@ -34,7 +34,7 @@ export type TaskbarRuntimeState = "disabled" | "probing" | "waiting_snapshot" | 
 
 export type TaskbarRuntimeIssue = "unsupported_version" | "missing_taskbar" | "unexpected_structure" | "unsafe_geometry" | "insufficient_space" | "background_unavailable" | "host_unavailable" | "host_timeout" | "protocol_error" | "unsupported_position" | "input_unavailable" | "cleanup_uncertain" | "cleanup_failed" | "external_layout_change";
 
-export type TaskbarRuntimeSnapshot = { revision: DecimalInt, state: TaskbarRuntimeState, applied_settings_revision: DecimalInt | null, issue: TaskbarRuntimeIssue | null, error: ErrorCode | null, compact: boolean | null, fallback_visible: boolean | null, last_cleanup: TaskbarCleanupOutcome | null, last_snapshot_at_ms: EpochMs | null, };
+export type TaskbarRuntimeSnapshot = { revision: DecimalInt, state: TaskbarRuntimeState, applied_settings_revision: DecimalInt | null, issue: TaskbarRuntimeIssue | null, error: ErrorCode | null, compact: boolean | null, fallback_visible: boolean | null, fallback_error: ErrorCode | null, last_cleanup: TaskbarCleanupOutcome | null, last_snapshot_at_ms: EpochMs | null, };
 
 export type TaskbarCleanupOutcome = "no_record" | "restored" | "already_restored" | "external_change" | "identity_lost" | "failed" | "uncertain" | "timeout" | "unavailable";
 

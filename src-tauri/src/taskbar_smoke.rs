@@ -31,6 +31,27 @@ fn wait(app: &tauri::AppHandle, state: TaskbarRuntimeState) -> Result<(), String
         thread::sleep(Duration::from_millis(30));
     }
 }
+fn wait_fallback(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        let state = super::taskbar_commands::service(app)
+            .ok_or("taskbar missing")?
+            .snapshot()
+            .map_err(|e| e.to_string())?;
+        let actual = app
+            .get_webview_window("mini")
+            .is_some_and(|w| w.is_visible().unwrap_or(false));
+        if state.fallback_visible == Some(visible) && actual == visible {
+            return Ok(());
+        }
+        if Instant::now() >= until {
+            return Err(format!(
+                "fallback state timeout: expected={visible}, {state:?}, actual={actual}"
+            ));
+        }
+        thread::sleep(Duration::from_millis(30));
+    }
+}
 pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     use token_pulse_taskbar::windows::topology::inspect_primary_taskbar;
     let path = &app.state::<super::RuntimeState>().data_directory;
@@ -140,15 +161,105 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if inspect_primary_taskbar().map_err(|e| format!("disabled topology: {e:?}"))? != before {
         return Err("manager disable did not restore original geometry".into());
     }
+    // Destroy this test's own mini to cover automatic creation as well as hidden-window reuse.
+    mini.destroy().map_err(|e| e.to_string())?;
+    let until = Instant::now() + Duration::from_secs(3);
+    while app.get_webview_window("mini").is_some() {
+        if Instant::now() >= until {
+            return Err("old isolated mini did not close".into());
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    // A real unsupported position is a controlled fallback trigger; no machine setting changes.
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    let foreground = unsafe { GetForegroundWindow() };
+    if foreground.is_null() {
+        return Err("no foreground HWND to verify nonactivating fallback".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-fallback-enable'});
+      await invoke('set_taskbar_preferences',{requestId:'taskbar-fallback-save',request:{preferences:{...current.data.preferences,enabled:true,position:'application_right',fallback_to_mini:true},expected_settings_revision:current.data.settings_revision}});
+    "#,
+    )?;
+    wait(app, TaskbarRuntimeState::Unavailable)?;
+    wait_fallback(app, true)?;
+    let mini = app
+        .get_webview_window("mini")
+        .ok_or("fallback did not create mini")?;
+    if unsafe { GetForegroundWindow() } != foreground {
+        return Err("automatic fallback stole foreground focus".into());
+    }
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_NOACTIVATE,
+    };
+    if unsafe {
+        GetWindowLongPtrW(
+            mini.hwnd().map_err(|e| e.to_string())?.0.cast(),
+            GWL_EXSTYLE,
+        )
+    } & WS_EX_NOACTIVATE as isize
+        != 0
+    {
+        return Err("fallback left mini permanently nonactivating".into());
+    }
+    if inspect_primary_taskbar().map_err(|e| format!("fallback topology: {e:?}"))? != before {
+        return Err("unsupported-position fallback changed taskbar geometry".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        r#"
+      await invoke('mini_window_action',{requestId:'taskbar-fallback-user-hide',request:{kind:'hide'}});
+    "#,
+    )?;
+    wait_fallback(app, false)?;
+    thread::sleep(Duration::from_millis(1500));
+    if mini.is_visible().map_err(|e| e.to_string())? {
+        return Err("fallback reopened user-hidden mini in same failure episode".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      await invoke('retry_taskbar_embed',{requestId:'taskbar-fallback-explicit-retry'});
+    "#,
+    )?;
+    wait_fallback(app, true)?;
+    if unsafe { GetForegroundWindow() } != foreground {
+        return Err("reused fallback mini stole foreground focus".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      const waitFor=async(read)=>{for(let i=0;i<100;i++){if(read())return;await new Promise(r=>setTimeout(r,50));}throw new Error('TASKBAR_FALLBACK_UI_TIMEOUT');};
+      const read=()=>[...document.querySelectorAll('.taskbar-preferences label')].find(n=>n.textContent==='任务栏不可用时显示悬浮窗')?.querySelector('input');
+      await waitFor(()=>read()?.checked===true); read().click();
+      await waitFor(()=>document.querySelector('.taskbar-preferences button.primary')?.disabled===false);document.querySelector('.taskbar-preferences button.primary').click();
+      await waitFor(()=>document.querySelector('.taskbar-preferences button.primary')?.disabled===true && read()?.checked===false);
+      const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-fallback-ui-verify'});
+      if(current.data.preferences.fallback_to_mini)throw new Error('TASKBAR_FALLBACK_UI_NOT_SAVED');
+    "#,
+    )?;
+    thread::sleep(Duration::from_millis(1200));
+    if !mini.is_visible().map_err(|e| e.to_string())? {
+        return Err("disabling fallback closed existing mini".into());
+    }
     super::mini_smoke::evaluate(
         app,
         &main,
         r#"
       const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-exit-enable'});
-      await invoke('set_taskbar_preferences',{requestId:'taskbar-exit-enable-save',request:{preferences:{...current.data.preferences,enabled:true},expected_settings_revision:current.data.settings_revision}});
+      await invoke('set_taskbar_preferences',{requestId:'taskbar-exit-enable-save',request:{preferences:{...current.data.preferences,enabled:true,position:'notification_left'},expected_settings_revision:current.data.settings_revision}});
     "#,
     )?;
     wait(app, TaskbarRuntimeState::Embedded)?;
+    if !mini.is_visible().map_err(|e| e.to_string())? {
+        return Err("successful re-embedding closed existing mini".into());
+    }
     super::taskbar_commands::service(app)
         .ok_or("service missing")?
         .shutdown();
@@ -156,7 +267,7 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("shutdown while embedded did not restore original geometry".into());
     }
     println!(
-        "NATIVE_TASKBAR_MANAGER_OK: isolated SQLite DTO, real settings UI/status and save, native host embedding, shared privacy barrier, hidden-main snapshot refresh, synthetic power routing, disable and embedded shutdown restore original geometry"
+        "NATIVE_TASKBAR_MANAGER_OK: isolated SQLite DTO, real settings UI/status and save, native host embedding, shared privacy barrier, hidden-main refresh, synthetic power routing, nonactivating fallback/user-hide/explicit-retry, retained mini after recovery, disable and embedded shutdown geometry restore"
     );
     Ok(())
 }

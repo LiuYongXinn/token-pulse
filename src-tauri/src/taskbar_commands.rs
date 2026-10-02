@@ -57,6 +57,44 @@ pub(super) fn initialize(app: &tauri::AppHandle) {
                 }
             }
         }),
+        {
+            let fallback_app = app.clone();
+            Arc::new(move |request| {
+                if !request.current() {
+                    request.cancel();
+                    return Ok(false);
+                }
+                if !request.show {
+                    return fallback_app
+                        .get_webview_window("mini")
+                        .map(|window| {
+                            window
+                                .is_visible()
+                                .map_err(|_| ErrorCode::WindowUnavailable)
+                        })
+                        .unwrap_or(Ok(false));
+                }
+                let state = fallback_app.state::<super::RuntimeState>();
+                let preferences = state
+                    .database
+                    .as_ref()
+                    .map_err(|e| e.code)?
+                    .taskbar_preferences()
+                    .map_err(|e| e.code)?
+                    .preferences;
+                if !preferences.enabled || !preferences.fallback_to_mini || !request.current() {
+                    request.cancel();
+                    return Ok(false);
+                }
+                super::mini_window::show_fallback(&fallback_app, &request)
+                    .map_err(|_| ErrorCode::WindowUnavailable)?;
+                fallback_app
+                    .get_webview_window("mini")
+                    .ok_or(ErrorCode::WindowUnavailable)?
+                    .is_visible()
+                    .map_err(|_| ErrorCode::WindowUnavailable)
+            })
+        },
     );
     if let Ok(service) = result {
         if let Ok(mut slot) = app.state::<super::RuntimeState>().taskbar.lock() {
