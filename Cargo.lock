@@ -4139,6 +4139,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "token-pulse-taskbar"
+version = "0.1.0"
+dependencies = [
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "token-pulse-core",
+]
+
+[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

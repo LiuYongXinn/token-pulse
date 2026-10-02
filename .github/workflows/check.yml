@@ -15,6 +15,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run contracts:check
+      - run: cargo run -p token-pulse-taskbar --example export_host_contract -- --check
       - run: npm run test
       - run: npx playwright install chromium
       - run: npm run test:e2e

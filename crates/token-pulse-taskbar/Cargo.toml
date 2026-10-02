@@ -1,0 +1,12 @@
+[package]
+name = "token-pulse-taskbar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+token-pulse-core.workspace = true
+schemars = "1.2.2"

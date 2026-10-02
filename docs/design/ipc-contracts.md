@@ -550,3 +550,8 @@ authorization_required 保留 DTO 枚举和 QUOTA_AUTH_REQUIRED 错误以兼容�
 AccountServiceSelectionKind 新增 detect_local，继续调用 main 专属 choose_account_service；后端按本机 PATH / npm 原生包及 Home 规则读取程序元数据与 SHA 返回有期限草稿能力，不启动服务、解析认证或自动保存。已有显式 Home（含服务默认 null）保持；首次使用 CODEX_HOME / 已存在用户 .codex。保存继续重新校验并执行原设置修订 CAS。详情见[检测验收](../development/local-account-detection.md)。
 
 总览与小窗共享 useAccountQuota，先订阅 account_quota_changed 再读取完整 QuotaSnapshot；事件只使旧缓存失效，epoch 切换 / 断开立即移除旧账户值。请求序号、生命周期、同连接精确修订和显示隐私 epoch 阻止迟到响应覆盖。可见轮询仅查询已有内存快照，用户刷新仍使用既有受限命令。无新增任意 RPC / 账户管理 / 路径权限，无账户与本地消费的联合范围请求；显示时区来自保存配置。实际周期、null、零、重置待更新及共享显示验收见[验证记录](../development/account-quota-verification.md)。
+
+
+### 6.1 M13a 实际宿主契约
+
+任务栏跨进程契约权威位于 token-pulse-taskbar，从 Rust 生成独立 schemas/taskbar-host-v1.json。Envelope / HostMessage / HostReply / HostAction、TaskbarView 与 HostSession 的实际字段、64 KiB 分帧、严格空结构消息、实例 / nonce / 递增序号和隐私清空规则见[宿主协议](taskbar-host-protocol.md)。当前仅共享协议库和接收状态；第 6 节命名管道 ACL / 子进程验证 / 心跳期限 / 实际画面清除仍须在原生管理器实现，不属于已完成证据。

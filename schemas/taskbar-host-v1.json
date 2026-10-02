@@ -1,0 +1,583 @@
+{
+  "host_to_main": {
+    "$defs": {
+      "DecimalInt": {
+        "maxLength": 39,
+        "pattern": "^(0|[1-9][0-9]*)$",
+        "type": "string"
+      },
+      "HostAction": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "open_float",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "open_stats",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "open_taskbar_settings",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "kind": {
+                "const": "set_privacy",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "enabled"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "disable_taskbar",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "HostReply": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "ready",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "heartbeat",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "kind": {
+                "const": "privacy_applied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "enabled"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "stopped",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "$ref": "#/$defs/HostAction"
+              },
+              "kind": {
+                "const": "action",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "action"
+            ],
+            "type": "object"
+          }
+        ]
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "body": {
+        "$ref": "#/$defs/HostReply"
+      },
+      "host_instance_id": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "nonce": {
+        "maxLength": 64,
+        "minLength": 64,
+        "type": "string"
+      },
+      "protocol_version": {
+        "format": "uint32",
+        "maximum": 1,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "sequence": {
+        "$ref": "#/$defs/DecimalInt"
+      }
+    },
+    "required": [
+      "protocol_version",
+      "host_instance_id",
+      "nonce",
+      "sequence",
+      "body"
+    ],
+    "title": "Envelope",
+    "type": "object"
+  },
+  "main_to_host": {
+    "$defs": {
+      "CoverageState": {
+        "enum": [
+          "complete",
+          "partial",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "DecimalInt": {
+        "maxLength": 39,
+        "pattern": "^(0|[1-9][0-9]*)$",
+        "type": "string"
+      },
+      "DecimalMoney": {
+        "maxLength": 40,
+        "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,15})?$",
+        "type": "string"
+      },
+      "EpochMs": {
+        "maximum": 8640000000000000,
+        "minimum": -8640000000000000,
+        "type": "integer"
+      },
+      "HostCost": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalMoney"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "currency",
+          "estimated_cost"
+        ],
+        "type": "object"
+      },
+      "HostMessage": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "hello",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "snapshot",
+                "type": "string"
+              },
+              "view": {
+                "$ref": "#/$defs/TaskbarView"
+              }
+            },
+            "required": [
+              "kind",
+              "view"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "kind": {
+                "const": "privacy",
+                "type": "string"
+              },
+              "settings_revision": {
+                "$ref": "#/$defs/DecimalInt"
+              }
+            },
+            "required": [
+              "kind",
+              "settings_revision",
+              "enabled"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "heartbeat",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "shutdown",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "HostQuota": {
+        "additionalProperties": false,
+        "properties": {
+          "connection_epoch": {
+            "type": "string"
+          },
+          "fetched_at_ms": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EpochMs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "state": {
+            "$ref": "#/$defs/QuotaState"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/$defs/QuotaWindow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "connection_epoch",
+          "revision",
+          "state",
+          "limit_label",
+          "fetched_at_ms",
+          "windows"
+        ],
+        "type": "object"
+      },
+      "QuotaState": {
+        "enum": [
+          "disconnected",
+          "connecting",
+          "authorization_required",
+          "unsupported",
+          "ready",
+          "stale",
+          "error"
+        ],
+        "type": "string"
+      },
+      "QuotaWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_mins": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "remaining_percent": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "resets_at_ms": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EpochMs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "used_percent": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "window_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window_id",
+          "duration_mins",
+          "used_percent",
+          "remaining_percent",
+          "resets_at_ms"
+        ],
+        "type": "object"
+      },
+      "TaskbarView": {
+        "additionalProperties": false,
+        "description": "Display-only projection: no paths, SQL, credentials, conversation text or executable arguments.",
+        "properties": {
+          "cached_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costs": {
+            "items": {
+              "$ref": "#/$defs/HostCost"
+            },
+            "type": "array"
+          },
+          "generated_at_ms": {
+            "$ref": "#/$defs/EpochMs"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price_revision": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "priced_tokens": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "privacy": {
+            "type": "boolean"
+          },
+          "quota": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HostQuota"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "settings_revision": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DecimalInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unpriced_tokens": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "usage_revision": {
+            "$ref": "#/$defs/DecimalInt"
+          },
+          "usage_status": {
+            "$ref": "#/$defs/CoverageState"
+          }
+        },
+        "required": [
+          "settings_revision",
+          "usage_revision",
+          "price_revision",
+          "generated_at_ms",
+          "privacy",
+          "scope_label",
+          "timezone",
+          "total_tokens",
+          "input_tokens",
+          "cached_tokens",
+          "output_tokens",
+          "usage_status",
+          "costs",
+          "priced_tokens",
+          "unpriced_tokens",
+          "quota"
+        ],
+        "type": "object"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "body": {
+        "$ref": "#/$defs/HostMessage"
+      },
+      "host_instance_id": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "nonce": {
+        "maxLength": 64,
+        "minLength": 64,
+        "type": "string"
+      },
+      "protocol_version": {
+        "format": "uint32",
+        "maximum": 1,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "sequence": {
+        "$ref": "#/$defs/DecimalInt"
+      }
+    },
+    "required": [
+      "protocol_version",
+      "host_instance_id",
+      "nonce",
+      "sequence",
+      "body"
+    ],
+    "title": "Envelope",
+    "type": "object"
+  },
+  "maximum_frame_bytes": 65536,
+  "protocol_version": 1
+}
