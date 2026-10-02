@@ -376,6 +376,11 @@ impl PrivacyRedact for crate::settings::DisplaySettingsSnapshot {
 }
 impl PrivacyRedact for QuotaSnapshot {
     fn redact(&mut self) {
+        // Policy applies to the cloned response, never to the account owner's real cache.
+        // Hidden values are absent, not zero; connection controls remain usable.
+        self.windows.clear();
+        self.fetched_at_ms = None;
+        self.last_attempt_at_ms = None;
         for limit in &mut self.available_limits {
             replace_known(&mut limit.display_name, "额度类型", Some(&limit.limit_id));
         }

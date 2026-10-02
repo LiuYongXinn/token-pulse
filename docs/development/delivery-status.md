@@ -4,6 +4,8 @@
 
 ## 当前交付状态（2026-10-03，M15a7 / M15a6 / M15a5 / M15a4 / M15b4 / M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
 
+M12k 已将额度隐藏补到共享响应序列化：不再只匿名化桶名，隐私下窗口为空、成功 / 尝试时间 null，连接 / 状态 / 精确修订 / 控制保留；owner 真值不变，关闭后重查。新增独立隐私预期、privacy 6 / quota 14 及前端相关 6 项回归通过；core / desktop strict Clippy、release / fmt / diff 通过。无需 schema 变更，原生 quota 移除和 UI 即时隐藏继续保持。真实任务栏账户第三入口正在单独验收，完整范围继续，详见[账户验证](account-quota-verification.md)。
+
 M12h 新增四个独立 Tauri 进程的真实 Win10 冷启动验收：同一隔离 SQLite 配置从保存到自动连接，关闭自动连接及程序指纹变化后的拒绝均通过；账户空值 / 正式 IPC / 拥有的服务退出检查通过，四阶段 COLD_OK、SEQUENCE_OK、退出 0。合成程序 / Home 仅在 debug UUID 隔离目录，无真实认证读取；参数单测、strict Clippy 通过，WebView2 1412 保留。详见[账户共享显示验证](account-quota-verification.md)。真实账户持续读取及其他已确认范围继续推进。
 
 M12i 补齐现有本地账户持续读取：显式观察入口使用生产 owner，首次 ready 及两次后续尝试 / 成功时间前进，同一连接、实际周期 / 百分比提供，断开 / shutdown 后退出 0。没有强制刷新、时钟改动、登录 / 登出或模型回合，输出仅净化存在性标记，不记录真实百分比 / 身份 / 路径 / 认证。领域 17 / 服务 8 项回归、quota 全目标全 feature strict Clippy / fmt / diff 通过，官方 account/read / updated 协议同步核对。真实身份变化 / 通知、过期 / 重置、真实账户冷启动及三入口 / 兼容 / 部署仍分别推进；不记为性能或无限期验收。详见[账户验证](account-quota-verification.md)。

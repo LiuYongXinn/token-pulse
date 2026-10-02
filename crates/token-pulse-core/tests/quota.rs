@@ -506,10 +506,9 @@ fn refresh_result_keeps_exact_control_state_and_latest_shared_privacy() {
         .unwrap();
     let hidden = serde_json::to_value(response).unwrap();
     assert!(!hidden.to_string().contains("PRIVATE NAME"));
-    assert_eq!(
-        hidden["data"]["quota"]["windows"][0]["remaining_percent"],
-        0.0
-    );
+    assert_eq!(hidden["data"]["quota"]["windows"], serde_json::json!([]));
+    assert_eq!(hidden["data"]["status"], "rate_limited");
+    assert_eq!(hidden["data"]["retry_after_ms"], 4999);
     assert_eq!(
         result.quota.available_limits[0].display_name.as_deref(),
         Some("PRIVATE NAME")

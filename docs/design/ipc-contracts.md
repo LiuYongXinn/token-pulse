@@ -581,6 +581,8 @@ AccountServiceSelectionKind 新增 detect_local，继续调用 main 专属 choos
 
 总览与小窗共享 useAccountQuota，先订阅 account_quota_changed 再读取完整 QuotaSnapshot；事件只使旧缓存失效，epoch 切换 / 断开立即移除旧账户值。请求序号、生命周期、同连接精确修订和显示隐私 epoch 阻止迟到响应覆盖。可见轮询仅查询已有内存快照，用户刷新仍使用既有受限命令。无新增任意 RPC / 账户管理 / 路径权限，无账户与本地消费的联合范围请求；显示时区来自保存配置。实际周期、null、零、重置待更新及共享显示验收见[验证记录](../development/account-quota-verification.md)。
 
+M12k：最新 display_policy.privacy=true 时，QuotaSnapshot 响应副本移除 windows，并将 fetched_at_ms / last_attempt_at_ms 置 null，已有桶名继续匿名化、未知桶名仍为 null。连接 epoch、quota_revision、状态、选桶 ID、有限错误和刷新控制结果保持；不把隐藏数据换成零或更改真实服务缓存。该规则同时用于 get_account_quota、连接管理结果、QuotaRefreshResult 和 MiniSnapshot 的嵌套额度。隐私开启前构造、开启后序列化的响应也遵循当前策略；关闭后重新查询权威缓存，不能由前端已隐藏 DTO 恢复数值。无 schema 字段变化。
+
 
 ### 6.1 M13a 实际宿主契约
 

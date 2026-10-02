@@ -27,6 +27,73 @@ fn coverage() -> Value {
 fn context() -> Value {
     json!({"context_tokens":null,"model_context_window":null,"percentage":null,"observed_at_ms":null,"quality":"unknown"})
 }
+
+#[test]
+fn late_account_response_hides_windows_and_times_without_mutating_real_cache_or_controls() {
+    use token_pulse_core::protocol::QuotaSnapshot;
+    let snapshot: QuotaSnapshot = serde_json::from_value(json!({
+        "connection_epoch":"account-proof-epoch", "quota_revision":"9007199254740994", "state":"ready",
+        "selected_limit_id":"codex", "available_limits":[
+            {"limit_id":"codex","display_name":"PRIVATE ACCOUNT BUCKET"},
+            {"limit_id":"unknown","display_name":null}
+        ], "fetched_at_ms":1790899200123_i64,"last_attempt_at_ms":1790899200001_i64,
+        "error_code":null, "windows":[
+            {"window_id":"primary","duration_mins":300,"used_percent":100.0,"remaining_percent":0.0,"resets_at_ms":1790900200000_i64},
+            {"window_id":"secondary","duration_mins":null,"used_percent":null,"remaining_percent":null,"resets_at_ms":null}
+        ]
+    })).unwrap();
+    let original = serde_json::to_value(&snapshot).unwrap();
+    let policy = PrivacyState::new(DisplayPolicyStamp {
+        settings_revision: DecimalInt::parse("10").unwrap(),
+        privacy: false,
+    });
+    let response = PrivateResponse::new("late-account".into(), snapshot.clone(), policy.clone());
+    policy
+        .publish(DisplayPolicyStamp {
+            settings_revision: DecimalInt::parse("11").unwrap(),
+            privacy: true,
+        })
+        .unwrap();
+    let hidden = serde_json::to_value(response).unwrap();
+    assert_eq!(hidden["display_policy"]["privacy"], true);
+    assert_eq!(hidden["display_policy"]["settings_revision"], "11");
+    assert_eq!(hidden["data"]["windows"], json!([]));
+    assert_eq!(hidden["data"]["fetched_at_ms"], Value::Null);
+    assert_eq!(hidden["data"]["last_attempt_at_ms"], Value::Null);
+    for field in [
+        "connection_epoch",
+        "quota_revision",
+        "state",
+        "selected_limit_id",
+        "error_code",
+    ] {
+        assert_eq!(hidden["data"][field], original[field]);
+    }
+    assert!(!hidden.to_string().contains("PRIVATE ACCOUNT BUCKET"));
+    assert_eq!(
+        hidden["data"]["available_limits"][1]["display_name"],
+        Value::Null
+    );
+    assert_eq!(serde_json::to_value(&snapshot).unwrap(), original);
+    policy
+        .publish(DisplayPolicyStamp {
+            settings_revision: DecimalInt::parse("12").unwrap(),
+            privacy: false,
+        })
+        .unwrap();
+    let visible = serde_json::to_value(PrivateResponse::new(
+        "account-requery".into(),
+        snapshot,
+        policy,
+    ))
+    .unwrap();
+    assert_eq!(visible["data"], original);
+    assert_eq!(visible["data"]["windows"][0]["remaining_percent"], 0.0);
+    assert_eq!(
+        visible["data"]["windows"][1]["remaining_percent"],
+        Value::Null
+    );
+}
 fn base() -> Value {
     json!({"meta":meta(),"summary":totals(),"pricing":pricing(),"coverage":coverage()})
 }

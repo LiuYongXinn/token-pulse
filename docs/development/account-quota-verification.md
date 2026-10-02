@@ -56,4 +56,10 @@ Win10 19045 上四阶段 `NATIVE_ACCOUNT_COLD_OK` 与 `NATIVE_ACCOUNT_COLD_SEQUE
 
 Win10 19045 实际进程输出 LocalSeed / LocalReady 两阶段 COLD_OK、EXISTING_COLD_DISPLAY_OK、EXISTING_COLD_SEQUENCE_OK，退出 0；正常退出流程关闭所拥有的服务。scene 两项自动检查、desktop all-targets strict Clippy 及 release check 通过。默认合成四阶段另作回归。WebView2 注销 1412 继续记录。此证据包含真实冷启动 / 两个真实 WebView 的 DTO 和 DOM 渲染，不冒充物理点击、截图视觉或任务栏第三入口验收。
 
+## M12k：额度 DTO 隐私边界（2026-10-03）
+
+原 WebView DTO 仅匿名化桶名，额度窗口和读取时间仍在响应内，两个前端入口自行隐藏。现在共享 QuotaSnapshot 的响应副本清空 windows，将成功 / 尝试时间设为 null，保留连接 / 状态 / 修订和控制字段；真实 owner 缓存不变。嵌套刷新 / 小窗结果复用该规则，较晚序列化的旧响应也取最新策略。原生投影原已移除整个 quota，继续保持。没有用零表达隐藏，也未改动额度解析或刷新逻辑。
+
+新增独立预期检查：超安全整数修订、真实 0% 与未知窗口、最新隐私时间、空窗口 / null 时间、未知桶名仍 null、控制不变、原缓存完全不变、关闭后重新查询仍得到真实 0 / null。privacy 6 / quota 14 项通过；前端账户及相关小窗 6 项合成交互回归通过；core / desktop 全目标 strict Clippy、release check、fmt / diff 通过。实际第三入口验收独立推进，不以浏览器模拟桥替代原生或真实账户证据。
+
 仍需完成真实账户通知 / 身份变化、登录过期 / 实际重置、Windows 11 / 多屏 / 各档 DPI 以及任务栏第三入口。未执行性能测试。M14 与迁移保护扩展按已确认范围取消，不作为本模块待验收项。
