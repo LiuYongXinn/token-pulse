@@ -8,24 +8,35 @@ use token_pulse_core::{
 };
 
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
-    show_internal(app, None)
+    show_internal(app, None, None)
+}
+pub(super) fn show_taskbar(
+    app: &tauri::AppHandle,
+    request: &super::taskbar_service::ActionRequest,
+) -> Result<(), String> {
+    show_internal(app, None, Some(request))
 }
 pub(super) fn show_fallback(
     app: &tauri::AppHandle,
     request: &super::taskbar_service::FallbackRequest,
 ) -> Result<(), String> {
-    show_internal(app, Some(request))
+    show_internal(app, Some(request), None)
 }
 fn show_internal(
     app: &tauri::AppHandle,
     fallback: Option<&super::taskbar_service::FallbackRequest>,
+    action: Option<&super::taskbar_service::ActionRequest>,
 ) -> Result<(), String> {
+    let current = || {
+        fallback.is_none_or(|request| request.current())
+            && action.is_none_or(|request| request.current())
+    };
     let runtime = app.state::<super::RuntimeState>();
     let _creation = runtime
         .mini_creation
         .lock()
         .map_err(|_| "WINDOW_STATE_UNAVAILABLE")?;
-    if fallback.is_some_and(|request| !request.current()) {
+    if !current() {
         if let Some(request) = fallback {
             request.cancel();
         }
@@ -74,7 +85,7 @@ fn show_internal(
         .always_on_top(interaction.pinned)
         .theme(theme)
         .center()
-        .focused(fallback.is_none())
+        .focused(fallback.is_none() && action.is_none())
         .visible(false)
         .build()
         .map_err(|e| e.to_string())?;
@@ -89,7 +100,7 @@ fn show_internal(
         }
         window
     };
-    if fallback.is_some_and(|request| !request.current()) {
+    if !current() {
         if let Some(request) = fallback {
             request.cancel();
         }
@@ -97,16 +108,40 @@ fn show_internal(
     }
     // Explicit show, tray and recovery key all restore interaction, including when saving fails.
     super::mini_passthrough::recover(&window).map_err(|e| e.to_string())?;
+    if !current() {
+        return Ok(());
+    }
     if save_current_placement(&window).is_err() {
         eprintln!("MINI_PLACEMENT_SAVE_FAILED");
     }
     if let Some(request) = fallback {
         show_without_activation(&window, request)?;
+    } else if let Some(request) = action {
+        let target = window.clone();
+        let owned_request = request.clone();
+        super::taskbar_commands::on_main_thread(app, request, move || {
+            {
+                // Do not hold the interaction mutex while waiting for a main-thread dispatch.
+                let state = target.app_handle().state::<super::RuntimeState>();
+                let mut interaction = state
+                    .mini_window
+                    .lock()
+                    .map_err(|_| ErrorCode::WindowUnavailable)?;
+                set_expanded(&target, &mut interaction, true)?;
+            }
+            if !owned_request.current() {
+                return Ok(());
+            }
+            target.show().map_err(|_| ErrorCode::WindowUnavailable)?;
+            super::quota_commands::update_visibility(&target);
+            target.set_focus().map_err(|_| ErrorCode::WindowUnavailable)
+        })
+        .map_err(|e| e.to_string())?;
     } else {
         window.show().map_err(|e| e.to_string())?;
     }
     super::quota_commands::update_visibility(&window);
-    if fallback.is_some() {
+    if fallback.is_some() || action.is_some() {
         Ok(())
     } else {
         window.set_focus().map_err(|e| e.to_string())
@@ -268,31 +303,8 @@ pub fn mini_window_action(
     let result = match request {
         MiniWindowAction::Read {} => Ok(()),
         MiniWindowAction::SetExpanded { expanded } => {
-            let (width, height) = dimensions(expanded);
-            window
-                .set_size(tauri::LogicalSize::new(width, height))
-                .map_err(|_| {
-                    Box::new(AppError::new(
-                        ErrorCode::WindowUnavailable,
-                        request_id.clone(),
-                    ))
-                })?;
-            if let Err(error) = persist(
-                window.app_handle(),
-                MiniPreferenceChange::Expanded(expanded),
-            ) {
-                let (width, height) = dimensions(interaction.expanded);
-                let _ = window.set_size(tauri::LogicalSize::new(width, height));
-                return Err(Box::new(AppError::new(error, request_id)));
-            }
-            interaction.expanded = expanded;
-            // Growing the window near an edge must not hide its buttons below the taskbar.
-            if fit_current(&window).is_err() {
-                eprintln!("MINI_PLACEMENT_UNAVAILABLE");
-            }
-            if save_current_placement(&window).is_err() {
-                eprintln!("MINI_PLACEMENT_SAVE_FAILED");
-            }
+            set_expanded(&window, &mut interaction, expanded)
+                .map_err(|error| Box::new(AppError::new(error, request_id.clone())))?;
             Ok(())
         }
         MiniWindowAction::SetPinned { pinned } => {
@@ -328,6 +340,33 @@ pub fn mini_window_action(
     Ok(Response::new(request_id, *interaction))
 }
 
+fn set_expanded(
+    window: &WebviewWindow,
+    interaction: &mut MiniWindowState,
+    expanded: bool,
+) -> Result<(), ErrorCode> {
+    let (width, height) = dimensions(expanded);
+    window
+        .set_size(tauri::LogicalSize::new(width, height))
+        .map_err(|_| ErrorCode::WindowUnavailable)?;
+    if let Err(error) = persist(
+        window.app_handle(),
+        MiniPreferenceChange::Expanded(expanded),
+    ) {
+        let (width, height) = dimensions(interaction.expanded);
+        let _ = window.set_size(tauri::LogicalSize::new(width, height));
+        return Err(error);
+    }
+    interaction.expanded = expanded;
+    if fit_current(window).is_err() {
+        eprintln!("MINI_PLACEMENT_UNAVAILABLE");
+    }
+    if save_current_placement(window).is_err() {
+        eprintln!("MINI_PLACEMENT_SAVE_FAILED");
+    }
+    let _ = window.emit("mini_interaction_changed", ());
+    Ok(())
+}
 fn area(monitor: &tauri::Monitor) -> WorkArea {
     let work = monitor.work_area();
     WorkArea {

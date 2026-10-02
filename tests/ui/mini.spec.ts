@@ -8,6 +8,7 @@ async function bridge(page: Page) {
     let rejectScope = false, expireCandidates = false, holdCandidates = false, candidateSerial = 0;
     const candidateWaits: (() => void)[] = [], candidateCursors = new Map<string, { query: string; offset: number; snapshot: string }>();
     let state = { expanded: false, pinned: false };
+    let holdInteraction = false; const interactionWaits: (() => void)[] = [];
     let scope: { kind: 'today_all_sources' } | { kind: 'session'; session_key: string; start: { kind: 'fixed'; start_ms: number } | { kind: 'today' } } = { kind: 'session', session_key: 'synthetic-session', start: { kind: 'fixed', start_ms: 1709179200123 } };
     const calls: { command: string; request: unknown }[] = [];
     const waits: (() => void)[] = [];
@@ -57,7 +58,9 @@ async function bridge(page: Page) {
           const r = args.request as { kind: string; expanded?: boolean; pinned?: boolean };
           if (r.kind === 'set_expanded') state.expanded = r.expanded!;
           if (r.kind === 'set_pinned') state.pinned = r.pinned!;
-          return { api_version: 1, request_id: args.requestId, data: { ...state } };
+          const data = { ...state };
+          if (r.kind === 'read' && holdInteraction) { holdInteraction = false; await new Promise<void>(resolve => interactionWaits.push(resolve)); }
+          return { api_version: 1, request_id: args.requestId, data };
         }
         if (command === 'set_display_privacy') {
           const r = args.request as { privacy: boolean; expected_settings_revision: string };
@@ -93,10 +96,10 @@ async function bridge(page: Page) {
           return response(args.requestId, { settings_revision: revision, mini_scope: scope });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __miniQA: { calls: () => calls, fail: (value: boolean) => { fail = value; }, theme: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); changed(); }, hold: () => { hold = true; }, release: () => waits.splice(0).forEach(fn => fn()), privacy: (value: boolean) => { privacy = value; revision = String(BigInt(revision) + 1n); emit('display_policy_changed', { settings_revision: revision, privacy }); changed(); }, listeners: () => [...listeners.values()].map(l => l.event), mode: (value: string) => { mode = value; changed(); }, rejectScope: (value: boolean) => { rejectScope = value; }, expireCandidates: (value: boolean) => { expireCandidates = value; }, holdCandidates: () => { holdCandidates = true; }, releaseCandidates: () => candidateWaits.splice(0).forEach(fn => fn()), candidateLeases: () => candidateCursors.size } });
+      } }, __miniQA: { interaction: (expanded: boolean) => { state.expanded = expanded; emit('mini_interaction_changed', { expanded: !expanded, pinned: true }); }, holdInteraction: () => { holdInteraction = true; }, releaseInteraction: () => interactionWaits.splice(0).forEach(resolve => resolve()), calls: () => calls, fail: (value: boolean) => { fail = value; }, theme: (value: string) => { theme = value; revision = String(BigInt(revision) + 1n); changed(); }, hold: () => { hold = true; }, release: () => waits.splice(0).forEach(fn => fn()), privacy: (value: boolean) => { privacy = value; revision = String(BigInt(revision) + 1n); emit('display_policy_changed', { settings_revision: revision, privacy }); changed(); }, listeners: () => [...listeners.values()].map(l => l.event), mode: (value: string) => { mode = value; changed(); }, rejectScope: (value: boolean) => { rejectScope = value; }, expireCandidates: (value: boolean) => { expireCandidates = value; }, holdCandidates: () => { holdCandidates = true; }, releaseCandidates: () => candidateWaits.splice(0).forEach(fn => fn()), candidateLeases: () => candidateCursors.size } });
   });
 }
-type QA = { __miniQA: { calls(): { command: string; request: unknown }[]; fail(v: boolean): void; theme(v: string): void; hold(): void; release(): void; privacy(v: boolean): void; listeners(): string[]; mode(v: string): void; rejectScope(v: boolean): void; expireCandidates(v: boolean): void; holdCandidates(): void; releaseCandidates(): void; candidateLeases(): number } };
+type QA = { __miniQA: { interaction(expanded: boolean): void; holdInteraction(): void; releaseInteraction(): void; calls(): { command: string; request: unknown }[]; fail(v: boolean): void; theme(v: string): void; hold(): void; release(): void; privacy(v: boolean): void; listeners(): string[]; mode(v: string): void; rejectScope(v: boolean): void; expireCandidates(v: boolean): void; holdCandidates(): void; releaseCandidates(): void; candidateLeases(): number } };
 type QuotaQA = { __miniQuotaQA: { set(value: unknown): void; hold(): void; release(): void; fail(value: boolean): void } };
 test.beforeEach(async ({ page }) => { await bridge(page); await page.setViewportSize({ width: 280, height: 220 }); });
 
@@ -186,7 +189,7 @@ test('shared theme and privacy clear retained names, money details and reject a 
   await page.getByLabel('小窗隐私模式').click();
   await expect(page.getByLabel('费用估算详情')).toContainText('$0.57');
   await expect(page.locator('.mini-scope')).toContainText('SYNTHETIC PRIVATE SESSION');
-  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__miniQA.listeners().sort())).toEqual(['account_quota_changed', 'display_policy_changed', 'price_rules_changed', 'settings_changed']);
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__miniQA.listeners().sort())).toEqual(['account_quota_changed', 'display_policy_changed', 'mini_interaction_changed', 'price_rules_changed', 'settings_changed']);
 });
 
 test('failed refresh keeps an explicitly old success, scope reset carries precise revision and never queries main data', async ({ page }) => {
@@ -297,4 +300,18 @@ test('external privacy closes unsaved picker and a late unmasked page closes its
   expect(await page.locator('body').innerHTML()).not.toContain('SYNTHETIC PRIVATE CANDIDATE');
   await page.getByLabel('选择小窗会话与起点').click(); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(25);
   expect(await page.getByRole('dialog').innerHTML()).not.toContain('SYNTHETIC PRIVATE CANDIDATE');
+});
+
+
+test('external native expansion rereads authoritative state and ignores older interaction response', async ({ page }) => {
+  await page.goto('/?window=mini'); await expect(page.getByLabel('展开小窗')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__miniQA.listeners().filter(name => name === 'mini_interaction_changed').length)).toBe(1);
+  await page.evaluate(() => { const qa = (window as unknown as QA).__miniQA; qa.holdInteraction(); qa.interaction(true); });
+  await page.evaluate(() => (window as unknown as QA).__miniQA.interaction(false));
+  await page.evaluate(() => (window as unknown as QA).__miniQA.releaseInteraction());
+  await expect(page.getByLabel('展开小窗')).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__miniQA.interaction(true));
+  await page.setViewportSize({ width: 360, height: 380 });
+  await expect(page.getByLabel('收起小窗')).toBeVisible(); await expect(page.locator('.mini-breakdown')).toContainText('输出（含推理）83.1K');
+  await page.screenshot({ path: 'test-results/mini-external-expansion.png' });
 });

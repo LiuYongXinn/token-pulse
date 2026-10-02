@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { useAppTheme } from '../shared/useAppTheme';
 import { compactTokens, fullTokens, money, percentage } from '../shared/format';
-import { getDisplaySettings, getMiniUsage, openMiniStats, miniWindowAction, onDisplayPolicyChanged, onPriceRulesChanged, onSettingsChanged, runtimeError, setDisplayPrivacy, setMiniScope } from '../shared/runtime';
+import { getDisplaySettings, getMiniUsage, openMiniStats, miniWindowAction, onDisplayPolicyChanged, onMiniInteractionChanged, onPriceRulesChanged, onSettingsChanged, runtimeError, setDisplayPrivacy, setMiniScope } from '../shared/runtime';
 import type { DisplaySettingsSnapshot, MiniUsageSnapshot, MiniWindowAction, MiniWindowState } from '../shared/generated/contracts';
 import { coverageNames, whenExact } from '../app/usage-display';
 import './mini.css';
@@ -18,7 +18,7 @@ export function MiniApp() {
   const usage = cache?.epoch === policy.epoch ? cache.value : null;
   const [interaction, setInteraction] = useState<MiniWindowState>({ expanded: false, pinned: true });
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [details, setDetails] = useState(false);
-  const mounted = useRef(false), sequence = useRef(0), acting = useRef(false);
+  const mounted = useRef(false), sequence = useRef(0), interactionSequence = useRef(0), acting = useRef(false);
   useAppTheme(settings?.preferences.theme);
   useEffect(() => { setCache(null); setDetails(false); setEditing(false); setError(null); }, [policy.epoch]);
   const refresh = async () => {
@@ -47,15 +47,22 @@ export function MiniApp() {
         else if (active) setError('更新订阅失败，请手动刷新。');
       });
     };
-    subscribe(onSettingsChanged(() => void refresh())); subscribe(onPriceRulesChanged(() => void refresh()));
+    const readInteraction = async () => {
+      const serial = ++interactionSequence.current;
+      try { const value = await miniWindowAction({ kind: 'read' }); if (active && serial === interactionSequence.current) { setInteraction(value); if (!value.expanded) setEditing(false); } }
+      catch (e) { if (active && serial === interactionSequence.current) setError(runtimeError(e)); }
+    };
+    subscribe(onSettingsChanged(() => { void refresh(); void readInteraction(); })); subscribe(onPriceRulesChanged(() => void refresh()));
+    subscribe(onMiniInteractionChanged(() => void readInteraction()));
     subscribe(onDisplayPolicyChanged(), true);
-    void miniWindowAction({ kind: 'read' }).then(value => { if (active) setInteraction(value); }).catch(e => { if (active) setError(runtimeError(e)); });
-    return () => { active = false; mounted.current = false; ++sequence.current; clearInterval(timer); document.removeEventListener('visibilitychange', visible); stops.forEach(stop => stop()); };
+    void readInteraction();
+    return () => { active = false; mounted.current = false; ++sequence.current; ++interactionSequence.current; clearInterval(timer); document.removeEventListener('visibilitychange', visible); stops.forEach(stop => stop()); };
   }, [policy.epoch, policy.pending]);
   const nativeAction = async (request: MiniWindowAction) => {
     if (acting.current) return;
     acting.current = true; setBusy(true);
-    try { const value = await miniWindowAction(request); if (mounted.current) { setInteraction(value); if (!value.expanded) setEditing(false); setError(null); if (request.kind === 'set_expanded' || request.kind === 'set_pinned') await refresh(); } }
+    const serial = ++interactionSequence.current;
+    try { const value = await miniWindowAction(request); if (mounted.current) { if (serial === interactionSequence.current) { setInteraction(value); if (!value.expanded) setEditing(false); } setError(null); if (request.kind === 'set_expanded' || request.kind === 'set_pinned') await refresh(); } }
     catch (e) { if (mounted.current) setError(runtimeError(e)); }
     finally { acting.current = false; if (mounted.current) setBusy(false); }
   };

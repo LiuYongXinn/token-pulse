@@ -12080,6 +12080,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "action_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "applied_settings_revision": {
           "anyOf": [
             {
@@ -12168,6 +12178,7 @@
         "compact",
         "fallback_visible",
         "fallback_error",
+        "action_error",
         "last_cleanup",
         "last_snapshot_at_ms"
       ],

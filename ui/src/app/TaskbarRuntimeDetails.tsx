@@ -15,6 +15,7 @@ export function TaskbarRuntimeDetails({ snapshot, error, timezone }: { snapshot:
     {error && <p className="notice" role="alert">{error}</p>}
     {snapshot?.issue && <p className="taskbar-issue">{issues[snapshot.issue]}{snapshot.error ? `（${snapshot.error}）` : ''}</p>}
     {snapshot?.fallback_error && <p className="notice" role="alert">小窗回退失败：{runtimeError({ code: snapshot.fallback_error })} 可通过托盘或显示悬浮窗按钮重试。</p>}
+    {snapshot?.action_error && <p className="notice" role="alert">任务栏窗口操作失败：{runtimeError({ code: snapshot.action_error })} 请重新点击任务栏或通过托盘打开。</p>}
     <dl><dt>已应用设置修订</dt><dd>{snapshot?.applied_settings_revision ?? '尚未确认'}</dd>
       <dt>实际显示密度</dt><dd>{snapshot?.compact === null || !snapshot ? '尚未确认' : snapshot.compact ? '精简显示' : '完整显示'}</dd>
       <dt>小窗自动回退</dt><dd>{snapshot?.fallback_visible === null || !snapshot ? '尚未确认' : snapshot.fallback_visible ? '回退小窗已显示' : '未显示回退小窗'}</dd>

@@ -15,6 +15,236 @@ pub fn start(app: tauri::AppHandle) {
         app.exit(if result.is_ok() { 0 } else { 1 });
     });
 }
+pub fn start_actions(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        let result = super::mini_window::show(&app).and_then(|_| verify_actions(&app));
+        if let Err(error) = &result {
+            eprintln!("NATIVE_TASKBAR_ACTIONS_FAILED: {error}");
+        }
+        app.exit(if result.is_ok() { 0 } else { 1 });
+    });
+}
+fn verify_actions(app: &tauri::AppHandle) -> Result<(), String> {
+    use token_pulse_taskbar::windows::topology::inspect_primary_taskbar;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_LBUTTONDBLCLK, WM_LBUTTONUP};
+    if !app
+        .state::<super::RuntimeState>()
+        .data_directory
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().starts_with("native-probe-"))
+    {
+        return Err("actions check requires isolated smoke database".into());
+    }
+    let before = inspect_primary_taskbar().map_err(|e| format!("actions baseline: {e:?}"))?;
+    let main = app.get_webview_window("main").ok_or("main missing")?;
+    let mini = app.get_webview_window("mini").ok_or("mini missing")?;
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        r#"
+      await invoke('mini_window_action',{requestId:'taskbar-action-compact',request:{kind:'set_expanded',expanded:false}});
+      await invoke('mini_window_action',{requestId:'taskbar-action-hide',request:{kind:'hide'}});
+    "#,
+    )?;
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-actions-default'});
+      await invoke('set_taskbar_preferences',{requestId:'taskbar-actions-enable',request:{preferences:{...current.data.preferences,enabled:true,fallback_to_mini:false},expected_settings_revision:current.data.settings_revision}});
+    "#,
+    )?;
+    wait_actions_ready(app)?;
+    main.hide().map_err(|e| e.to_string())?;
+    // These are authored messages to our verified own readout, explicitly not real mouse input.
+    own_click_message(app, WM_LBUTTONUP)?;
+    until_action(app, || {
+        mini.is_visible().unwrap_or(false)
+            && app
+                .state::<super::RuntimeState>()
+                .mini_window
+                .lock()
+                .is_ok_and(|state| state.expanded)
+    })?;
+    let size = mini
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(mini.scale_factor().map_err(|e| e.to_string())?);
+    if (size.width - 360.0).abs() > 1.0 || (size.height - 380.0).abs() > 1.0 {
+        return Err(format!("taskbar mini size mismatch: {size:?}"));
+    }
+    if main.is_visible().map_err(|e| e.to_string())? {
+        return Err("single intention opened statistics".into());
+    }
+    if !app
+        .state::<super::RuntimeState>()
+        .database
+        .as_ref()
+        .map_err(|e| e.code.to_string())?
+        .mini_window_preferences()
+        .map_err(|e| e.code.to_string())?
+        .interaction
+        .expanded
+    {
+        return Err("taskbar expansion was not persisted".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &mini,
+        r#"
+      await wait(()=>document.querySelector('.mini-window.expanded'));
+      const current=await invoke('mini_window_action',{requestId:'taskbar-native-expanded-state',request:{kind:'read'}});
+      if(!current.data.expanded)throw new Error('TASKBAR_MINI_STATE_NOT_EXPANDED');
+      await invoke('mini_window_action',{requestId:'taskbar-double-hide',request:{kind:'hide'}});
+    "#,
+    )?;
+    wait_actions_ready(app)?;
+    own_click_message(app, WM_LBUTTONUP)?;
+    own_click_message(app, WM_LBUTTONDBLCLK)?;
+    own_click_message(app, WM_LBUTTONUP)?;
+    until_action(app, || {
+        main.is_visible().unwrap_or(false)
+            && app
+                .state::<super::RuntimeState>()
+                .mini_stats_request
+                .lock()
+                .is_ok_and(|value| value.is_some())
+    })?;
+    thread::sleep(Duration::from_millis(
+        u64::from(unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() })
+            + 200,
+    ));
+    if mini.is_visible().map_err(|e| e.to_string())? {
+        return Err("double intention also opened mini".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      const current=await invoke('get_mini_scope',{requestId:'taskbar-double-scope'});
+      const intent=await invoke('get_mini_stats_request',{requestId:'taskbar-double-intent'});
+      const usage=await invoke('get_mini_usage',{requestId:'taskbar-double-usage'});
+      if(JSON.stringify(current.data.mini_scope)!==JSON.stringify(intent.data?.mini_scope)||intent.data.calendar.range.timezone!==usage.data.range.timezone||intent.data.calendar.range.start_ms!==usage.data.range.start_ms)throw new Error('TASKBAR_SHARED_STATS_RANGE_LOST');
+      await wait(()=>document.querySelector('.mini-stat-scope'));
+      const status=await invoke('get_taskbar_status',{requestId:'taskbar-action-error'});
+      if(status.data.action_error!==null)throw new Error('TASKBAR_ACTION_ERROR:'+status.data.action_error);
+    "#,
+    )?;
+    super::taskbar_commands::service(app)
+        .ok_or("service missing")?
+        .shutdown();
+    if inspect_primary_taskbar().map_err(|e| format!("actions restore: {e:?}"))? != before {
+        return Err("actions shutdown did not restore geometry".into());
+    }
+    println!(
+        "NATIVE_TASKBAR_ACTIONS_OK: authored own-window clicks, production host pipe/actor, real expanded 360x380 mini with persisted state and WebView invalidation, double statistics shared scope without mini, actual geometry restored; real SendInput acceptance separate"
+    );
+    Ok(())
+}
+fn until_action(app: &tauri::AppHandle, done: impl Fn() -> bool) -> Result<(), String> {
+    let until = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        let snapshot = super::taskbar_commands::service(app)
+            .ok_or("service missing")?
+            .snapshot()
+            .map_err(|e| e.to_string())?;
+        if let Some(error) = snapshot.action_error {
+            return Err(format!("actual window action failed: {error}"));
+        }
+        if Instant::now() >= until {
+            return Err(format!("action functional deadline: {snapshot:?}"));
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    Ok(())
+}
+fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
+    until_action(app, || {
+        let runtime = app.state::<super::RuntimeState>();
+        let Some(service) = super::taskbar_commands::service(app) else {
+            return false;
+        };
+        let Ok(snapshot) = service.snapshot() else {
+            return false;
+        };
+        let Ok(configuration) = runtime
+            .database
+            .as_ref()
+            .map_err(|e| e.code)
+            .and_then(|db| db.taskbar_preferences().map_err(|e| e.code))
+        else {
+            return false;
+        };
+        snapshot.state == TaskbarRuntimeState::Embedded
+            && snapshot.applied_settings_revision.as_ref() == Some(&configuration.settings_revision)
+            && service.owned_host_pid().is_some()
+    })
+}
+fn own_click_message(app: &tauri::AppHandle, message: u32) -> Result<(), String> {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM},
+        UI::WindowsAndMessaging::{
+            EnumChildWindows, FindWindowW, GetClassNameW, GetWindowThreadProcessId,
+            IsWindowVisible, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+        },
+    };
+    struct Probe {
+        pid: u32,
+        windows: Vec<HWND>,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        if pid == probe.pid && unsafe { IsWindowVisible(window) } != 0 {
+            let mut class = [0; 128];
+            let n = unsafe { GetClassNameW(window, class.as_mut_ptr(), 128) };
+            if n > 0
+                && String::from_utf16_lossy(&class[..n as usize])
+                    .starts_with("TokenPulse.Taskbar.Readout.")
+            {
+                probe.windows.push(window);
+            }
+        }
+        1
+    }
+    let pid = super::taskbar_commands::service(app)
+        .and_then(|service| service.owned_host_pid())
+        .ok_or("no own embedded host")?;
+    let class: Vec<u16> = "Shell_TrayWnd".encode_utf16().chain(Some(0)).collect();
+    let root = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
+    if root.is_null() {
+        return Err("taskbar root missing".into());
+    }
+    let mut probe = Probe {
+        pid,
+        windows: vec![],
+    };
+    unsafe {
+        EnumChildWindows(root, Some(collect), (&mut probe as *mut Probe) as LPARAM);
+    }
+    if probe.windows.len() != 1 {
+        return Err("own readout identity not unique".into());
+    }
+    if unsafe {
+        SendMessageTimeoutW(
+            probe.windows[0],
+            message,
+            0,
+            0,
+            SMTO_ABORTIFHUNG,
+            1000,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err("own click message timed out".into());
+    }
+    Ok(())
+}
 fn wait(app: &tauri::AppHandle, state: TaskbarRuntimeState) -> Result<(), String> {
     let until = Instant::now() + Duration::from_secs(10);
     loop {

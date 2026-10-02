@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     let revision = '9007199254740993', reject = false, failRead = false;
     let preferences = { enabled: false, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true }, position: 'notification_left', fallback_to_mini: true };
-    let status = { revision: '9007199254740993', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, last_cleanup: null, last_snapshot_at_ms: null };
+    let status = { revision: '9007199254740993', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, action_error: null, last_cleanup: null, last_snapshot_at_ms: null };
     const calls: { command: string; request: unknown }[] = [], callbacks = new Map<number, (value: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
     let callbackId = 0, eventId = 0;
     const notify = (event: string) => { for (const [id, listener] of listeners) if (listener.event === event) callbacks.get(listener.handler)?.({ event, id, payload: event === 'taskbar_status_changed' ? status : { settings_revision: revision } }); };
@@ -117,4 +117,13 @@ test('fallback preference persists independently; failed fallback remains unknow
   await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740995', fallback_visible: true, fallback_error: null }));
   await expect(panel.getByRole('alert')).toHaveCount(0); await expect(panel.getByRole('status')).toHaveText('任务栏显示不可用'); await expect(panel).toContainText('回退小窗已显示');
   await page.screenshot({ path: 'test-results/taskbar-fallback-state-dark-1280.png', fullPage: true });
+});
+
+
+test('window action error is independent from embedding and fallback and clears after success', async ({ page }) => {
+  const panel = await open(page);
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740994', state: 'embedded', compact: false, action_error: 'WINDOW_UNAVAILABLE' }));
+  await expect(panel.getByRole('status')).toHaveText('已嵌入任务栏'); await expect(panel.getByRole('alert')).toContainText('任务栏窗口操作失败');
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740995', action_error: null }));
+  await expect(panel.getByRole('alert')).toHaveCount(0); await expect(panel.getByRole('status')).toHaveText('已嵌入任务栏');
 });

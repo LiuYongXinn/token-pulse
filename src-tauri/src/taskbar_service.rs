@@ -19,11 +19,131 @@ pub type Reader = Arc<dyn Fn() -> Result<Input, ErrorCode> + Send + Sync>;
 pub type Changed = Arc<dyn Fn(TaskbarRuntimeSnapshot) + Send + Sync>;
 pub type Visible = Arc<dyn Fn(bool) + Send + Sync>;
 pub type Fallback = Arc<dyn Fn(FallbackRequest) -> Result<bool, ErrorCode> + Send + Sync>;
+pub type Action = Arc<dyn Fn(ActionRequest) -> Result<(), ErrorCode> + Send + Sync>;
+#[derive(Clone)]
+pub struct ActionRequest {
+    pub action: token_pulse_taskbar::HostAction,
+    pub settings_revision: DecimalInt,
+    flags: Arc<Flags>,
+    generation: u64,
+    cancelled: Arc<AtomicBool>,
+    timed_out: Arc<AtomicBool>,
+    deadline: std::time::Instant,
+}
+impl ActionRequest {
+    pub fn current(&self) -> bool {
+        !self.cancelled.load(Ordering::Acquire)
+            && std::time::Instant::now() < self.deadline
+            && self.live_generation()
+    }
+    fn live_generation(&self) -> bool {
+        !self.flags.stopping.load(Ordering::Acquire)
+            && !self.flags.paused.load(Ordering::Acquire)
+            && !self.flags.suspended.load(Ordering::Acquire)
+            && self.generation == self.flags.generation.load(Ordering::Acquire)
+    }
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+    pub(super) fn timeout(&self) {
+        self.timed_out.store(true, Ordering::Release);
+        self.cancel();
+    }
+}
+#[cfg(windows)]
+#[derive(Default)]
+struct ActionDispatch {
+    queued: std::collections::VecDeque<ActionRequest>,
+    work: Option<(
+        ActionRequest,
+        tokio::task::JoinHandle<Result<(), ErrorCode>>,
+    )>,
+}
+#[cfg(windows)]
+impl ActionDispatch {
+    fn clear(&mut self) {
+        self.queued.clear();
+        if let Some((request, _)) = &self.work {
+            request.cancel();
+        }
+    }
+    fn receive(
+        &mut self,
+        reply: token_pulse_taskbar::HostReply,
+        revision: &DecimalInt,
+        flags: &Arc<Flags>,
+        generation: u64,
+    ) {
+        if reply.validate_actions().is_err() {
+            return;
+        }
+        let token_pulse_taskbar::HostReply::Actions {
+            settings_revision: Some(received),
+            actions,
+        } = reply
+        else {
+            return;
+        };
+        if received != *revision || flags.generation.load(Ordering::Acquire) != generation {
+            return;
+        }
+        for action in actions {
+            if self.queued.len() >= token_pulse_taskbar::MAX_HOST_ACTIONS {
+                break;
+            }
+            self.queued.push_back(ActionRequest {
+                action,
+                settings_revision: received.clone(),
+                flags: flags.clone(),
+                generation,
+                cancelled: Arc::new(AtomicBool::new(false)),
+                timed_out: Arc::new(AtomicBool::new(false)),
+                deadline: std::time::Instant::now() + Duration::from_secs(5),
+            });
+        }
+    }
+    async fn step(&mut self, callback: &Action) -> Option<Result<(), ErrorCode>> {
+        if self
+            .work
+            .as_ref()
+            .is_some_and(|(_, work)| work.is_finished())
+        {
+            let (request, work) = self.work.take().expect("finished action");
+            let result = work.await.unwrap_or(Err(ErrorCode::WindowUnavailable));
+            if request.current()
+                || (result.is_err()
+                    && request.timed_out.load(Ordering::Acquire)
+                    && request.live_generation())
+            {
+                return Some(result);
+            }
+        }
+        if let Some((request, _)) = &self.work {
+            if !request.current() && !request.cancelled.load(Ordering::Acquire) {
+                request.timeout();
+                if request.live_generation() {
+                    return Some(Err(ErrorCode::WindowUnavailable));
+                }
+            }
+        } else {
+            while let Some(request) = self.queued.pop_front() {
+                if request.current() {
+                    let action = callback.clone();
+                    let owned = request.clone();
+                    self.work = Some((request, tokio::task::spawn_blocking(move || action(owned))));
+                    break;
+                }
+            }
+        }
+        None
+    }
+}
 #[cfg(windows)]
 struct Callbacks {
     changed: Changed,
     visible: Visible,
     fallback: Fallback,
+    action: Action,
 }
 #[derive(Clone)]
 pub struct FallbackRequest {
@@ -103,6 +223,7 @@ struct Flags {
     paused: AtomicBool,
     suspended: AtomicBool,
     generation: AtomicU64,
+    owned_host_pid: AtomicU64,
 }
 pub struct TaskbarService {
     flags: Arc<Flags>,
@@ -126,12 +247,14 @@ impl TaskbarService {
         changed: Changed,
         visible: Visible,
         fallback: Fallback,
+        action: Action,
     ) -> Result<Self, ErrorCode> {
         let flags = Arc::new(Flags {
             stopping: AtomicBool::new(false),
             paused: AtomicBool::new(false),
             suspended: AtomicBool::new(false),
             generation: AtomicU64::new(0),
+            owned_host_pid: AtomicU64::new(0),
         });
         let snapshot = Arc::new(Mutex::new(TaskbarRuntimeSnapshot {
             revision: DecimalInt::parse("0")?,
@@ -142,6 +265,7 @@ impl TaskbarService {
             compact: None,
             fallback_visible: None,
             fallback_error: None,
+            action_error: None,
             last_cleanup: None,
             last_snapshot_at_ms: None,
         }));
@@ -164,6 +288,7 @@ impl TaskbarService {
                                 changed,
                                 visible,
                                 fallback,
+                                action,
                             },
                             owned_flags,
                             owned_snapshot,
@@ -183,7 +308,7 @@ impl TaskbarService {
                 }
                 #[cfg(not(windows))]
                 {
-                    let _ = (executable, visible, fallback);
+                    let _ = (executable, visible, fallback, action);
                     while !owned_flags.stopping.load(Ordering::Acquire) {
                         while let Ok(Command::Clear(reply)) = receiver.try_recv() {
                             let _ = reply.send(Ok(()));
@@ -230,6 +355,13 @@ impl TaskbarService {
             .lock()
             .map(|s| s.clone())
             .map_err(|_| ErrorCode::TaskbarEmbedFailed)
+    }
+    #[cfg(all(windows, debug_assertions))]
+    pub(super) fn owned_host_pid(&self) -> Option<u32> {
+        (self.snapshot().ok()?.state == TaskbarRuntimeState::Embedded)
+            .then(|| u32::try_from(self.flags.owned_host_pid.load(Ordering::Acquire)).ok())
+            .flatten()
+            .filter(|pid| *pid != 0)
     }
     pub fn invalidate(&self) {
         self.flags.generation.fetch_add(1, Ordering::AcqRel);
@@ -293,6 +425,7 @@ fn publish(
             compact,
             fallback_visible: current.fallback_visible,
             fallback_error: current.fallback_error,
+            action_error: current.action_error,
             last_cleanup: current.last_cleanup,
             last_snapshot_at_ms: current.last_snapshot_at_ms,
         };
@@ -325,6 +458,7 @@ async fn run(
         changed,
         visible,
         fallback,
+        action,
     } = callbacks;
     use std::time::Instant;
     use token_pulse_taskbar::{
@@ -349,9 +483,18 @@ async fn run(
         tokio::task::JoinHandle<Result<bool, ErrorCode>>,
     )> = None;
     let mut next_fallback = Instant::now();
+    let mut actions = ActionDispatch::default();
+    let mut next_actions = Instant::now();
     while !flags.stopping.load(Ordering::Acquire) {
+        flags.owned_host_pid.store(
+            connection
+                .as_ref()
+                .map_or(0, |host| u64::from(host.process_id())),
+            Ordering::Release,
+        );
         let current_generation = flags.generation.load(Ordering::Acquire);
         if current_generation != observed_generation {
+            actions.clear();
             observed_generation = current_generation;
             retry_at = Instant::now();
             next_read = Instant::now();
@@ -360,6 +503,7 @@ async fn run(
             fallback_policy.attempted = false;
         }
         while let Ok(Command::Clear(reply)) = receiver.try_recv() {
+            actions.clear();
             if retired.as_ref().is_none_or(|work| work.is_finished()) {
                 retired = pending.take().map(|(_, work)| work);
             }
@@ -394,6 +538,7 @@ async fn run(
             let _ = reply.send(result);
         }
         if flags.suspended.load(Ordering::Acquire) {
+            actions.clear();
             close_host(&mut connection, &snapshot, &changed).await;
             policy = None;
             configuration = None;
@@ -414,6 +559,9 @@ async fn run(
         if flags.paused.load(Ordering::Acquire) || flags.suspended.load(Ordering::Acquire) {
             tokio::time::sleep(Duration::from_millis(20)).await;
             continue;
+        }
+        if let Some(result) = actions.step(&action).await {
+            publish_action(&snapshot, &changed, result.err());
         }
         if fallback_work
             .as_ref()
@@ -697,8 +845,51 @@ async fn run(
             }
             last_poll = Instant::now();
         }
+        if Instant::now() >= next_actions {
+            if let (Some(host), Some(config)) = (connection.as_mut(), configuration.as_ref()) {
+                if snapshot
+                    .lock()
+                    .ok()
+                    .is_some_and(|s| s.state == TaskbarRuntimeState::Embedded)
+                {
+                    match host.exchange(HostMessage::GetActions {}).await {
+                        Ok(reply @ HostReply::Actions { .. }) => actions.receive(
+                            reply,
+                            &config.settings_revision,
+                            &flags,
+                            current_generation,
+                        ),
+                        _ => {
+                            actions.clear();
+                            close_host(&mut connection, &snapshot, &changed).await;
+                            policy = None;
+                            configuration = None;
+                            visible(false);
+                            failures = failures.saturating_add(1);
+                            retry_at = Instant::now() + retry_delay(failures);
+                            publish(
+                                &snapshot,
+                                &changed,
+                                TaskbarRuntimeState::Recovering,
+                                None,
+                                Some(TaskbarRuntimeIssue::ProtocolError),
+                                Some(ErrorCode::TaskbarEmbedFailed),
+                                None,
+                            );
+                        }
+                    }
+                } else {
+                    actions.clear();
+                }
+            } else {
+                actions.clear();
+            }
+            next_actions = Instant::now() + Duration::from_millis(150);
+        }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+    actions.clear();
+    flags.owned_host_pid.store(0, Ordering::Release);
     visible(false);
     if let Some((request, _)) = fallback_work.take() {
         request.cancel();
@@ -728,6 +919,25 @@ async fn run(
         uncertain.then_some(ErrorCode::TaskbarEmbedFailed),
         None,
     );
+}
+#[cfg(windows)]
+fn publish_action(
+    snapshot: &Mutex<TaskbarRuntimeSnapshot>,
+    changed: &Changed,
+    error: Option<ErrorCode>,
+) {
+    let update = snapshot.lock().ok().and_then(|mut current| {
+        if current.action_error == error {
+            return None;
+        }
+        current.action_error = error;
+        current.revision =
+            DecimalInt::from_nonnegative(current.revision.value().saturating_add(1)).ok()?;
+        Some(current.clone())
+    });
+    if let Some(update) = update {
+        changed(update);
+    }
 }
 #[cfg(windows)]
 fn publish_fallback(
@@ -843,6 +1053,148 @@ async fn close_host(
 mod tests {
     use super::*;
     use std::time::Instant;
+    fn action_flags() -> Arc<Flags> {
+        Arc::new(Flags {
+            stopping: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
+            suspended: AtomicBool::new(false),
+            generation: AtomicU64::new(4),
+            owned_host_pid: AtomicU64::new(0),
+        })
+    }
+    fn action_batch(revision: &str, count: usize) -> token_pulse_taskbar::HostReply {
+        token_pulse_taskbar::HostReply::Actions {
+            settings_revision: Some(DecimalInt::parse(revision).unwrap()),
+            actions: vec![token_pulse_taskbar::HostAction::OpenStats {}; count],
+        }
+    }
+    #[test]
+    fn native_actions_reject_wrong_revision_generation_overflow_and_expired_intentions() {
+        let flags = action_flags();
+        let mut dispatch = ActionDispatch::default();
+        let revision = DecimalInt::parse("9007199254740993").unwrap();
+        dispatch.receive(action_batch("9007199254740992", 1), &revision, &flags, 4);
+        dispatch.receive(action_batch(revision.as_str(), 1), &revision, &flags, 3);
+        dispatch.receive(action_batch(revision.as_str(), 5), &revision, &flags, 4);
+        assert!(dispatch.queued.is_empty());
+        dispatch.receive(action_batch(revision.as_str(), 4), &revision, &flags, 4);
+        dispatch.receive(action_batch(revision.as_str(), 4), &revision, &flags, 4);
+        assert_eq!(dispatch.queued.len(), 4);
+        let mut request = dispatch.queued.pop_front().unwrap();
+        assert!(request.current());
+        for flag in [&flags.paused, &flags.suspended, &flags.stopping] {
+            flag.store(true, Ordering::Release);
+            assert!(!request.current());
+            flag.store(false, Ordering::Release);
+        }
+        flags.generation.store(5, Ordering::Release);
+        assert!(!request.current());
+        flags.generation.store(4, Ordering::Release);
+        request.deadline = Instant::now() - Duration::from_millis(1);
+        assert!(!request.current());
+        request.deadline = Instant::now() + Duration::from_secs(5);
+        request.cancel();
+        assert!(!request.current());
+        dispatch.clear();
+        assert!(dispatch.queued.is_empty());
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn blocked_action_has_one_worker_and_clear_cancels_late_show_without_waiting() {
+        let flags = action_flags();
+        let mut dispatch = ActionDispatch::default();
+        let revision = DecimalInt::parse("2").unwrap();
+        dispatch.receive(action_batch("2", 4), &revision, &flags, 4);
+        let (entered, notified) = tokio::sync::oneshot::channel();
+        let entered = Mutex::new(Some(entered));
+        let (release, gate) = mpsc::sync_channel(1);
+        let gate = Mutex::new(gate);
+        let calls = Arc::new(AtomicU64::new(0));
+        let observed = calls.clone();
+        let late_show = Arc::new(AtomicBool::new(false));
+        let shown = late_show.clone();
+        let callback: Action = Arc::new(move |request| {
+            observed.fetch_add(1, Ordering::AcqRel);
+            if let Some(sender) = entered.lock().unwrap().take() {
+                let _ = sender.send(request.clone());
+            }
+            let _ = gate.lock().unwrap().recv();
+            shown.store(request.current(), Ordering::Release);
+            Err(ErrorCode::WindowUnavailable)
+        });
+        assert!(dispatch.step(&callback).await.is_none());
+        let old = tokio::time::timeout(Duration::from_secs(1), notified)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(dispatch.step(&callback).await.is_none());
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+        dispatch.clear();
+        assert!(!old.current());
+        assert!(dispatch.queued.is_empty());
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while dispatch
+                .work
+                .as_ref()
+                .is_some_and(|(_, task)| !task.is_finished())
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(dispatch.step(&callback).await.is_none());
+        assert!(!late_show.load(Ordering::Acquire));
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn expired_running_action_reports_failure_once_and_old_results_cannot_replace_state() {
+        let flags = action_flags();
+        let mut dispatch = ActionDispatch::default();
+        dispatch.receive(
+            action_batch("2", 1),
+            &DecimalInt::parse("2").unwrap(),
+            &flags,
+            4,
+        );
+        let (release, gate) = mpsc::sync_channel(1);
+        let gate = Mutex::new(gate);
+        let callback: Action = Arc::new(move |_| {
+            let _ = gate.lock().unwrap().recv();
+            Ok(())
+        });
+        dispatch.step(&callback).await;
+        dispatch.work.as_mut().unwrap().0.deadline = Instant::now() - Duration::from_millis(1);
+        assert_eq!(
+            dispatch.step(&callback).await,
+            Some(Err(ErrorCode::WindowUnavailable))
+        );
+        assert!(dispatch.step(&callback).await.is_none());
+        flags.generation.store(5, Ordering::Release);
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while dispatch
+                .work
+                .as_ref()
+                .is_some_and(|(_, task)| !task.is_finished())
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(dispatch.step(&callback).await.is_none());
+        let data = Mutex::new(state(TaskbarRuntimeState::Embedded));
+        let notify: Changed = Arc::new(|_| {});
+        publish_action(&data, &notify, Some(ErrorCode::WindowUnavailable));
+        assert_eq!(data.lock().unwrap().state, TaskbarRuntimeState::Embedded);
+        assert_eq!(
+            data.lock().unwrap().action_error,
+            Some(ErrorCode::WindowUnavailable)
+        );
+        publish_action(&data, &notify, None);
+        assert!(data.lock().unwrap().action_error.is_none());
+    }
     fn state(state: TaskbarRuntimeState) -> TaskbarRuntimeSnapshot {
         TaskbarRuntimeSnapshot {
             revision: DecimalInt::parse("1").unwrap(),
@@ -853,6 +1205,7 @@ mod tests {
             compact: None,
             fallback_visible: None,
             fallback_error: None,
+            action_error: None,
             last_cleanup: None,
             last_snapshot_at_ms: None,
         }
@@ -894,6 +1247,7 @@ mod tests {
             paused: AtomicBool::new(false),
             suspended: AtomicBool::new(false),
             generation: AtomicU64::new(4),
+            owned_host_pid: AtomicU64::new(0),
         });
         let data = Arc::new(Mutex::new(state(TaskbarRuntimeState::Unavailable)));
         let request = FallbackRequest {
@@ -940,6 +1294,7 @@ mod tests {
                 let _ = gate.lock().unwrap().recv();
                 Ok(true)
             }),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         let old = notified.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -978,6 +1333,7 @@ mod tests {
                 }
                 Ok(native_visible.load(Ordering::Acquire))
             }),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         wait(&service, |s| s.fallback_visible == Some(true));
@@ -1006,6 +1362,7 @@ mod tests {
                 request.cancel();
                 Err(ErrorCode::WindowUnavailable)
             }),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         wait(&service, |s| {
@@ -1053,6 +1410,7 @@ mod tests {
             Arc::new(|_| {}),
             Arc::new(|_| {}),
             Arc::new(|_| Ok(false)),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         notified.recv_timeout(Duration::from_secs(3)).unwrap();
@@ -1094,6 +1452,7 @@ mod tests {
             Arc::new(|_| {}),
             Arc::new(|_| {}),
             Arc::new(|_| Ok(false)),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         wait(&service, |s| {
@@ -1126,6 +1485,7 @@ mod tests {
             }),
             Arc::new(|_| {}),
             Arc::new(|_| Ok(false)),
+            Arc::new(|_| Ok(())),
         )
         .unwrap();
         let until = Instant::now() + Duration::from_secs(15);

@@ -144,6 +144,7 @@ pub struct TaskbarRuntimeSnapshot {
     pub compact: Option<bool>,
     pub fallback_visible: Option<bool>,
     pub fallback_error: Option<crate::error::ErrorCode>,
+    pub action_error: Option<crate::error::ErrorCode>,
     pub last_cleanup: Option<TaskbarCleanupOutcome>,
     pub last_snapshot_at_ms: Option<EpochMs>,
 }

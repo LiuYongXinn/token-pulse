@@ -325,7 +325,9 @@ impl PointerRestore {
     fn save() -> Self {
         let mut point = Default::default();
         assert_ne!(
-            unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point) },
+            unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::GetPhysicalCursorPos(&mut point)
+            },
             0
         );
         Self(point)
@@ -335,7 +337,7 @@ impl PointerRestore {
 impl Drop for PointerRestore {
     fn drop(&mut self) {
         unsafe {
-            windows_sys::Win32::UI::WindowsAndMessaging::SetCursorPos(self.0.x, self.0.y);
+            windows_sys::Win32::UI::WindowsAndMessaging::SetPhysicalCursorPos(self.0.x, self.0.y);
         }
     }
 }

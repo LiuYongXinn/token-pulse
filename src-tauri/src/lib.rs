@@ -232,6 +232,11 @@ pub fn run() {
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
                 #[cfg(windows)]
+                if std::env::args().any(|arg| arg == "--native-taskbar-actions-smoke") {
+                    taskbar_smoke::start_actions(app.handle().clone());
+                    return Ok(());
+                }
+                #[cfg(windows)]
                 if std::env::args().any(|arg| arg == "--native-taskbar-smoke") {
                     taskbar_smoke::start(app.handle().clone());
                     return Ok(());

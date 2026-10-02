@@ -561,3 +561,6 @@ M13e1 扩展正式 TaskbarRuntimeSnapshot：fallback_visible 为实际回退观�
 
 
 M13e2a 的独立宿主协议新增严格 get_actions / actions，最多 4 项受限动作及 nullable 精确配置修订；实际 UI 队列取走后才回复，不采用 unsolicited action 帧。普通刷新保持、配置 / 隐私 / 脱离清空，主端执行尚待接入；应用前端 IPC 未增加任意动作接口。权威字段 / schema 及验证边界见宿主协议。
+
+
+M13e2b 扩展 TaskbarRuntimeSnapshot.action_error（nullable ErrorCode），为窗口执行失败的独立状态，下一次成功动作清除；不覆盖原生嵌入 / 回退结果。主端在受控宿主通道拉取受限意图并复用 mini_stats_requested / get_mini_stats_request，同范围统计保持原子快照与精确设置修订。mini_interaction_changed 只使交互状态失效，mini 重新调用 mini_window_action.read，并以查询序号拒绝旧响应；事件载荷不直接更新 UI。前端无新增任意动作 / 窗口 / 路径命令。

@@ -95,10 +95,91 @@ pub(super) fn initialize(app: &tauri::AppHandle) {
                     .map_err(|_| ErrorCode::WindowUnavailable)
             })
         },
+        {
+            let action_app = app.clone();
+            Arc::new(move |request| execute_action(&action_app, &request))
+        },
     );
     if let Ok(service) = result {
         if let Ok(mut slot) = app.state::<super::RuntimeState>().taskbar.lock() {
             *slot = Some(Arc::new(service));
+        }
+    }
+}
+fn execute_action(
+    app: &tauri::AppHandle,
+    request: &super::taskbar_service::ActionRequest,
+) -> Result<(), ErrorCode> {
+    use token_pulse_taskbar::HostAction;
+    if !request.current() {
+        return Ok(());
+    }
+    let runtime = app.state::<super::RuntimeState>();
+    let db = runtime.database.as_ref().map_err(|e| e.code)?;
+    let configuration = db.taskbar_preferences().map_err(|e| e.code)?;
+    if !configuration.preferences.enabled
+        || configuration.settings_revision != request.settings_revision
+    {
+        return Err(ErrorCode::RevisionConflict);
+    }
+    if !request.current() {
+        return Ok(());
+    }
+    match &request.action {
+        HostAction::OpenFloat {} => {
+            super::mini_window::show_taskbar(app, request).map_err(|_| ErrorCode::WindowUnavailable)
+        }
+        HostAction::OpenStats {} => {
+            let id = uuid::Uuid::new_v4().to_string();
+            let at = token_pulse_core::numeric::EpochMs::new(
+                token_pulse_collector::jobs::now_ms().map_err(|e| e.code)?,
+            )?;
+            let usage = db.mini_usage(at, &id).map_err(|e| e.code)?;
+            let data = token_pulse_core::mini::open_stats_request(
+                &usage,
+                &token_pulse_core::mini::MiniStatsOpenRequest {
+                    expected_settings_revision: request.settings_revision.clone(),
+                },
+                id,
+            )?;
+            let owned_app = app.clone();
+            on_main_thread(app, request, move || {
+                *owned_app
+                    .state::<super::RuntimeState>()
+                    .mini_stats_request
+                    .lock()
+                    .map_err(|_| ErrorCode::WindowUnavailable)? = Some(data);
+                let _ = owned_app.emit_to("main", "mini_stats_requested", ());
+                super::show_main(&owned_app).map_err(|_| ErrorCode::WindowUnavailable)
+            })
+        }
+        // Menu intentions have no producer yet. Never turn an unknown intention into a command.
+        HostAction::OpenTaskbarSettings {}
+        | HostAction::SetPrivacy { .. }
+        | HostAction::DisableTaskbar {} => Err(ErrorCode::TaskbarUnsupported),
+    }
+}
+pub(super) fn on_main_thread(
+    app: &tauri::AppHandle,
+    request: &super::taskbar_service::ActionRequest,
+    work: impl FnOnce() -> Result<(), ErrorCode> + Send + 'static,
+) -> Result<(), ErrorCode> {
+    let owned_request = request.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let result = if owned_request.current() {
+            work()
+        } else {
+            Ok(())
+        };
+        let _ = sender.send(result);
+    })
+    .map_err(|_| ErrorCode::WindowUnavailable)?;
+    match receiver.recv_timeout(std::time::Duration::from_secs(5)) {
+        Ok(result) => result,
+        Err(_) => {
+            request.timeout();
+            Err(ErrorCode::WindowUnavailable)
         }
     }
 }
