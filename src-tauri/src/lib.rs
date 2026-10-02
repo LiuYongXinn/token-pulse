@@ -188,6 +188,7 @@ pub fn run() {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
                 database.interrupt_unfinished_jobs(now)?;
                 database.interrupt_rollup_builds()?;
+                database.interrupt_valuation_builds()?;
                 // Native fixtures keep their explicit empty price state, except the catalog scene.
                 let install_catalog = !cfg!(debug_assertions)
                     || !std::env::args().any(|arg| arg == "--native-smoke")

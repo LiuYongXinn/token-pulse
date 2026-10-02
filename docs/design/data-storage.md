@@ -497,6 +497,12 @@ M09g1b 已接正常启动发布（在 Collector 启动之前）和主窗口目�
 - event_time 用 occurred_at；specified_time 用明确的估价时点，不能把“当前”隐含为每次查询的系统时间。
 - 缓存字段缺失且价格需要拆分时为 insufficient_usage；已知缓存为零时不要求缓存单价。来源额外 cache_write 只有语义与单价明确时才能增加计价维度，否则保持未计价标记。
 - `valuation_sets` 为缓存，不是事实账本；只使用 ready 且价格版本 / 估价模式匹配的项。新事件缺失缓存时按同一规则版本即时计算，不能回退为零。
+
+M09g2a 已接持久事件费用缓存读写基础：schema v5 使用既有 `valuation_sets` / `event_valuations`，追加 `valuation_cache_sets`（账本证据修订、解析 / 核算 / 缓存版本、数量、发布摘要）与 `valuation_cache_inputs`（事件的计价输入 SHA-256）。不修改历史 migration 或事实表。指纹含算法版本、核算版本、提供方、确切模型、全体真实来源 ID、事件时间和完整 Token 向量；UI 来源筛选不能缩小计价证据。读取同时匹配 price revision、event_time / specified_time 及确切估价时点；未知金额保留 null，存在真实零价时才存零。费用缓存不改变 data / price / settings revision 或采集检查点。
+
+`build_event_valuation_interruptible` 在单一实际 SQLite 读事务捕获账本和价格，流式计算并每 500 行通过 Writer 写入 building 候选，无全历史事件向量驻留。发布前重新校验活跃账本、证据修订、解析 / 核算版本，复核持久行数量与完整候选摘要，再同事务设置 ready。取消、事实变化和发布失败留下不可读候选，先前 ready 结果保留。缓存版本或事件输入变化即失配；旧 SQLite 租约仍读取原始事实 / 规则 / 缓存。读取方每次查询创建并复用 CacheReader，没有匹配 ready 集合时仅检查一次后直接计价。金额使用十进制整数原子，不经过 SQLite REAL / JS Number。总览 / 分组 / 会话 / 回合 / 小窗共用 visit 读法，明细租约单独接同一读法。
+
+本模块提供内部构建 / 进度回调 / 取消信号及启动中断处理；独立后台服务、正式重估作业与进度 / 取消 UI 尚未接入，不能将持久表和内部构建 API 视为完整 M09 重估交付。部分发布缓存和未命中事件始终以同一快照版本即时补算，不混用新旧价格。
 - price_revision 改变通知前端刷新；查询响应同时带 data_revision 与 price_revision。构建期间显示重估状态，不能混用两个价格版本。
 - 查询或租约捕获的 price_revision 固定规则与别名：`introduced_revision <= revision` 且 `retired_revision IS NULL OR retired_revision > revision`。内存 PricingService 必须按该版本取不可变规则，不能使用“最新规则”解释旧快照。
 

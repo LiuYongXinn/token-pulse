@@ -85,6 +85,7 @@ fn rows(
         p.sql
     );
     let catalog = crate::pricing::catalog_at(tx, revision.price)?;
+    let mut cache = crate::valuation::CacheReader::new(tx, &catalog.revision, &query.price_basis)?;
     let mut statement = tx.prepare(&sql)?;
     let mut result = statement.query(params_from_iter(values))?;
     let mut events = Vec::new();
@@ -132,16 +133,17 @@ fn rows(
         {
             return Err(ErrorCode::DbCorrupt.into());
         }
-        let price = catalog.estimate(
-            &PricingEvent {
-                provider: provider.as_deref(),
-                model: model.as_deref(),
-                source_ids: &source_ids,
-                occurred_at_ms,
-                usage,
-            },
-            &query.price_basis,
-        );
+        let pricing_event = PricingEvent {
+            provider: provider.as_deref(),
+            model: model.as_deref(),
+            source_ids: &source_ids,
+            occurred_at_ms,
+            usage,
+        };
+        let fingerprint = crate::valuation::fingerprint(&pricing_event, &version)?;
+        let price = cache
+            .lookup(&event_id, &fingerprint)?
+            .unwrap_or_else(|| catalog.estimate(&pricing_event, &query.price_basis));
         events.push(UsageEventRow {
             event_id,
             session_key,

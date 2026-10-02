@@ -1,5 +1,5 @@
 //! Same-snapshot event pricing. Source filters select facts, never price identity.
-use super::{FROM, predicate};
+use super::{FROM, Predicate, predicate};
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{Transaction, params_from_iter};
 use token_pulse_core::{
@@ -21,20 +21,64 @@ pub struct PricedEvent {
     pub turn_id: Option<String>,
     pub total_tokens: i64,
     pub outcome: PriceOutcome,
+    pub(crate) cache_fingerprint: String,
 }
 pub fn visit(
     tx: &Transaction<'_>,
     filter: &UsageFilter,
     basis: &PriceBasis,
     catalog: &PriceCatalog,
-    mut consume: impl FnMut(PricedEvent) -> StoreResult<()>,
+    consume: impl FnMut(PricedEvent) -> StoreResult<()>,
 ) -> StoreResult<()> {
     let p = predicate(filter)?;
+    visit_where(tx, p, basis, catalog, true, consume)
+}
+pub(crate) fn visit_ledger_uncached(
+    tx: &Transaction<'_>,
+    ledger: &str,
+    basis: &PriceBasis,
+    catalog: &PriceCatalog,
+    consume: impl FnMut(PricedEvent) -> StoreResult<()>,
+) -> StoreResult<()> {
+    visit_where(
+        tx,
+        Predicate {
+            sql: "e.ledger_id=?".into(),
+            values: vec![rusqlite::types::Value::Text(ledger.into())],
+        },
+        basis,
+        catalog,
+        false,
+        consume,
+    )
+}
+fn visit_where(
+    tx: &Transaction<'_>,
+    p: Predicate,
+    basis: &PriceBasis,
+    catalog: &PriceCatalog,
+    use_cache: bool,
+    mut consume: impl FnMut(PricedEvent) -> StoreResult<()>,
+) -> StoreResult<()> {
+    let mut cache = if use_cache {
+        Some(crate::valuation::CacheReader::new(
+            tx,
+            &catalog.revision,
+            basis,
+        )?)
+    } else {
+        None
+    };
     // The global source registry is bounded at 32. LIMIT 33 detects violation;
     // it never silently drops a source from rule matching. Mirrors are DISTINCT.
     let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY LIMIT 33))";
+    let order = if use_cache {
+        ""
+    } else {
+        " ORDER BY e.event_id COLLATE BINARY"
+    };
     let sql = format!(
-        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id FROM {FROM} WHERE {}",
+        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id FROM {FROM} WHERE {}{order}",
         p.sql
     );
     let mut statement = tx.prepare(&sql)?;
@@ -71,18 +115,23 @@ pub fn visit(
         {
             return Err(ErrorCode::DbCorrupt.into());
         }
-        let outcome = catalog.estimate(
-            &PricingEvent {
-                provider: provider.as_deref(),
-                model: model.as_deref(),
-                source_ids: &sources,
-                occurred_at_ms,
-                usage,
-            },
-            basis,
-        );
+        let event_id: String = row.get(0)?;
+        let event = PricingEvent {
+            provider: provider.as_deref(),
+            model: model.as_deref(),
+            source_ids: &sources,
+            occurred_at_ms,
+            usage,
+        };
+        let cache_fingerprint = crate::valuation::fingerprint(&event, &version)?;
+        let cached = if let Some(cache) = &mut cache {
+            cache.lookup(&event_id, &cache_fingerprint)?
+        } else {
+            None
+        };
+        let outcome = cached.unwrap_or_else(|| catalog.estimate(&event, basis));
         consume(PricedEvent {
-            event_id: row.get(0)?,
+            event_id,
             ledger_id: row.get(1)?,
             session_key: row.get(2)?,
             provider,
@@ -92,6 +141,7 @@ pub fn visit(
             turn_id: row.get(14)?,
             total_tokens: total,
             outcome,
+            cache_fingerprint,
         })?;
     }
     Ok(())

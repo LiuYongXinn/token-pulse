@@ -4,6 +4,8 @@
 
 M09g1b 已接正常应用启动和主窗口正式目录。运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -OfflinePrices`：在隔离库走正常目录启动发布，实际 main / mini WebView 验证 172 事实 / 37 可用规则、历史 null / 非法修订、搜索 / 模式 / 历史切换、mini 拒绝、共享隐私清空与重开新查询、重复发布不增修订和消费不变。Win10 19045 / 150% DPI 场景打印 NATIVE_OFFLINE_PRICES_OK，退出 0；WebView2 1412 保留。普通 debug / release 独立应用都使用内置目录；其他原生夹具仍保留显式空价格，避免混入市场价。定向浏览器 `npx playwright test tests/ui/offline-prices.spec.ts tests/ui/prices.spec.ts` 6 项通过；截图位于忽略的 test-results/offline-prices-*.png，合成 bridge 与公开事实用于检查界面，不冒充生产账户 / 用量。
 
+M09g2a 的 `cargo test -p token-pulse-store valuation --lib` 使用合成价格 / 事件和真实 SQLite，8 项通过：持久重开 / 检查点保持、超 JS 安全整数的精确金额、估价模式 / 时点隔离、旧真实快照、镜像证据 / 来源筛选、跨 500 行事务取消、候选过期 / 新事件即时计算、发布失败保留旧缓存。601 事件只用于跨批次功能检查，无性能测量或报告。schema v5 的普通 store lib 为 179 通过 / 1 性能夹具 ignored；store / desktop strict Clippy、fmt 通过。缓存构建暂为内部 API，实际 Windows 目录场景仅是启动 / 既有 IPC 回归，不能证明正式后台重估 UI 已完成。
+
 当前交付环境为 Windows 10 / 11 与本地来源，多屏与各档 DPI 兼容继续验收。macOS、WSL / 网络来源、开机启动、额外快捷键及旧格式自动重解析不再新增；诊断简化、安装打包做简单版，notify、自动更新与完整计价功能保留。详见[已确认范围](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。
 
 实现依据：[开发总入口](../design/development-design.md)、[实施计划](implementation-plan.md)。当前进度与真实验收结果见[交付记录](delivery-status.md)。

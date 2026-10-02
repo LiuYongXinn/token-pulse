@@ -21,6 +21,7 @@ pub mod rollup;
 pub mod rollup_service;
 pub mod settings;
 pub mod source_management;
+pub mod valuation;
 pub use database::{Database, Revision, SourceRecord};
 pub use registration::{FileRegistration, SessionRegistration};
 pub use rusqlite;
