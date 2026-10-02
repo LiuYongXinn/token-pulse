@@ -50,7 +50,7 @@ impl NotifyRegistration {
         chain_original: bool,
     ) -> Result<Self, RegistryError> {
         let home_text = home.to_str().ok_or(RegistryError::InvalidRecord)?;
-        if !home.is_absolute()
+        if !local_absolute_path(home)
             || home_text.len() > 4096
             || home_text.chars().any(char::is_control)
             || restore.installed_arguments().get(3).map(String::as_str)
@@ -122,4 +122,19 @@ pub(crate) fn valid_registration_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+pub(crate) fn local_absolute_path(path: &Path) -> bool {
+    if !path.is_absolute() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+        matches!(path.components().next(),Some(Component::Prefix(prefix)) if matches!(prefix.kind(),Prefix::Disk(_) | Prefix::VerbatimDisk(_)))
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
 }

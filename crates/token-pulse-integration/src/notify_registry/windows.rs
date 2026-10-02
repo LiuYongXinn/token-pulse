@@ -2,7 +2,7 @@
 mod files;
 use super::{
     MAX_REGISTRATION_BYTES, MAX_REGISTRATIONS, NotifyRegistration, RegistryError,
-    valid_registration_id,
+    local_absolute_path, valid_registration_id,
 };
 use crate::notify_channel::NotifyCapability;
 use std::{
@@ -17,7 +17,7 @@ pub struct NotifyRegistry {
 }
 impl NotifyRegistry {
     pub fn open(app_directory: &Path) -> Result<Self, RegistryError> {
-        if !app_directory.is_absolute() {
+        if !local_absolute_path(app_directory) {
             return Err(RegistryError::UnsafePath);
         }
         files::require_plain_directory(app_directory)?;
@@ -42,7 +42,7 @@ impl NotifyRegistry {
         self.check_root()?;
         // Deny sharing while allocating a registration, so separate processes cannot exceed the limit.
         let _guard = files::allocation_guard(&self.root.join(".registry.lock"))?;
-        if self.registrations()?.len() >= MAX_REGISTRATIONS {
+        if self.registration_ids()?.len() >= MAX_REGISTRATIONS {
             return Err(RegistryError::LimitReached);
         }
         let bytes = serde_json::to_vec(registration).map_err(|_| RegistryError::InvalidRecord)?;
@@ -88,6 +88,13 @@ impl NotifyRegistry {
         Ok(registration)
     }
     pub fn registrations(&self) -> Result<Vec<NotifyRegistration>, RegistryError> {
+        self.registration_ids()?
+            .iter()
+            .map(|id| self.get(id))
+            .collect()
+    }
+    /// Bounded identities only; one corrupt record does not prevent other profiles from loading.
+    pub fn registration_ids(&self) -> Result<Vec<String>, RegistryError> {
         self.check_root()?;
         let mut registrations = Vec::new();
         for (count, entry) in std::fs::read_dir(&self.root)
@@ -104,16 +111,15 @@ impl NotifyRegistry {
             let Some(id) = name.strip_suffix(".registration.json") else {
                 continue;
             };
-            registrations.push(self.get(id)?);
+            if !valid_registration_id(id) {
+                return Err(RegistryError::InvalidRecord);
+            }
+            registrations.push(id.to_owned());
             if registrations.len() > MAX_REGISTRATIONS {
                 return Err(RegistryError::LimitReached);
             }
         }
-        registrations.sort_by(|a, b| {
-            a.capability()
-                .registration_id()
-                .cmp(b.capability().registration_id())
-        });
+        registrations.sort();
         Ok(registrations)
     }
     /// A zero-byte dirty bit per registration coalesces all offline hints. No identity/body is saved.
@@ -140,13 +146,13 @@ impl NotifyRegistry {
     }
     /// Rename before acknowledging, so completion cannot remove a newly arrived wake marker.
     pub fn claim_pending(&self, id: &str) -> Result<Option<PendingWake>, RegistryError> {
-        self.get(id)?;
         let pending = self.named(id, ".wake")?;
         match require_marker(&pending) {
             Ok(()) => {}
             Err(RegistryError::NotFound) => return Ok(None),
             Err(error) => return Err(error),
         }
+        self.get(id)?;
         let claimed = self
             .root
             .join(format!("{id}.claim.{}", uuid::Uuid::new_v4().simple()));
@@ -160,6 +166,53 @@ impl NotifyRegistry {
             Err(RegistryError::NotFound) => Ok(None),
             Err(error) => Err(error),
         }
+    }
+    pub fn has_pending(&self, id: &str) -> Result<bool, RegistryError> {
+        match require_marker(&self.named(id, ".wake")?) {
+            Ok(()) => Ok(true),
+            Err(RegistryError::NotFound) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+    pub(crate) fn service_guard(&self) -> Result<std::fs::File, RegistryError> {
+        self.check_root()?;
+        files::allocation_guard(&self.root.join(".service.lock"))
+    }
+    /// Called only by the single service owner on startup, never by headless marker writers.
+    pub(crate) fn recover_claims(&self) -> Result<(), RegistryError> {
+        self.check_root()?;
+        for (count, entry) in std::fs::read_dir(&self.root)
+            .map_err(|_| RegistryError::Io)?
+            .enumerate()
+        {
+            if count >= 128 {
+                return Err(RegistryError::LimitReached);
+            }
+            let entry = entry.map_err(|_| RegistryError::Io)?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some((id, claim_id)) = name.split_once(".claim.") else {
+                continue;
+            };
+            if !valid_registration_id(id) || !valid_registration_id(claim_id) {
+                return Err(RegistryError::InvalidMarker);
+            }
+            self.get(id)?;
+            let claimed = entry.path();
+            require_marker(&claimed)?;
+            let pending = self.named(id, ".wake")?;
+            match files::move_new(&claimed, &pending) {
+                Ok(()) => {}
+                Err(RegistryError::AlreadyExists) => {
+                    require_marker(&pending)?;
+                    std::fs::remove_file(claimed).map_err(|_| RegistryError::Io)?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
     }
 }
 

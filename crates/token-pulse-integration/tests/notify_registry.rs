@@ -73,6 +73,18 @@ fn record_links_the_same_registration_and_requires_explicit_original_chain_choic
         .unwrap(),
         RegistryError::InvalidRecord
     );
+    #[cfg(windows)]
+    assert_eq!(
+        NotifyRegistration::from_prepared(
+            Path::new(r"\\server\share\codex-home"),
+            registered.capability().clone(),
+            registered.restore_record().clone(),
+            false
+        )
+        .err()
+        .unwrap(),
+        RegistryError::InvalidRecord
+    );
 }
 #[test]
 fn malformed_persisted_records_cannot_change_version_home_identity_or_choice_defaults() {

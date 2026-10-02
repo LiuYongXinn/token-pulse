@@ -2,7 +2,9 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02，M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+## 当前交付状态（2026-10-03，M15b3 / M15b2 / M15a3 / M15b1 / M15a2 / M13e7 / M11h / M10d2 / M06f8）
+
+M15b3 已接正式主进程 notify owner / CollectorService 原子补扫标志与离线 claim 消费，初始化未知侦听数保持 null，错误 / reload / 单 owner / 正常关闭就绪。新增实际 Win10 服务 4 项通过；正式 `native-smoke.ps1 -Notify` 从 headless 子进程经真实主 owner 到 SQLite 的 3→10→11、重复不重计 / 来源暂停、隐藏主窗不激活、源只读 / 配置不变全部通过，退出 0。integration 总 37 项、正式 headless 3 项及 strict Clippy / release check 通过；尚未改真实用户配置，文件启用 / 撤销、原命令 runner 和设置 UI 继续实现。下方 M15b2 的“主进程 / 离线消费待接入”按本增量收敛，完整目标保持进行中。
 
 M15b2 已接正式 exe 在 Tauri 之前的严格 headless 唤醒入口：当前 exe / 当前配置所有权核对、允许字段 / 有界只读配置、在线通道 / 离线零字节标记。新增 integration 4 项、正式 exe Win10 跨进程 3 项通过，integration 合计 33 项 / desktop headless 3 项；两模块 strict Clippy all-targets / fmt / release check 通过。原命令链 runner、正式主进程补扫 / 标记消费、配置文件启用 / 撤销和 UI 继续实施，chain_original=true 明确拒绝而不静默跳过或执行新程序。真实用户配置未修改，完整目标仍进行中。
 
@@ -52,6 +54,16 @@ M06f1 最新增量：schema v8 已落地替换文件候选的隔离暂存区、�
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。历史 M14 / 导出副本及迁移保护 / 专门故障恢复待办已由上述范围修订撤销，既有实现和测试记录保留。
 
 账户服务已注册主窗口专用原生程序 / Home 选择、草稿释放、配置保存、连接 / 断开和额度桶选择命令，设置页接入实际 DTO、显示隐私门禁与精确修订。默认不连接，已保存的明确 auto_connect 偏好接启动钩子；程序变化拒绝，配置保存不替换当前连接。用户已确认复用本地已登录账户，新增登录 / 设备码 / 取消登录不在交付范围。本机已通过选定程序和已有 Home 读到真实 ready / 周额度，未发起新登录。主总览与小窗完整额度内容、真实账户持续刷新 / 身份变化、完整冷进程自动连接及 OS 文件选择对话框交互仍待后续；不以单次读取证明全部账户验收。
+
+## M15b3：主进程 notify owner、离线消费与实际采集贯通
+
+正式 setup 在采集器可用时建立 notify 服务，后台唯一 owner 管理配置归属与私有管道；退出在采集器之前停止该 owner / listeners。入口 worker 仅合并标志，真正 callback 只调用 `CollectorService::reconcile` 的原子请求，没有直接读日志、写 Token 或费用。监听数初始 None，枚举后返回实际有界数；失败保留有限原因，不用零冒充未知。来源暂停仍由原采集器生效。
+
+有界登记 ID 枚举不读整份恢复记录，逐个读取 / 配置核对，一份损坏记录可单独失效，其他健康来源仍侦听。新登记 / 显式 reload 更新实例，失败有限重试；配置不可读时离线 claim 恢复，不在错误下确认丢弃。普通 owner 启动恢复先前遗留的零字节 claim 并与新 `.wake` 合并，headless 不执行恢复；独立 `.service.lock` 的分享禁止保证不同时领取。登记 Home / 应用目录拒绝 UNC，只保留 Windows 本地磁盘路径。
+
+新增自动服务检查 4 项（真实 Win10 管道 / 文件 / 线程）：启动 marker 与 online / 重复 hint、reload / 正常关闭重开、第二 owner 失败的 null 计数、遗留 claim + 新 marker 合并、配置锁定保留 / 解锁补扫、失效配置清除旧提示、坏记录隔离与修复 / 新登记重新加载。integration 总 37 项与正式 headless 3 项通过；两个包 strict Clippy all-targets / fmt / diff 和 release check 通过。
+
+实际应用验收：`pwsh -NoProfile -File scripts/native-smoke.ps1 -Notify`，Win10 19045，NATIVE_NOTIFY_COLLECTOR_OK / 退出 0。明确 debug 目录、合成只读 Home / JSONL 和测试准备的安装数组，watcher 禁用、活动 / 目录轮询设为一小时以区分本次 wake 与普通补扫。空来源先完成扫描；停止 notify owner 后追加 3 并调用正式 headless，SQLite 仍 0、零字节 marker 保存；正常重开 owner 消费后变为 3；追加 7 后正式 headless 在线唤醒变为 10，重复提示仍 10；暂停来源追加 1 / 提示仍 10，恢复采集为 11。通知载荷中虚构 999999 Token 未参与核算；隐藏的真实主窗口始终隐藏、源内容与 readonly 属性 / config 字节不变，正常退出完成。WebView2 仍输出与此前相同的 Chrome_WidgetWin_0 unregister 1412；不是通知失败，发布环境继续复核。此场景不是真实用户 Codex 回合或保真配置写入器验收，未运行性能测试。配置启用 / 撤销、受控原命令 runner、main-only IPC / 设置 UI、其余保留范围继续推进。
 
 ## M15b2：正式 exe 的只读 headless 唤醒入口
 

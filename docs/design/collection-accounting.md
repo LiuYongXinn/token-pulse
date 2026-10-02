@@ -222,6 +222,8 @@ Publishing 是短事务临界段，不接受强制中断；已进入该段的取
 
 ## 8. notify 唤醒与恢复路径
 
+M15b3 已接正式主进程的单一 notify owner：私有文件分享锁限制同一应用目录一个服务，独立 worker 管理有界登记、配置 / exe 归属与管道，online 提示只设置合并标志并排入 `CollectorService::reconcile`，不创建事件。离线 claim 在补扫请求排入后确认；读配置失败释放 claim 使标记继续保留，已知配置不再归属则清除过时提示。正常启动由唯一 owner 恢复遗留的私有零字节 claim 并与新 marker 合并；这只处理 notify 队列，不扩展已取消的数据恢复功能。登记名的有界枚举与各记录读取分开，一个损坏记录不阻止健康登记加载；显式 reload / 有限错误重试可恢复。初始化未完成或 owner 不可用时 listener_count 保持 null，枚举后的实际侦听数才可为零。Home 与应用目录限定 Windows 本地绝对磁盘路径，UNC 拒绝，未增加网络来源。退出先停止 notify，再停采集器。正式 Win10 主程序 / headless / 真实补扫 / SQLite / 隐藏窗口场景已通过；保真文件启用 / 撤销、原命令 runner 与设置 UI 继续实施。
+
 M15b2 已接正式 exe 的唤醒专用 headless 分支，先于 Tauri / 单实例处理。参数仅接受 `--tokenpulse-notify --integration <32 位小写 hex 注册标识> <一个 JSON 参数>`，错误位置 / 额外参数拒绝，不误打开 GUI；正文、cwd、未知字段读取后丢弃，只返回 core 最小 hint。读取当前用户私有登记，安装 exe 必须与 current_exe 相同，明确 Home/config.toml 只读有界、拒绝目录重解析 / 文件重解析与硬链接；根 notify 解码参数与恢复记录相同才视为已启用。在线发送 300 ms 有界提示，确认失败保存零字节离线标记，陌生事件 / 已改变 notify 不唤醒。应用目录解析与当前 Tauri app_local_data_dir 使用同一 dirs / 标识约定；测试专用目录分支仅 debug 且只能选 AppData 下验证过的子目录名，release 不包含该分支。原命令链 runner 尚未接入，正式 exe 对 chain_original=true 明确拒绝而不执行任意程序；该限制与正式启用 / UI 未开放同时保留，不能视为整套 notify 交付。主进程 listener / CollectorService 回调、标记消费和配置文件启用 / 撤销继续实施。
 
 M15a3 已接应用目录下独立 `notify` 登记 / 离线标记存储库。Win32 明确设置当前用户 owner / protected DACL；原目录或文件权限不符合时拒绝，不静默改权限。根目录、文件种类 / reparse point / hard link、有限 JSON 记录和文件名注册标识在读取前校验；记录仅含版本、目标 Home、同一注册 capability、原 notify 恢复信息和明确原命令链选择，不复制其他配置或原始日志。写入先创建私有临时文件并同步，再不覆盖地原子改名，登记不可变，跨进程文件分享锁保护 16 条上限。离线提示只创建该注册的零字节 dirty bit，最多一份当前标记，不保存线程 / 回合或正文；领取时先改名为私有唯一 claim，完成仅删 claim，所以同时到达的新标记仍保留。未完成对象正常释放时恢复或合并标记；IO 失败保留 claim，由正常启动日志扫描保证统计依据。该库尚未接正式进程或修改用户 config.toml；其受限元数据不是被取消的统计备份 / 数据恢复功能。

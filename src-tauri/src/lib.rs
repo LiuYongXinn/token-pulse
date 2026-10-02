@@ -12,6 +12,13 @@ use token_pulse_core::{
 };
 
 struct RuntimeState {
+    #[cfg(windows)]
+    notify: std::sync::Mutex<
+        Result<
+            token_pulse_integration::notify_service::NotifyService,
+            token_pulse_integration::notify_registry::RegistryError,
+        >,
+    >,
     taskbar: std::sync::Mutex<Option<std::sync::Arc<taskbar_service::TaskbarService>>>,
     quota_selections:
         std::sync::Arc<std::sync::Mutex<token_pulse_core::quota::AccountServiceSelections>>,
@@ -185,7 +192,10 @@ pub fn run() {
             }
             let data_directory = app.path().app_local_data_dir()?;
             #[cfg(debug_assertions)]
-            let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))} else {data_directory};
+            let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {
+                if std::env::args().any(|arg|arg=="--native-notify-smoke") {data_directory.join(format!("native-notify-{}",uuid::Uuid::new_v4().simple()))}
+                else {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
+            } else {data_directory};
             token_pulse_store::prepare_data_directory(&data_directory)?;
             let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
@@ -202,7 +212,14 @@ pub fn run() {
                 if std::env::args().any(|arg|arg=="--native-smoke") && std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::seed(&database)?;}
                 Ok(database)
             });
-            let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),Default::default()).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
+            let options=token_pulse_collector::service::CollectorOptions::default();
+            #[cfg(debug_assertions)]
+            let options=if std::env::args().any(|arg|arg=="--native-smoke") && std::env::args().any(|arg|arg=="--native-notify-smoke") {
+                token_pulse_collector::service::CollectorOptions {watcher:false,active_poll:std::time::Duration::from_secs(3600),manifest_poll:std::time::Duration::from_secs(3600)}
+            } else {options};
+            let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),options).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
+            #[cfg(windows)]
+            let notify=std::sync::Mutex::new(notify_runtime::start(&data_directory,&collector));
             let jobs=match &database {Ok(database)=>{
                 let notify:std::sync::Arc<dyn Fn()+Send+Sync>=if let Ok(collector)=&collector {let collector=collector.clone();std::sync::Arc::new(move||collector.reconcile())} else {std::sync::Arc::new(||{})};
                 token_pulse_collector::jobs::JobService::start_with_notify(database.clone(),notify)
@@ -215,7 +232,7 @@ pub fn run() {
             let privacy = initial_privacy(&database);
             let notify_app = app.handle().clone();
             let quota = token_pulse_quota::service::AccountQuotaService::start(&uuid::Uuid::new_v4().to_string(), std::sync::Arc::new(move |event| {use tauri::Emitter; let _ = notify_app.emit("account_quota_changed", event);})).map(std::sync::Arc::new);
-            app.manage(RuntimeState { taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
+            app.manage(RuntimeState { #[cfg(windows)] notify, taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
             if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
@@ -245,6 +262,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if std::env::args().any(|arg|arg=="--native-notify-smoke") {notify_smoke::start(app.handle().clone());return Ok(());}
                 #[cfg(windows)]
                 if std::env::args().any(|arg| arg == "--native-recovery-routes-smoke") {shortcuts_smoke::start_routes(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-diagnostics-smoke") {diagnostics_smoke::start(app.handle().clone());return Ok(());}
@@ -319,6 +338,12 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
                 if let Some(state) = app.try_state::<RuntimeState>() {
+                    #[cfg(windows)]
+                    if let Ok(notify) = state.notify.lock() {
+                        if let Ok(service) = notify.as_ref() {
+                            service.shutdown();
+                        }
+                    }
                     if let Ok(quota) = &state.quota {
                         quota.shutdown();
                     }
@@ -355,6 +380,10 @@ mod mini_passthrough;
 #[cfg(debug_assertions)]
 mod mini_smoke;
 mod mini_window;
+#[cfg(windows)]
+mod notify_runtime;
+#[cfg(all(debug_assertions, windows))]
+mod notify_smoke;
 #[cfg(debug_assertions)]
 mod offline_prices_smoke;
 #[cfg(all(debug_assertions, windows))]
