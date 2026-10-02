@@ -423,6 +423,9 @@ mod quota_smoke;
 mod quota_startup_smoke;
 #[cfg(all(debug_assertions, windows))]
 mod quota_taskbar_smoke;
+#[cfg(windows)]
+#[doc(hidden)]
+pub mod release_verifier;
 mod revalue_commands;
 mod settings_commands;
 mod shortcuts;

@@ -16,6 +16,7 @@
     "tauri:build": "tauri build --config src-tauri/tauri.bundle.conf.json",
     "icons": "node scripts/generate-icons.mjs",
     "notices": "node scripts/generate-third-party-notices.mjs --target x86_64-pc-windows-msvc",
+    "release:prepare": "node scripts/prepare-update-release.mjs",
     "contracts": "cargo run -p token-pulse-core --example export_contracts",
     "contracts:check": "cargo run -p token-pulse-core --example export_contracts -- --check"
   },

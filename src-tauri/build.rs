@@ -1,4 +1,8 @@
 fn main() {
+    println!(
+        "cargo:rustc-env=TOKENPULSE_BUILD_TARGET={}",
+        std::env::var("TARGET").expect("Cargo target")
+    );
     println!("cargo:rerun-if-env-changed=TOKENPULSE_UPDATER_PUBLIC_KEY");
     if std::env::var("CARGO_CFG_TARGET_OS").ok().as_deref() == Some("windows") {
         // Cargo's tests-only flags omit the library unit-test harness. Embed its required

@@ -2,6 +2,20 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16d：本地签名发布资产准备
+
+新增 release-only 维护入口，实际桌面 exe 在初始化前核对编译公钥 / 版本、全局签名及可信版本字段，缺失 / 重复 / 版本不符拒绝；create_new 验证记录包含编译 target、公钥摘要、安装包 / 原签名哈希及十进制字节，不包含私钥、认证、来源或本机路径。不启动桌面服务、数据库、网络或安装器，debug 构建没有可用发布验证入口；主窗与 mini 未增加 IPC 权限。已有 notify 维护入口和正常运行顺序保持。
+
+本地 release:prepare 核对三处版本、生产 ID、受支持 Windows target、规范安装文件名、实际编译验签记录和输入字节，说明按后端 UTF-8 字节 / 控制字符约束，发布时间显式 UTC。清单固定本仓库 GitHub v版本资产 URL。输出新目录包含安装包、签名、latest.json 和公开验证记录，旧目录 / 并发新建目录拒绝，失败仅清理身份与父目录已核对的自有临时目录；不上传 / 自动签名 / 生成正式密钥。要求桌面 exe 和安装包来自同次正式构建，不将签名验证当成任意安装包的内部应用身份提取。
+
+自动：Rust 无效材料 / 读取边界检查通过；显式真实 Tauri CLI 临时密钥签名夹具通过，验证正确签名 / 错误公钥 / 改字节 / 不同版本 / 缺版本、精确报告及已存在报告保留。六项 Node 定向检查通过，独立预期核对固定 URL / 版本 / 日期 / target、字节与哈希差异、Unicode 字节 / 控制字符、成功资产原字节、失败 / 桌面变更清理及实际 Windows 并发创建空目标目录不覆盖。脚本工作流使用显式合成 verifier，密码学行为由真实签名 Rust 夹具验证，均不冒充配置正式公钥的生产 exe 成功发布。desktop all-targets strict Clippy 通过；完整构建与实际缺配置入口验证随后记录。未运行性能测试，正式签名发布 / 完整升级仍待发布条件，整体目标继续。
+
+完整 `npm run tauri:build` 成功，最新 0.1.0 本地 NSIS 包 6,605,578 字节，SHA-256 b44ca1fd19aa5c0d782ff905335b15240092d311e9a00a536a75fafdc7de1c62；已包含维护入口、既有宿主 / 前端 / 第三方声明，仍未配置正式公钥或签名。声明仍为 334 项 / 同一 2,986,262 字节及哈希，五项声明生成回归通过；fmt 与 updater 两项边界回归通过，实际 HTTP 签名场景保持显式 ignored，此步没有重复执行。
+
+实际 Win10 19045：新的 release exe 通过精确进程参数启动本维护入口，缺公钥返回 14，不创建报告；正式准备脚本调用该 exe 返回 1，无发布文件或残留暂存目录，NATIVE_RELEASE_CONFIGURATION_REJECT_OK / NATIVE_RELEASE_PREPARATION_REJECT_OK。不执行合成安装器，不启动应用 / 任务栏服务，探测结束 TokenPulse 两类进程数量 0。组合式探测命令一度被工具策略拦截（未给具体原因），改为可审查的分步准备 / 探测 / 非递归清理后完成；没有覆盖正式数据或安装注册。此证据是缺配置拒绝，不是正式签名成功发布或真实升级。
+
+最终代码实际 `-Updates` 回归通过，NATIVE_UPDATES_IPC_OK / 退出 0，真实 main / mini WebView 检查缺配置 / null、严格请求、主窗更新权限、通用插件拒绝及共享隐私，既有正常启动入口未受维护命令影响。WebView2 注销类 1412 提示继续记录；此场景没有下载 / 安装，不替代正式更新验收。
+
 ## M16c：第三方声明与安装包资源
 
 新增按锁文件和目标生成的第三方声明，覆盖 Windows cargo resolve.nodes 中的 327 个 registry 依赖（含构建 / 测试，不声称全部进入运行时）、四个 npm 运行依赖、SQLite amalgamation、NSIS 和安装辅助插件，共 334 项。保留完整 LICENSE / NOTICE / COPYRIGHT / AUTHORS 文本，递归包含 ring 内部 once_cell / fiat 等许可，公开源包精确版本下载地址及 SHA-256；不写入本机绝对路径、账户信息或认证。MPL 依赖给出原版本完整源包入口，SQLite 另取实际 amalgamation 的源声明和版本，不把 Rust wrapper 的 MIT 当作 SQLite 本身许可。NSIS COPYING 包含压缩器条款与原有 LZMA 例外：[NSIS 原文](https://nsis.sourceforge.io/License) / [SQLite 原文](https://www.sqlite.org/copyright.html)。

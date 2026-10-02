@@ -1,10 +1,24 @@
 # 本地开发与运行
 
+## 本地签名发布准备
+
+`npm run release:prepare -- --desktop <同次构建的桌面exe> --installer <NSIS安装包> --signature <安装包.sig> --output <尚不存在的输出目录> --published-at <UTC时间> [--notes <UTF-8说明文件>]` 只生成本地资产，不上传 GitHub、不生成密钥、不读取认证或正式数据。UTC 时间采用 `2026-10-03T00:00:00.000Z` 形式；版本必须在 Cargo workspace、package.json、tauri.conf.json 一致，安装器名称必须为 `TokenPulse_<版本>_x64-setup.exe` 或对应 arm64。生成清单固定使用本仓库 `releases/download/v<版本>/`，无任意发布 URL 参数。
+
+发布者先选择版本并同步上述三处，设置 `TOKENPULSE_UPDATER_PUBLIC_KEY` 为 Tauri base64 公钥的单行正文，再执行 `npm run tauri:build`；公钥文件读取时去掉首尾换行。必须使用这次构建的桌面 exe 与 NSIS 安装包，不混用旧产物。通过本机 Tauri CLI `signer sign --private-key-path <仓库外私钥路径> --app-version <同一版本> <安装包路径>` 签名，密码由交互提示输入；私钥与密码不提交、不发送到聊天。准备工具不处理私钥。仅临时修改构建环境，完成后移除公钥环境覆盖，正式发布公钥的持久配置仍需发布者确认。
+
+桌面 exe 的维护入口 `--verify-update-release <安装包> <签名> <新报告路径>` 使用实际编译公钥、编译版本与 target。release 构建才能执行，debug 返回 13；参数错误 12，验证 / 文件失败 14，成功 0。签名全局验证成功后才读取可信 version 字段；缺失、重复或与当前版本不符拒绝。没有初始化 Tauri / 单实例 / 数据库 / 来源 / 账户或运行安装器，报告 create_new，不覆盖旧文件。该入口不是 renderer IPC，也不授予主窗 / 小窗文件或任意验证权限。
+
+准备流程核对安装器 / 签名 SHA-256、精确字节、target、版本和公钥摘要，说明受相同 DTO 的 UTF-8 字节 / 控制字符限制，检查过程中改变桌面 exe 则失败。输出含安装包、原签名、latest.json 及验证记录；先放本次自有临时目录，再发布到新目录。已有目标或并发创建目标均拒绝，失败只清理已校验的自有临时目录。验证记录只能证明这些字节的签名、公钥和版本，不能独立证明任意安装包内含哪个应用；同次正式打包是发布操作的前提，实际安装 / 更新仍须另验收。
+
+必要自动检查：`node --test scripts/prepare-update-release.test.mjs`；`cargo test -p token-pulse-desktop --lib release_verifier`；显式运行真实临时签名夹具 `cargo test -p token-pulse-desktop --lib release_verifier::tests::actual_signature_version_and_key_binding -- --ignored --exact`。后者调用已安装 Tauri CLI，临时私钥生成 / 签名输出被捕获且不打印，合成文件从不执行，临时目录自动清理；不生成正式项目密钥。当前缺正式公钥 / 发布资产，准备就绪不代表已经完成实际升级，不运行性能测试。
+
+本步骤完整打包通过，最新 0.1.0 NSIS 为 6,605,578 字节，SHA-256 b44ca1fd19aa5c0d782ff905335b15240092d311e9a00a536a75fafdc7de1c62；仍无正式公钥 / 发布签名。Win10 实际新 release exe 缺配置返回 14 / 不创建报告，准备脚本返回 1 / 无发布或暂存文件，通过两项 NATIVE_RELEASE_*_REJECT_OK；未运行安装器或触碰现有正式数据。以下各步骤旧包大小 / 哈希仅为当时产物记录。
+
 ## 第三方声明生成与打包
 
 `npm run notices` 为本地 x64 Windows 生成 src-tauri/resources/third-party-notices.txt；其他已支持的 MSVC 目标由 prepare-desktop 传入实际 target。需锁定 npm 依赖和已获取的 Cargo registry 源，生成器调用 cargo metadata --locked --offline，只读取依赖 / 审查许可文本，不读账户或来源日志。默认正式 `npm run tauri:build` 自动生成，并由 NSIS 放到安装目录 THIRD_PARTY_NOTICES.txt；普通运行无需 Node / Cargo / 编译器。此生成文件忽略，源码跟踪生成器及 scripts/third-party 的十份审查原文 / SHA-256 / 来源。
 
-2026-10-03 完整 NSIS 重建通过，最新 0.1.0 本地包 6,603,716 字节（6.30 MiB），已包含声明资源及正常卸载指令。SHA-256 fd29f91b1728f4437022fba72d665af6398c45f7f4f77e302dab8d421797e158；仍无正式更新公钥 / 发布签名，不替代实际干净安装或更新。原文快照在 .gitattributes 标为 -text，保持不同 Git 换行设置下的原字节 / 哈希。
+2026-10-03 M16c 完整 NSIS 重建通过，当时 0.1.0 本地包 6,603,716 字节（6.30 MiB），已包含声明资源及正常卸载指令。SHA-256 fd29f91b1728f4437022fba72d665af6398c45f7f4f77e302dab8d421797e158；仍无正式更新公钥 / 发布签名，不替代实际干净安装或更新。原文快照在 .gitattributes 标为 -text，保持不同 Git 换行设置下的原字节 / 哈希。
 
 `node --test scripts/third-party-notices.test.mjs` 为五项必要校验，覆盖缺正文 / 未审查版本拒绝、源文本完整性、目标图 / npm 运行依赖和 vendor 声明。当前生成覆盖 334 项：327 Rust Windows 图含构建 / 测试、四前端运行依赖和 SQLite / NSIS / helper 三项；并非都实际链接进运行时。重复生成字节一致。新依赖缺许可正文、缓存工具变化或锁版本变化必须补齐上游原文 / 审查来源，不能用 generic MIT 代替作者许可。NSIS / helper 当前审查为 3.11 / 0.5.3，首次构建不要求旧缓存，已有缓存则验证。
 
