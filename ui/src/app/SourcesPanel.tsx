@@ -1,5 +1,6 @@
 import { displayPolicy } from '../shared/display-policy';
 import { AccountServicePanel } from './AccountServicePanel';
+import { NotifySettingsPanel } from './NotifySettingsPanel';
 import { whenFull } from './usage-display';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { chooseSourceDirectory, getSources, manageSource, runtimeError } from '../shared/runtime';
@@ -57,11 +58,12 @@ export function SourcesPanel({ onChanged, timezone, diagnostics = false }: { onC
     {snapshot?.sources.length === 0 && <div className="source-empty"><h3>尚未配置 Codex Home</h3><p>可检测当前 Windows 用户的默认目录与 CODEX_HOME，或选择包含 sessions 的目录。</p></div>}
     <div className="source-list">{snapshot?.sources.map(source => <article className="source-card" key={source.source_id}>
       <div className="source-card-title"><strong>{origins[source.origin]}</strong><span className={`source-state ${source.readability}`}>{source.removed ? '已移除 · 历史保留' : readable[source.readability]}</span></div>
-      <p className="source-path">{source.root_path}</p>
+      <p className="source-path">{policy.privacy === false ? source.root_path : '路径已隐藏'}</p>
       <dl>{!diagnostics && <><dt>文件监听能力</dt><dd>{capability[source.capabilities.watcher]} · {source.enabled ? '定期核对持续开启' : '采集已停止，历史保留'}</dd><dt>物理文件身份</dt><dd>{capability[source.capabilities.physical_identity]}</dd></>}<dt>最近目录核对</dt><dd>{source.last_scan_at_ms === null && diagnostics ? '尚无扫描记录' : time(source.last_scan_at_ms, timezone)}</dd><dt>最近成功采集</dt><dd>{time(source.last_success_at_ms, timezone)}</dd></dl>
       {source.error && <p className="notice" role="status">{runtimeError({ code: source.error })}</p>}
       <div className="source-actions"><button disabled={busy} onClick={() => void run({ kind: source.enabled ? 'pause' : 'resume', source_id: source.source_id })}>{source.enabled ? '暂停采集' : '恢复采集'}</button>{!diagnostics && !source.removed && <button disabled={busy} onClick={() => void run({ kind: 'retain_remove', source_id: source.source_id })}>移除来源并保留历史</button>}</div>
     </article>)}</div>
     {!diagnostics && <AccountServicePanel timezone={timezone} />}
+    {!diagnostics && <NotifySettingsPanel sources={snapshot} />}
   </section>;
 }

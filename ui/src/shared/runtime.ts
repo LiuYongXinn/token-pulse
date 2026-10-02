@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest, MiniSessionsRequest, MiniSessionsPage } from './generated/contracts';
 import { displayPolicy } from './display-policy';
+import type { NotifyIntegrationsSnapshot, NotifyPrepareAction, NotifyConfigPreview, NotifyApplyResult } from './generated/contracts';
 import type { DisplayPolicyStamp, DisplayPrivacyMutation, DisplayThemeMutation } from './generated/contracts';
 import type { CloseQuerySnapshotRequest, FilterOptionsRequest, FilterOptionsPage } from './generated/contracts';
 
@@ -21,6 +22,9 @@ const plainCommands = new Set(['get_taskbar_preferences', 'set_taskbar_preferenc
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
+  if (command === 'prepare_notify_integration' && typeof data === 'object' && data !== null && 'plan_id' in data && typeof data.plan_id === 'string') {
+    await invoke('release_notify_preview', { requestId: crypto.randomUUID(), planId: data.plan_id }).catch(() => {});
+  }
   if (command === 'choose_account_service' && typeof data === 'object' && data !== null && 'selection_handle' in data && typeof data.selection_handle === 'string') {
     await invoke('cancel_account_service_selection', { requestId: crypto.randomUUID(), selectionHandle: data.selection_handle }).catch(() => {});
   }
@@ -137,6 +141,11 @@ export function runtimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error !== null && 'code' in error) {
     const code = String(error.code);
+    if (code === 'NOTIFY_INTEGRATION_FAILED') {
+      const details = 'details' in error && typeof error.details === 'object' && error.details !== null ? error.details : null;
+      const issue = details && 'notify_issue' in details ? String(details.notify_issue) : '';
+      return notifyIssueText(issue);
+    }
     if (code === 'SNAPSHOT_EXPIRED') return '查询快照已过期，请重新查询。';
     if (code === 'CURSOR_INVALID') return '分页条件或游标已失效，请重新查询。';
     if (code === 'DB_WRITE_FAILED') return '数据库写入失败，设置未保存，请重试。';
@@ -144,6 +153,47 @@ export function runtimeError(error: unknown): string {
     return descriptions[code] ?? `操作失败（${code}），请查看采集诊断。`;
   }
   return '桌面服务未能完成操作，请重试。';
+}
+
+export function notifyIssueText(issue: string): string {
+  const messages: Record<string, string> = {
+    transaction_unavailable: '当前目录不支持安全修改通知配置。请使用本机 NTFS 目录；日志采集继续可用。',
+    busy: '通知配置正在被其他程序使用，请稍后重试。',
+    config_changed: '配置已发生变化，请关闭当前预览并重新预览。',
+    ownership_changed: '通知命令已被修改，无法覆盖。请检查该 Home 的通知配置。',
+    already_managed: '该 Home 已有 TokenPulse 通知命令，请先核对现有接入状态。',
+    active_configuration: '通知仍在启用，请先预览并停用通知，再清理接入记录。',
+    plan_not_found: '预览已关闭或失效，请重新预览。', plan_expired: '预览已过期，请重新预览。',
+    plan_limit: '打开的预览过多，请关闭已有预览后重试。',
+    no_original_command: '没有可保留的原通知命令，请重新选择通知处理方式。',
+    invalid_config: '无法读取有效的 config.toml，请修正配置后重试。',
+    invalid_notify: '原通知配置不是受支持的命令数组，请检查配置后重试。',
+    unsafe_path: '仅支持本机磁盘上的 Codex Home，请重新选择目录。',
+    unsafe_file: '配置文件类型不受支持，请检查链接或文件属性。',
+    unsafe_permissions: '通知接入记录的访问权限不符合要求，请检查应用数据目录权限。',
+    permission_denied: '没有修改通知配置的权限，请检查目录与文件权限。',
+    invalid_registration: '接入记录无法验证，已保留配置，请检查此 Home 的通知设置。',
+    invalid_marker: '通知标记无法验证，接入记录已保留。',
+    limit_reached: '通知接入数量或配置大小超过限制，请检查已有接入。',
+    wrong_executable: '通知指向之前的程序位置，请先停用旧接入再重新启用。',
+    cleanup_failed: '配置操作未完成且接入记录仍待清理，请刷新接入状态后核对。',
+    not_found: '接入记录已不存在，请刷新通知状态。',
+    already_exists: '接入记录已存在，请刷新通知状态。',
+    channel_unavailable: '通知监听暂时不可用，日志采集继续运行。',
+    worker_unavailable: '通知服务暂时不可用，请重启应用后重试。',
+    unavailable: '暂时无法读取或清理通知接入，请检查占用与访问权限后重试。',
+  };
+  return messages[issue] ?? '通知接入未能完成，请刷新状态后重试。';
+}
+export function getNotifyIntegrations(): Promise<NotifyIntegrationsSnapshot> { return request('get_notify_integrations'); }
+export function prepareNotifyIntegration(action: NotifyPrepareAction): Promise<NotifyConfigPreview | null> { return request('prepare_notify_integration', { request: action }); }
+export function applyNotifyIntegration(planId: string): Promise<NotifyApplyResult> { return request('apply_notify_integration', { planId }); }
+export function retireNotifyIntegration(registrationId: string): Promise<NotifyApplyResult> { return request('retire_notify_integration', { registrationId }); }
+export async function releaseNotifyPreview(planId: string): Promise<void> {
+  if (!isTauri()) return;
+  const requestId = crypto.randomUUID();
+  const response = await invoke<Response<null>>('release_notify_preview', { requestId, planId });
+  if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('桌面协议版本或响应身份不匹配。');
 }
 
 export async function windowAction(action: WindowAction): Promise<void> {

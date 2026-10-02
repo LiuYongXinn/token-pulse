@@ -32,7 +32,7 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
   await page.goto('/');
   await page.getByRole('button', { name: '设置', exact: true }).click();
   const panel = page.getByRole('tabpanel', { name: '数据来源设置' });
-  await expect(panel.getByText('E:\\synthetic-fixture\\.codex', { exact: true })).toBeVisible();
+  await expect(panel.locator('.source-list .source-path')).toHaveText('E:\\synthetic-fixture\\.codex');
   await expect(panel.getByText('等待目录出现')).toBeVisible();
   await expect(panel.getByText('尚无成功记录')).toHaveCount(2);
   await expect(panel.getByText('尚未探测', { exact: true })).toBeVisible();

@@ -397,6 +397,22 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       if(gone.data.registrations.length!==0)throw new Error('NOTIFY_IPC_RETIREMENT');
       const retired=await invoke('retire_notify_integration',{requestId:'notify-idempotent-retire',registrationId:fresh.data.registration_id});
       if(!retired.data.retired||retired.data.configured!==null)throw new Error('NOTIFY_IPC_ABSENT_CONFIG_UNKNOWN');
+      [...document.querySelectorAll('.sidebar nav button')].find(b=>b.textContent==='设置').click();
+      await wait(()=>document.querySelector('.notify-settings select[aria-label="通知接入来源"] option[value="native-notify"]'));
+      const region=document.querySelector('.notify-settings');
+      const button=name=>[...region.querySelectorAll('button')].find(b=>b.textContent===name);
+      const source=region.querySelector('select[aria-label="通知接入来源"]');
+      const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;
+      setter.call(source,'native-notify');source.dispatchEvent(new Event('change',{bubbles:true}));
+      await wait(()=>button('预览启用通知')&&!button('预览启用通知').disabled);
+      button('预览启用通知').click();await wait(()=>region.querySelector('.notify-preview'));
+      if(!region.querySelector('.notify-preview').textContent.includes('继续调用原通知命令'))throw new Error('NOTIFY_REAL_UI_ORIGINAL_DEFAULT');
+      button('确认启用通知').click();
+      await wait(()=>region.querySelector('.notify-registration h3')?.textContent==='通知已启用');
+      button('预览停用通知').click();await wait(()=>button('确认停用通知'));
+      if(!region.querySelector('.notify-preview').textContent.includes('恢复后 notify'))throw new Error('NOTIFY_REAL_UI_UNDO_REVIEW');
+      button('确认停用通知').click();
+      await wait(()=>!region.querySelector('.notify-registration')&&region.querySelector('[role="status"]')?.textContent.includes('原通知配置已恢复'));
     "#,
         Duration::from_secs(20),
     )?;
@@ -419,7 +435,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     )?;
     mini.hide().map_err(|_| "notify mini hide")?;
     println!(
-        "NATIVE_NOTIFY_IPC_OK: actual main WebView five commands, readonly review/release, default original, privacy redaction/write gate/stale preview, active retirement refused, conditional enable/undo, null absent configuration, mini capability denied, source bytes unchanged"
+        "NATIVE_NOTIFY_IPC_OK: actual main WebView five commands and settings UI clicks, readonly review/release, default original, privacy redaction/write gate/stale preview, active retirement refused, conditional enable/undo, null absent configuration, mini capability denied, source bytes unchanged"
     );
     Ok(())
 }

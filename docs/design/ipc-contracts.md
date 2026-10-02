@@ -206,6 +206,8 @@ cursor 为服务端签发的不透明游标：snapshot / filter hash、sort、�
 
 ## 3. 写操作与作业命令
 
+M15a7 的正式通知设置消费者已接上述五命令，复用标准 request 身份 / 版本 / 显示策略门禁；prepare 的迟到或隐私拒绝响应会主动 release plan。关闭 / 离页 / 隐私变化释放预览，后台 plan / 文件条件与修订校验仍是最终写入依据。release 仅返回 Response<null>、无敏感数据，不要求显示戳；其响应身份仍校验。正式 UI 成功应用后重新读取真实当前状态，清理失败不丢掉已成功撤销结果。实际主 WebView按钮启用 / 停用与 mini 权限继续通过，系统目录选择器交互、真实 Codex 回合及其他卷验证未因此完成。
+
 |命令|请求与效果|
 |---|---|
 |`choose_source_directory`|后端原生目录选择；返回一次性 selection_handle 和检测摘要|
