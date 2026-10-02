@@ -20,7 +20,7 @@ struct RuntimeState {
     recovery_shortcut: std::sync::Mutex<shortcuts::RecoveryRuntime>,
     #[cfg(debug_assertions)]
     native_dashboard_request: std::sync::Mutex<Option<token_pulse_core::query::DashboardRequest>>,
-    mini_stats_request: std::sync::Mutex<Option<token_pulse_core::mini::MiniStatsRequest>>,
+    main_navigation: std::sync::Mutex<token_pulse_core::navigation::MainNavigationSnapshot>,
     privacy: PrivacyState,
     mini_creation: std::sync::Mutex<()>,
     mini_geometry_sequence: std::sync::atomic::AtomicU64,
@@ -201,7 +201,7 @@ pub fn run() {
             let privacy = initial_privacy(&database);
             let notify_app = app.handle().clone();
             let quota = token_pulse_quota::service::AccountQuotaService::start(&uuid::Uuid::new_v4().to_string(), std::sync::Arc::new(move |event| {use tauri::Emitter; let _ = notify_app.emit("account_quota_changed", event);})).map(std::sync::Arc::new);
-            app.manage(RuntimeState { taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), mini_stats_request: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            app.manage(RuntimeState { taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
             if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
@@ -255,7 +255,7 @@ pub fn run() {
                 quota_commands::update_native_visibility(window);
             }
         })
-        .invoke_handler(tauri::generate_handler![taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -345,3 +345,5 @@ mod taskbar_commands;
 mod taskbar_service;
 #[cfg(all(debug_assertions, windows))]
 mod taskbar_smoke;
+
+mod navigation;

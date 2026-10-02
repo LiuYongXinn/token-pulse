@@ -20,6 +20,7 @@
     "allow-manage-account-connection",
     "allow-refresh-account-quota",
     "allow-get-mini-stats-request",
+    "allow-get-main-navigation",
     "allow-get-mini-scope",
     "allow-query-mini-sessions",
     "allow-get-mini-usage",

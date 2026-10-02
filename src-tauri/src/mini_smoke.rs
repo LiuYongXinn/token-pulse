@@ -428,10 +428,10 @@ fn verify_stats_navigation(
     for _ in 0..100 {
         let runtime = app.state::<super::RuntimeState>();
         let intent = runtime
-            .mini_stats_request
+            .main_navigation
             .lock()
             .map_err(|_| "probe request lock failed")?
-            .clone()
+            .mini_stats()
             .ok_or("navigation intent missing")?;
         let query = runtime
             .native_dashboard_request

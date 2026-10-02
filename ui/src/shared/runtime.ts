@@ -15,7 +15,7 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
+const plainCommands = new Set(['get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request', 'get_main_navigation']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
@@ -143,11 +143,6 @@ export function miniWindowAction(action: MiniWindowAction): Promise<MiniWindowSt
 
 export function openMiniStats(open: MiniStatsOpenRequest): Promise<MiniStatsRequest> { return request('open_mini_stats', { request: open }); }
 export function getMiniStatsRequest(): Promise<MiniStatsRequest | null> { return request('get_mini_stats_request'); }
-export async function onMiniStatsRequested(refresh: () => void): Promise<() => void> {
-  if (!isTauri()) return () => {};
-  const stop = await listen('mini_stats_requested', refresh);
-  return () => { void Promise.resolve(stop()).catch(() => {}); };
-}
 
 export function queryMiniSessions(query: MiniSessionsRequest): Promise<MiniSessionsPage> { return request('query_mini_sessions', { request: query }); }
 
@@ -161,5 +156,12 @@ export function refreshAccountQuota(): Promise<import('./generated/contracts').Q
 export async function onAccountQuotaChanged(refresh: (change: import('./generated/contracts').QuotaChanged) => void): Promise<() => void> {
   if (!isTauri()) return () => {};
   const stop = await listen<import('./generated/contracts').QuotaChanged>('account_quota_changed', event => refresh(event.payload));
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
+
+export function getMainNavigation(): Promise<import('./generated/contracts').MainNavigationSnapshot> { return request('get_main_navigation'); }
+export async function onMainNavigationChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen('main_navigation_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }

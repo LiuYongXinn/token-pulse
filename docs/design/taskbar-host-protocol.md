@@ -159,3 +159,12 @@ HostMessage.get_actions 是严格空结构；HostReply.actions 含 nullable sett
 OpenFloat 复用 mini 的创建 / 交互恢复 / 展开持久保存与回滚逻辑，最后在主线程有效意图内展开到 360×380 并显示；创建时隐藏且非聚焦，不持交互锁跨线程等待。OpenStats 从正式 mini_usage 原子读取，复用 open_stats_request 的精确修订和范围校验，然后主窗口读取已保留意图；账户数据不随本地会话变更。当前仅这两个动作有生产者，其余菜单意图明确拒绝待下一模块。窗口错误与 embedded / 回退分别表达，下一次成功动作清除。
 
 实际 Win10 自有窗口消息 → 正式独立宿主管道 → 后台 → 真实 Tauri 小窗 / 主统计已通过，真实 SendInput 鼠标与焦点验收仍因锁屏 / 前台异常待复核，详见交付记录 M13e2b。
+## M13e3：原生菜单与受控设置动作
+
+标准 Windows 菜单固定 ID 映射到五种 HostAction，返回取消 / 未知 ID 时不排队；隐私勾选与 SetPrivacy.enabled 来源于当前 TaskbarView.privacy。右键 / 菜单键 / Shift+F10 共用入口，Enter / Space 忽略重复键并排 OpenFloat。仍经 get_actions 拉取，身份 / 序号 / 数量 / 配置修订边界不变，没有任意命令接口。
+
+配置 / 隐私清屏、取消、脱离或销毁使菜单交互代际失效并结束菜单；旧选择不能跨代际排队。模态 TrackPopupMenuEx 不持画布可变借用，WndProc 的 Rc 保留资源到返回，alive 单独记录，绘制重入不借用渲染状态，允许菜单消息循环内销毁自有读数。
+
+主端 Settings 复用窗口门禁；SetPrivacy / DisableTaskbar 先等待发布暂停与原生清屏，检查唯一暂停归属、有效期限 / 非退出 / 非休眠及精确 SQLite 修订后提交。自己的清屏会取消普通动作，因此协调写入结果单独标记，实际写入失败仍表达 action_error；未进入事务的过期或外部取消意图不执行。仍只一个异步动作工作，不阻塞宿主 I/O。窗口统计 / 设置采用统一保留导航，见 IPC 契约。
+
+实际 Win10 菜单结构、五项自有助记消息通路及菜单打开时清屏 / shutdown 恢复几何通过；真实鼠标 / 方向键与焦点仍单独待验收。自动 / 实际系统证据见交付记录 M13e3。

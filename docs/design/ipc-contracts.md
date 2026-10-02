@@ -444,7 +444,7 @@ mini capability 允许 get_mini_scope / get_mini_usage / set_mini_scope / get_di
 
 ### 2.18 明确打开同范围统计
 
-open_mini_stats 为 mini-only，参数 MiniStatsOpenRequest { expected_settings_revision } 绑定用户正在看的范围版本，真实 mini 使用事务修订不同时返回 REVISION_CONFLICT，不发布导航。成功返回 MiniStatsRequest { request_id, mini_scope, calendar }，calendar.range 保留精确 UTC 半开毫秒边界（包含采样毫秒），heatmap_range 由相同采样时刻 / 时区日历解析。该 DTO 只有稳定 ID / 日期，无敏感名称 / 金额 / 账户字段，使用普通 Response。main-only get_mini_stats_request 返回当前意图或 null，mini_stats_requested 只作为失效通知。
+open_mini_stats 为 mini-only，参数 MiniStatsOpenRequest { expected_settings_revision } 绑定用户正在看的范围版本，真实 mini 使用事务修订不同时返回 REVISION_CONFLICT，不发布导航。成功返回 MiniStatsRequest { request_id, mini_scope, calendar }，calendar.range 保留精确 UTC 半开毫秒边界（包含采样毫秒），heatmap_range 由相同采样时刻 / 时区日历解析。该 DTO 只有稳定 ID / 日期，无敏感名称 / 金额 / 账户字段，使用普通 Response。M13e3 将统计 / 设置导航统一到 get_main_navigation 与 main_navigation_changed；main-only get_mini_stats_request 保留兼容读取，当前最后意图不是统计时返回 null。旧 mini_stats_requested 不再发出。
 
 主窗口按意图 ID 只应用一次；新意图明确重置来源 / 其他维度 / specified_time 并进入总览，显示精确范围替代整日日期控件。刷新与分页沿用此范围，恢复主日历或重置不回写 mini_scope；恢复可见不会重新应用已消费过的 ID。小窗数据之后更新不暗中改变已打开主统计范围，须再次点击打开。
 
@@ -564,3 +564,10 @@ M13e2a 的独立宿主协议新增严格 get_actions / actions，最多 4 项受
 
 
 M13e2b 扩展 TaskbarRuntimeSnapshot.action_error（nullable ErrorCode），为窗口执行失败的独立状态，下一次成功动作清除；不覆盖原生嵌入 / 回退结果。主端在受控宿主通道拉取受限意图并复用 mini_stats_requested / get_mini_stats_request，同范围统计保持原子快照与精确设置修订。mini_interaction_changed 只使交互状态失效，mini 重新调用 mini_window_action.read，并以查询序号拒绝旧响应；事件载荷不直接更新 UI。前端无新增任意动作 / 窗口 / 路径命令。
+### M13e3：统一保留主窗口导航
+
+新增 main-only get_main_navigation，参数仍为 request_id，无客户端写导航命令，返回普通 Response<MainNavigationSnapshot>。snapshot 为 { revision: DecimalInt, intent: MainNavigationIntent | null }；intent 严格标记为 mini_stats { request: MiniStatsRequest } 或 taskbar_settings {}。该 DTO 仅含稳定 ID / 日期和导航类型，不带名称 / 路径 / 费用 / 账户字段。修订是此应用实例中的单一单调域，溢出拒绝发布并保留旧意图。
+
+mini-only open_mini_stats、原生双击 / 菜单统计和菜单设置经同一保留意图发布器递增后发送 main_navigation_changed，事件载荷不导航。主窗口先订阅再读取，以查询序号与 BigInt 修订拒绝迟到 / 低修订；重复事件和可见性恢复仅重读，不重新执行已接受意图。main-only get_mini_stats_request 保留兼容，当前最后意图不是统计则返回 null；mini_stats_requested 不再发出。
+
+原生菜单隐私 / 隐藏不增加前端任意写接口，继续复用已有精确设置修订和发布清屏协调器。实际写失败使用独立 taskbar.action_error；自己的暂停取消不吞掉协调写入结果，退出 / 休眠仍拒绝旧结果。Rust / TypeScript / schema 同步，mini capability 不包含 get_main_navigation。

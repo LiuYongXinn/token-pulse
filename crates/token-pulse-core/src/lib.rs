@@ -12,6 +12,7 @@ pub mod jobs;
 pub mod mini;
 pub mod mini_opacity;
 pub mod mini_passthrough;
+pub mod navigation;
 pub mod numeric;
 pub mod placement;
 pub mod pricing;

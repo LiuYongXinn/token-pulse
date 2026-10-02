@@ -144,19 +144,70 @@ fn execute_action(
             )?;
             let owned_app = app.clone();
             on_main_thread(app, request, move || {
-                *owned_app
-                    .state::<super::RuntimeState>()
-                    .mini_stats_request
-                    .lock()
-                    .map_err(|_| ErrorCode::WindowUnavailable)? = Some(data);
-                let _ = owned_app.emit_to("main", "mini_stats_requested", ());
+                super::navigation::publish(
+                    &owned_app,
+                    token_pulse_core::navigation::MainNavigationIntent::MiniStats {
+                        request: Box::new(data),
+                    },
+                )?;
                 super::show_main(&owned_app).map_err(|_| ErrorCode::WindowUnavailable)
             })
         }
-        // Menu intentions have no producer yet. Never turn an unknown intention into a command.
-        HostAction::OpenTaskbarSettings {}
-        | HostAction::SetPrivacy { .. }
-        | HostAction::DisableTaskbar {} => Err(ErrorCode::TaskbarUnsupported),
+        HostAction::OpenTaskbarSettings {} => {
+            let owned_app = app.clone();
+            on_main_thread(app, request, move || {
+                super::navigation::publish(
+                    &owned_app,
+                    token_pulse_core::navigation::MainNavigationIntent::TaskbarSettings {},
+                )?;
+                super::show_main(&owned_app).map_err(|_| ErrorCode::WindowUnavailable)
+            })
+        }
+        HostAction::SetPrivacy { enabled } => {
+            let _ = super::settings_commands::update_privacy_from_taskbar(
+                app,
+                db.clone(),
+                &runtime.privacy,
+                token_pulse_core::settings::DisplayPrivacyMutation {
+                    privacy: *enabled,
+                    expected_settings_revision: request.settings_revision.clone(),
+                },
+                request,
+            )
+            .map_err(|e| e.code)?;
+            Ok(())
+        }
+        HostAction::DisableTaskbar {} => {
+            let owner = service(app).ok_or(ErrorCode::TaskbarEmbedFailed)?;
+            let _pause = owner.pause_publication()?;
+            if !request.mutation_current() {
+                return Ok(());
+            }
+            request.mark_coordinated();
+            let mut preferences = configuration.preferences;
+            preferences.enabled = false;
+            let at = token_pulse_core::numeric::EpochMs::new(
+                token_pulse_collector::jobs::now_ms().map_err(|e| e.code)?,
+            )?;
+            let (data, changed) = db
+                .mutate_taskbar_preferences(
+                    TaskbarPreferencesMutation {
+                        preferences,
+                        expected_settings_revision: request.settings_revision.clone(),
+                    },
+                    at,
+                )
+                .map_err(|e| e.code)?;
+            if changed {
+                let _ = app.emit(
+                    "settings_changed",
+                    token_pulse_core::settings::SettingsChanged {
+                        settings_revision: data.settings_revision,
+                    },
+                );
+            }
+            Ok(())
+        }
     }
 }
 pub(super) fn on_main_thread(

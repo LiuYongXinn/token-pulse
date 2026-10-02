@@ -23,6 +23,7 @@ fn main() {
             "query_mini_sessions",
             "open_mini_stats",
             "get_mini_stats_request",
+            "get_main_navigation",
             "get_mini_usage",
             "set_mini_scope",
             "perform_window_action",

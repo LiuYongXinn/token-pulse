@@ -28,6 +28,7 @@ pub struct ActionRequest {
     generation: u64,
     cancelled: Arc<AtomicBool>,
     timed_out: Arc<AtomicBool>,
+    coordinated: Arc<AtomicBool>,
     deadline: std::time::Instant,
 }
 impl ActionRequest {
@@ -48,6 +49,17 @@ impl ActionRequest {
     pub(super) fn timeout(&self) {
         self.timed_out.store(true, Ordering::Release);
         self.cancel();
+    }
+    pub(super) fn mutation_current(&self) -> bool {
+        !self.flags.stopping.load(Ordering::Acquire)
+            && !self.flags.suspended.load(Ordering::Acquire)
+            && self.flags.paused.load(Ordering::Acquire)
+            && self.flags.generation.load(Ordering::Acquire) == self.generation.saturating_add(1)
+            && std::time::Instant::now() < self.deadline
+            && !self.timed_out.load(Ordering::Acquire)
+    }
+    pub(super) fn mark_coordinated(&self) {
+        self.coordinated.store(true, Ordering::Release);
     }
 }
 #[cfg(windows)]
@@ -98,6 +110,7 @@ impl ActionDispatch {
                 generation,
                 cancelled: Arc::new(AtomicBool::new(false)),
                 timed_out: Arc::new(AtomicBool::new(false)),
+                coordinated: Arc::new(AtomicBool::new(false)),
                 deadline: std::time::Instant::now() + Duration::from_secs(5),
             });
         }
@@ -111,6 +124,9 @@ impl ActionDispatch {
             let (request, work) = self.work.take().expect("finished action");
             let result = work.await.unwrap_or(Err(ErrorCode::WindowUnavailable));
             if request.current()
+                || (request.coordinated.load(Ordering::Acquire)
+                    && !request.flags.stopping.load(Ordering::Acquire)
+                    && !request.flags.suspended.load(Ordering::Acquire))
                 || (result.is_err()
                     && request.timed_out.load(Ordering::Acquire)
                     && request.live_generation())
@@ -1194,6 +1210,46 @@ mod tests {
         );
         publish_action(&data, &notify, None);
         assert!(data.lock().unwrap().action_error.is_none());
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn own_coordinated_mutation_survives_its_clear_barrier_and_reports_actual_write_failure()
+    {
+        let flags = action_flags();
+        let mut dispatch = ActionDispatch::default();
+        dispatch.receive(
+            action_batch("2", 1),
+            &DecimalInt::parse("2").unwrap(),
+            &flags,
+            4,
+        );
+        let callback: Action = Arc::new(move |request| {
+            request.flags.paused.store(true, Ordering::Release);
+            request.flags.generation.store(5, Ordering::Release);
+            request.cancel();
+            assert!(!request.current());
+            assert!(request.mutation_current());
+            request.mark_coordinated();
+            request.flags.paused.store(false, Ordering::Release);
+            request.flags.generation.store(6, Ordering::Release);
+            Err(ErrorCode::DbWriteFailed)
+        });
+        dispatch.step(&callback).await;
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while dispatch
+                .work
+                .as_ref()
+                .is_some_and(|(_, task)| !task.is_finished())
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            dispatch.step(&callback).await,
+            Some(Err(ErrorCode::DbWriteFailed))
+        );
+        assert!(dispatch.step(&callback).await.is_none());
     }
     fn state(state: TaskbarRuntimeState) -> TaskbarRuntimeSnapshot {
         TaskbarRuntimeSnapshot {

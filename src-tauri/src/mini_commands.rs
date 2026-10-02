@@ -152,15 +152,14 @@ pub async fn open_mini_stats(
         )?)
     })
     .await?;
-    *state.mini_stats_request.lock().map_err(|_| {
-        Box::new(AppError::new(
-            ErrorCode::WindowUnavailable,
-            request_id.clone(),
-        ))
-    })? = Some(data.clone());
     let app = window.app_handle();
-    // Only an invalidation is emitted. The main window retrieves the latest retained intent.
-    let _ = app.emit_to("main", "mini_stats_requested", ());
+    super::navigation::publish(
+        app,
+        token_pulse_core::navigation::MainNavigationIntent::MiniStats {
+            request: Box::new(data.clone()),
+        },
+    )
+    .map_err(|code| Box::new(AppError::new(code, request_id.clone())))?;
     super::show_main(app).map_err(|_| {
         Box::new(AppError::new(
             ErrorCode::WindowUnavailable,
@@ -186,7 +185,7 @@ pub fn get_mini_stats_request(
         )));
     }
     let data = state
-        .mini_stats_request
+        .main_navigation
         .lock()
         .map_err(|_| {
             Box::new(AppError::new(
@@ -194,6 +193,6 @@ pub fn get_mini_stats_request(
                 request_id.clone(),
             ))
         })?
-        .clone();
+        .mini_stats();
     Ok(token_pulse_core::protocol::Response::new(request_id, data))
 }

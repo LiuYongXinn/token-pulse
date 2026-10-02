@@ -3,6 +3,7 @@ mod canvas;
 pub mod control;
 pub mod guardian;
 mod layout;
+mod menu;
 mod ownership;
 mod process;
 pub mod render;

@@ -4,7 +4,7 @@
 
 本设计补充[完整设计方案](token-pulse-design.md)、[UI 设计](token-pulse-ui.md)和[账户额度设计](account-quota.md)。新增类似 TrafficMonitor 的任务栏内显示模式，与统计主窗口、桌面悬浮窗共享后台快照。任务栏与悬浮窗可独立开启，也可同时显示。
 
-当前已实现 M13a–M13d4 的受限协议、独立原生宿主、安全预留 / 实际 Win10 嵌入、归属恢复监督、精确绘制、持久配置、后台管理器及真实设置 / 状态；M13e1 接入按偏好的小窗回退。默认不启用任务栏，Win10 19045 / 150% DPI 有实际系统验证；原生鼠标 / 悬停 / 菜单、应用图标右侧位置、Explorer 重建、Win11 与物理兼容矩阵仍待完成。详见[原生宿主协议](taskbar-host-protocol.md)及[交付记录](../development/delivery-status.md)。[HTML 交互原型](../../prototypes/token-pulse-ui.html)底部的任务栏区域全部为演示数据，生产应用通过真实 DTO 显示。
+当前已实现 M13a–M13e3 的受限协议、独立原生宿主、安全预留 / 实际 Win10 嵌入、归属恢复监督、精确绘制、持久配置、后台管理器、真实设置 / 状态、小窗回退、单击 / 双击通路及原生右键菜单。默认不启用任务栏，Win10 19045 / 150% DPI 有实际系统验证；真实鼠标 / 键盘与焦点、悬停、应用图标右侧位置、Explorer 重建、Win11 与物理兼容矩阵仍待完成。详见[原生宿主协议](taskbar-host-protocol.md)及[交付记录](../development/delivery-status.md)。[HTML 交互原型](../../prototypes/token-pulse-ui.html)底部的任务栏区域全部为演示数据，生产应用通过真实 DTO 显示。
 
 ## 1. 目标与入口
 
@@ -195,3 +195,6 @@ M13e2a 已实现原生系统双击判定与有界动作拉取，普通刷新保�
 
 
 M13e2b 已接正式主端单击展开 360×380 小窗及双击同范围统计，使用已保存时区和精确范围；已存在 WebView 外部展开会重新读交互状态。窗口操作错误独立显示，隐私 / 生命周期门禁取消迟到操作。Win10 自有窗口消息、正式通信和实际窗口场景通过；真实鼠标 / 焦点保持仍待复核，悬停 / 菜单及兼容范围继续实施。
+M13e3 已接入标准 Windows 右键菜单及五种正式受限动作：显示小窗、同范围统计、任务栏页签、三入口共享隐私和持久隐藏任务栏。菜单显示当前隐私勾选，支持菜单键 / Shift+F10 入口和 Enter / Space 小窗意图；原生菜单文字助记键与取消由系统处理。菜单期间配置 / 隐私改变结束菜单并拒绝旧选择，销毁的画布保留资源至模态过程返回。隐私 / 隐藏经过发布清屏协调器和精确 CAS，不覆盖其他偏好。主窗口统计与设置采用同一保留导航修订，迟到响应或重新显示不会覆盖较新导航。
+
+实际 Win10 菜单结构、五项自有助记字符消息 → 正式 pipe / 后台 → 真实窗口 / SQLite、菜单打开时隐私清屏与 shutdown 原几何恢复通过；这些自有消息不等于真实鼠标 / 方向键 / 焦点 / 屏幕阅读器验收，悬停与兼容矩阵继续实施。标准菜单调用按 [TrackPopupMenuEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-trackpopupmenuex) 返回受限命令 ID，清屏在菜单所属线程调用 [EndMenu](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-endmenu)。

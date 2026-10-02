@@ -78,6 +78,10 @@ export type MiniStatsRequest = { request_id: string, mini_scope: MiniScope, cale
 
 export type MiniStatsOpenRequest = { expected_settings_revision: DecimalInt, };
 
+export type MainNavigationIntent = { "kind": "mini_stats", request: MiniStatsRequest, } | { "kind": "taskbar_settings", };
+
+export type MainNavigationSnapshot = { revision: DecimalInt, intent: MainNavigationIntent | null, };
+
 export type MiniSessionsQuery = { search: string, page_size: number, };
 
 export type MiniSessionsRequest = { query: MiniSessionsQuery, cursor: string | null, };

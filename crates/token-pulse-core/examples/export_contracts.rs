@@ -87,6 +87,8 @@ fn main() {
         token_pulse_core::shortcuts::RecoveryShortcutMutation,
         MiniStatsRequest,
         MiniStatsOpenRequest,
+        token_pulse_core::navigation::MainNavigationIntent,
+        token_pulse_core::navigation::MainNavigationSnapshot,
         MiniSessionsQuery,
         MiniSessionsRequest,
         MiniSessionOption,

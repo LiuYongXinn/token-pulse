@@ -174,3 +174,6 @@ pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions
 该独立场景使用隔离无来源 / 无账户数据库与真实两个 WebView，向本次后台所拥有 PID / 自有读数类的窗口发送明确标记的鼠标消息，然后通过正式宿主 pipe / 后台执行窗口操作。实际核对 360×380 DIP 展开 / 持久状态 / 已有 WebView 刷新、双击同范围 / 实际时区统计且不打开 mini、shutdown 全部原几何恢复。本机 Win10 19045 / 150% 已通过，输出 NATIVE_TASKBAR_ACTIONS_OK、退出 0；仍有 WebView2 退出 1412 诊断。
 
 这是自有消息通路的原生窗口检查，不能作为真实鼠标命中、锁屏时可点击、焦点保持、悬停或菜单的证据。真实 SendInput 场景仍使用上方 check_taskbar_wire，在被锁屏覆盖时拒绝输入；两项记录分开。开发鼠标检查光标保存 / 恢复使用明确的物理坐标 API，不混入线程 DPI 虚拟化坐标。
+M13e3 扩展上述 -TaskbarActions：实际弹出独立宿主的标准 Windows 菜单，核对 PID / 菜单归属及文字，再用明确标记的自有 WM_CHAR 助记消息选择小窗、统计、设置、隐私和隐藏；核对共享隐私与 SQLite 持久关闭。重新启用后，在菜单打开时提交主窗口隐私，确认菜单结束 / 未产生导航；再次打开菜单后 shutdown，验证模态循环内退出不悬挂且原全部几何恢复。新增 NATIVE_TASKBAR_MENU_OK，仍须最终 NATIVE_TASKBAR_ACTIONS_OK / 退出 0 才算场景通过。
+
+本机 Win10 19045 / 150% 已通过，仍有 WebView2 退出 1412。先前自有 Home / Down / Enter 消息未改变原生菜单选中项，改为助记字符做通路验证；真实鼠标、方向键、入口键盘可达性、焦点与屏幕阅读器分别待交互桌面验收。此场景不读取日志或登录凭据，不更改系统 DPI，不重启 Explorer。定向前端导航检查：npx playwright test tests/ui/overview.spec.ts tests/ui/taskbar.spec.ts，共 16 项；未运行性能测试。

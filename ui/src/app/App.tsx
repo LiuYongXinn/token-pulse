@@ -13,7 +13,7 @@ import { EventsPage } from './EventsPage';
 import { useMainCalendar } from './useMainCalendar';
 import { DisplaySettingsPanel } from './DisplaySettingsPanel';
 import { TaskbarDiagnosticsPanel, TaskbarSettingsPanel } from './TaskbarSettingsPanel';
-import { useMiniStatsRequest } from './useMiniStatsRequest';
+import { useMainNavigation } from './useMainNavigation';
 import { whenFull } from './usage-display';
 import type { MiniStatsRequest } from '../shared/generated/contracts';
 import { DateFilter } from './DateFilter';
@@ -56,7 +56,9 @@ export function App() {
   const mounted = useRef(false);
   const display = useMainCalendar(selection, status?.storage === 'ready', refreshRevision, clock);
   useAppTheme(display.settings?.preferences.theme);
-  useMiniStatsRequest(request => {
+  useMainNavigation(intent => {
+    if (intent.kind === 'taskbar_settings') { setPage('settings'); setTab('任务栏显示'); return; }
+    const request = intent.request;
     setMiniStats(request); setSource(null); setChoices({ models: null, projects: null, sessions: request.mini_scope.kind === 'session' ? { key: request.mini_scope.session_key, display_name: '固定会话（小窗）' } : null }); setPriceBasis({ mode: 'event_time' }); setPage('overview');
   }, message => setError(message));
   const query = useMemo(() => {

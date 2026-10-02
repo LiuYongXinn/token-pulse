@@ -4297,6 +4297,386 @@
       "title": "JobState",
       "type": "string"
     },
+    "MainNavigationIntent": {
+      "$defs": {
+        "CalendarSelectionResult": {
+          "additionalProperties": false,
+          "properties": {
+            "heatmap_range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "local_today": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            }
+          },
+          "required": [
+            "range",
+            "heatmap_range",
+            "local_today"
+          ],
+          "type": "object"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "MiniScope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today_all_sources",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "session",
+                  "type": "string"
+                },
+                "session_key": {
+                  "type": "string"
+                },
+                "start": {
+                  "$ref": "#/$defs/ScopeStart"
+                }
+              },
+              "required": [
+                "kind",
+                "session_key",
+                "start"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "MiniStatsRequest": {
+          "additionalProperties": false,
+          "description": "Explicit navigation intent. It contains no names, paths, prices or account fields.",
+          "properties": {
+            "calendar": {
+              "$ref": "#/$defs/CalendarSelectionResult"
+            },
+            "mini_scope": {
+              "$ref": "#/$defs/MiniScope"
+            },
+            "request_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "request_id",
+            "mini_scope",
+            "calendar"
+          ],
+          "type": "object"
+        },
+        "ScopeStart": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "fixed",
+                  "type": "string"
+                },
+                "start_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "kind",
+                "start_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "mini_stats",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/MiniStatsRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "request"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "taskbar_settings",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "MainNavigationIntent"
+    },
+    "MainNavigationSnapshot": {
+      "$defs": {
+        "CalendarSelectionResult": {
+          "additionalProperties": false,
+          "properties": {
+            "heatmap_range": {
+              "$ref": "#/$defs/DateRange"
+            },
+            "local_today": {
+              "type": "string"
+            },
+            "range": {
+              "$ref": "#/$defs/DateRange"
+            }
+          },
+          "required": [
+            "range",
+            "heatmap_range",
+            "local_today"
+          ],
+          "type": "object"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "properties": {
+            "end_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "start_ms": {
+              "$ref": "#/$defs/EpochMs"
+            },
+            "timezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "MainNavigationIntent": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "mini_stats",
+                  "type": "string"
+                },
+                "request": {
+                  "$ref": "#/$defs/MiniStatsRequest"
+                }
+              },
+              "required": [
+                "kind",
+                "request"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "taskbar_settings",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "MiniScope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today_all_sources",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "session",
+                  "type": "string"
+                },
+                "session_key": {
+                  "type": "string"
+                },
+                "start": {
+                  "$ref": "#/$defs/ScopeStart"
+                }
+              },
+              "required": [
+                "kind",
+                "session_key",
+                "start"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "MiniStatsRequest": {
+          "additionalProperties": false,
+          "description": "Explicit navigation intent. It contains no names, paths, prices or account fields.",
+          "properties": {
+            "calendar": {
+              "$ref": "#/$defs/CalendarSelectionResult"
+            },
+            "mini_scope": {
+              "$ref": "#/$defs/MiniScope"
+            },
+            "request_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "request_id",
+            "mini_scope",
+            "calendar"
+          ],
+          "type": "object"
+        },
+        "ScopeStart": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "today",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "fixed",
+                  "type": "string"
+                },
+                "start_ms": {
+                  "$ref": "#/$defs/EpochMs"
+                }
+              },
+              "required": [
+                "kind",
+                "start_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MainNavigationIntent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "revision",
+        "intent"
+      ],
+      "title": "MainNavigationSnapshot",
+      "type": "object"
+    },
     "ManageSourceAction": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [

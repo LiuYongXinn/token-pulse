@@ -7,7 +7,8 @@ test.beforeEach(async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {
     let privacy = false, policyRevision = '1';
-    let miniIntent: unknown = null;
+    let miniIntent: unknown = null, navigationRevision = '0';
+    let deferNavigation = false; const navigationWaits: (() => void)[] = [];
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let lastDashboardRequest: unknown = null;
     let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
@@ -26,6 +27,9 @@ test.beforeEach(async ({ page }) => {
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: policyRevision, privacy }, data });
       if (command === 'get_mini_stats_request') return response(miniIntent);
+      if (command === 'get_main_navigation') { const data = { revision: navigationRevision, intent: structuredClone(miniIntent) }; if (deferNavigation) { deferNavigation = false; await new Promise<void>(resolve => navigationWaits.push(resolve)); } return response(data); }
+      if (command === 'get_taskbar_preferences') return response({settings_revision: policyRevision, preferences:{enabled:true,position:'notification_left',fallback_to_mini:true,display:{layout:'two_rows',show_tokens:true,show_costs:true,show_quota:true,show_weekly_reset:true}}});
+      if (command === 'get_taskbar_status') return response({revision:'1',state:'embedded',applied_settings_revision:policyRevision,issue:null,error:null,compact:false,fallback_visible:null,fallback_error:null,action_error:null,last_cleanup:null,last_snapshot_at_ms:null});
       if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: policyRevision, preferences: { theme: 'dark', privacy, display_timezone: 'Asia/Shanghai' } });
       if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
@@ -57,9 +61,10 @@ test.beforeEach(async ({ page }) => {
     __setSyntheticQuota: (value: Record<string, unknown>) => { quota = structuredClone(value); for (const [id, listener] of listeners) if (listener.event === 'account_quota_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { connection_epoch: quota.connection_epoch, quota_revision: quota.quota_revision, state: quota.state } }); },
     __lastDashboardRequest: () => lastDashboardRequest,
     __requestSyntheticMiniStats: (all = false, id = 'synthetic-mini-open') => {
-      miniIntent = { request_id: id, mini_scope: all ? { kind: 'today_all_sources' } : { kind: 'session', session_key: 'synthetic-fixed', start: { kind: 'fixed', start_ms: 1709179200123 } }, calendar: { range: { start_ms: 1709179200123, end_ms: 1709203200457, timezone: 'UTC' }, heatmap_range: { start_ms: Date.parse('2023-09-01T00:00:00Z'), end_ms: Date.parse('2024-03-01T00:00:00Z'), timezone: 'UTC' }, local_today: '2024-02-29' } };
-      for (const [id, listener] of listeners) if (listener.event === 'mini_stats_requested') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null });
+      navigationRevision=String(BigInt(navigationRevision)+1n); miniIntent = { kind: 'mini_stats', request: { request_id: id, mini_scope: all ? { kind: 'today_all_sources' } : { kind: 'session', session_key: 'synthetic-fixed', start: { kind: 'fixed', start_ms: 1709179200123 } }, calendar: { range: { start_ms: 1709179200123, end_ms: 1709203200457, timezone: 'UTC' }, heatmap_range: { start_ms: Date.parse('2023-09-01T00:00:00Z'), end_ms: Date.parse('2024-03-01T00:00:00Z'), timezone: 'UTC' }, local_today: '2024-02-29' } } };
+      for (const [id, listener] of listeners) if (listener.event === 'main_navigation_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null });
     },
+    __taskbarNavigationQA: { settings: () => { navigationRevision=String(BigInt(navigationRevision)+1n);miniIntent={kind:'taskbar_settings'}; for(const [id,listener] of listeners)if(listener.event==='main_navigation_changed')callbacks.get(listener.handler)?.({event:listener.event,id,payload:{kind:'mini_stats'}}); }, hold:()=>{deferNavigation=true;},release:()=>navigationWaits.splice(0).forEach(resolve=>resolve()), revision:(value:string)=>{navigationRevision=value;}, listeners:()=>[...listeners.values()].filter(v=>v.event==='main_navigation_changed').length },
     __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
     __emitSyntheticPrivacyChange: (value: boolean) => { privacy = value; policyRevision = String(BigInt(policyRevision) + 1n); for (const [id, listener] of listeners) if (listener.event === 'display_policy_changed' || listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: policyRevision, privacy } }); },
@@ -265,4 +270,24 @@ test('overview quota is account-scoped, actual-period aware and hidden by shared
   await page.evaluate(() => (window as unknown as { __emitSyntheticPrivacyChange(v: boolean): void }).__emitSyntheticPrivacyChange(true));
   await expect(card).toContainText('隐私模式已隐藏账户额度');
   await expect(card).not.toContainText('14%'); await expect(card.getByRole('progressbar')).toHaveCount(0);
+});
+
+
+test('retained navigation orders taskbar settings against late stats with exact revisions and ignores repeated visibility', async ({ page }) => {
+  type QA = { __taskbarNavigationQA: { settings(): void; hold(): void; release(): void; revision(value: string): void; listeners(): number }; __requestSyntheticMiniStats(all?: boolean, id?: string): void; __setSyntheticHidden(value: boolean): void };
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__taskbarNavigationQA.listeners())).toBe(1);
+  await page.evaluate(() => { const qa=(window as unknown as QA); qa.__taskbarNavigationQA.revision('9007199254740993'); qa.__taskbarNavigationQA.hold(); qa.__requestSyntheticMiniStats(false,'old-held-stats'); });
+  await page.evaluate(() => (window as unknown as QA).__taskbarNavigationQA.settings());
+  await expect(page.getByRole('tab', { name:'任务栏显示', exact:true })).toHaveAttribute('aria-selected','true');
+  await page.evaluate(() => (window as unknown as QA).__taskbarNavigationQA.release());
+  await expect(page.getByRole('heading',{name:'设置',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'模型',exact:true}).click();
+  await page.evaluate(() => {const qa=(window as unknown as QA);qa.__setSyntheticHidden(true);qa.__setSyntheticHidden(false);});
+  await expect(page.getByRole('heading',{name:'模型',exact:true})).toBeVisible();
+  await page.evaluate(() => { const qa=(window as unknown as QA);qa.__taskbarNavigationQA.revision('9007199254740992');qa.__taskbarNavigationQA.settings(); });
+  await expect(page.getByRole('heading',{name:'模型',exact:true})).toBeVisible();
+  await page.evaluate(() => { const qa=(window as unknown as QA);qa.__taskbarNavigationQA.revision('9007199254740995');qa.__requestSyntheticMiniStats(false,'new-shared-stats'); });
+  await expect(page.getByLabel('从小窗带入的精确范围')).toContainText('.123');
+  await expect(page.getByRole('heading',{name:'总览',exact:true})).toBeVisible();
 });
