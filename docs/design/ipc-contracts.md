@@ -558,3 +558,6 @@ AccountServiceSelectionKind 新增 detect_local，继续调用 main 专属 choos
 
 
 M13e1 扩展正式 TaskbarRuntimeSnapshot：fallback_visible 为实际回退观察 bool / null，fallback_error 为独立 ErrorCode / null。回退成功仍保留任务栏原生 unavailable / 原因，失败不能用 false 表示没有窗口。设置的 fallback_to_mini 已接正式开关和后台一次尝试策略；这类状态 / 开关响应不包含消费、费用、路径或账户标识。生成 TypeScript / protocol-v1 schema 已同步。
+
+
+M13e2a 的独立宿主协议新增严格 get_actions / actions，最多 4 项受限动作及 nullable 精确配置修订；实际 UI 队列取走后才回复，不采用 unsolicited action 帧。普通刷新保持、配置 / 隐私 / 脱离清空，主端执行尚待接入；应用前端 IPC 未增加任意动作接口。权威字段 / schema 及验证边界见宿主协议。

@@ -4,22 +4,26 @@ use super::{
     topology::wide,
 };
 use crate::{
-    TaskbarView, WireError,
+    HostAction, TaskbarView, WireError,
+    click::ClickQueue,
     display::{DisplayPreferences, MeasuredPlan, accessible_text},
 };
 use std::{cell::UnsafeCell, mem, ptr};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Gdi::{
         BeginPaint, EndPaint, GdiFlush, GetDC, InvalidateRect, PAINTSTRUCT, ReleaseDC, UpdateWindow,
     },
-    System::LibraryLoader::GetModuleHandleW,
+    System::{LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64},
     UI::WindowsAndMessaging::{
-        CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWLP_USERDATA,
-        GetClientRect, GetWindowLongPtrW, IsWindowVisible, RegisterClassExW, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-        UnregisterClassW, WM_ERASEBKGND, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT,
-        WNDCLASSEXW, WS_CHILD, WS_EX_NOACTIVATE, WS_TABSTOP,
+        CREATESTRUCTW, CS_DBLCLKS, CreateWindowExW, DefWindowProcW, DestroyWindow, GWLP_USERDATA,
+        GetClientRect, GetWindowLongPtrW, IsWindowVisible, KillTimer, MA_NOACTIVATE,
+        RegisterClassExW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetTimer,
+        SetWindowLongPtrW, SetWindowPos, SetWindowTextW, UnregisterClassW, WM_ERASEBKGND,
+        WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_NCCREATE,
+        WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_EX_NOACTIVATE,
+        WS_EX_NOPARENTNOTIFY,
     },
 };
 struct State {
@@ -28,7 +32,10 @@ struct State {
     palette: Palette,
     alive: bool,
     paint_failed: bool,
+    interactive: bool,
+    clicks: ClickQueue,
 }
+const CLICK_TIMER: usize = 1;
 unsafe extern "system" fn procedure(
     window: HWND,
     message: u32,
@@ -45,6 +52,35 @@ unsafe extern "system" fn procedure(
     if !raw.is_null() {
         let state = unsafe { &mut *raw };
         match message {
+            WM_MOUSEACTIVATE => return MA_NOACTIVATE as _,
+            // Consume our own press; DefWindowProc would forward child notification to Explorer.
+            WM_LBUTTONDOWN => return 0,
+            WM_LBUTTONUP | WM_LBUTTONDBLCLK | WM_TIMER
+                if state.interactive
+                    && state.plan.is_some()
+                    && unsafe { IsWindowVisible(window) } != 0 =>
+            {
+                let now = unsafe { GetTickCount64() };
+                if message == WM_LBUTTONDBLCLK {
+                    unsafe {
+                        KillTimer(window, CLICK_TIMER);
+                    }
+                    state.clicks.double_click(now);
+                } else if message == WM_LBUTTONUP {
+                    let delay = unsafe { GetDoubleClickTime() }.max(1);
+                    if state.clicks.release(now, delay)
+                        && unsafe { SetTimer(window, CLICK_TIMER, delay, None) } == 0
+                    {
+                        state.clicks.clear();
+                    }
+                } else if wparam == CLICK_TIMER {
+                    state.clicks.tick(now);
+                    unsafe {
+                        KillTimer(window, CLICK_TIMER);
+                    }
+                }
+                return 0;
+            }
             WM_PAINT | WM_PRINTCLIENT => {
                 let mut paint: PAINTSTRUCT = unsafe { mem::zeroed() };
                 let dc = if message == WM_PAINT {
@@ -76,6 +112,8 @@ unsafe extern "system" fn procedure(
             }
             WM_ERASEBKGND => return 1,
             WM_NCDESTROY => {
+                state.clicks.clear();
+                state.interactive = false;
                 state.plan = None;
                 state.alive = false;
                 unsafe {
@@ -104,6 +142,8 @@ impl NativeCanvas {
             palette: Palette::system(rgb(18, 18, 18))?,
             alive: true,
             paint_failed: false,
+            interactive: false,
+            clicks: ClickQueue::default(),
         }));
         let class = wide(&format!(
             "TokenPulse.Taskbar.Readout.{}",
@@ -113,6 +153,7 @@ impl NativeCanvas {
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as u32,
             lpfnWndProc: Some(procedure),
+            style: CS_DBLCLKS,
             hInstance: module,
             lpszClassName: class.as_ptr(),
             ..unsafe { mem::zeroed() }
@@ -122,10 +163,10 @@ impl NativeCanvas {
         }
         let window = unsafe {
             CreateWindowExW(
-                WS_EX_NOACTIVATE,
+                WS_EX_NOACTIVATE | WS_EX_NOPARENTNOTIFY,
                 class.as_ptr(),
                 wide("TokenPulse").as_ptr(),
-                WS_CHILD | WS_TABSTOP,
+                WS_CHILD,
                 0,
                 0,
                 0,
@@ -161,6 +202,12 @@ impl NativeCanvas {
     }
     pub(crate) fn set_attached(&mut self, attached: bool) {
         self.attached = attached;
+        unsafe {
+            (*self.state.get()).interactive = attached;
+        }
+        if !attached {
+            self.clear_interactions();
+        }
     }
     pub(crate) fn set_palette(&mut self, palette: Palette) {
         unsafe {
@@ -168,6 +215,19 @@ impl NativeCanvas {
         }
     }
     pub(crate) fn clear(&mut self) -> Result<(), WireError> {
+        self.clear_interactions();
+        self.clear_render()
+    }
+    pub(crate) fn clear_interactions(&mut self) {
+        unsafe {
+            (*self.state.get()).clicks.clear();
+            KillTimer(self.window, CLICK_TIMER);
+        }
+    }
+    pub(crate) fn take_actions(&mut self) -> Vec<HostAction> {
+        unsafe { (*self.state.get()).clicks.take(GetTickCount64()) }
+    }
+    pub(crate) fn clear_render(&mut self) -> Result<(), WireError> {
         unsafe {
             (*self.state.get()).plan = None;
         }
@@ -214,7 +274,7 @@ impl NativeCanvas {
         height: i32,
         now: i64,
     ) -> Result<(), WireError> {
-        self.clear()?;
+        self.clear_render()?;
         let font = NativeFont::new(dpi)?;
         let plan = font.plan(view, prefs, now, width, height)?;
         unsafe {
@@ -254,6 +314,8 @@ impl NativeCanvas {
                 InvalidateRect(self.window, ptr::null(), 0);
                 UpdateWindow(self.window);
             }
+        } else {
+            self.clear_interactions();
         }
         Ok(())
     }

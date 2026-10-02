@@ -243,7 +243,11 @@ impl HostConnection {
             return Err(WireError::OutOfOrder.into());
         };
         self.sent = sent;
-        let expected = if matches!(message, HostMessage::GetStatus {}) {
+        let get_actions = matches!(message, HostMessage::GetActions {});
+        let expected = if matches!(
+            message,
+            HostMessage::GetStatus {} | HostMessage::GetActions {}
+        ) {
             None
         } else {
             Some(match &message {
@@ -256,7 +260,7 @@ impl HostConnection {
                 HostMessage::Configure { configuration } => HostReply::Configured {
                     settings_revision: configuration.settings_revision.clone(),
                 },
-                HostMessage::GetStatus {} => unreachable!(),
+                HostMessage::GetStatus {} | HostMessage::GetActions {} => unreachable!(),
             })
         };
         let frame = match self.startup.envelope(self.sent, message) {
@@ -281,7 +285,10 @@ impl HostConnection {
                 return Err(WireError::OutOfOrder.into());
             }
             let matching = match (&reply.body, &expected) {
-                (HostReply::Status { status }, None) => status.validate().is_ok(),
+                (HostReply::Status { status }, None) if !get_actions => status.validate().is_ok(),
+                (HostReply::Actions { .. }, None) if get_actions => {
+                    reply.body.validate_actions().is_ok()
+                }
                 (_, Some(expected)) => reply.body == *expected,
                 _ => false,
             };
@@ -339,6 +346,7 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
                 | HostMessage::Configure { .. }
         );
         let get_status = matches!(incoming.body, HostMessage::GetStatus {});
+        let get_actions = matches!(incoming.body, HostMessage::GetActions {});
         let configure = matches!(incoming.body, HostMessage::Configure { .. });
         let mut reply = session.apply(incoming)?;
         if matches!(reply, HostReply::Ready {}) {
@@ -371,6 +379,17 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
             reply = HostReply::Status {
                 status: receipt.host_status(session.configuration())?,
             };
+        }
+        if get_actions {
+            reply = HostReply::Actions {
+                settings_revision: session.configuration().map(|c| c.settings_revision.clone()),
+                actions: native
+                    .as_ref()
+                    .ok_or(TransportError::Native)?
+                    .take_actions()
+                    .await?,
+            };
+            reply.validate_actions()?;
         }
         let stopped = matches!(reply, HostReply::Stopped {});
         sequence = sequence

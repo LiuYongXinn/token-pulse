@@ -110,6 +110,9 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     assert!(
         status.settings_revision.is_none() && status.failure.is_none() && status.density.is_none()
     );
+    assert!(
+        matches!(connection.exchange(HostMessage::GetActions {}).await.unwrap(), HostReply::Actions { settings_revision: None, actions } if actions.is_empty())
+    );
     connection
         .exchange(HostMessage::Configure {
             configuration: token_pulse_taskbar::HostConfiguration {
@@ -131,6 +134,9 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     assert_eq!(
         status.state,
         token_pulse_taskbar::HostDisplayState::Disabled
+    );
+    assert!(
+        matches!(connection.exchange(HostMessage::GetActions {}).await.unwrap(), HostReply::Actions { settings_revision: Some(revision), actions } if revision.as_str() == "1" && actions.is_empty())
     );
     assert!(matches!(
         connection

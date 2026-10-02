@@ -21,6 +21,50 @@ fn session() -> HostSession {
     HostSession::new("synthetic-host".into(), "a".repeat(64)).unwrap()
 }
 #[test]
+fn action_pull_is_strict_bounded_and_requires_revision_for_nonempty_batch() {
+    let empty = HostReply::Actions {
+        settings_revision: None,
+        actions: Vec::new(),
+    };
+    assert!(empty.validate_actions().is_ok());
+    assert!(
+        HostReply::Actions {
+            settings_revision: None,
+            actions: vec![HostAction::OpenFloat {}]
+        }
+        .validate_actions()
+        .is_err()
+    );
+    assert!(
+        HostReply::Actions {
+            settings_revision: Some(number("9007199254740993")),
+            actions: vec![HostAction::OpenStats {}; 4]
+        }
+        .validate_actions()
+        .is_ok()
+    );
+    assert!(
+        HostReply::Actions {
+            settings_revision: Some(number("1")),
+            actions: vec![HostAction::OpenStats {}; 5]
+        }
+        .validate_actions()
+        .is_err()
+    );
+    assert!(
+        serde_json::from_str::<HostMessage>(r#"{"kind":"get_actions","command":"arbitrary"}"#)
+            .is_err()
+    );
+    assert!(serde_json::from_str::<HostReply>(r#"{"kind":"actions","settings_revision":"1","actions":[{"kind":"open_float","path":"untrusted"}]}"#).is_err());
+    let mut host = session();
+    host.apply(frame("1", HostMessage::Hello {})).unwrap();
+    assert_eq!(
+        host.apply(frame("2", HostMessage::GetActions {})).unwrap(),
+        HostReply::Heartbeat {}
+    );
+    // Session alone cannot manufacture a native event; transport must obtain the UI result.
+}
+#[test]
 fn configuration_revision_clears_stale_view_and_rejects_conflicting_preferences() {
     let mut receiver = session();
     receiver.apply(frame("1", HostMessage::Hello {})).unwrap();

@@ -1,4 +1,6 @@
 //! Shared native-host wire contract and fail-closed receiver. No Tauri, database or log access.
+#[cfg(any(windows, test))]
+mod click;
 pub mod display;
 #[cfg(windows)]
 pub mod windows;
@@ -13,6 +15,7 @@ use token_pulse_core::{
 
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_FRAME_BYTES: usize = 65_536;
+pub const MAX_HOST_ACTIONS: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -103,6 +106,7 @@ pub enum HostMessage {
         configuration: HostConfiguration,
     },
     GetStatus {},
+    GetActions {},
     Shutdown {},
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -119,11 +123,39 @@ pub enum HostAction {
 pub enum HostReply {
     Ready {},
     Heartbeat {},
-    PrivacyApplied { enabled: bool },
+    PrivacyApplied {
+        enabled: bool,
+    },
     Stopped {},
-    Action { action: HostAction },
-    Configured { settings_revision: DecimalInt },
-    Status { status: HostStatus },
+    Action {
+        action: HostAction,
+    },
+    Configured {
+        settings_revision: DecimalInt,
+    },
+    Status {
+        status: HostStatus,
+    },
+    Actions {
+        settings_revision: Option<DecimalInt>,
+        #[schemars(length(max = 4))]
+        actions: Vec<HostAction>,
+    },
+}
+impl HostReply {
+    pub fn validate_actions(&self) -> Result<(), WireError> {
+        match self {
+            Self::Actions {
+                settings_revision,
+                actions,
+            } if actions.len() <= MAX_HOST_ACTIONS
+                && (actions.is_empty() || settings_revision.is_some()) =>
+            {
+                Ok(())
+            }
+            _ => Err(WireError::InvalidFrame),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -430,6 +462,7 @@ impl HostSession {
             HostMessage::Hello {} => Err(WireError::InvalidState),
             HostMessage::Heartbeat {} => Ok(HostReply::Heartbeat {}),
             HostMessage::GetStatus {} => Ok(HostReply::Heartbeat {}),
+            HostMessage::GetActions {} => Ok(HostReply::Heartbeat {}),
             // Session validates the request; transport must obtain an actual UI receipt for status.
             HostMessage::Configure { configuration } => {
                 configuration

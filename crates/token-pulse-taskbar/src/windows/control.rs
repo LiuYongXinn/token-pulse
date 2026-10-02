@@ -51,6 +51,7 @@ impl Drop for BusyGuard<'_> {
 enum Operation {
     Replace(Option<Box<TaskbarView>>),
     Inspect,
+    TakeActions,
     Enable(bool),
     Configure(bool, DisplayPreferences),
 }
@@ -72,6 +73,7 @@ pub struct NativeReceipt {
     pub embedded: bool,
     pub embedding_failure: Option<ProbeError>,
     pub last_restore: Option<RestoreDisposition>,
+    pub actions: Vec<crate::HostAction>,
 }
 impl NativeReceipt {
     pub fn host_status(
@@ -170,6 +172,7 @@ impl State {
                 && self.canvas.as_ref().is_some_and(|c| c.visible()),
             embedding_failure: self.embedding_failure,
             last_restore: self.last_restore,
+            actions: Vec::new(),
         }
     }
     fn system_changed(&mut self) {
@@ -196,7 +199,7 @@ impl State {
         }
         self.embedding_failure = None;
         if let Some(canvas) = self.canvas.as_mut() {
-            canvas.clear().map_err(|_| TransportError::Native)?;
+            canvas.clear_render().map_err(|_| TransportError::Native)?;
             if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
                 let available = self
                     .layout
@@ -320,8 +323,21 @@ unsafe extern "system" fn procedure(
                 // A posted message carries no pointers or commands; only this private bounded
                 // Rust queue owns the request. External WM_APP messages cannot create an action.
                 while let Ok(request) = state.receiver.try_recv() {
+                    let take_actions = matches!(request.operation, Operation::TakeActions);
                     let result = match request.operation {
                         Operation::Replace(view) => {
+                            if view.is_none()
+                                || state.view.as_ref().zip(view.as_ref()).is_none_or(
+                                    |(old, new)| {
+                                        old.settings_revision != new.settings_revision
+                                            || old.privacy != new.privacy
+                                    },
+                                )
+                            {
+                                if let Some(canvas) = state.canvas.as_mut() {
+                                    canvas.clear_interactions();
+                                }
+                            }
                             state.view = view;
                             state.prepare()
                         }
@@ -345,11 +361,24 @@ unsafe extern "system" fn procedure(
                             }
                             Ok(())
                         }
+                        Operation::TakeActions => Ok(()),
                     };
                     if result.is_err() {
                         state.native_failed = true;
                     }
-                    let _ = request.reply.send(result.map(|_| state.receipt(window)));
+                    let _ = request.reply.send(result.map(|_| {
+                        let mut receipt = state.receipt(window);
+                        if take_actions {
+                            if let Some(canvas) = state.canvas.as_mut() {
+                                if receipt.embedded && !receipt.paint_failed {
+                                    receipt.actions = canvas.take_actions();
+                                } else {
+                                    canvas.clear_interactions();
+                                }
+                            }
+                        }
+                        receipt
+                    }));
                 }
                 return 0;
             }
@@ -450,6 +479,9 @@ impl NativeController {
     }
     pub async fn inspect(&self) -> Result<NativeReceipt, TransportError> {
         self.request(Operation::Inspect).await
+    }
+    pub async fn take_actions(&self) -> Result<Vec<crate::HostAction>, TransportError> {
+        Ok(self.request(Operation::TakeActions).await?.actions)
     }
     /// Only this private Rust queue can enable native layout mutation. Default is disabled.
     pub async fn enable_taskbar(&self, enabled: bool) -> Result<NativeReceipt, TransportError> {

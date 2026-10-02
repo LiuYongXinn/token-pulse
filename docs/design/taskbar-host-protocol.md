@@ -26,7 +26,7 @@
 
 管道使用保护 DACL，只允许当前进程用户 SID，句柄不继承；拒绝远程连接，限制一个实例，并拒绝同名管道抢先建立。自定义 ACL 避免使用包含其他访问者的默认安全描述符。[Microsoft 管道安全](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights) 两端在消息读取前用内核进程 ID 校验真实客户端 / 服务端，主端必须匹配刚启动的 PID，宿主端必须匹配启动参数中的主 PID；nonce 再绑定消息会话。[Microsoft 客户端进程 ID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)
 
-连接与每次交换最多等待 5 秒。宿主连续 15 秒没有完整主端消息时退出；后续管理器按 5 秒发送心跳。当前 `HostConnection` 提供串行交换，不负责后台调度，也尚未接入原生动作通知。回复必须匹配消息种类、隐私值、身份和严格递增序号；错误立即断连并关闭自有进程，即使连接对象仍存活也不能继续交换。生产调用所有读取都有截止时间；半帧超时后关闭会话，不从半帧继续读取。
+连接与每次交换最多等待 5 秒。宿主连续 15 秒没有完整主端消息时退出；后续管理器按 5 秒发送心跳。当前 `HostConnection` 提供串行交换，不负责后台调度，使用 get_actions 拉取有界原生意图，主应用窗口执行继续接入。回复必须匹配消息种类、隐私值、身份和严格递增序号；错误立即断连并关闭自有进程，即使连接对象仍存活也不能继续交换。生产调用所有读取都有截止时间；半帧超时后关闭会话，不从半帧继续读取。
 
 ## 消息与展示投影
 
@@ -143,3 +143,10 @@ M13d4 主窗口正式设置页和诊断接入 get_taskbar_preferences / set_task
 
 
 M13e1 主端回退最多一个异步工作，绑定发布代际及停止 / 暂停 / 休眠状态；显示前再次核对有效偏好和实际失败。小窗创建 / 原生显示发生在主应用，不发给宿主任意动作或路径；实际结果附在 TaskbarRuntimeSnapshot.fallback_visible / fallback_error，未知为 null，与原生失败分开。主线程非激活显示有 5 秒等待期限，超时取消迟到显示并表达失败，旧代际结果拒绝。Tauri 可见性与原生样式同步更新，不用直接 Win32 显示绕过框架缓存；恢复或关闭回退不会自动隐藏已有小窗。
+
+
+## M13e2a：有界原生意图拉取
+
+HostMessage.get_actions 是严格空结构；HostReply.actions 含 nullable settings_revision 与最多 4 项受限 HostAction。非空批次必须有配置修订，主端继续验证身份、序号和一请求一回复，拒绝未经请求的旧 action 帧。宿主在 UI 私有队列上验证实际嵌入 / 绘制正常后原子取走； disabled / 脱离时返回空批次，不把缓存意图带到新配置。
+
+单击在 GetDoubleClickTime 的系统期限后只产生 OpenFloat；双击取消该待发单击，只产生 OpenStats，并忽略第二次抬起。动作在单调时钟 5 秒后失效、队列最多 4 项满后拒绝新项。普通同修订 snapshot 刷新保留待发和已排动作；配置修订 / 隐私改变及清屏、脱离、销毁、绘制失败清除计时器与全部意图。自有子窗按下事件不走默认 Explorer 父通知通路。此阶段只实现原生意图 / 通道，主应用执行仍待 M13e2b；开发鼠标整场受锁屏覆盖及前台状态异常限制，未记为系统验收通过，见交付记录。

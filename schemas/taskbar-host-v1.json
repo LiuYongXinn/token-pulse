@@ -218,6 +218,38 @@
               "status"
             ],
             "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "actions": {
+                "items": {
+                  "$ref": "#/$defs/HostAction"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              "kind": {
+                "const": "actions",
+                "type": "string"
+              },
+              "settings_revision": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DecimalInt"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "settings_revision",
+              "actions"
+            ],
+            "type": "object"
           }
         ]
       },
@@ -486,6 +518,19 @@
             "properties": {
               "kind": {
                 "const": "get_status",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "get_actions",
                 "type": "string"
               }
             },
