@@ -1,10 +1,10 @@
 # 本地开发与运行
 
-当前最新完整安装包为 M16g：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,623,768 字节，SHA-256 `65a53f0b0181762cdd8ee58cbed6bceb4ea115c8b7756758f687cd4497009c4e`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置 / 工作区尺寸适配及任务栏 Tab 修复。下面 M16f / M16e 及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新和 Win11 / 物理多屏验收仍需外部条件；同 DPI 显示器切换检测还需补齐。
+当前最新完整安装包为 M16h：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,629 字节，SHA-256 `ed28d76646d0d3b14f03e26d7d3851c590a9bf324c7c08cda22bd9399a06d212`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置 / 工作区尺寸适配、同 DPI 显示器工作区切换检测及任务栏 Tab 修复。下面旧包及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新、Win11 原生任务栏适配和物理多屏验收仍需外部条件。详见[最新构建记录](delivery-status.md#m16h包含同-dpi-工作区切换检测的安装包)。
 
 ## 主窗口位置冷启动验收
 
-M15f3 已追加合成 960×600 DIP 工作区在真实主窗口上的尺寸适配 / 四边检查及 React 导航 / 页脚滚动检查，随后恢复本次普通窗口继续退出保存验证；不修改系统 DPI / 工作区。浏览器对应检查为 `npx playwright test tests/ui/overview.spec.ts --grep 'small work-area' --workers=1`，两项截图只用测试桥 DTO。M15f4 进一步用合成同 DPI 较大旧屏内存记录、真实超大窗口及普通 Moved 事件验证生产检测 / 适配，随后同屏事件保持原普通几何；脚本要求 SAME_DPI_TRANSITION_OK。没有物理多屏切换或 DPI 改动。M15f3 已进入 M16g 包，M15f4 提交时仍未重新打包。
+M15f3 已追加合成 960×600 DIP 工作区在真实主窗口上的尺寸适配 / 四边检查及 React 导航 / 页脚滚动检查，随后恢复本次普通窗口继续退出保存验证；不修改系统 DPI / 工作区。浏览器对应检查为 `npx playwright test tests/ui/overview.spec.ts --grep 'small work-area' --workers=1`，两项截图只用测试桥 DTO。M15f4 进一步用合成同 DPI 较大旧屏内存记录、真实超大窗口及普通 Moved 事件验证生产检测 / 适配，随后同屏事件保持原普通几何；脚本要求 SAME_DPI_TRANSITION_OK。没有物理多屏切换或 DPI 改动。M15f3 / M15f4 现均已进入 M16h 包。
 
 先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-main-window.ps1`。三个独立 debug 应用进程共用本次 UUID 隔离数据库，只接受 seed / restore / missing 阶段，不能输入任意数据路径。实际普通移动与快速最大化、最小化不覆盖位置、关闭隐藏 / 重新打开、下一进程启动恢复、合成原屏缺失时主屏工作区夹紧通过；冷启动预期在正式恢复前冻结，不依赖恢复后保存值；最后移动在数据库尚未保存时立即退出，下一进程必须读到独立已知的最终位置，验证退出保存。Win10 19045 / 150% SEQUENCE_OK、退出 0，1412 提示仍保留，无真实来源 / 账户或性能测试。
 
