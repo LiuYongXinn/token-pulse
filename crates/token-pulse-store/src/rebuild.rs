@@ -1,5 +1,7 @@
 //! Candidates stay invisible until a validated dependency group is published in one transaction.
 mod canonical;
+mod replacement;
+pub use crate::file_candidate::rebuild::ReplacementInput;
 use crate::{
     Database, ErrorCode, StoreResult,
     batch::{
@@ -35,7 +37,7 @@ pub struct FileInput {
 #[serde(deny_unknown_fields)]
 pub struct LedgerInput {
     pub session_key: String,
-    pub old_ledger_id: String,
+    pub old_ledger_id: Option<String>,
     pub candidate_ledger_id: String,
     pub provider: String,
     pub provider_session_id: Option<String>,
@@ -52,6 +54,8 @@ pub struct RebuildManifest {
     pub accounting_version: String,
     pub files: Vec<FileInput>,
     pub ledgers: Vec<LedgerInput>,
+    #[serde(default)]
+    pub replacements: Vec<ReplacementInput>,
 }
 #[derive(Serialize)]
 pub struct CandidateBatch {
@@ -153,9 +157,10 @@ fn selected_generations(m: &RebuildManifest) -> StoreResult<String> {
     )?)
 }
 fn manifest(tx: &Transaction<'_>, job_id: &str) -> StoreResult<RebuildManifest> {
-    let value:String=tx.query_row("SELECT input_manifest_json FROM ledger_generations WHERE ledger_id=(SELECT json_extract(resume_json,'$.candidate_ledger_ids[0]') FROM jobs WHERE job_id=?1)",[job_id],|r|r.get(0))?;
+    let value:String=tx.query_row("SELECT manifest_json FROM rebuild_manifests WHERE job_id=?1 UNION ALL SELECT input_manifest_json FROM ledger_generations WHERE ledger_id=(SELECT json_extract(resume_json,'$.candidate_ledger_ids[0]') FROM jobs WHERE job_id=?1) LIMIT 1",[job_id],|r|r.get(0))?;
     let m: RebuildManifest = json(&value)?;
-    if m.version != 1
+    if !matches!(m.version, 1 | 2)
+        || (m.version == 1 && !m.replacements.is_empty())
         || m.job_id != job_id
         || m.parser_version != PARSER_VERSION
         || m.accounting_version != ACCOUNTING_VERSION
@@ -164,18 +169,42 @@ fn manifest(tx: &Transaction<'_>, job_id: &str) -> StoreResult<RebuildManifest> 
     }
     Ok(m)
 }
+pub(crate) fn has_manifest(tx: &Transaction<'_>, job: &str) -> StoreResult<bool> {
+    Ok(tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM rebuild_manifests WHERE job_id=?1)",
+        [job],
+        |r| r.get(0),
+    )?)
+}
 fn fresh(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
+    let job = jobs::load(tx, &m.job_id)?;
+    if job.checkpoint.candidate_ledger_ids
+        != m.ledgers
+            .iter()
+            .map(|l| l.candidate_ledger_id.clone())
+            .collect::<Vec<_>>()
+    {
+        return Err(ErrorCode::CandidateObsolete.into());
+    }
     let expected_sessions = m
         .ledgers
         .iter()
         .map(|l| l.session_key.clone())
         .collect::<BTreeSet<_>>();
-    let actual_sessions = dependency_closure(
-        tx,
-        &JobScope::Sessions {
-            session_keys: expected_sessions.iter().cloned().collect(),
-        },
-    )?;
+    let replacements = crate::file_candidate::rebuild::frozen_inputs(tx, &m.job_id)?;
+    if replacements != m.replacements {
+        return Err(ErrorCode::CandidateObsolete.into());
+    }
+    let actual_sessions = if replacements.is_empty() {
+        dependency_closure(
+            tx,
+            &JobScope::Sessions {
+                session_keys: expected_sessions.iter().cloned().collect(),
+            },
+        )?
+    } else {
+        replacement::closure(tx, &job.request.scope, &replacements)?
+    };
     if actual_sessions != expected_sessions {
         return Err(ErrorCode::CandidateObsolete.into());
     }
@@ -183,6 +212,7 @@ fn fresh(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
     for session in &actual_sessions {
         actual_files.extend(current_inputs(tx, session)?);
     }
+    replacement::select(&mut actual_files, &replacements);
     if actual_files != m.files.iter().map(|f| f.generation_id.clone()).collect() {
         return Err(ErrorCode::CandidateObsolete.into());
     }
@@ -281,26 +311,27 @@ impl Database {
         EpochMs::new(at_ms)?;
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             require_state(&tx,&job_id,JobState::Running)?;let job=jobs::load(&tx,&job_id)?;
-            if job.job.kind!=JobKind::Rebuild || !job.checkpoint.candidate_ledger_ids.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
-            // Claimed replacements require an explicit replacement manifest. Ordinary replay
-            // must never report success after silently rebuilding only the old physical input.
-            if crate::file_candidate::rebuild::has_owned(&tx,&job_id)? {return Err(ErrorCode::InvalidQuery.into());}
-            let closure=dependency_closure(&tx,&job.request.scope)?;
-            if closure.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
+            if job.job.kind!=JobKind::Rebuild || !job.checkpoint.candidate_ledger_ids.is_empty() || has_manifest(&tx,&job_id)? {return Err(ErrorCode::InvalidQuery.into());}
+            let replacements=crate::file_candidate::rebuild::frozen_inputs(&tx,&job_id)?;
+            let closure=if replacements.is_empty() {dependency_closure(&tx,&job.request.scope)?} else {replacement::closure(&tx,&job.request.scope,&replacements)?};
+            if closure.is_empty() && replacements.is_empty() {return Err(ErrorCode::InvalidQuery.into());}
             let mut files=BTreeMap::new();let mut ledgers=vec![];
             for key in closure {
-                let (parser,accounting):(String,String)=tx.query_row("SELECT l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&key],|r|Ok((r.get(0)?,r.get(1)?)))?;
-                if parser!=PARSER_VERSION || (accounting!=ACCOUNTING_VERSION && !token_pulse_core::domain::can_upgrade_accounting_version(&accounting)) {return Err(ErrorCode::UnsupportedFormat.into());}
+                let versions:Option<(String,String)>=tx.query_row("SELECT l.parser_version,l.accounting_version FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE s.session_key=?1",[&key],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+                if let Some((parser,accounting))=versions {if parser!=PARSER_VERSION || (accounting!=ACCOUNTING_VERSION && !token_pulse_core::domain::can_upgrade_accounting_version(&accounting)) {return Err(ErrorCode::UnsupportedFormat.into());}}
                 if tx.query_row("SELECT EXISTS(SELECT 1 FROM ledger_generations WHERE session_key=?1 AND state='candidate')",[&key],|r|r.get::<_,bool>(0))? {return Err(ErrorCode::RevisionConflict.into());}
                 let candidate=format!("candidate-{:x}",Sha256::digest(serde_json::to_vec(&(&job_id,&key))?));
                 for generation in current_inputs(&tx,&key)? {files.insert(generation.clone(),input_file(&tx,&generation)?);}
                 ledgers.push(input_ledger(&tx,&key,candidate)?);
             }
-            let m=RebuildManifest{version:1,job_id:job_id.clone(),parser_version:PARSER_VERSION.into(),accounting_version:ACCOUNTING_VERSION.into(),files:files.into_values().collect(),ledgers};
+            let mut generations=files.keys().cloned().collect();replacement::select(&mut generations,&replacements);
+            files=generations.into_iter().map(|g|Ok((g.clone(),input_file(&tx,&g)?))).collect::<StoreResult<_>>()?;
+            let m=RebuildManifest{version:2,job_id:job_id.clone(),parser_version:PARSER_VERSION.into(),accounting_version:ACCOUNTING_VERSION.into(),files:files.into_values().collect(),ledgers,replacements};
             let encoded=serde_json::to_string(&m)?;if encoded.len()>16*1024*1024 {return Err(ErrorCode::InvalidQuery.into());}
             for file in &m.files {let _:Vec<ContentAnchor>=json(&file.anchors_json)?;}
-            let reference=serde_json::to_string(&serde_json::json!({"version":1,"manifest_owner":m.ledgers[0].candidate_ledger_id}))?;
+            let reference=serde_json::to_string(&serde_json::json!({"version":2,"manifest_job":m.job_id}))?;
             for (index,l) in m.ledgers.iter().enumerate() {tx.execute("INSERT INTO ledger_generations(ledger_id,session_key,state,parser_version,accounting_version,base_data_revision,created_at_ms,input_manifest_json) VALUES(?1,?2,'candidate',?3,?4,(SELECT data_revision FROM app_state),?5,?6)",params![l.candidate_ledger_id,l.session_key,PARSER_VERSION,ACCOUNTING_VERSION,at_ms,if index==0 {&encoded} else {&reference}])?;}
+            tx.execute("INSERT INTO rebuild_manifests VALUES(?1,?2,?3)",params![job_id,encoded,at_ms])?;
             let mut checkpoint=job.checkpoint;checkpoint.candidate_ledger_ids=m.ledgers.iter().map(|l|l.candidate_ledger_id.clone()).collect();
             tx.execute("UPDATE jobs SET resume_json=?1,updated_at_ms=?2 WHERE job_id=?3",params![serde_json::to_string(&checkpoint)?,at_ms,job_id])?;
             tx.commit()?;Ok(m)
@@ -421,18 +452,28 @@ fn publish(
     validate(&tx, &m)?;
     let revision: i64 = tx.query_row("SELECT data_revision FROM app_state", [], |r| r.get(0))?;
     let next = revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?;
+    let identities = if m.replacements.is_empty() {
+        None
+    } else {
+        Some(canonical::load(&tx, &m)?)
+    };
     for ledger in &m.ledgers {
         let total = |id: &str| -> StoreResult<(i64, Option<String>)> {
             Ok(tx.query_row("SELECT COUNT(*),sum_token_decimal(total_tokens) FROM usage_events WHERE ledger_id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?)))?)
         };
-        let (old_count, old_total) = total(&ledger.old_ledger_id)?;
+        let (old_count, old_total) = ledger
+            .old_ledger_id
+            .as_deref()
+            .map(total)
+            .transpose()?
+            .unwrap_or((0, None));
         let (new_count, new_total) = total(&ledger.candidate_ledger_id)?;
         tx.execute(
             "UPDATE ledger_generations SET state='retired' WHERE ledger_id=?1 AND state='active'",
             [&ledger.old_ledger_id],
         )?;
         tx.execute("UPDATE ledger_generations SET state='active',activated_at_ms=?1 WHERE ledger_id=?2 AND state='candidate'",params![at_ms,ledger.candidate_ledger_id])?;
-        tx.execute("UPDATE sessions SET active_ledger_id=?1,last_activity_ms=(SELECT MAX(occurred_at_ms) FROM usage_events WHERE ledger_id=?1) WHERE session_key=?2",params![ledger.candidate_ledger_id,ledger.session_key])?;
+        tx.execute("UPDATE sessions SET active_ledger_id=?1,identity_status=CASE WHEN identity_status='candidate' THEN 'confirmed' ELSE identity_status END,last_activity_ms=(SELECT MAX(occurred_at_ms) FROM usage_events WHERE ledger_id=?1) WHERE session_key=?2",params![ledger.candidate_ledger_id,ledger.session_key])?;
         let difference = serde_json::json!({"old_event_count":old_count.to_string(),"new_event_count":new_count.to_string(),"old_total_tokens":old_total,"new_total_tokens":new_total});
         let audit = format!(
             "audit-{:x}",
@@ -440,7 +481,12 @@ fn publish(
         );
         tx.execute("INSERT INTO rebuild_audits(audit_id,job_id,session_key,old_ledger_id,new_ledger_id,reason,difference_json,committed_data_revision,created_at_ms) VALUES(?1,?2,?3,?4,?5,'rebuild',?6,?7,?8)",params![audit,job_id,ledger.session_key,ledger.old_ledger_id,ledger.candidate_ledger_id,serde_json::to_string(&difference)?,next,at_ms])?;
     }
+    replacement::publish_files(&tx, &m, at_ms)?;
+    if let Some(identities) = identities {
+        replacement::publish_identities(&tx, &m, &identities)?;
+    }
     canonical::publish_aliases(&tx, &m)?;
+    replacement::resolve_parents(&tx, &m)?;
     tx.execute("UPDATE app_state SET data_revision=?1", [next])?;
     let job = jobs::load(&tx, job_id)?;
     let mut progress: token_pulse_core::jobs::JobProgress = json(&tx.query_row(

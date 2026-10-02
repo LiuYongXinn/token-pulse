@@ -258,12 +258,24 @@ fn verify_physical_inputs(
     for input in &m.files {
         stopped(db, &m.job_id, stop)?;
         let target = db.rebuild_file_path(&input.file_id)?;
+        let replacement = m
+            .replacements
+            .iter()
+            .any(|r| r.generation_id == input.generation_id);
         if !target.source_enabled {
+            if replacement {
+                return Err(ErrorCode::CandidateObsolete.into());
+            }
             continue;
         }
         let path = Path::new(&target.path);
         match std::fs::symlink_metadata(path) {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if replacement {
+                    return Err(ErrorCode::CandidateObsolete.into());
+                }
+                continue;
+            }
             Err(_) => return Err(ErrorCode::SourceUnreadable.into()),
             Ok(_) => {}
         }
@@ -345,7 +357,24 @@ fn run(
         "planning",
         now(),
     )?;
-    if !db.rebuild_has_targets(&db.get_job(job_id)?.request.scope)? {
+    let replacements = db.rebuild_file_candidates(job_id)?;
+    for input in &replacements {
+        let mut after = input.after_offset;
+        loop {
+            stopped(db, job_id, stop)?;
+            let receipt = db.register_file_candidate_inputs(
+                input.generation_id.clone(),
+                job_id.into(),
+                after,
+                now(),
+            )?;
+            after = receipt.after_offset;
+            if receipt.complete {
+                break;
+            }
+        }
+    }
+    if replacements.is_empty() && !db.rebuild_has_targets(&db.get_job(job_id)?.request.scope)? {
         let mut progress = progress_of(db, job_id)?;
         progress.discovery_complete = true;
         db.checkpoint_job(

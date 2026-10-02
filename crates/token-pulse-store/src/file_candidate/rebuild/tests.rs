@@ -468,7 +468,7 @@ fn cancellation_failure_and_startup_interruption_release_only_owned_candidate_an
     }
 }
 #[test]
-fn ordinary_manifest_and_success_transition_cannot_silently_ignore_owned_replacement() {
+fn manifest_selects_owned_replacement_and_direct_success_cannot_bypass_publication() {
     let (_dir, db) = populated();
     let old = active(&db);
     staging(&db, "new-session", "new-provider", 1, true);
@@ -477,9 +477,18 @@ fn ordinary_manifest_and_success_transition_cannot_silently_ignore_owned_replace
     advance(&db, "owner", JobState::Queued, JobState::Running);
     db.register_file_candidate_inputs("replacement".into(), "owner".into(), -1, 5)
         .unwrap();
-    assert_eq!(
-        db.prepare_rebuild("owner".into(), 6).unwrap_err().code,
-        ErrorCode::InvalidQuery
+    let manifest = db.prepare_rebuild("owner".into(), 6).unwrap();
+    assert_eq!(manifest.replacements.len(), 1);
+    assert_eq!(manifest.files.len(), 1);
+    assert_eq!(manifest.files[0].generation_id, "replacement");
+    assert!(
+        manifest
+            .ledgers
+            .iter()
+            .find(|l| l.session_key == "new-session")
+            .unwrap()
+            .old_ledger_id
+            .is_none()
     );
     advance(&db, "owner", JobState::Running, JobState::Validating);
     advance(&db, "owner", JobState::Validating, JobState::Publishing);
@@ -606,7 +615,7 @@ fn schema_eight_ready_candidate_upgrades_and_registers_without_reimporting_or_ch
     // A real v8 fixture has the original tables/checksums and no v9 ownership tables.
     db.write(|conn| {
         let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        tx.execute_batch("DROP TABLE file_rebuild_sessions; DROP TABLE file_rebuild_candidates; DELETE FROM schema_migrations WHERE version=9; UPDATE app_state SET schema_version=8;")?;
+        tx.execute_batch("DROP TABLE rebuild_manifests; DROP TABLE file_rebuild_sessions; DROP TABLE file_rebuild_candidates; DELETE FROM schema_migrations WHERE version>=9; UPDATE app_state SET schema_version=8;")?;
         tx.pragma_update(None,"user_version",8)?;tx.commit()?;Ok(())
     }).unwrap();
     drop(db);
@@ -628,7 +637,7 @@ fn schema_eight_ready_candidate_upgrades_and_registers_without_reimporting_or_ch
     db.snapshot(|tx, _| {
         assert_eq!(
             tx.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))?,
-            9
+            crate::migration::SCHEMA_VERSION
         );
         assert_eq!(
             tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r

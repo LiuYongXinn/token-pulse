@@ -24,7 +24,7 @@ fn change(db: &Database, id: &str, expected: JobState, next: JobState) {
     )
     .unwrap();
 }
-fn planned(db: &Database) -> RebuildManifest {
+pub(super) fn planned(db: &Database) -> RebuildManifest {
     db.create_job(
         "rebuild".into(),
         JobRequest {

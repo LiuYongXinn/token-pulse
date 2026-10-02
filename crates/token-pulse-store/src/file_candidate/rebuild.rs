@@ -20,6 +20,78 @@ pub struct RegistrationReceipt {
     pub registered_rows: usize,
     pub complete: bool,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProposedSession {
+    pub session_key: String,
+    pub provider_session_id: String,
+    pub parent_provider_id: Option<String>,
+    pub created_at_ms: Option<i64>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplacementInput {
+    pub generation_id: String,
+    pub base: FrozenFile,
+    pub context_json: String,
+    pub after_offset: i64,
+    pub sessions: Vec<ProposedSession>,
+}
+// The same selection is used before planning, throughout replay and immediately before commit.
+// It deliberately does not use `owner`: replay has already frozen its ledger manifest.
+pub(crate) fn frozen_inputs(
+    tx: &Transaction<'_>,
+    job_id: &str,
+) -> StoreResult<Vec<ReplacementInput>> {
+    let job = jobs::load(tx, job_id)?;
+    let mut q = tx.prepare(
+        "SELECT generation_id FROM file_rebuild_candidates WHERE job_id=?1 ORDER BY generation_id",
+    )?;
+    let generations = q
+        .query_map([job_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(q);
+    let mut result = Vec::new();
+    for generation in generations {
+        let c = load(tx, &generation)?;
+        fresh(tx, &c)?;
+        let r = registration(tx, &generation)?;
+        let last: i64 = tx.query_row("SELECT COALESCE(MAX(byte_offset),-1) FROM file_candidate_observations WHERE generation_id=?1", [&generation], |r| r.get(0))?;
+        if !permitted(&job, &c.base.source_id)
+            || !matches!(
+                job.job.state,
+                JobState::Running | JobState::Validating | JobState::Publishing
+            )
+            || c.state != "claimed"
+            || !r.materialized
+            || r.after_offset != last
+            || r.checkpoint_revision != c.checkpoint.checkpoint_revision
+            || c.checkpoint.committed_offset != c.checkpoint.observed_size
+            || c.checkpoint.context.oversized_line.is_some()
+        {
+            return Err(ErrorCode::CandidateObsolete.into());
+        }
+        let mut q = tx.prepare("SELECT session_key,provider_session_id,parent_provider_id,created_at_ms FROM file_rebuild_sessions WHERE generation_id=?1 ORDER BY session_key")?;
+        let sessions = q
+            .query_map([&generation], |r| {
+                Ok(ProposedSession {
+                    session_key: r.get(0)?,
+                    provider_session_id: r.get(1)?,
+                    parent_provider_id: r.get(2)?,
+                    created_at_ms: r.get(3)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        result.push(ReplacementInput {
+            generation_id: generation,
+            base: c.base,
+            context_json: serde_json::to_string(&c.checkpoint.context)?,
+            after_offset: r.after_offset,
+            sessions,
+        });
+    }
+    Ok(result)
+}
 fn registration(tx: &Transaction<'_>, generation: &str) -> StoreResult<FileCandidateRegistration> {
     tx.query_row("SELECT generation_id,job_id,checkpoint_revision,after_offset,materialized FROM file_rebuild_candidates WHERE generation_id=?1",[generation],|r|Ok(FileCandidateRegistration{generation_id:r.get(0)?,job_id:r.get(1)?,checkpoint_revision:r.get(2)?,after_offset:r.get(3)?,materialized:r.get(4)?})).optional()?.ok_or(ErrorCode::InvalidQuery.into())
 }
@@ -54,6 +126,7 @@ fn owner(
     if !permitted(&job, &c.base.source_id)
         || job.job.state != JobState::Running
         || !job.checkpoint.candidate_ledger_ids.is_empty()
+        || crate::rebuild::has_manifest(tx, job_id)?
     {
         return Err(ErrorCode::RevisionConflict.into());
     }
@@ -157,6 +230,7 @@ fn claim_in_tx(
     if !permitted(&job, &c.base.source_id)
         || !matches!(job.job.state, JobState::Queued | JobState::Running)
         || !job.checkpoint.candidate_ledger_ids.is_empty()
+        || crate::rebuild::has_manifest(tx, job_id)?
         || expected_revision != c.checkpoint.checkpoint_revision
         || c.checkpoint.committed_offset != c.checkpoint.observed_size
         || c.checkpoint.context.oversized_line.is_some()

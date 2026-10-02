@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M06f6：`cargo test -p token-pulse-store rebuild --lib` 29 项（新增替换清单 / 发布 6 项）、`file_candidate --lib` 22 项；`cargo test -p token-pulse-collector` 55 项（replacement-read 18 项，新增 8 项）通过。store / collector / desktop strict Clippy、fmt / Git diff 通过。合成 SQLite 检查整组发布回滚、真实旧快照、nullable 审计、跨来源旧 / 新关系、冻结输入过期、诊断 / 扫描门禁、无账本清单及 v1 兼容；Win10 临时 JSONL 检查真实只读读取、替换发布、追加及独立后台作业。源属性恢复原权限，不读取用户 Home / 账户 / auth.json；无 UI 变化、人工窗口 / 安装或性能验收。正常 CollectorService 自动触发仍待 M06f7。
+
 M06f5 补充：`cargo test -p token-pulse-collector` 全部 47 项功能检查通过，其中 replacement-read 为 10 项；store / collector / desktop `cargo clippy --all-targets -- -D warnings`、fmt 与 Git diff 检查通过。
 
 M06f5：`cargo test -p token-pulse-store file_candidate --lib` 22 项（新增所有权 / 登记 11 项）、普通采集 `batch::tests` 9 项及 `cargo test -p token-pulse-store --test jobs` 6 项通过；collector 新增 `readonly_replacement_to_owned_registration` 的真实临时日志组合检查通过。验证 128 记录及 16 MiB 登记边界、重开库继续、原子排队 / 竞争认领、header / 身份与旧游标拒绝、登记 / 取消失败回滚、终态释放、普通成功门禁及 v8 → v9 基本兼容。大指纹仅检查事务载荷边界，未测量性能；v8 夹具只验证本次正常 schema 增量，不扩展已取消的迁移保护或灾难恢复。尚未接正常替换重建发布，没有新 UI / 人工原生验收。

@@ -1,5 +1,9 @@
 # 数据与存储详细设计
 
+M06f6 schema v10 增加 `rebuild_manifests`，无会话 / 无账本的替换也能冻结输入，不制造占位身份。manifest v2 保存原文件冻结值、封存新代次及登记游标 / 完成、proposed header、ReaderContext；旧账本指针允许 null。闭包在普通已发布身份之外仅加入本作业 header，覆盖旧 / 新父关系、镜像及既有别名；回放移除被替换旧代次，保留其余当前输入。阶段写入、回放、验证和发布检查同一清单、作业账本集合与活动指针。旧 v1 清单继续兼容，不做全历史 parser 自动重解析。
+
+核算分类及实际物理前缀验证通过后，同一 Writer 事务发布整组账本与身份、旧代次 retired / 新代次 current、文件 identity / 指针、candidate published、必要诊断 / 旧诊断失效、审计和作业成功；data revision 仅增一次，价格与设置不变。失败保留整组旧状态及旧读快照。原 canonical 文件被替换时，已发布 mirror provenance 也作为可信历史依据；冲突新副本隔离。结构 EOF 不恢复目录证明，发布清空单文件确认并保持 incomplete。下述 M06f5 未接 manifest / 发布为历史阶段；正常 CollectorService 自动发现 / 继续 / 排队仍待 M06f7。
+
 M06f5 schema v9 增加 `file_rebuild_candidates` 与 `file_rebuild_sessions`：作业独占关联一个封存代次，冻结候选检查点修订，保存独立登记游标 / 完成标志和 proposed header 身份。排队 / 认领在同一 Writer 事务，精确重复请求复用作业，认领失败不能留下未关联队列项。登记每批最多 128 条 / 16 MiB（包含规范载荷、标识与指纹），复用普通观察写入 / 项目规范化逻辑，必要观察、绑定、NULL 活跃指针的新会话和登记游标一起提交；旧会话身份与活跃账本、消费、基线、文件指针 / 检查点、data / price / settings revision 不变。新的 proposed header 单独保存，不能提前改写已发布会话。取消 / 失败 / 启动中断同事务释放所属 claimed 并标记新代次 invalid；读取方不能撤销作业所有权。替换专用 manifest / 最终验证发布尚未接入，普通 manifest 和成功推进拒绝忽略已认领候选。
 
 M06f4 明确会话发布门禁：`sessions.active_ledger_id IS NULL` 的暂存身份不属于普通查询 / 选择 / 手动与自动重建依赖组。详情、轮次、上下文直接读取拒绝该身份；父子关系与小窗固定范围不暴露或选中该身份。已发布的空账本会话仍可读取及选择，缺失用量 / 上下文继续为 null。普通采集的已读用量判定仅检查当前文件代次，自动重建的完整性及证据指纹复用 M06f3 的当前输入选择。替换作业后续须显式关联并授权自己的暂存身份，不能放宽普通入口来隐式纳入候选。

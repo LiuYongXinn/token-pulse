@@ -112,7 +112,7 @@ pub(super) fn publish_aliases(tx: &Transaction<'_>, m: &RebuildManifest) -> Stor
     }
     Ok(())
 }
-fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalReplayPlan> {
+pub(super) fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalReplayPlan> {
     let selected = selected_generations(m)?;
     let mut sequences: BTreeMap<String, PhysicalReplaySequence> = BTreeMap::new();
     let mut footprint = 0usize;
@@ -139,7 +139,7 @@ fn load(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<CanonicalRepla
             );
             if !sequences.contains_key(&key) {
                 let previously_canonical = tx.query_row("SELECT EXISTS(SELECT 1 FROM canonical_usage_sequence c JOIN observations o ON o.observation_id=c.observation_id JOIN sessions s ON s.active_ledger_id=c.ledger_id WHERE s.session_key=?1 AND c.ordinal=0 AND o.file_generation_id=?2)", params![owner,generation], |r|r.get(0))?;
-                let has_trusted_history = tx.query_row("SELECT EXISTS(SELECT 1 FROM active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id WHERE e.session_key=?1 AND o.file_generation_id=?2)", params![owner,generation], |r|r.get(0))?;
+                let has_trusted_history = tx.query_row("SELECT EXISTS(SELECT 1 FROM active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id WHERE e.session_key=?1 AND o.file_generation_id=?2 UNION ALL SELECT 1 FROM active_usage_events e JOIN event_provenance p ON p.event_id=e.event_id JOIN observations o ON o.observation_id=p.observation_id WHERE e.session_key=?1 AND o.file_generation_id=?2 AND p.relation='mirror')", params![owner,generation], |r|r.get(0))?;
                 sequences.insert(
                     key.clone(),
                     PhysicalReplaySequence {

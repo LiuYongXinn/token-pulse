@@ -1,4 +1,4 @@
-//! Necessary-observation staging against real temporary files; no active publication or benchmarks.
+//! Replacement staging and verified publication against real temporary files; no benchmarks.
 use std::{
     fs,
     io::Write,
@@ -19,6 +19,40 @@ fn log(id: &str, count: usize, value: u8) -> Vec<u8> {
         b.extend(call(value));
     }
     b
+}
+fn anchored_log(id: &str, parent: Option<&str>, values: &[u8]) -> Vec<u8> {
+    let mut payload = serde_json::json!({"id":id,"timestamp":"2026-10-01T00:00:00Z"});
+    if let Some(parent) = parent {
+        payload["forked_from_id"] = serde_json::json!(parent);
+    }
+    let mut bytes =
+        serde_json::to_vec(&serde_json::json!({"type":"session_meta","payload":payload})).unwrap();
+    bytes.push(b'\n');
+    let mut cumulative = 0u32;
+    for value in values {
+        cumulative += u32::from(*value);
+        bytes.extend(counted_call(*value, cumulative));
+    }
+    bytes
+}
+fn counted_call(value: u8, cumulative: u32) -> Vec<u8> {
+    let vector = |n: u32| serde_json::json!({"input_tokens":n,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":n});
+    let mut bytes=serde_json::to_vec(&serde_json::json!({"timestamp":"1970-01-01T00:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":vector(u32::from(value)),"total_token_usage":vector(cumulative)}}})).unwrap();
+    bytes.push(b'\n');
+    bytes
+}
+fn manual_rebuild(db: &Database, id: &str) {
+    db.create_job(
+        id.into(),
+        token_pulse_core::jobs::JobRequest {
+            kind: token_pulse_core::protocol::JobKind::Rebuild,
+            scope: token_pulse_core::jobs::JobScope::All {},
+            request_key: id.into(),
+        },
+        3,
+    )
+    .unwrap();
+    token_pulse_collector::replay::execute_rebuild(db, id, || false, || 4).unwrap();
 }
 fn setup() -> (tempfile::TempDir, tempfile::TempDir, Database, PathBuf) {
     let data = tempfile::tempdir().unwrap();
@@ -80,6 +114,294 @@ fn append(path: &Path, bytes: &[u8]) {
         .unwrap()
         .write_all(bytes)
         .unwrap();
+}
+fn queue_replacement(db: &Database, path: &Path) -> (String, String) {
+    let r = read_replacement_file(db, "source", path, 2).unwrap();
+    assert!(r.read_complete);
+    let job = db
+        .enqueue_file_candidate_rebuild(r.generation_id.clone(), r.checkpoint_revision, 3)
+        .unwrap();
+    (job.job_id, r.generation_id)
+}
+#[test]
+fn replacement_executor_publishes_rewrite_truncate_and_new_provider_then_appends_without_recounting()
+ {
+    use token_pulse_collector::replay::execute_rebuild;
+    for (provider, count) in [("old", 1), ("old", 3), ("new", 3)] {
+        let (data, _logs, db, path) = setup();
+        let before = old(&db, &path);
+        let bytes = log(provider, count, 8);
+        fs::write(&path, &bytes).unwrap();
+        let (job, generation) = queue_replacement(&db, &path);
+        let revision = execute_rebuild(&db, &job, || false, || 4).unwrap();
+        let after = old(&db, &path);
+        assert_eq!(revision, before.0 + 1);
+        assert_eq!(after.0, revision);
+        assert_eq!((after.1, after.2), (before.1, before.2));
+        assert_eq!(after.3, (count * 8).to_string());
+        assert_eq!(after.4, bytes.len() as i64);
+        assert_eq!(
+            db.file_read_candidate(&generation).unwrap().state,
+            "published"
+        );
+        assert_eq!(
+            db.get_job(&job).unwrap().job.state,
+            token_pulse_core::protocol::JobState::Succeeded
+        );
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        db.snapshot(|tx, _| {
+            assert_eq!(
+                tx.query_row(
+                    "SELECT COUNT(*) FROM sessions WHERE active_ledger_id IS NULL",
+                    [],
+                    |r| r.get::<_, i64>(0)
+                )?,
+                0
+            );
+            assert_eq!(
+                tx.query_row(
+                    "SELECT COUNT(*) FROM file_generations WHERE state='current'",
+                    [],
+                    |r| r.get::<_, i64>(0)
+                )?,
+                1
+            );
+            assert_eq!(
+                tx.query_row(
+                    "SELECT COUNT(*) FROM file_generations WHERE state='retired'",
+                    [],
+                    |r| r.get::<_, i64>(0)
+                )?,
+                1
+            );
+            if provider == "new" {
+                assert_eq!(
+                    tx.query_row(
+                        "SELECT COUNT(*) FROM rebuild_audits WHERE old_ledger_id IS NULL",
+                        [],
+                        |r| r.get::<_, i64>(0)
+                    )?,
+                    1
+                );
+            }
+            Ok(())
+        })
+        .unwrap();
+        drop(db);
+        let db = Database::open(data.path()).unwrap();
+        collect_file(&db, "source", &path, 5).unwrap();
+        assert_eq!(old(&db, &path).3, (count * 8).to_string());
+        append(&path, &call(8));
+        collect_file(&db, "source", &path, 6).unwrap();
+        assert_eq!(old(&db, &path).3, ((count + 1) * 8).to_string());
+    }
+}
+#[test]
+fn replacement_executor_rejects_missing_rewritten_paused_and_cancelled_inputs_preserving_old_facts()
+{
+    use token_pulse_collector::replay::execute_rebuild;
+    for scenario in ["missing", "rewrite", "pause", "cancel"] {
+        let (_data, _logs, db, path) = setup();
+        let before = old(&db, &path);
+        fs::write(&path, log("new", 3, 8)).unwrap();
+        let (job, generation) = queue_replacement(&db, &path);
+        if scenario == "missing" {
+            fs::remove_file(&path).unwrap();
+        }
+        if scenario == "rewrite" {
+            fs::write(&path, log("new", 3, 9)).unwrap();
+        }
+        if scenario == "pause" {
+            db.mutate_sources(SourceMutation::Pause("source".into()), before.2, 3)
+                .unwrap();
+        }
+        let expected = old(&db, &path);
+        let result = execute_rebuild(&db, &job, || scenario == "cancel", || 4);
+        assert!(result.is_err(), "{scenario}");
+        assert_eq!(old(&db, &path), expected);
+        assert_eq!(db.file_read_candidate(&generation).unwrap().state, "failed");
+    }
+}
+#[test]
+fn empty_replacement_removes_superseded_usage_and_headerless_file_has_a_durable_manifest() {
+    use token_pulse_collector::replay::execute_rebuild;
+    for initially_empty in [false, true] {
+        let (_data, _logs, db, path) = setup();
+        if initially_empty {
+            fs::write(&path, []).unwrap();
+            let (job, _) = queue_replacement(&db, &path);
+            execute_rebuild(&db, &job, || false, || 4).unwrap();
+            // Use a second, new physical identity with no metadata or session bindings.
+            fs::remove_file(&path).unwrap();
+            fs::write(&path, b"{\"type\":\"unknown\"}\n").unwrap();
+        } else {
+            fs::write(&path, []).unwrap();
+        }
+        let (job, generation) = queue_replacement(&db, &path);
+        execute_rebuild(&db, &job, || false, || 5).unwrap();
+        assert_eq!(old(&db, &path).3, "0");
+        assert_eq!(
+            db.file_read_candidate(&generation).unwrap().state,
+            "published"
+        );
+        assert!(
+            db.get_rebuild_manifest(&job)
+                .unwrap()
+                .files
+                .iter()
+                .any(|f| f.generation_id == generation)
+        );
+    }
+}
+#[test]
+fn replacement_of_canonical_origin_keeps_verified_mirror_and_isolates_conflicting_new_copy() {
+    let (_data, logs, db, path) = setup();
+    fs::write(&path, anchored_log("old", None, &[2, 2, 2])).unwrap();
+    let (job, _) = queue_replacement(&db, &path);
+    token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 4).unwrap();
+    let mirror = logs.path().join("sessions").join("mirror.jsonl");
+    fs::write(&mirror, anchored_log("old", None, &[2, 2, 2])).unwrap();
+    collect_file(&db, "source", &mirror, 5).unwrap();
+    manual_rebuild(&db, "mirrors");
+    assert_eq!(old(&db, &path).3, "6");
+    let origin_path:String=db.snapshot(|tx,_|Ok(tx.query_row("SELECT f.canonical_path FROM active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id JOIN file_generations g ON g.file_generation_id=o.file_generation_id JOIN source_files f ON f.file_id=g.file_id LIMIT 1",[],|r|r.get(0))?)).unwrap();
+    let origin = Path::new(&origin_path);
+    fs::write(origin, anchored_log("old", None, &[8, 8, 8])).unwrap();
+    let (job, generation) = queue_replacement(&db, origin);
+    token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 6).unwrap();
+    assert_eq!(old(&db, &path).3, "6");
+    db.snapshot(|tx,_| {
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id WHERE o.file_generation_id=?1 AND p.kind='pending'",[&generation],|r|r.get::<_,i64>(0))?,3);
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id WHERE o.file_generation_id=?1",[&generation],|r|r.get::<_,i64>(0))?,0);Ok(())
+    }).unwrap();
+    collect_file(&db, "source", origin, 7).unwrap();
+    assert_eq!(old(&db, &path).3, "6");
+}
+#[test]
+fn replacement_child_rebuilds_new_parent_dependency_and_charges_only_its_continuation() {
+    let (_data, logs, db, path) = setup();
+    fs::write(&path, anchored_log("parent-a", None, &[2, 2])).unwrap();
+    let (job, _) = queue_replacement(&db, &path);
+    token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 4).unwrap();
+    let parent_b = logs.path().join("sessions").join("parent-b.jsonl");
+    let child = logs.path().join("sessions").join("child.jsonl");
+    fs::write(&parent_b, anchored_log("parent-b", None, &[8, 8])).unwrap();
+    collect_file(&db, "source", &parent_b, 5).unwrap();
+    fs::write(&child, anchored_log("child", Some("parent-a"), &[2, 2, 3])).unwrap();
+    collect_file(&db, "source", &child, 5).unwrap();
+    manual_rebuild(&db, "family");
+    assert_eq!(old(&db, &path).3, "23");
+    fs::write(&child, anchored_log("child", Some("parent-b"), &[8, 8, 5])).unwrap();
+    let (job, generation) = queue_replacement(&db, &child);
+    token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 6).unwrap();
+    assert_eq!(old(&db, &path).3, "25");
+    db.snapshot(|tx,_| {
+        let (parent,provider):(Option<String>,Option<String>)=tx.query_row("SELECT parent_key,parent_provider_id FROM sessions WHERE provider_session_id='child' AND active_ledger_id IS NOT NULL",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
+        assert_eq!(provider.as_deref(),Some("parent-b"));assert_eq!(tx.query_row("SELECT provider_session_id FROM sessions WHERE session_key=?1",[parent],|r|r.get::<_,String>(0))?,"parent-b");
+        assert_eq!(tx.query_row("SELECT COUNT(*) FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id WHERE o.file_generation_id=?1 AND p.kind='inherited'",[&generation],|r|r.get::<_,i64>(0))?,2);Ok(())
+    }).unwrap();
+    append(&child, &counted_call(7, 28));
+    collect_file(&db, "source", &child, 7).unwrap();
+    assert_eq!(old(&db, &path).3, "32");
+}
+#[test]
+fn standalone_job_service_drains_owned_replacement_without_renderer_or_explicit_executor() {
+    use std::{sync::Arc, time::Duration};
+    let (_data, _logs, db, path) = setup();
+    fs::write(&path, log("new", 130, 8)).unwrap();
+    let (job, generation) = queue_replacement(&db, &path);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let service = token_pulse_collector::jobs::JobService::start_with_notify(
+        db.clone(),
+        Arc::new(move || {
+            let _ = sender.send(());
+        }),
+    )
+    .unwrap();
+    receiver.recv_timeout(Duration::from_secs(10)).unwrap();
+    service.shutdown();
+    assert_eq!(
+        db.get_job(&job).unwrap().job.state,
+        token_pulse_core::protocol::JobState::Succeeded
+    );
+    assert_eq!(
+        db.file_read_candidate(&generation).unwrap().state,
+        "published"
+    );
+    assert_eq!(old(&db, &path).3, "1040");
+}
+#[test]
+fn completely_sessionless_source_replacement_publishes_without_manufacturing_an_identity() {
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    fs::create_dir(logs.path().join("sessions")).unwrap();
+    let path = logs.path().join("sessions/unknown.jsonl");
+    let db = Database::open(data.path()).unwrap();
+    db.add_source(SourceRecord {
+        source_id: "source".into(),
+        root_path: logs.path().to_str().unwrap().into(),
+        directory_identity: None,
+        kind: "local".into(),
+        enabled: true,
+        created_at_ms: 1,
+    })
+    .unwrap();
+    fs::write(&path, b"{\"type\":\"unknown\"}\n").unwrap();
+    collect_file(&db, "source", &path, 1).unwrap();
+    let before = old(&db, &path);
+    assert_eq!(count(&db, "sessions"), 0);
+    let bytes = b"{\"type\":\"different\"}\n";
+    fs::write(&path, bytes).unwrap();
+    let (job, generation) = queue_replacement(&db, &path);
+    token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 4).unwrap();
+    let manifest = db.get_rebuild_manifest(&job).unwrap();
+    assert!(manifest.ledgers.is_empty());
+    assert_eq!(manifest.files.len(), 1);
+    assert_eq!(
+        db.file_read_candidate(&generation).unwrap().state,
+        "published"
+    );
+    assert_eq!(old(&db, &path).0, before.0 + 1);
+    assert_eq!(count(&db, "sessions"), 0);
+    assert_eq!(count(&db, "ledger_generations"), 0);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+}
+#[test]
+fn append_after_sealing_keeps_frozen_prefix_then_collects_tail_and_readonly_publication_leaves_bytes_unchanged()
+ {
+    for after_sealing_append in [false, true] {
+        let (_data, _logs, db, path) = setup();
+        let bytes = log("new", 3, 8);
+        fs::write(&path, &bytes).unwrap();
+        let (job, generation) = queue_replacement(&db, &path);
+        if after_sealing_append {
+            append(&path, &call(8));
+        }
+        let original_permissions = fs::metadata(&path).unwrap().permissions();
+        let mut readonly = original_permissions.clone();
+        readonly.set_readonly(true);
+        fs::set_permissions(&path, readonly).unwrap();
+        let result = token_pulse_collector::replay::execute_rebuild(&db, &job, || false, || 4);
+        fs::set_permissions(&path, original_permissions).unwrap();
+        result.unwrap();
+        assert_eq!(
+            db.file_read_candidate(&generation).unwrap().state,
+            "published"
+        );
+        assert_eq!(old(&db, &path).3, "24");
+        assert_eq!(old(&db, &path).4, bytes.len() as i64);
+        let expected = if after_sealing_append {
+            [bytes.as_slice(), call(8).as_slice()].concat()
+        } else {
+            bytes
+        };
+        assert_eq!(fs::read(&path).unwrap(), expected);
+        collect_file(&db, "source", &path, 5).unwrap();
+        assert_eq!(
+            old(&db, &path).3,
+            if after_sealing_append { "32" } else { "24" }
+        );
+    }
 }
 
 #[test]
@@ -369,10 +691,10 @@ fn readonly_replacement_to_owned_registration_reopens_across_batches_without_pub
             Ok(())
         }).unwrap();
         assert_eq!(fs::read(&path).unwrap(), bytes);
-        assert_eq!(
-            db.prepare_rebuild(job.job_id.clone(), 7).unwrap_err().code,
-            ErrorCode::InvalidQuery
-        );
+        let manifest = db.prepare_rebuild(job.job_id.clone(), 7).unwrap();
+        assert_eq!(manifest.replacements.len(), 1);
+        assert_eq!(manifest.files.len(), 1);
+        assert_eq!(manifest.files[0].generation_id, read.generation_id);
         db.fail_rebuild(job.job_id, ErrorCode::JobInterrupted, 8)
             .unwrap();
         assert_eq!(old(&db, &path), before);
