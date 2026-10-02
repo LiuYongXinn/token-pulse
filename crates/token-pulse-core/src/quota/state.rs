@@ -171,6 +171,47 @@ impl QuotaCoordinator {
         }
         Ok(true)
     }
+    /// Transport / handshake failure has no quota request token. Keep known old values
+    /// explicitly stale until a new connection proves identity; never publish old replies.
+    pub fn connection_failed(
+        &mut self,
+        epoch: &str,
+        error: ErrorCode,
+        at: QuotaTime,
+    ) -> Result<bool, ErrorCode> {
+        if epoch != self.epoch() || matches!(self.state, QuotaState::Disconnected) {
+            return Ok(false);
+        }
+        if !matches!(
+            error,
+            ErrorCode::QuotaTimeout
+                | ErrorCode::QuotaProtocolError
+                | ErrorCode::QuotaServiceUnavailable
+                | ErrorCode::QuotaUnsupported
+                | ErrorCode::QuotaAuthRequired
+        ) {
+            return Err(ErrorCode::InvalidQuery);
+        }
+        self.clock(at)?;
+        self.bump()?;
+        self.pending = None;
+        self.eligible = false;
+        self.proven_read = false;
+        self.error = Some(error);
+        self.state = match error {
+            ErrorCode::QuotaUnsupported => {
+                self.book.clear();
+                QuotaState::Unsupported
+            }
+            ErrorCode::QuotaAuthRequired => {
+                self.book.clear();
+                QuotaState::AuthorizationRequired
+            }
+            _ if self.selected_id().is_some() => QuotaState::Stale,
+            _ => QuotaState::Error,
+        };
+        Ok(true)
+    }
     fn selected_id(&self) -> Option<&str> {
         if let Some(explicit) = &self.explicit_selection {
             return self

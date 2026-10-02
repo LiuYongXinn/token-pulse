@@ -354,6 +354,11 @@ impl PrivacyRedact for QuotaSnapshot {
         }
     }
 }
+impl PrivacyRedact for crate::quota::QuotaRefreshResult {
+    fn redact(&mut self) {
+        self.quota.redact();
+    }
+}
 impl PrivacyRedact for Job {
     fn redact(&mut self) {
         if let Some(error) = &mut self.error {

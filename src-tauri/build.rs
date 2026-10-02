@@ -2,6 +2,8 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_account_quota",
+            "refresh_account_quota",
             "get_mini_opacity",
             "get_mini_passthrough",
             "set_mini_passthrough",

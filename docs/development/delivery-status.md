@@ -2,7 +2,7 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
-## 当前交付状态（2026-10-02，M12b）
+## 当前交付状态（2026-10-02，M12c）
 
 - 独立 Tauri / React 工程、SQLite / 原子采集事务、持久化作业、只读适配、镜像与分叉核算、候选重建及已知旧核算版本升级已接入；实际 Codex 格式、完整扫描证据、文件代次替换恢复、旧 parser 重解析和实际 WSL 条件仍有待办，不能宣称采集已经完整覆盖。
 - 总览、模型、项目、会话、明细五个统计页面使用正式 DTO。会话 / 明细稳定分页使用真实 SQLite 租约；范围消费与最近上下文分开。会话详情的消费 / 关系 / 账本分类摘要使用原子 bundle，子关系支持跳转；可靠回合分页已接入详情；已保存时区、自定义日期和热力图日期跳转已接统一筛选；完整继承证明、完整诊断 / 设置尚未完成。
@@ -13,7 +13,7 @@
 
 下方按模块记录实现和当时的验证，早期“待实现”说明以本节及相应后续模块为准；完整交付尚未完成。
 
-账户额度已新增 M12a 纯领域解析与内存协调器，完整 core 现为 94 项通过（新增 12 项）。M12b 独立 stdio 通信库新增 3 项协议 / framing 与 8 项真实合成子进程检查通过，包含 Windows 自有 Job / 后代进程清理；workspace 与夹具特性 Clippy 通过。M12a 契约 / 前端构建及 29 项 Vitest 通过；M12b 没有改 UI。持续账户服务 owner、授权、持久配置、IPC 和真实额度 UI 尚未接入；不得把合成通信库验证作为真实账户验收。
+账户额度已接独立串行持续服务和 Tauri 生命周期，默认断开，不启动未经用户连接的外部服务。主窗口 / 小窗正式额度读取与受限刷新 IPC、失效通知、原生可见性合并、power suspend / resume 及退出清理已接入。完整 core 96 项、quota 通信与持续服务 18 项（3 协议 / framing、8 管道、7 持续服务）、29 项 Vitest、契约 / 构建 / Clippy / fmt 通过；独立 Win10 两个 WebView 实际断开读取 / 刷新拒绝与已有原生回归通过。用户连接配置、授权 / 取消、账户 UI 和在线真实额度未完成；不得把合成服务或断开态 IPC 检查作为真实账户验收。未运行性能测试。
 
 ## 起始状态（2026-10-01）
 
@@ -819,3 +819,19 @@ stdout 每帧上限 1 MiB，限长读取不使用无限 read_line；队列 16 �
 自动功能检查：3 项纯协议 / framing 多场景、8 项实际合成 exe / OS pipe 场景通过。覆盖握手顺序、固定方法、敏感字段丢弃、账户通知与旧读取、单飞、主动工具请求拒绝、未知 / 旧消息、初始化不支持 / 损坏、超长 / 非 JSON / 截断帧、stderr 排空、队列填满后断开、真实 10 秒超时及迟到回复拒绝。Windows 系统 API 场景真实持有后代进程 handle：断开前 WAIT_TIMEOUT，Job 关闭后 WAIT_OBJECT_0，并确认继承管道全部释放。这个证据属于合成服务的实际原生进程生命周期，不是正式应用授权 / 网络账户 / WebView 验收。路径检查对可用的 Windows symlink 能力附加 canonical 脚本目标拒绝，缺少创建权限时该条件场景不计为实际通过。
 
 workspace all-target Clippy、夹具特性 all-target Clippy warnings denied、fmt 与差异空白检查通过；路径 canonical 检查收紧后针对性检查再次通过。CI 增加显式 test-fixture 检查；合成 exe 仅在该特性开启时构建，普通生产构建不包含它。未改前端或采集算法，不重复旧浏览器 / 小窗原生检查；没有执行性能测试。通信库尚未接到 Tauri 生命周期和前端，后续继续串行 owner / 轮询恢复、用户授权 / 取消、配置权限和真实 UI。
+
+## M12c：持续账户服务、生命周期与共享读取 IPC
+
+AccountQuotaService 单一 owner 持有额度协调器和自有 stdio 连接。默认快照 disconnected，只有明确后台 connect 才建立连接；不发现或自动连接本机账户。初始化 → account/read → 有效 ChatGPT 模式 → 完整额度读取由 owner 驱动。连接控制绑定当前 epoch，额度桶选择另外比较 quota_revision；旧动作拒绝。16 条控制队列有界，过期 / 取消的排队控制拒绝；快照读取不等待网络，显示失败不会停止本地采集。
+
+收到 account/updated 时清除旧快照 / 读取映射、旋转账户 epoch，重新验证账户；未经完整额度证明的新通知不会发布旧额度。服务退出 / 握手错误没有额度令牌，因此新增 connection_failed 受控入口：保留已知成功值并标 stale，未曾成功为 error；不支持 / 需要授权清空值。可重试连接失败按 5 / 15 / 30 / 60 秒退避，新 transport 旋转 epoch 并先发布 connecting，不能用旧身份冒充新连接。普通额度失败沿用领域单飞与退避，不重启合法服务，也不更改本地用量时间。
+
+后台每步使用 owner 内部单调采样；可见入口合并 main / mini / taskbar 位，某一入口隐藏不会覆盖其他入口。恢复可见 / resume 请求补查，仍遵守最小间隔和在途请求；suspend 不开始新查询，但接收必要通知以撤销旧身份。实际已到的 selected 窗口 reset 每个时间值触发一次补查，不能自行补满百分比；未知 reset 不猜测。原生任务栏位目前仅为内部消费者接口，未创建任务栏宿主。
+
+Tauri setup 建立默认断开的服务，shutdown 回收 owner / 自有子进程，Windows power 消息只设置非阻塞服务标志。原生窗口显示 / 隐藏 / close-to-hide、焦点 / 尺寸 / destroy 核对实际 IsWindowVisible / IsIconic 更新可见性。get_account_quota / refresh_account_quota 仅 main / mini；前者读取内存完整快照，后者返回 QuotaRefreshResult（started / in_flight / rate_limited / not_due，retry_after_ms 明确可空），保留旧成功值。两者经过最新 PrivateResponse，嵌套额度名称同样脱敏；account_quota_changed 仅发送 connection_epoch / quota_revision / state。尚无任意路径、任意方法或 WebView 连接 / 登录命令。
+
+自动检查：完整 core 96 项通过，新增两项多场景覆盖传输失败保留 75% / 原获取时间、旧 epoch / 无效错误拒绝、新连接清空，以及精确限流状态、真实 0%、嵌套 DTO 的最新隐私与原值保留、溢出 / 未知字段 / 无敏感事件字段。quota 全部 3 + 8 + 7 项通过；新增持续服务实际合成 exe 场景覆盖默认不连接 / 幂等 shutdown、握手 / 身份 / 多桶与 CAS、授权缺失和 API key 不发额度查询、切换账户清空及拒绝未证明通知、进程退出后的 stale、suspend / resume 后最小间隔补查，以及握手错误后真实退避重连 / 新身份证明。最后新增重连发布前的状态同步后，7 项服务检查和夹具特性 Clippy 再通过。契约检查、严格 TS / 生产构建、29 项 Vitest、workspace / 夹具特性 all-target Clippy warnings denied、fmt / 空白检查通过。
+
+Win10 独立新构建 --native-smoke 退出 0：main 与 mini 的真实正式 IPC 均读 disconnected / windows 空 / fetched_at_ms null，refresh 明确 QUOTA_DISCONNECTED；主响应包含正确最新隐私戳。已有真实 WebView、power 路由、托盘 / 关闭隐藏 / 单实例、小窗尺寸 / 范围 / 精确导航 / 位置、快捷键、透明度、穿透及故障恢复 marker 全部通过。这个系统检查没有连接真实 Codex 服务或账户，在线授权、额度刷新、服务可见性轮询在实际账户下仍待后续。既有 WebView class unregister 1412 提示仍存在，退出成功。没有 UI 布局变化，不重复浏览器截图 / Playwright 全套；没有执行性能测试。
+
+后续继续受控原生程序 / Home 选择和持久连接配置、明确授权 / 取消、主窗口与小窗真实额度内容及账户桶 UI。账户快照不持久化、不混入本地统计，实际账户授权须通过明确应用流程，不能使用当前 Codex 对话工具替代。

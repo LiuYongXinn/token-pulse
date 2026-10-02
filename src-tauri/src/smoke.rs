@@ -89,6 +89,13 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 ok = r.api_version === 1 && r.request_id === 'native-smoke'
                     && r.data.development === true && r.data.collector === 'not_configured'
                     && r.data.storage === 'ready' && r.data.storage_error === null;
+                const quota=await invoke('get_account_quota',{requestId:'native-quota-read'});
+                ok=ok && quota.data.state==='disconnected' && quota.data.windows.length===0
+                    && quota.data.fetched_at_ms===null && quota.data.selected_limit_id===null
+                    && typeof quota.data.connection_epoch==='string' && quota.display_policy.privacy===false;
+                let quotaDisconnected=false;
+                try{await invoke('refresh_account_quota',{requestId:'native-quota-refresh'});}catch(error){quotaDisconnected=error.code==='QUOTA_DISCONNECTED';}
+                ok=ok && quotaDisconnected;
                 const sources = await invoke('get_sources', { requestId: 'native-smoke-sources' });
                 ok = ok && sources.api_version === 1 && sources.request_id === 'native-smoke-sources'
                     && Array.isArray(sources.data.sources) && typeof sources.data.settings_revision === 'string';

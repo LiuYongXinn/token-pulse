@@ -4106,6 +4106,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "token-pulse-collector",
  "token-pulse-core",
+ "token-pulse-quota",
  "token-pulse-store",
  "uuid",
  "windows-sys 0.61.2",

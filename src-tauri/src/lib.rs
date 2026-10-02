@@ -12,6 +12,7 @@ use token_pulse_core::{
 };
 
 struct RuntimeState {
+    quota: Result<std::sync::Arc<token_pulse_quota::service::AccountQuotaService>, ErrorCode>,
     recovery_shortcut: std::sync::Mutex<shortcuts::RecoveryRuntime>,
     #[cfg(debug_assertions)]
     native_dashboard_request: std::sync::Mutex<Option<token_pulse_core::query::DashboardRequest>>,
@@ -70,7 +71,21 @@ fn get_app_status(
                 ServiceState::Error
             },
             storage_error: state.database.as_ref().err().map(|e| e.code),
-            quota: ServiceState::NotConfigured,
+            quota: match state
+                .quota
+                .as_ref()
+                .and_then(|q| {
+                    q.snapshot()
+                        .map_err(|_| &ErrorCode::QuotaServiceUnavailable)
+                })
+                .map(|s| s.state)
+            {
+                Ok(token_pulse_core::protocol::QuotaState::Disconnected) => {
+                    ServiceState::NotConfigured
+                }
+                Ok(token_pulse_core::protocol::QuotaState::Ready) => ServiceState::Ready,
+                _ => ServiceState::Error,
+            },
             taskbar: ServiceState::NotImplemented,
         },
         state.privacy.clone(),
@@ -100,7 +115,10 @@ async fn perform_window_action(
                 .map_err(|_| "WINDOW_CREATION_FAILED".to_string())
                 .and_then(|result| result)
         }
-        WindowAction::HideMain => window.hide().map_err(|e| e.to_string()),
+        WindowAction::HideMain => window
+            .hide()
+            .map(|_| quota_commands::update_visibility(&window))
+            .map_err(|e| e.to_string()),
         WindowAction::Quit => {
             app.exit(0);
             Ok(())
@@ -114,6 +132,7 @@ fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("WINDOW_NOT_FOUND")?;
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
+    quota_commands::update_visibility(&window);
     window.set_focus().map_err(|e| e.to_string())
 }
 
@@ -165,7 +184,10 @@ pub fn run() {
             let theme = database.as_ref().ok().and_then(|db| db.display_settings().ok()).map(|s| s.preferences.theme).unwrap_or_default();
             settings_commands::apply_native_theme(app.handle(), theme);
             let privacy = initial_privacy(&database);
-            app.manage(RuntimeState { recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), mini_stats_request: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            let notify_app = app.handle().clone();
+            let quota = token_pulse_quota::service::AccountQuotaService::start(&uuid::Uuid::new_v4().to_string(), std::sync::Arc::new(move |event| {use tauri::Emitter; let _ = notify_app.emit("account_quota_changed", event);})).map(std::sync::Arc::new);
+            app.manage(RuntimeState { quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), mini_stats_request: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, selections: Default::default() });
+            if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             shortcuts::initialize(app.handle());
@@ -197,14 +219,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Destroyed) {quota_commands::update_native_visibility(window);}
             if window.label()=="mini" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { mini_window::schedule_placement(window.app_handle()); }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 if window.label()=="mini" {if let Some(mini)=window.app_handle().get_webview_window("mini") {if mini_window::save_current_placement(&mini).is_err() {eprintln!("MINI_PLACEMENT_SAVE_FAILED");}}}
                 let _ = window.hide();
+                quota_commands::update_native_visibility(window);
             }
         })
-        .invoke_handler(tauri::generate_handler![mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,price_commands::get_price_rules,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -226,6 +250,9 @@ pub fn run() {
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
                 if let Some(state) = app.try_state::<RuntimeState>() {
+                    if let Ok(quota) = &state.quota {
+                        quota.shutdown();
+                    }
                     if let Some(mini) = app.get_webview_window("mini") {
                         if mini_window::save_current_placement(&mini).is_err() {
                             eprintln!("MINI_PLACEMENT_SAVE_FAILED");
@@ -260,6 +287,7 @@ mod passthrough_smoke;
 mod power;
 mod price_commands;
 mod query_commands;
+mod quota_commands;
 mod settings_commands;
 mod shortcuts;
 #[cfg(all(debug_assertions, windows))]

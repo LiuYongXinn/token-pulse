@@ -73,6 +73,7 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
         eprintln!("MINI_PLACEMENT_SAVE_FAILED");
     }
     window.show().map_err(|e| e.to_string())?;
+    super::quota_commands::update_visibility(&window);
     window.set_focus().map_err(|e| e.to_string())
 }
 fn dimensions(expanded: bool) -> (f64, f64) {
@@ -153,7 +154,9 @@ pub fn mini_window_action(
             if save_current_placement(&window).is_err() {
                 eprintln!("MINI_PLACEMENT_SAVE_FAILED");
             }
-            window.hide()
+            window
+                .hide()
+                .map(|_| super::quota_commands::update_visibility(&window))
         }
     };
     result.map_err(|_| {

@@ -2,6 +2,7 @@
 mod framing;
 mod process;
 mod protocol;
+pub mod service;
 pub use process::{NativeService, StdioSession};
 pub use protocol::{AccountRequest, ProtocolEvent, RpcReply, RpcToken};
 pub const MAX_PROTOCOL_LINE_BYTES: usize = 1_048_576;

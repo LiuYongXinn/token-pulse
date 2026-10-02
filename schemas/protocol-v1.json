@@ -7443,6 +7443,47 @@
       "title": "PricingSummary",
       "type": "object"
     },
+    "QuotaChanged": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "QuotaState": {
+          "enum": [
+            "disconnected",
+            "connecting",
+            "authorization_required",
+            "unsupported",
+            "ready",
+            "stale",
+            "error"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "connection_epoch": {
+          "type": "string"
+        },
+        "quota_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "state": {
+          "$ref": "#/$defs/QuotaState"
+        }
+      },
+      "required": [
+        "connection_epoch",
+        "quota_revision",
+        "state"
+      ],
+      "title": "QuotaChanged",
+      "type": "object"
+    },
     "QuotaLimit": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -7463,6 +7504,214 @@
       ],
       "title": "QuotaLimit",
       "type": "object"
+    },
+    "QuotaRefreshResult": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        },
+        "QuotaLimit": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "limit_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "limit_id",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "QuotaRefreshStatus": {
+          "enum": [
+            "started",
+            "in_flight",
+            "rate_limited",
+            "not_due"
+          ],
+          "type": "string"
+        },
+        "QuotaSnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "available_limits": {
+              "items": {
+                "$ref": "#/$defs/QuotaLimit"
+              },
+              "type": "array"
+            },
+            "connection_epoch": {
+              "type": "string"
+            },
+            "error_code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "fetched_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_attempt_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quota_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "selected_limit_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "state": {
+              "$ref": "#/$defs/QuotaState"
+            },
+            "windows": {
+              "items": {
+                "$ref": "#/$defs/QuotaWindow"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "connection_epoch",
+            "quota_revision",
+            "state",
+            "selected_limit_id",
+            "available_limits",
+            "fetched_at_ms",
+            "last_attempt_at_ms",
+            "windows",
+            "error_code"
+          ],
+          "type": "object"
+        },
+        "QuotaState": {
+          "enum": [
+            "disconnected",
+            "connecting",
+            "authorization_required",
+            "unsupported",
+            "ready",
+            "stale",
+            "error"
+          ],
+          "type": "string"
+        },
+        "QuotaWindow": {
+          "additionalProperties": false,
+          "properties": {
+            "duration_mins": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "remaining_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "resets_at_ms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EpochMs"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "used_percent": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "window_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "window_id",
+            "duration_mins",
+            "used_percent",
+            "remaining_percent",
+            "resets_at_ms"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "quota": {
+          "$ref": "#/$defs/QuotaSnapshot"
+        },
+        "retry_after_ms": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/QuotaRefreshStatus"
+        }
+      },
+      "required": [
+        "status",
+        "retry_after_ms",
+        "quota"
+      ],
+      "title": "QuotaRefreshResult",
+      "type": "object"
+    },
+    "QuotaRefreshStatus": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "started",
+        "in_flight",
+        "rate_limited",
+        "not_due"
+      ],
+      "title": "QuotaRefreshStatus",
+      "type": "string"
     },
     "QuotaSnapshot": {
       "$defs": {

@@ -30,6 +30,7 @@ fn main() {
         std::env::args().skip(1).collect::<Vec<_>>(),
         vec!["app-server"]
     );
+    std::fs::write(home.join("service.pid"), std::process::id().to_string()).unwrap();
     let mode = std::fs::read_to_string(home.join("fixture-mode")).unwrap();
     let mut stdin = io::stdin().lock();
     let init = read(&mut stdin);
@@ -87,13 +88,25 @@ fn main() {
                 if mode == "account-change" && account_reads == 1 {
                     send(json!({"method":"account/updated","params":{"email":"SECRET"}}));
                 }
-                if mode != "silent" {
+                if mode == "auth-required" || (mode == "switch-account" && account_reads > 1) {
+                    send(
+                        json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":null}}),
+                    );
+                } else if mode == "unsupported-account" {
+                    send(
+                        json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":{"type":"apiKey", "secret":"SECRET"}}}),
+                    );
+                } else if mode != "silent" {
                     send(
                         json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":{"type":"chatgpt", "email":"SECRET", "token":"SECRET"}}}),
                     );
                 }
             }
             "account/rateLimits/read" => {
+                assert!(
+                    mode != "auth-required" && mode != "unsupported-account",
+                    "must not query quota without an eligible account"
+                );
                 assert!(request.get("params").is_none());
                 limits_reads += 1;
                 match mode.as_str() {
@@ -137,9 +150,24 @@ fn main() {
                     }
                     _ => {}
                 }
+                if mode == "service" {
+                    send(json!({"id":request["id"],"result":{"rateLimitsByLimitId":{
+                        "codex":{"limitId":"codex","primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":4102444800_i64}},
+                        "other":{"limitId":"other","primary":{"usedPercent":80,"windowDurationMins":10080,"resetsAt":4102444800_i64}}
+                    },"rateLimits":null}}));
+                    continue;
+                }
                 send(
                     json!({"id":request["id"],"result":limits(if limits_reads == 1 { 50 } else { 20 })}),
                 );
+                if mode == "exit-after-read" {
+                    std::thread::sleep(Duration::from_millis(400));
+                    return;
+                }
+                if mode == "switch-account" && limits_reads == 1 {
+                    send(json!({"method":"account/updated","params":{"email":"SECRET"}}));
+                    send(json!({"method":"account/rateLimits/updated","params":limits(0)}));
+                }
             }
             _ => panic!("non-allowlisted outgoing method"),
         }

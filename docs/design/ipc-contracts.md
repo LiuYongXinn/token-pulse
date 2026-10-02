@@ -514,3 +514,11 @@ token-pulse-quota 是独立后台库，尚未注册 WebView 命令。NativeServi
 RpcToken 绑定 transport connection_epoch 与不可重用序列 ID，独立于账户领域快照 epoch；后续 owner 映射两者，不能用订阅或 PID 当作账户身份。ProtocolEvent 仅包含已净化的回复 / 超时 / 账户变化 / 桶通知；10 秒过期请求移除，旧回复不命中后续请求。account/updated 先清理该连接所有旧账户读取，再由领域 owner 清空快照并查询新身份。任何服务主动请求只收到受控不支持错误，未知通知不保留。
 
 原始协议帧短暂经过有界后台管道，解析后只保留展示字段；不 Debug / 日志 / 持久化消息。原始 stderr 排空但不输出，只暴露安全字节计数。Windows 自有服务以 suspended → Job 约束 → 自有主线程恢复启动，断开回收自有进程树与所有 pipe worker；Job 失败拒绝启动。相关规则依据 [Windows Job 官方说明](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)和 [ResumeThread](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-resumethread)。本节不代表授权流程或正式 get_account_quota 已可用；登录和 UI 接入继续按第 6 节设计实施。
+
+### 2.26 已实现的持续账户服务与共享读取命令
+
+get_account_quota / refresh_account_quota 正式注册为 main / mini 专用命令，后端再次验证窗口身份和 request_id，均返回最新 PrivateResponse。QuotaRefreshResult 包含 quota: QuotaSnapshot、status: started / in_flight / rate_limited / not_due、retry_after_ms: u32 | null。刷新不等待网络额度完成，不伪造值；单飞 / 限流返回相应受限状态，未连接 / 需要授权 / 不支持明确报错。嵌套 quota 的额度名称通过与原 QuotaSnapshot 相同的隐私脱敏，Token / 百分比 / unknown 不改变。
+
+account_quota_changed 的 QuotaChanged 只含 connection_epoch / quota_revision / state，属于失效通知，不带账户信息或百分比。串行 owner 只在完整快照修订后发布；采集 usage_changed / 设置 settings_changed 与额度事件独立。transport RPC ID 映射到领域额度令牌 / 当时身份 epoch，通知身份变化时两层旧请求都失效。传输失败通过 connection_failed 明确标旧值陈旧；自动重连先清空新连接未证明的身份和值，不能沿用旧 epoch。
+
+默认服务不连接外部程序；当前 WebView 没有 connect / authorize / select_limit / disconnect 命令。后续 manage_account_connection 仅 main，从原生受控选择 / 明确授权取得配置。持续服务内部已经提供 epoch 约束的连接 / 断开及 quota_revision 约束的桶选择，但内部 Rust API 不等于前端连接能力已交付。可见性位和 power flags 由原生生命周期设置，任务栏消费者接口不代表任务栏宿主完成。授权 / UI / 在线真实账户继续实施。

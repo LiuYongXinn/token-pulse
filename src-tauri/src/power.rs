@@ -56,6 +56,13 @@ unsafe extern "system" fn power_message(
         // The only writer of dwRefData is install above; no message payload is dereferenced.
         let app = unsafe { &*(data as *const tauri::AppHandle) };
         if let Some(state) = app.try_state::<super::RuntimeState>() {
+            if let Ok(quota) = &state.quota {
+                match wparam as u32 {
+                    PBT_APMSUSPEND => quota.suspend(),
+                    PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND => quota.resume(),
+                    _ => {}
+                }
+            }
             if let Ok(collector) = &state.collector {
                 match wparam as u32 {
                     PBT_APMSUSPEND => collector.suspend(),

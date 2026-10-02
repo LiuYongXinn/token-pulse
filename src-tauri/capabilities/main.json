@@ -8,6 +8,8 @@
   "permissions": [
     "core:default",
     "allow-get-app-status",
+    "allow-get-account-quota",
+    "allow-refresh-account-quota",
     "allow-get-mini-stats-request",
     "allow-get-mini-scope",
     "allow-query-mini-sessions",

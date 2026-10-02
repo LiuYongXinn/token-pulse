@@ -252,6 +252,12 @@ export type QuotaLimit = { limit_id: string, display_name: string | null, };
 
 export type QuotaSnapshot = { connection_epoch: string, quota_revision: DecimalInt, state: QuotaState, selected_limit_id: string | null, available_limits: Array<QuotaLimit>, fetched_at_ms: EpochMs | null, last_attempt_at_ms: EpochMs | null, windows: Array<QuotaWindow>, error_code: string | null, };
 
+export type QuotaRefreshStatus = "started" | "in_flight" | "rate_limited" | "not_due";
+
+export type QuotaRefreshResult = { status: QuotaRefreshStatus, retry_after_ms: number | null, quota: QuotaSnapshot, };
+
+export type QuotaChanged = { connection_epoch: string, quota_revision: DecimalInt, state: QuotaState, };
+
 export type MiniSnapshot = { usage_meta: SnapshotMeta, mini_scope: MiniScope, scope_display_name: string | null, usage: TokenTotals, pricing: PricingSummary, coverage: Coverage, quota: QuotaSnapshot, privacy: boolean, usage_last_success_ms: EpochMs | null, };
 
 export type JobKind = "import" | "reconcile" | "rebuild" | "export" | "backup" | "restore" | "price_revalue" | "clear";

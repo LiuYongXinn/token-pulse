@@ -414,3 +414,119 @@ fn legacy_notifications_only_update_a_proven_legacy_identity_and_weekly_ambiguit
     );
     assert_eq!(cache.snapshot().windows[0].remaining_percent, Some(75.0));
 }
+
+#[test]
+fn transport_failures_preserve_only_proven_stale_values_and_new_connection_clears_them() {
+    let mut cache = connected();
+    let token = request(&mut cache, 0);
+    cache
+        .read_succeeded(
+            &token,
+            parse_quota_read(
+                &json!({"rateLimits":{"limitId":"codex", "primary":{"usedPercent":25}}}),
+            )
+            .unwrap(),
+            time(1),
+        )
+        .unwrap();
+    let epoch = cache.epoch();
+    assert!(
+        !cache
+            .connection_failed("old", ErrorCode::QuotaTimeout, time(2))
+            .unwrap()
+    );
+    assert_eq!(
+        cache.connection_failed(&epoch, ErrorCode::DbWriteFailed, time(2)),
+        Err(ErrorCode::InvalidQuery)
+    );
+    assert!(
+        cache
+            .connection_failed(&epoch, ErrorCode::QuotaServiceUnavailable, time(2))
+            .unwrap()
+    );
+    let snapshot = cache.snapshot();
+    assert!(matches!(snapshot.state, QuotaState::Stale));
+    assert_eq!(snapshot.windows[0].remaining_percent, Some(75.0));
+    assert_eq!(snapshot.fetched_at_ms, Some(time(1).wall));
+    assert_eq!(
+        snapshot.error_code.as_deref(),
+        Some("QUOTA_SERVICE_UNAVAILABLE")
+    );
+    assert!(matches!(
+        cache.begin_refresh(time(3), true, true),
+        Err(ErrorCode::QuotaDisconnected)
+    ));
+    let next = cache.begin_connection(time(4)).unwrap();
+    assert_ne!(next, epoch);
+    assert!(cache.snapshot().windows.is_empty());
+    assert_eq!(cache.snapshot().fetched_at_ms, None);
+    cache
+        .connection_failed(&next, ErrorCode::QuotaUnsupported, time(5))
+        .unwrap();
+    assert!(matches!(cache.snapshot().state, QuotaState::Unsupported));
+    cache.disconnect(time(6)).unwrap();
+    let disconnected = cache.epoch();
+    assert!(
+        !cache
+            .connection_failed(&disconnected, ErrorCode::QuotaTimeout, time(7))
+            .unwrap()
+    );
+}
+
+#[test]
+fn refresh_result_keeps_exact_control_state_and_latest_shared_privacy() {
+    use token_pulse_core::{
+        numeric::DecimalInt,
+        privacy::{DisplayPolicyStamp, PrivacyState, PrivateResponse},
+    };
+    let mut cache = connected();
+    let token = request(&mut cache, 0);
+    cache.read_succeeded(&token, parse_quota_read(&json!({"rateLimits":{"limitId":"codex","limitName":"PRIVATE NAME","primary":{"usedPercent":100}}})).unwrap(), time(1)).unwrap();
+    let result = QuotaRefreshResult::from_decision(
+        QuotaRefreshDecision::RateLimited {
+            retry_after_ms: 4999,
+        },
+        cache.snapshot(),
+    )
+    .unwrap();
+    let json = serde_json::to_value(&result).unwrap();
+    assert_eq!(json["status"], "rate_limited");
+    assert_eq!(json["retry_after_ms"], 4999);
+    assert_eq!(json["quota"]["windows"][0]["remaining_percent"], 0.0);
+    let privacy = PrivacyState::new(DisplayPolicyStamp {
+        settings_revision: DecimalInt::parse("1").unwrap(),
+        privacy: false,
+    });
+    let response = PrivateResponse::new("quota-fixture".into(), result.clone(), privacy.clone());
+    privacy
+        .publish(DisplayPolicyStamp {
+            settings_revision: DecimalInt::parse("2").unwrap(),
+            privacy: true,
+        })
+        .unwrap();
+    let hidden = serde_json::to_value(response).unwrap();
+    assert!(!hidden.to_string().contains("PRIVATE NAME"));
+    assert_eq!(
+        hidden["data"]["quota"]["windows"][0]["remaining_percent"],
+        0.0
+    );
+    assert_eq!(
+        result.quota.available_limits[0].display_name.as_deref(),
+        Some("PRIVATE NAME")
+    );
+    assert!(
+        QuotaRefreshResult::from_decision(
+            QuotaRefreshDecision::RateLimited {
+                retry_after_ms: u64::MAX
+            },
+            cache.snapshot()
+        )
+        .is_err()
+    );
+    let mut extra = json;
+    extra["credentials"] = serde_json::json!("SECRET");
+    assert!(serde_json::from_value::<QuotaRefreshResult>(extra).is_err());
+    let event = serde_json::to_value(QuotaChanged::from(&cache.snapshot())).unwrap();
+    assert_eq!(event.as_object().unwrap().len(), 3);
+    assert!(!event.to_string().contains("PRIVATE NAME"));
+}
