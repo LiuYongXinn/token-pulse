@@ -14,6 +14,12 @@ pub(super) struct PlacementRuntime {
     worker: AtomicBool,
     fit_requested: AtomicBool,
     last_normal: std::sync::Mutex<Option<WindowPlacement>>,
+    pub(super) fitted_area: std::sync::Mutex<Option<MonitorWorkArea>>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct MonitorWorkArea {
+    pub(super) monitor: Option<String>,
+    pub(super) work: WorkArea,
 }
 fn area(monitor: &tauri::Monitor) -> WorkArea {
     let work = monitor.work_area();
@@ -24,6 +30,45 @@ fn area(monitor: &tauri::Monitor) -> WorkArea {
         height: work.size.height,
         scale: monitor.scale_factor(),
     }
+}
+fn current_area(window: &WebviewWindow) -> Result<MonitorWorkArea, ErrorCode> {
+    let monitor = window
+        .current_monitor()
+        .map_err(|_| ErrorCode::WindowUnavailable)?
+        .or(window
+            .primary_monitor()
+            .map_err(|_| ErrorCode::WindowUnavailable)?)
+        .ok_or(ErrorCode::WindowUnavailable)?;
+    Ok(MonitorWorkArea {
+        monitor: monitor.name().cloned(),
+        work: area(&monitor),
+    })
+}
+fn fitted(window: &WebviewWindow, current: MonitorWorkArea) -> Result<(), ErrorCode> {
+    // Do not hold the runtime mutex while invoking native window APIs.
+    *window
+        .app_handle()
+        .state::<super::RuntimeState>()
+        .main_geometry
+        .fitted_area
+        .lock()
+        .map_err(|_| ErrorCode::WindowUnavailable)? = Some(current);
+    Ok(())
+}
+fn work_area_changed(window: &WebviewWindow) -> Result<bool, ErrorCode> {
+    if !normal(window)? {
+        return Ok(false);
+    }
+    let current = current_area(window)?;
+    Ok(window
+        .app_handle()
+        .state::<super::RuntimeState>()
+        .main_geometry
+        .fitted_area
+        .lock()
+        .map_err(|_| ErrorCode::WindowUnavailable)?
+        .as_ref()
+        != Some(&current))
 }
 fn normal(window: &WebviewWindow) -> Result<bool, ErrorCode> {
     Ok(!window
@@ -73,20 +118,22 @@ fn restore(window: &WebviewWindow, placement: &WindowPlacement) -> Result<(), Er
     let (x, y) = area(&monitor).restore(placement, width, height)?;
     window
         .set_position(tauri::PhysicalPosition::new(x, y))
-        .map_err(|_| ErrorCode::WindowUnavailable)
+        .map_err(|_| ErrorCode::WindowUnavailable)?;
+    fitted(
+        window,
+        MonitorWorkArea {
+            monitor: monitor.name().cloned(),
+            work: area(&monitor),
+        },
+    )
 }
 pub(super) fn fit_current(window: &WebviewWindow) -> Result<(), ErrorCode> {
     if !normal(window)? {
         return Ok(());
     }
-    let monitor = window
-        .current_monitor()
-        .map_err(|_| ErrorCode::WindowUnavailable)?
-        .or(window
-            .primary_monitor()
-            .map_err(|_| ErrorCode::WindowUnavailable)?)
-        .ok_or(ErrorCode::WindowUnavailable)?;
-    fit_in_area(window, area(&monitor))
+    let current = current_area(window)?;
+    fit_in_area(window, current.work)?;
+    fitted(window, current)
 }
 pub(super) fn fit_in_area(window: &WebviewWindow, work: WorkArea) -> Result<(), ErrorCode> {
     if !normal(window)? {
@@ -254,8 +301,12 @@ pub(super) fn schedule(app: &tauri::AppHandle, fit: bool) {
                 continue;
             }
             if let Some(window) = app.get_webview_window("main") {
-                if runtime.fit_requested.swap(false, Ordering::AcqRel)
-                    && fit_current(&window).is_err()
+                // Same-DPI monitor moves do not emit ScaleFactorChanged. Compare the last
+                // successfully fitted work area after the ordinary move/resize debounce.
+                let forced = runtime.fit_requested.swap(false, Ordering::AcqRel);
+                let changed = work_area_changed(&window);
+                if changed.is_err()
+                    || ((forced || changed.unwrap_or(false)) && fit_current(&window).is_err())
                 {
                     eprintln!("MAIN_PLACEMENT_UNAVAILABLE");
                 }

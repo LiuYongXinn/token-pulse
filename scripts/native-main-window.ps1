@@ -12,5 +12,6 @@ foreach ($phase in @('seed','restore','missing')) {
     $output | ForEach-Object { Write-Host $_ }
     if ($phaseExit -ne 0) { exit $phaseExit }
     if (-not ($output | Select-String -SimpleMatch "NATIVE_MAIN_WINDOW_COLD_OK: $phase")) { throw 'Main-window phase did not run; a development instance may be active.' }
+    if ($phase -eq 'seed' -and -not ($output | Select-String -SimpleMatch 'NATIVE_MAIN_WINDOW_SAME_DPI_TRANSITION_OK')) { throw 'Same-DPI transition did not complete.' }
 }
-Write-Host 'NATIVE_MAIN_WINDOW_COLD_SEQUENCE_OK: three independent processes, ordinary native placement, maximize/minimize exclusion, close/reopen, synthetic small-work-area fit and missing-monitor fallback'
+Write-Host 'NATIVE_MAIN_WINDOW_COLD_SEQUENCE_OK: three independent processes, ordinary native placement, maximize/minimize exclusion, close/reopen, synthetic small-work-area fit, same-DPI work-area transition and missing-monitor fallback'

@@ -341,6 +341,97 @@ fn verify(
         println!(
             "NATIVE_MAIN_WINDOW_SMALL_WORK_AREA_OK: synthetic work area, actual decorated window and scrollable React navigation"
         );
+        // A synthetic previous monitor has the same DPI but a larger work area.
+        // Arm only a real ordinary move; do not request a forced fit / fake DPI notification.
+        state.main_geometry.enabled.store(false, Ordering::Release);
+        std::thread::sleep(Duration::from_millis(650));
+        *state
+            .main_geometry
+            .fitted_area
+            .lock()
+            .map_err(|_| "area lock")? = Some(super::main_window::MonitorWorkArea {
+            monitor: Some("synthetic-larger-same-dpi-monitor".into()),
+            work: token_pulse_core::placement::WorkArea {
+                x: work.position.x,
+                y: work.position.y,
+                width: work.size.width + 1024,
+                height: work.size.height + 1024,
+                scale,
+            },
+        });
+        window
+            .set_size(tauri::PhysicalSize::new(
+                work.size.width + 96,
+                work.size.height + 96,
+            ))
+            .map_err(|e| e.to_string())?;
+        let oversized = window.outer_size().map_err(|e| e.to_string())?;
+        if oversized.width <= work.size.width || oversized.height <= work.size.height {
+            return Err("same-DPI scene did not begin with a real oversized window".into());
+        }
+        state.main_geometry.enabled.store(true, Ordering::Release);
+        window
+            .set_position(tauri::PhysicalPosition::new(
+                work.position.x + 17,
+                work.position.y + 19,
+            ))
+            .map_err(|e| e.to_string())?;
+        wait(
+            || {
+                window
+                    .outer_size()
+                    .is_ok_and(|s| s.width <= work.size.width && s.height <= work.size.height)
+            },
+            "ordinary move detects work-area transition without DPI event",
+        )?;
+        let corrected = window.outer_position().map_err(|e| e.to_string())?;
+        if (corrected.x - work.position.x).abs() > 1
+            || (corrected.y - work.position.y).abs() > 1
+            || window.scale_factor().map_err(|e| e.to_string())? != scale
+        {
+            return Err("same-DPI fit did not preserve scale or retain every edge".into());
+        }
+        let fitted_area = state
+            .main_geometry
+            .fitted_area
+            .lock()
+            .map_err(|_| "area lock")?
+            .clone();
+        if !fitted_area.is_some_and(|a| {
+            a.monitor.as_ref() == monitor.name()
+                && a.work.width == work.size.width
+                && a.work.height == work.size.height
+                && a.work.scale == scale
+        }) {
+            return Err("successful fit did not acknowledge current monitor work area".into());
+        }
+        window
+            .set_size(original_client)
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(original_position)
+            .map_err(|e| e.to_string())?;
+        let ordinary = WindowPlacement {
+            monitor: monitor.name().cloned(),
+            offset_x_dip: f64::from(original_position.x - work.position.x) / scale,
+            offset_y_dip: f64::from(original_position.y - work.position.y) / scale,
+        };
+        wait(
+            || {
+                db.main_window_preferences()
+                    .is_ok_and(|p| p.placement == Some(ordinary.clone()))
+            },
+            "ordinary placement after same-DPI transition persisted",
+        )?;
+        std::thread::sleep(Duration::from_millis(650));
+        if window.inner_size().map_err(|e| e.to_string())? != original_client
+            || window.outer_position().map_err(|e| e.to_string())? != original_position
+        {
+            return Err("ordinary same-monitor event changed user geometry".into());
+        }
+        println!(
+            "NATIVE_MAIN_WINDOW_SAME_DPI_TRANSITION_OK: synthetic previous monitor, real moved event, unchanged DPI, production debounce fits current work area, subsequent ordinary geometry retained"
+        );
         // Leave a known final move pending; the next process proves the production exit save.
         let current = window.outer_position().map_err(|e| e.to_string())?;
         let final_x = current.x + 9;
