@@ -494,6 +494,8 @@ query_mini_sessions 允许 main / mini，接收 MiniSessionsRequest { query: { s
 
 位置 / monitor 标识不是前端 DTO，不开放任意路径、窗口标签或 native handle。实际多屏拖动 / 断屏 / 跨屏 DPI、完整进程冷启动和主窗口位置恢复仍需后续验收；自动布局预期、实际 WebView 重建与 SQLite 重开证据在交付记录分别列出。透明度、恢复快捷键、穿透尚未开放。
 
+M15f2 增补独立主窗口 main_window 位置字段，仍不公开几何 DTO / 写入命令。原生事件记录工作区相对 DIP 与 monitor，保留最后普通位置，合并提交；最大化 / 最小化排除。初始化在首次显示之前恢复，按实际外框（含标题栏 / 边框）及目标屏工作区夹紧，原屏缺失回主屏；关闭隐藏 / 退出保存，工作区或缩放改变后重新检查。settings_changed 沿用既有全局修订，账户 / 小窗范围不改变。Win10 150% 实际三进程冷启动已通过，上述“主窗口位置恢复仍需后续”按本增量收敛；物理多屏 / 断屏 / 多档 DPI / Win11 不以合成缺屏代替。
+
 ### 2.21 已实现的恢复快捷键
 
 RecoveryShortcut 包含 control / alt / shift 和 canonical key（A–Z、0–9、F1–F11），至少有 Ctrl 或 Alt；默认 Ctrl+Alt+Shift+T。Windows 键组合、F12、非规范 / 任意数值键拒绝，遵循 [RegisterHotKey 官方规则](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)。RecoveryShortcutMutation 带精确 expected_settings_revision，Writer 单字段更新 recovery_shortcut 与全局修订，保留其他配置；同值不写，但可明确重试原生注册。

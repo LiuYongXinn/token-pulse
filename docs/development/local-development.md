@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+## 主窗口位置冷启动验收
+
+先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-main-window.ps1`。三个独立 debug 应用进程共用本次 UUID 隔离数据库，只接受 seed / restore / missing 阶段，不能输入任意数据路径。实际普通移动与快速最大化、最小化不覆盖位置、关闭隐藏 / 重新打开、下一进程启动恢复、合成原屏缺失时主屏工作区夹紧通过；冷启动预期在正式恢复前冻结，不依赖恢复后保存值；最后移动在数据库尚未保存时立即退出，下一进程必须读到独立已知的最终位置，验证退出保存。Win10 19045 / 150% SEQUENCE_OK、退出 0，1412 提示仍保留，无真实来源 / 账户或性能测试。
+
+系统窗口检查为实际原生 API 和 WebView 程序化检查，不能替代物理拖动 / 断屏 / 多屏 DPI / Win11。详见[交付记录](delivery-status.md#m15f2主窗口原生捕获与冷启动恢复)。本模块提交时，下方 M16e 安装包尚未包含主窗口位置功能，新包另作记录。
+
 当前最新完整 NSIS 包（M16e）：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,605,439 字节，SHA-256 `2e8eb45072009cd9ae862afb604a09d07a6e3429ba2dce6169896fbbfe63410b`。同次正式 TS / Vite、release 宿主 / 桌面、334 项第三方声明和 makensis 全部通过；旧段落中的包哈希按历史保留。包含最新正式空态说明，账户 / notify 选择器验收代码只在 debug 中。此轮未覆盖现有正式数据进行安装，未生成正式签名或发布；干净安装 / 卸载及完整更新不能由打包通过替代。
 
 本轮按用户允许重试任务栏 wire，输入桌面可打开，但自有前台夹具仍被全屏 Windows.UI.Core.CoreWindow 覆盖，命中保护在发送输入之前拒绝 / 退出 101；不计真实输入通过、不绕过保护，历史 M13e7 通过证据保留。详见[本轮记录](delivery-status.md#2026-10-03本轮任务栏真实输入复测)。

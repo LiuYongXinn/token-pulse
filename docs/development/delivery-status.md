@@ -2,6 +2,16 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M15f2：主窗口原生捕获与冷启动恢复
+
+主窗口配置改为初始隐藏；正常 setup 在 RuntimeState 就绪后读取独立 main_window 偏好，按已保存 monitor 的当前工作区 / DPI 恢复，再显示。原屏缺失选主屏并夹紧；以真实 outer_size 计算标题栏 / 边框，较小工作区仍保留标题栏可达。主窗口移动 / 调整尺寸记录普通位置，300 ms 合并保存；缩放、WM_DISPLAYCHANGE、SPI_SETWORKAREA 变化调度重新检查，重新打开统计先恢复最小化并校正位置。关闭继续隐藏，在隐藏前和正常退出前保存，失败只报告有限码，不替换坏配置或阻断普通显示。
+
+最大化和最小化不捕获其外框 / 哨兵坐标。原生事件先保留最后普通位置于内存，避免移动后立即最大化丢失尚未提交的位置信息；后台和退出可提交这一普通位置。退出停用调度并递增代次，避免继续创建保存 worker。通过既有 settings_changed 失效通知，未新增 IPC / native handle / renderer 位置写入，范围 / 价格 / 账户 / 小窗偏好分离。
+
+新增显式 `scripts/native-main-window.ps1`，三个完整应用进程共享新的 UUID native-main-placement 开发数据库，参数严格要求 native-smoke、UUID 与 seed / restore / missing 有限阶段。生产读取 / 恢复 / 保存代码原样运行，验收不直接调用启动恢复。第二、三阶段在 initialize 之前只读捕获原始偏好作为独立预期，不能用恢复后重新保存的数据库值给自己证明。首阶段实际原生移动 / 保存、移动立即最大化、最小化 / 恢复、关闭隐藏 / 重新打开通过；首阶段最后把独立预期写入本次自有夹具文件，实际再移动并确认数据库尚未保存，立即退出；第二阶段在 initialize 前的数据库值必须等于该独立预期，随后核对原生位置，证明生产退出保存及独立进程冷启动恢复；再显式写入合成缺失显示器 / 8000 DIP 输入供第三进程验证主屏和实际外框夹紧。合成输入阶段关闭本次保存，仅为保留下一轮已知输入，不当作真实显示器拔插或退出保存证据。
+
+Win10 19045 / 150% 三个 NATIVE_MAIN_WINDOW_COLD_OK / SEQUENCE_OK、退出 0；正式 main DOM / IPC 确认无来源、账户断开。scene 参数一项自动检查、desktop all-targets strict Clippy / release check / fmt、PowerShell AST / diff 通过；来源 / 账户选择器实际回归也退出 0。1412 提示保留。没有物理拖动 / 断屏 / 其他 DPI / Win11 或视觉截图通过声称；本轮不读取真实日志 / 账户，不运行性能测试。模块提交时安装包仍为 M16e，源码 / debug 产物已含本功能，后续打包记录另列。
+
 ## M15f1：独立主窗口位置持久契约
 
 核对实际代码后确认原有位置恢复仅覆盖 mini，主窗口尚未实现。新增内部 MainWindowPreferences 与 SQLite settings.main_window 字段，缺省 placement=None；重用已校验的 monitor / 工作区相对 DIP 坐标。读取及写入不接受未知字段、非有限坐标或未来配置版本，不写默认覆盖坏记录。Writer 仅修改最新 payload 的 main_window 并与全局修订原子提交，保留小窗、显示、账户与其他设置；同值无修订变化。没有新增 IPC / renderer 路径或几何能力、数据表或迁移保护工作。

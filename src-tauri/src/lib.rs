@@ -29,6 +29,7 @@ struct RuntimeState {
     recovery_shortcut: std::sync::Mutex<shortcuts::RecoveryRuntime>,
     #[cfg(debug_assertions)]
     native_dashboard_request: std::sync::Mutex<Option<token_pulse_core::query::DashboardRequest>>,
+    main_geometry: main_window::PlacementRuntime,
     main_navigation: std::sync::Mutex<token_pulse_core::navigation::MainNavigationSnapshot>,
     privacy: PrivacyState,
     mini_creation: std::sync::Mutex<()>,
@@ -157,8 +158,9 @@ async fn perform_window_action(
 
 fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("WINDOW_NOT_FOUND")?;
-    window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
+    main_window::fit_current(&window).map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
     quota_commands::update_visibility(&window);
     window.set_focus().map_err(|e| e.to_string())
 }
@@ -197,11 +199,17 @@ pub fn run() {
             #[cfg(all(debug_assertions, windows))]
             let quota_startup_scene = quota_startup_smoke::scene()?;
             #[cfg(all(debug_assertions, windows))]
+            let main_window_scene = main_window_smoke::scene()?;
+            #[cfg(all(debug_assertions, windows))]
+            if quota_startup_scene.is_some() && main_window_scene.is_some() { return Err("native startup scenes cannot be combined".into()); }
+            #[cfg(all(debug_assertions, windows))]
+            let data_directory = if let Some(scene) = &main_window_scene { data_directory.join(&scene.directory) } else { data_directory };
+            #[cfg(all(debug_assertions, windows))]
             let data_directory = if let Some(scene) = &quota_startup_scene { data_directory.join(&scene.directory) } else { data_directory };
             #[cfg(debug_assertions)]
             let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {
                 #[cfg(windows)]
-                if quota_startup_scene.is_some() {data_directory}
+                if quota_startup_scene.is_some() || main_window_scene.is_some() {data_directory}
                 else {
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {data_directory.join(format!("native-notify-{}",uuid::Uuid::new_v4().simple()))}
                 else {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
@@ -245,7 +253,10 @@ pub fn run() {
             let privacy = initial_privacy(&database);
             let notify_app = app.handle().clone();
             let quota = token_pulse_quota::service::AccountQuotaService::start(&uuid::Uuid::new_v4().to_string(), std::sync::Arc::new(move |event| {use tauri::Emitter; let _ = notify_app.emit("account_quota_changed", event);})).map(std::sync::Arc::new);
-            let update_app = app.handle().clone(); let updates = update_service::UpdateService::production(app.package_info().version.to_string(), std::sync::Arc::new(move || { use tauri::Emitter; let _ = update_app.emit("updates_changed", ()); })); app.manage(RuntimeState { updates, notify_operations: notify_commands::initialize(&data_directory), #[cfg(windows)] notify, taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
+            let update_app = app.handle().clone(); let updates = update_service::UpdateService::production(app.package_info().version.to_string(), std::sync::Arc::new(move || { use tauri::Emitter; let _ = update_app.emit("updates_changed", ()); })); app.manage(RuntimeState { updates, notify_operations: notify_commands::initialize(&data_directory), #[cfg(windows)] notify, taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_geometry: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
+            #[cfg(all(debug_assertions, windows))]
+            let main_window_before_restore = if main_window_scene.is_some() {app.state::<RuntimeState>().database.as_ref().map_err(|e| e.to_string())?.main_window_preferences()?.placement} else {None};
+            main_window::initialize(app.handle());
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
             if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
@@ -275,6 +286,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if let Some(scene) = main_window_scene {main_window_smoke::start(app.handle().clone(),scene.phase,main_window_before_restore);return Ok(());}
                 #[cfg(windows)]
                 if let Some(scene) = quota_startup_scene {quota_startup_smoke::start(app.handle().clone(),scene.phase);return Ok(());}
                 #[cfg(windows)]
@@ -314,9 +327,11 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Destroyed) {quota_commands::update_native_visibility(window);}
+            if window.label()=="main" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { main_window::schedule(window.app_handle(),matches!(event,tauri::WindowEvent::ScaleFactorChanged {..})); }
             if window.label()=="mini" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { mini_window::schedule_placement(window.app_handle()); }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label()=="main" {if let Some(main)=window.app_handle().get_webview_window("main") {if main_window::save_current(&main).is_err() {eprintln!("MAIN_PLACEMENT_SAVE_FAILED");}}}
                 if window.label()=="mini" {if let Some(mini)=window.app_handle().get_webview_window("mini") {if mini_window::save_current_placement(&mini).is_err() {eprintln!("MINI_PLACEMENT_SAVE_FAILED");}}}
                 let _ = window.hide();
                 quota_commands::update_native_visibility(window);
@@ -359,6 +374,7 @@ pub fn run() {
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
             ) {
+                main_window::stop_and_save(app);
                 if let Some(state) = app.try_state::<RuntimeState>() {
                     #[cfg(windows)]
                     if let Ok(notify) = state.notify.lock() {
@@ -462,3 +478,8 @@ mod native_dialog_driver;
 
 #[cfg(all(debug_assertions, windows))]
 mod notify_dialog_smoke;
+
+mod main_window;
+
+#[cfg(all(debug_assertions, windows))]
+mod main_window_smoke;

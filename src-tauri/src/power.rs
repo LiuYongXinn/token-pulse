@@ -5,8 +5,8 @@ use windows_sys::Win32::{
     UI::{
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
-            PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, WM_DISPLAYCHANGE,
-            WM_HOTKEY, WM_NCDESTROY, WM_POWERBROADCAST,
+            PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, SPI_SETWORKAREA,
+            WM_DISPLAYCHANGE, WM_HOTKEY, WM_NCDESTROY, WM_POWERBROADCAST, WM_SETTINGCHANGE,
         },
     },
 };
@@ -48,9 +48,12 @@ unsafe extern "system" fn power_message(
         let app = unsafe { &*(data as *const tauri::AppHandle) };
         super::shortcuts::dispatch(app, wparam, lparam);
     }
-    if message == WM_DISPLAYCHANGE {
+    if message == WM_DISPLAYCHANGE
+        || (message == WM_SETTINGCHANGE && wparam as u32 == SPI_SETWORKAREA)
+    {
         let app = unsafe { &*(data as *const tauri::AppHandle) };
         super::mini_window::schedule_placement(app);
+        super::main_window::schedule(app, true);
     }
     if message == WM_POWERBROADCAST {
         // The only writer of dwRefData is install above; no message payload is dereferenced.

@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "TokenPulse", "width": 1280, "height": 860, "minWidth": 960, "minHeight": 680, "backgroundColor": "#202020" }],
+    "windows": [{ "label": "main", "title": "TokenPulse", "visible": false, "width": 1280, "height": 860, "minWidth": 960, "minHeight": 680, "backgroundColor": "#202020" }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'"
     }
