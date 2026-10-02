@@ -274,6 +274,8 @@ M13e5a 的定向检查为 cargo test -p token-pulse-taskbar --lib control。普�
 
 ## 显式模型别名 IPC 验收
 
+账户冷启动独立入口：`pwsh -NoProfile -File scripts/native-account-startup.ps1`。四个完整进程以同一 UUID 隔离库依次验证 seed / ready / disabled / changed，正常初始化读取已保存设置；脚本要求四阶段及 SEQUENCE_OK，并检查拥有的合成账户子进程已退出。不会打开用户账户、选择器或发送桌面输入。Windows 10 已通过，WebView2 注销 1412 保留；真实账户冷启动 / 持续读取及 Win11 分开记录，详见[账户共享显示验证](account-quota-verification.md)。
+
 pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceAliases 选择 debug-only、无来源 / 账户的隔离库及两个真实 WebView，实际核对 main-only create / replace / retire / 旧版本、CAS / 映射冲突、提交成功通知、隐私投影和 mini 拒绝。Win10 已输出 NATIVE_PRICE_ALIAS_OK、退出 0，WebView2 注销 1412 保留。此检查不启用任务栏、不读取真实日志 / 登录信息，不等同设置编辑器 UI 验收。定向自动检查 cargo test -p token-pulse-core --test pricing 和 cargo test -p token-pulse-store --lib pricing 均使用合成单价 / 模型、独立预期费用及消费不变；没有性能测试。
 
 M09f2 的 -PriceAliases 追加真实 React 表单事件，经正式 command / SQLite 完成新增、替换、历史只读、退休、外部发布后的原修订冲突及草稿保留，随后共享隐私清掉草稿，关闭后不恢复。成功通知现在精确检查 1–8 共八次；最终 NATIVE_PRICE_ALIAS_OK 和退出 0 为通过。本机 Win10 19045 / 150% 已通过，WebView2 1412 保留。运行前 npm run build；定向浏览器 npx playwright test tests/ui/prices.spec.ts，4 项通过，深 / 浅及 960 宽截图位于忽略的 test-results/model-alias-*.png，仅为开发合成 DTO 视觉检查。普通价格规则回归保持，未运行性能测试。

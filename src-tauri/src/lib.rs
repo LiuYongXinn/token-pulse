@@ -192,10 +192,20 @@ pub fn run() {
                 return Err("application identifier must match build profile; use npm run tauri:dev for debug".into());
             }
             let data_directory = app.path().app_local_data_dir()?;
+            #[cfg(all(debug_assertions, windows))]
+            let quota_startup_scene = quota_startup_smoke::scene()?;
+            #[cfg(all(debug_assertions, windows))]
+            let data_directory = if let Some(scene) = &quota_startup_scene { data_directory.join(&scene.directory) } else { data_directory };
             #[cfg(debug_assertions)]
             let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {
+                #[cfg(windows)]
+                if quota_startup_scene.is_some() {data_directory}
+                else {
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {data_directory.join(format!("native-notify-{}",uuid::Uuid::new_v4().simple()))}
                 else {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
+                }
+                #[cfg(not(windows))]
+                {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
             } else {data_directory};
             token_pulse_store::prepare_data_directory(&data_directory)?;
             let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
@@ -263,6 +273,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if let Some(scene) = quota_startup_scene {quota_startup_smoke::start(app.handle().clone(),scene.phase);return Ok(());}
                 #[cfg(windows)]
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {notify_smoke::start(app.handle().clone());return Ok(());}
                 #[cfg(windows)]
@@ -404,6 +416,8 @@ mod quota_commands;
 mod quota_config;
 #[cfg(all(debug_assertions, windows))]
 mod quota_smoke;
+#[cfg(all(debug_assertions, windows))]
+mod quota_startup_smoke;
 mod revalue_commands;
 mod settings_commands;
 mod shortcuts;
