@@ -4,6 +4,17 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: api.invoke, isTauri: () => true
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }));
 beforeEach(() => { vi.resetModules(); api.invoke.mockReset(); });
 
+test('taskbar controls accept their non-sensitive unstamped DTOs and retain response identity checks', async () => {
+  const { getTaskbarPreferences, getTaskbarStatus, setTaskbarPreferences, retryTaskbarEmbed } = await import('./runtime');
+  api.invoke.mockImplementation(async (_command, args) => ({ api_version: 1, request_id: args.requestId, data: null }));
+  await expect(getTaskbarPreferences()).resolves.toBeNull();
+  await expect(getTaskbarStatus()).resolves.toBeNull();
+  await expect(setTaskbarPreferences({ preferences: {}, expected_settings_revision: '9007199254740993' } as never)).resolves.toBeNull();
+  await expect(retryTaskbarEmbed()).resolves.toBeUndefined();
+  api.invoke.mockImplementationOnce(async () => ({ api_version: 1, request_id: 'wrong-request', data: null }));
+  await expect(getTaskbarStatus()).rejects.toThrow('响应身份不匹配');
+});
+
 test('old serialized page after protection is discarded and original continuation is released', async () => {
   const { displayPolicy } = await import('./display-policy');
   const { querySessions } = await import('./runtime');

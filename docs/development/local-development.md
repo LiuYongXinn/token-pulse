@@ -154,3 +154,5 @@ pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar
 `-Taskbar` 选择独立任务栏场景，使用 debug 专用 `native-probe-<UUID>` 数据目录、真实两个 WebView、正式宿主及 SQLite DTO。初始数据库无来源，未知用量 / 额度保留未知，不读取已有开发来源或真实账户；通过主窗口命令保存启用配置，并验证实际 embedded、mini 命令拒绝、共享隐私屏障、主窗口隐藏后最后成功快照时间继续推进、合成休眠消息 / 恢复、禁用以及嵌入时关闭后台服务。最后原任务栏几何恢复，输出 NATIVE_TASKBAR_MANAGER_OK 并以 0 退出；默认 tests 和不带 -Taskbar 的综合原生场景不调整任务栏。
 
 本机 Win10 19045 / 150% DPI 通过。电源检查仅向自有主窗口发送合成消息，不代表机器实际休眠；未做系统按钮实际点击、Win11 或完整物理多屏 / DPI。关闭时 WebView2 可能输出 Chrome_WidgetWin_0 注销错误 1412，本次场景断言及进程退出均成功，记录此诊断而不将其隐藏。当前综合原生回归另有真实键盘恢复失败，尚需复核，不能用任务栏独立通过代替综合回归通过。未运行性能测试。
+
+M13d4 为 -Taskbar 增加真实设置页状态及保存关闭检查：通过实际 WebView DOM 事件操作正式 React 页面，读回 SQLite 偏好并核对原任务栏几何。这不替代原生鼠标与菜单验收。定向前端检查：`npx playwright test tests/ui/taskbar.spec.ts tests/ui/shell.spec.ts tests/ui/jobs.spec.ts --workers=1`；任务栏视觉截图在忽略的 test-results 目录中，仅为显式合成 DTO 检查。

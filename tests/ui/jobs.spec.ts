@@ -11,6 +11,7 @@ test('synthetic job IPC fixture shows accepted cancellation until final state an
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if(command==='get_app_status')return response({version:'synthetic-test',development:true,data_directory:'synthetic-test',collector:'ready',storage:'ready',storage_error:null,quota:'not_configured',taskbar:'not_implemented'});
       if(command==='list_jobs')return response(structuredClone(jobs));
+      if(command==='get_taskbar_status')return response({revision:'0',state:'disabled',applied_settings_revision:null,issue:null,error:null,compact:null,fallback_visible:null,last_cleanup:null,last_snapshot_at_ms:null});
       if(command==='start_job') {
         const request=args.request as {request_key:string};
         if(requestKey!==null && requestKey!==request.request_key)throw new Error('lost idempotency key');

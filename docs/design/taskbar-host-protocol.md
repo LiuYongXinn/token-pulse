@@ -138,3 +138,5 @@ M13b2 增加 2 项实际 Win32 控制窗口检查和 3 项独立几何预期检�
 M13c1 增加 5 项独立展示预期和 2 项真实 GDI 字体 / 位图检查，任务栏全套 27 项通过。包括最大整数 / 金额、半分舍入、null / 零、实际周期 / 时区、周歧义、旧值、15 种有效内容选择、隐私、测量精简与不足回退；原生检查请求四档字体 DPI、核对全部文字界限，并确认清除后的每个像素只含背景。已有自有窗口检查补充读数子窗口、真实测量宽度、完整可访问名称及隐私后名称 / 布局清空；真实宿主跨进程回归通过。严格 Clippy / fmt / schema 漂移通过。
 
 显式开发 example 生成并人工查看 5 张同一 GDI 代码绘制的合成图：暗色两行、精简、浅色单行、0% 警示和隐私 / 大字号，无裁切。文件带 DEVELOPMENT-FIXTURE 标记，数值 / 价格 / 额度全部合成，不是实际账户或生产 UI 截图；默认 Python 没有 Pillow，直接用图像查看器检查原生 BMP，没有安装环境依赖。四档字体 API 检查不等于物理显示器 DPI 切换。后续继续安全布局 / Explorer 挂接与脱离、交互、主端管理器、背景适配及可见隐私；未执行性能测试。
+
+M13d4 主窗口正式设置页和诊断接入 get_taskbar_preferences / set_taskbar_preferences / get_taskbar_status / retry_taskbar_embed。这四类响应只含无敏感配置或运行状态，沿用 plain Response 身份校验，不携带显示隐私 stamp；用量 / 价格和账户仍经既有受保护通路进入宿主，主窗口 UI 没有接收宿主原始载荷。taskbar_status_changed 仅触发重新查询，旧响应按查询序号与 DecimalInt 修订拒绝；设置使用最初草稿修订 CAS。实际设置确认不替代 embedded，fallback_visible=null 的阶段 UI 明确不承诺自动回退。

@@ -15,7 +15,7 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
+const plainCommands = new Set(['get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
@@ -64,6 +64,17 @@ export async function onDisplayPolicyChanged(): Promise<() => void> {
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
+// These DTOs contain display switches and runtime state only, never usage values or paths.
+export function getTaskbarPreferences(): Promise<import('./generated/contracts').TaskbarPreferencesSnapshot> { return request('get_taskbar_preferences'); }
+export function setTaskbarPreferences(mutation: import('./generated/contracts').TaskbarPreferencesMutation): Promise<import('./generated/contracts').TaskbarPreferencesSnapshot> { return request('set_taskbar_preferences', { request: mutation }); }
+export function getTaskbarStatus(): Promise<import('./generated/contracts').TaskbarRuntimeSnapshot> { return request('get_taskbar_status'); }
+export async function retryTaskbarEmbed(): Promise<void> { await request<null>('retry_taskbar_embed'); }
+/** Runtime events invalidate only; a fresh command supplies the complete authoritative status. */
+export async function onTaskbarStatusChanged(refresh: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen('taskbar_status_changed', refresh);
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 export function getDisplaySettings(): Promise<DisplaySettingsSnapshot> { return request('get_display_settings'); }
 export function getMiniOpacity(): Promise<import('./generated/contracts').MiniOpacitySnapshot> { return request('get_mini_opacity'); }
 export function getMiniPassthrough(): Promise<import('./generated/contracts').MiniPassthroughSnapshot> { return request('get_mini_passthrough'); }

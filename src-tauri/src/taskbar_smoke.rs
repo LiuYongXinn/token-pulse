@@ -56,6 +56,19 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     wait(app, TaskbarRuntimeState::Embedded)?;
     super::mini_smoke::evaluate(
         app,
+        &main,
+        r#"
+      const waitFor=async(read)=>{for(let i=0;i<100;i++){if(read())return;await new Promise(r=>setTimeout(r,50));}throw new Error('TASKBAR_UI_TIMEOUT');};
+      document.querySelector('nav button:last-child').click();
+      await waitFor(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='任务栏显示'));
+      [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='任务栏显示').click();
+      await waitFor(()=>document.querySelector('.taskbar-enable input')?.checked===true);
+      await waitFor(()=>document.querySelector('.taskbar-runtime [role=status]')?.textContent==='已嵌入任务栏');
+      if(document.querySelector('.taskbar-settings-panel').textContent.includes('显示隐私策略已变化'))throw new Error('TASKBAR_UI_PROTOCOL_STAMP');
+    "#,
+    )?;
+    super::mini_smoke::evaluate(
+        app,
         &mini,
         r#"
       let denied=false;try{await invoke('get_taskbar_status',{requestId:'taskbar-mini-denied'});}catch{denied=true;}
@@ -113,8 +126,14 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         app,
         &main,
         r#"
-      const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-disable-before'});
-      await invoke('set_taskbar_preferences',{requestId:'taskbar-disable',request:{preferences:{...current.data.preferences,enabled:false},expected_settings_revision:current.data.settings_revision}});
+      const waitFor=async(read)=>{for(let i=0;i<100;i++){if(read())return;await new Promise(r=>setTimeout(r,50));}throw new Error('TASKBAR_UI_SAVE_TIMEOUT');};
+      await waitFor(()=>document.querySelector('.taskbar-enable input')?.checked===true);
+      document.querySelector('.taskbar-enable input').click();
+      await waitFor(()=>document.querySelector('.taskbar-preferences button.primary')?.disabled===false);
+      document.querySelector('.taskbar-preferences button.primary').click();
+      await waitFor(()=>document.querySelector('.taskbar-runtime [role=status]')?.textContent==='已关闭');
+      const current=await invoke('get_taskbar_preferences',{requestId:'taskbar-disable-ui-verify'});
+      if(current.data.preferences.enabled)throw new Error('TASKBAR_UI_SAVE_NOT_PERSISTED');
     "#,
     )?;
     wait(app, TaskbarRuntimeState::Disabled)?;
@@ -137,7 +156,7 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("shutdown while embedded did not restore original geometry".into());
     }
     println!(
-        "NATIVE_TASKBAR_MANAGER_OK: isolated SQLite DTO, real WebView commands, native host embedding, shared privacy barrier, hidden-main snapshot refresh, synthetic power routing, disable and embedded shutdown restore original geometry"
+        "NATIVE_TASKBAR_MANAGER_OK: isolated SQLite DTO, real settings UI/status and save, native host embedding, shared privacy barrier, hidden-main snapshot refresh, synthetic power routing, disable and embedded shutdown restore original geometry"
     );
     Ok(())
 }
