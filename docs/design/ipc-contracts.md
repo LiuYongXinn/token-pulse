@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-02 范围确认见[实施计划第 7 节](../development/implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。不新增 manage_startup、额外快捷键、WSL / 网络来源或旧格式自动重解析命令；诊断仅保留基本状态、错误与定位。notify、计价 / 重估、账户、任务栏和更新契约继续保留。auto_connect 是软件启动后的账户连接偏好，与已取消的开机启动无关。后文已实现协议记录保留历史事实，不修改既有 schema。
+
 总入口：[详细开发设计](development-design.md)。本文定义目标 `api_version=1`，为接口草案而非现有命令。Rust DTO 是运行时协议权威，生成 TypeScript 类型 / JSON Schema 并提交；禁止两端分别手写不一致的字段定义。
 
 ## 1. 传输与公共类型
@@ -130,7 +132,7 @@ range 左闭右开，start < end；时区必须合法 IANA 名称。ids 数量�
 |`get_context_snapshot`|session_key|最近有效上下文、快照时间、容量、质量；不伪装历史上下文|
 |`close_query_snapshot`|snapshot_handle|释放租约，重复关闭幂等|
 |`get_sources`|request_id|配置、规范路径、能力、可读性、扫描 / 导入状态|
-|`query_diagnostics`|受控来源 / 类别 / 时间、cursor|诊断分页、必要位置、可执行恢复动作|
+|`query_diagnostics`|受控来源 / 类别 / 时间、cursor|简化错误列表、必要位置、重新检测与手动重建；不返回原文样本或完整继承证据|
 |`get_price_rules`|revision 或当前、分页|规则版本、来源、匹配与生效时间|
 |`get_job` / `list_jobs`|job_id / 状态与分页|持久进度与明确最终状态|
 
@@ -186,7 +188,7 @@ cursor 为服务端签发的不透明游标：snapshot / filter hash、sort、�
 
 租约拥有窗口 / 作业身份；其他窗口不能持另一个窗口句柄调用。查询可取消，不在连接上并发执行两个语句。WAL 超过初始保护阈值 64 MiB 或全局写入压力时可提前回收并明确返回过期。前端清理旧列表后取新租约，显示刷新，不静默拼接分页。
 
-导出不使用交互租约无限延期：作业取得固定只读视图和价格版本，生成当前用户临时目录的私有一致副本 / 等效物化数据后释放主库快照，在副本分页输出，结束清理。实际备份 / 物化成本单独压测。
+2026-10-02 用户取消 M14，快照租约仅用于交互查询与分页，不再设计导出副本作业。
 
 ## 3. 写操作与作业命令
 
@@ -194,22 +196,17 @@ cursor 为服务端签发的不透明游标：snapshot / filter hash、sort、�
 |---|---|
 |`choose_source_directory`|后端原生目录选择；返回一次性 selection_handle 和检测摘要|
 |`manage_source`|add(handle)、pause、resume、detect、retain_remove；验证作用范围|
-|`start_job`|import / reconcile / rebuild / export / backup / price_revalue；scope 与 request_key；返回 job_id|
+|`start_job`|import / reconcile / rebuild / price_revalue；scope 与 request_key；返回 job_id|
 |`cancel_job`|job_id；只请求安全取消，返回 accepted / already_finished / too_late|
 |`set_project_alias`|project_id、alias、expected_settings_revision；不修改消费|
 |`save_price_rule`|完整规则、expected_price_revision；校验时间重叠、精度与优先级后发布新版本|
 |`retire_price_rule`|rule_id、expected_price_revision；保留历史可追溯规则|
 |`get_settings`|结构版本、revision、生效值|
 |`update_settings`|受控 patch、expected_settings_revision；校验后返回生效值与冲突|
-|`prepare_data_action`|clear_source / clear_all / restore 的受控范围；返回影响与 confirmation_token|
-|`commit_data_action`|confirmation_token、request_key；再次核对影响版本，启动安全作业|
 |`open_source_location`|diagnostic_id 或 source_id；后台定位，不接受任意路径|
 |`manage_notify_integration`|prepare / apply / restore；显示保真配置差异，校验当前内容归属|
-|`manage_startup`|enabled；返回实际系统结果，失败不保存为成功|
 
-selection_handle 绑定选择用途、当前窗口与 canonical target，5 分钟过期；消费一次，不能改成删除 / 任意执行目标。导出和备份使用专门 `choose_output_file`，验证不是源日志文件、数据库或安装资源。
-
-confirmation_token 绑定范围、统计 revision、影响计数、当前窗口，60 秒有效；底层数据变化时拒绝 STALE_CONFIRMATION 并重新评估。备份恢复文件需独立验证，不能把用户选择的任意文件当数据库打开写入。
+selection_handle 绑定选择用途、当前窗口与 canonical target，5 分钟过期；消费一次，不能改成删除 / 任意执行目标。不提供 `choose_output_file`、`prepare_data_action` 或 `commit_data_action`，也不开放导出、手动备份、备份恢复与数据清除作业。账户程序选择与指纹确认继续使用独立受控契约。
 
 对长操作 request_key 幂等：相同 key + 相同请求返回同 job；同 key 不同 payload 拒绝 REQUEST_KEY_CONFLICT。查询 request_id 只用于关联，不承诺写幂等。应用重启后作业状态可查，无法继续的任务明确 interrupted。
 
@@ -218,7 +215,7 @@ confirmation_token 绑定范围、统计 revision、影响计数、当前窗口�
 ```typescript
 type Job = {
   job_id: Id;
-  kind: 'import' | 'reconcile' | 'rebuild' | 'export' | 'backup' | 'restore' | 'price_revalue' | 'clear';
+  kind: 'import' | 'reconcile' | 'rebuild' | 'price_revalue';
   state: 'queued' | 'running' | 'validating' | 'publishing' | 'cancelling'
        | 'succeeded' | 'cancelled' | 'failed' | 'interrupted';
   phase: string;
@@ -334,10 +331,10 @@ action: open_float | open_stats | open_taskbar_settings | set_privacy | disable_
 |SOURCE_UNREADABLE|单来源读失败|局部旧数据与检测入口|
 |UNSUPPORTED_FORMAT / AMBIGUOUS_USAGE|观察格式 / 推断问题|显示覆盖缺口，进入诊断|
 |CHECKPOINT_CONFLICT|准备批次已过时|后台重新读取，不要求用户手工重试消费|
-|DB_WRITE_FAILED / DISK_FULL|提交失败|停止推进检查点，提供存储恢复入口|
-|DB_CORRUPT / MIGRATION_FAILED|库 / 升级不可用|停止写入，备份 / 恢复界面|
+|DB_WRITE_FAILED / DISK_FULL|提交失败|停止推进检查点，显示存储错误与排查提示|
+|DB_CORRUPT / MIGRATION_FAILED|库 / 升级不可用|显示普通错误提示，不提供恢复界面|
 |SNAPSHOT_EXPIRED / CURSOR_INVALID|租约 / 游标无效|重新取第一页，说明列表已刷新|
-|REVISION_CONFLICT / STALE_CONFIRMATION|配置或删除范围已变化|重新读取差异，再评估操作|
+|REVISION_CONFLICT / STALE_CONFIRMATION|配置或已确认账户程序已变化|重新读取差异，再评估操作|
 |REQUEST_KEY_CONFLICT|幂等 key 复用不同请求|拒绝操作，不启动第二任务|
 |PRICE_RULE_CONFLICT|同范围 / 同优先级规则有效时间重叠|保留旧规则，调整有效时间或优先级后重试|
 |JOB_CANCELLED / JOB_INTERRUPTED|安全取消 / 重启中断|展示实际状态，提供可支持的恢复|
@@ -349,13 +346,11 @@ action: open_float | open_stats | open_taskbar_settings | set_privacy | disable_
 
 AppError 不包含完整源记录、访问令牌、未经处理的系统错误串；message_key 由前端本地化。可安全重试的网络 / 文件失败与需要用户修改的配置错误必须分开。
 
-## 8. 导出契约与验证
+## 8. 契约验证
 
-导出 manifest 包含 demo=false、UTC 导出时间、snapshot / data / price revision、过滤条件、时区、估价模式、解析 / 核算版本、隐私选项。逐事件包含完整 Token 字符串、未知字段 null、规则 ID、currency、未计价原因与计算依据。
+M14 已取消，不定义 CSV / JSON 导出格式、公式注入验收、手动备份或数据恢复 / 清除契约。精确大整数、未知值、价格依据、隐私和快照一致性继续在查询 DTO 中验证。
 
-CSV 将可能被表格解释为公式的用户标签转为安全文本，数值列以精确字符串输出；路径隐藏由后台执行。JSON schema 显式区分零与 null。先写临时文件、完成校验再原子发布到用户选择目标，取消 / 失败清理临时产物。
-
-契约检查：DTO schema round-trip、超大整数、非法区间 / 枚举 / 游标、窗口越权、序号乱序、通知丢失、快照过期、幂等 key 冲突、费用空值、额度 epoch 变化、隐私宿主断连与安全导出。主页面同快照和分页租约需使用真实并发写入验证，不能只断言几个 revision 字符串相同。
+契约检查：DTO schema round-trip、超大整数、非法区间 / 枚举 / 游标、窗口越权、序号乱序、通知丢失、快照过期、幂等 key 冲突、费用空值、额度 epoch 变化、隐私宿主断连。主页面同快照和分页租约需使用真实并发写入验证，不能只断言几个 revision 字符串相同。
 
 `get_grouped_usage` 的正式请求将 filter、price_basis、dimension（models / projects）、sort（total_desc / name_asc）及 limit（1–200）放在 request 对象内。响应为 GroupedUsageBundle：完整筛选 summary / pricing / coverage / meta，加 groups（每组 key|null、display_name、totals、pricing、coverage）、含未知分类的 total_group_count 和 truncated。limit 仅限制显示行，不改变整体汇总；同事务规则与全部来源证据用于估价，来源筛选不缩小规则匹配证据。模型 key 当前基于实际 provider / model，版本化别名规范化需在后续接口统一。
 
