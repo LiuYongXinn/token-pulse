@@ -54,9 +54,10 @@ test('real DTO switches use exact CAS, saved enabled does not invent embedded or
   await panel.getByRole('checkbox', { name: '启用任务栏显示' }).check();
   await panel.getByRole('checkbox', { name: '费用估算', exact: true }).uncheck();
   await panel.getByRole('combobox', { name: '任务栏显示布局' }).selectOption('single_row');
+  await panel.getByRole('combobox', { name: '任务栏显示位置' }).selectOption('application_right');
   await panel.getByRole('button', { name: '保存任务栏设置' }).click();
   await expect(panel.getByRole('button', { name: '保存任务栏设置' })).toBeDisabled(); await expect(panel.getByRole('status')).toHaveText('已关闭');
-  const expected: TaskbarPreferences = { enabled: true, display: { layout: 'single_row', show_tokens: true, show_costs: false, show_quota: true, show_weekly_reset: true }, position: 'notification_left', fallback_to_mini: true };
+  const expected: TaskbarPreferences = { enabled: true, display: { layout: 'single_row', show_tokens: true, show_costs: false, show_quota: true, show_weekly_reset: true }, position: 'application_right', fallback_to_mini: true };
   expect(await page.evaluate(() => (window as unknown as QA).__taskbarQA.calls().filter(v => v.command === 'set_taskbar_preferences').at(-1)?.request)).toEqual({ preferences: expected, expected_settings_revision: '9007199254740993' });
   await expect(panel.getByRole('button', { name: '重试任务栏嵌入' })).toBeDisabled();
   await panel.getByRole('button', { name: '显示悬浮窗', exact: true }).click();

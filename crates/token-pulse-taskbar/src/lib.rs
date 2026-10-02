@@ -28,6 +28,8 @@ pub const MAX_HOST_ACTIONS: usize = 4;
 pub struct HostConfiguration {
     pub settings_revision: DecimalInt,
     pub enabled: bool,
+    #[serde(default)]
+    pub position: token_pulse_core::taskbar::TaskbarPosition,
     pub display: display::DisplayPreferences,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -83,6 +83,54 @@ pub struct ReservationPlan {
     pub remaining_task_switch: ScreenRect,
 }
 impl TaskbarTopology {
+    pub(crate) fn application_split(
+        &self,
+        coverage: &super::buttons::ButtonCoverage,
+        minimum_task_width: i32,
+    ) -> Result<i32, ProbeError> {
+        self.validate()?;
+        coverage.validate()?;
+        if minimum_task_width <= 0
+            || coverage.list.left != self.task_list.left
+            || coverage.list.top != self.task_list.top
+            || coverage.list.bottom != self.task_list.bottom
+            || coverage.list.right > self.task_list.right
+        {
+            return Err(ProbeError::UnsafeGeometry);
+        }
+        let split = i64::from(self.task_switch.left) + i64::from(minimum_task_width);
+        let split = split.max(i64::from(coverage.rightmost()) + i64::from(8 * self.dpi / 96));
+        if split > i64::from(self.task_switch.right) {
+            return Err(ProbeError::InsufficientSpace);
+        }
+        Ok(split as i32)
+    }
+    /// Reserve after actual task buttons, preserving minimum application area and an 8 DIP gap.
+    pub fn plan_application_right(
+        &self,
+        host_width: i32,
+        minimum_task_width: i32,
+        coverage: &super::buttons::ButtonCoverage,
+    ) -> Result<ReservationPlan, ProbeError> {
+        if host_width <= 0 {
+            return Err(ProbeError::UnsafeGeometry);
+        }
+        let split = self.application_split(coverage, minimum_task_width)?;
+        if i64::from(split) + i64::from(host_width) > i64::from(self.task_switch.right) {
+            return Err(ProbeError::InsufficientSpace);
+        }
+        Ok(ReservationPlan {
+            host: ScreenRect {
+                left: split,
+                right: split + host_width,
+                ..self.task_switch
+            },
+            remaining_task_switch: ScreenRect {
+                right: split,
+                ..self.task_switch
+            },
+        })
+    }
     pub fn validate(&self) -> Result<(), ProbeError> {
         if self.build != 19045 {
             return Err(ProbeError::UnsupportedVersion);

@@ -86,6 +86,7 @@ fn configuration_revision_clears_stale_view_and_rejects_conflicting_preferences(
         ))
         .unwrap();
     let configuration = HostConfiguration {
+        position: Default::default(),
         settings_revision: number("2"),
         enabled: true,
         display: display::DisplayPreferences::default(),
@@ -142,6 +143,7 @@ fn invalid_configuration_never_enables_and_status_does_not_invent_embedding_or_z
     let mut receiver = session();
     receiver.apply(frame("1", HostMessage::Hello {})).unwrap();
     let configuration = HostConfiguration {
+        position: Default::default(),
         settings_revision: number("1"),
         enabled: true,
         display: display::DisplayPreferences {
@@ -179,6 +181,80 @@ fn invalid_configuration_never_enables_and_status_does_not_invent_embedding_or_z
     status.state = HostDisplayState::Unavailable;
     status.density = None;
     status.validate().unwrap();
+}
+#[test]
+fn position_defaults_for_older_frames_but_changes_require_a_fresh_revision() {
+    use token_pulse_core::taskbar::TaskbarPosition;
+    let configuration = HostConfiguration {
+        position: TaskbarPosition::ApplicationRight,
+        settings_revision: number("1"),
+        enabled: true,
+        display: display::DisplayPreferences::default(),
+    };
+    let mut value = serde_json::to_value(&configuration).unwrap();
+    assert_eq!(value["position"], "application_right");
+    value.as_object_mut().unwrap().remove("position");
+    assert_eq!(
+        serde_json::from_value::<HostConfiguration>(value.clone())
+            .unwrap()
+            .position,
+        TaskbarPosition::NotificationLeft
+    );
+    value["position"] = serde_json::json!("arbitrary_external_window");
+    assert!(serde_json::from_value::<HostConfiguration>(value).is_err());
+    let mut receiver = session();
+    receiver.apply(frame("1", HostMessage::Hello {})).unwrap();
+    receiver
+        .apply(frame(
+            "2",
+            HostMessage::Configure {
+                configuration: configuration.clone(),
+            },
+        ))
+        .unwrap();
+    receiver
+        .apply(frame(
+            "3",
+            HostMessage::Privacy {
+                settings_revision: number("1"),
+                enabled: false,
+            },
+        ))
+        .unwrap();
+    receiver
+        .apply(frame(
+            "4",
+            HostMessage::Snapshot {
+                view: Box::new(view(false, "1")),
+            },
+        ))
+        .unwrap();
+    let mut next = configuration.clone();
+    next.position = TaskbarPosition::NotificationLeft;
+    next.settings_revision = number("2");
+    receiver
+        .apply(frame(
+            "5",
+            HostMessage::Configure {
+                configuration: next.clone(),
+            },
+        ))
+        .unwrap();
+    assert!(receiver.view().is_none());
+    assert_eq!(receiver.configuration(), Some(&next));
+    next.position = TaskbarPosition::ApplicationRight;
+    assert_eq!(
+        receiver
+            .apply(frame(
+                "6",
+                HostMessage::Configure {
+                    configuration: next
+                }
+            ))
+            .unwrap_err(),
+        WireError::OutOfOrder
+    );
+    assert!(receiver.configuration().is_none());
 }
 fn view(privacy: bool, revision: &str) -> TaskbarView {
     TaskbarView {

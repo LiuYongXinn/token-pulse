@@ -58,7 +58,9 @@ fn verify_actions(app: &tauri::AppHandle) -> Result<(), String> {
     wait_actions_ready(app)?;
     verify_details(app, &main)?;
     verify_canvas_recreation(app, &mini)?;
+    verify_application_position(app, &main, &before)?;
     main.hide().map_err(|e| e.to_string())?;
+    wait_readout_settled(app)?;
     // These are authored messages to our verified own readout, explicitly not real mouse input.
     own_click_message(app, WM_LBUTTONUP)?;
     until_action(app, || {
@@ -102,6 +104,7 @@ fn verify_actions(app: &tauri::AppHandle) -> Result<(), String> {
     "#,
     )?;
     wait_actions_ready(app)?;
+    wait_readout_settled(app)?;
     own_click_message(app, WM_LBUTTONUP)?;
     own_click_message(app, WM_LBUTTONDBLCLK)?;
     own_click_message(app, WM_LBUTTONUP)?;
@@ -198,6 +201,125 @@ fn until_action(app: &tauri::AppHandle, done: impl Fn() -> bool) -> Result<(), S
         }
         thread::sleep(Duration::from_millis(20));
     }
+    Ok(())
+}
+// Showing/hiding a real app window changes Explorer's buttons. Wait for the actor's
+// geometry publication before addressing its current child; stale gestures are discarded.
+fn wait_readout_settled(app: &tauri::AppHandle) -> Result<(), String> {
+    use windows_sys::Win32::{Foundation::RECT, UI::WindowsAndMessaging::GetWindowRect};
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut last = None;
+    let mut changed = Instant::now();
+    loop {
+        let rect = own_readout_window(app).ok().and_then(|window| {
+            let mut rect: RECT = unsafe { std::mem::zeroed() };
+            (unsafe { GetWindowRect(window, &mut rect) } != 0).then_some((
+                rect.left,
+                rect.top,
+                rect.right,
+                rect.bottom,
+            ))
+        });
+        if rect.is_none() || rect != last {
+            last = rect;
+            changed = Instant::now();
+        } else if changed.elapsed() >= Duration::from_millis(1500) {
+            return wait_actions_ready(app);
+        }
+        if Instant::now() >= deadline {
+            return Err("readout did not settle after actual task button change".into());
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+fn verify_application_position(
+    app: &tauri::AppHandle,
+    main: &tauri::WebviewWindow,
+    baseline: &token_pulse_taskbar::windows::topology::TaskbarTopology,
+) -> Result<(), String> {
+    use token_pulse_taskbar::windows::{button_fixture::TaskButtonFixture, buttons::ButtonProbe};
+    use windows_sys::Win32::{Foundation::RECT, UI::WindowsAndMessaging::GetWindowRect};
+    let probe = ButtonProbe::start().map_err(|e| format!("button probe: {e:?}"))?;
+    let native_rect = || {
+        let window = own_readout_window(app).ok()?;
+        let mut rect: RECT = unsafe { std::mem::zeroed() };
+        (unsafe { GetWindowRect(window, &mut rect) } != 0).then_some(rect)
+    };
+    super::mini_smoke::evaluate(
+        app,
+        main,
+        r#"
+        [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='设置').click();
+        await wait(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='任务栏显示'));
+        [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='任务栏显示').click();
+        await wait(()=>document.querySelector('[aria-label="任务栏显示位置"]')?.disabled===false);
+        const position=document.querySelector('[aria-label="任务栏显示位置"]');
+        position.value='application_right';position.dispatchEvent(new Event('change',{bubbles:true}));
+        await wait(()=>document.querySelector('.taskbar-preferences button.primary')?.disabled===false);
+        document.querySelector('.taskbar-preferences button.primary').click();
+    "#,
+    )?;
+    wait_actions_ready(app)?;
+    let correct = || {
+        let Ok(coverage) = probe.inspect() else {
+            return false;
+        };
+        let split = (baseline.task_switch.left + (320 * baseline.dpi / 96) as i32)
+            .max(coverage.rightmost() + (8 * baseline.dpi / 96) as i32);
+        native_rect().is_some_and(|rect| {
+            rect.left == split
+                && rect.right < baseline.notification.left
+                && rect.bottom <= baseline.taskbar.bottom
+                && rect.top >= baseline.taskbar.top
+        })
+    };
+    until_action(app, correct)?;
+    let old = probe
+        .inspect()
+        .map_err(|e| format!("before fixture: {e:?}"))?;
+    let original_left = native_rect().ok_or("application readout absent")?.left;
+    let fixture =
+        TaskButtonFixture::create().map_err(|e| format!("owned button fixture: {e:?}"))?;
+    until_action(app, || {
+        probe
+            .inspect()
+            .is_ok_and(|current| current.occupied.len() > old.occupied.len())
+            && correct()
+            && native_rect().is_some_and(|rect| rect.left > original_left)
+    })?;
+    drop(fixture);
+    until_action(app, || {
+        probe
+            .inspect()
+            .is_ok_and(|current| current.occupied.len() == old.occupied.len())
+            && correct()
+            && native_rect().is_some_and(|rect| rect.left == original_left)
+    })?;
+    super::mini_smoke::evaluate(
+        app,
+        main,
+        r#"
+        const current=await invoke('get_taskbar_preferences',{requestId:'application-to-notification'});
+        await invoke('set_taskbar_preferences',{requestId:'application-to-notification-save',request:{preferences:{...current.data.preferences,position:'notification_left'},expected_settings_revision:current.data.settings_revision}});
+    "#,
+    )?;
+    wait_actions_ready(app)?;
+    if native_rect().is_none_or(|rect| rect.right != baseline.task_switch.right) {
+        return Err("position switch did not return to notification edge".into());
+    }
+    super::mini_smoke::evaluate(
+        app,
+        main,
+        r#"
+        const current=await invoke('get_taskbar_preferences',{requestId:'notification-to-application'});
+        await invoke('set_taskbar_preferences',{requestId:'notification-to-application-save',request:{preferences:{...current.data.preferences,position:'application_right'},expected_settings_revision:current.data.settings_revision}});
+    "#,
+    )?;
+    wait_actions_ready(app)?;
+    until_action(app, correct)?;
+    println!(
+        "NATIVE_TASKBAR_APPLICATION_POSITION_OK: real settings select/save, measured verified Explorer button geometry, 8 DIP gap/minimum app area, owned distinct task button add/remove moves readout, both positions roundtrip; following actions run at application_right"
+    );
     Ok(())
 }
 fn wait_actions_ready(app: &tauri::AppHandle) -> Result<(), String> {
@@ -584,6 +706,7 @@ fn own_menu(pid: u32) -> Option<windows_sys::Win32::Foundation::HWND> {
 fn open_own_menu(
     app: &tauri::AppHandle,
 ) -> Result<(u32, windows_sys::Win32::Foundation::HWND), String> {
+    wait_readout_settled(app)?;
     let pid = super::taskbar_commands::service(app)
         .and_then(|s| s.owned_host_pid())
         .ok_or("menu host absent")?;
@@ -944,7 +1067,8 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         }
         thread::sleep(Duration::from_millis(20));
     }
-    // A real unsupported position is a controlled fallback trigger; no machine setting changes.
+    // An explicitly isolated missing-host factory exercises the real launch failure path.
+    super::taskbar_commands::missing_host_fixture(app, true)?;
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     let foreground = unsafe { GetForegroundWindow() };
     if foreground.is_null() {
@@ -1022,6 +1146,7 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if !mini.is_visible().map_err(|e| e.to_string())? {
         return Err("disabling fallback closed existing mini".into());
     }
+    super::taskbar_commands::missing_host_fixture(app, false)?;
     super::mini_smoke::evaluate(
         app,
         &main,

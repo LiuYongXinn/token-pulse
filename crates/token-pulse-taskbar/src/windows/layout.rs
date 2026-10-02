@@ -1,12 +1,14 @@
 //! A thread-owned, conditional Explorer reservation. Only the verified Win10 adapter mutates
 //! Explorer. A destroyed/replaced window, lost owner property or changed parent geometry prevents
 //! restoration. The child remains hidden until all postconditions hold.
+use super::buttons::ButtonProbe;
 use super::ownership::{LayoutRecord, Ownership, Phase, ProcessIdentity};
 use super::topology::{
     DpiGuard, ProbeError, ReservationPlan, ScreenRect, TaskbarTopology, TaskbarWindows, class_name,
     client_rect, discover_primary_taskbar, process_id, rect, wide,
 };
 use std::{marker::PhantomData, os::windows::io::AsRawHandle, ptr, rc::Rc};
+use token_pulse_core::taskbar::TaskbarPosition;
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, GetLastError, HANDLE, HWND, SetLastError, WAIT_ABANDONED, WAIT_OBJECT_0,
@@ -176,14 +178,29 @@ pub(crate) struct LayoutLease {
     baseline: TaskbarTopology,
     pub(crate) slot: ScreenRect,
     active: bool,
+    position: TaskbarPosition,
 }
 impl LayoutLease {
-    pub(crate) fn attach(child: HWND, width: i32, instance: &str) -> Result<Self, ProbeError> {
+    pub(crate) fn attach_at(
+        child: HWND,
+        width: i32,
+        instance: &str,
+        placement: TaskbarPosition,
+        buttons: Option<&ButtonProbe>,
+    ) -> Result<Self, ProbeError> {
         let _dpi = DpiGuard::enter()?;
         let windows = discover_primary_taskbar()?;
         let mutex = LayoutMutex::acquire(&windows)?;
         let baseline = windows.topology()?;
-        let plan = baseline.plan(width, (320 * baseline.dpi / 96) as i32)?;
+        let minimum = (320 * baseline.dpi / 96) as i32;
+        let plan = match placement {
+            TaskbarPosition::NotificationLeft => baseline.plan(width, minimum)?,
+            TaskbarPosition::ApplicationRight => baseline.plan_application_right(
+                width,
+                minimum,
+                &buttons.ok_or(ProbeError::UnexpectedStructure)?.inspect()?,
+            )?,
+        };
         let original = relative(baseline.task_switch, windows.rebar)?;
         let expected = relative(plan.remaining_task_switch, windows.rebar)?;
         let parent = client_rect(windows.rebar)?;
@@ -220,6 +237,7 @@ impl LayoutLease {
             baseline,
             slot: plan.host,
             active: true,
+            position: placement,
         };
         // From here all failures run the same conditional cleanup through Drop.
         position(lease.windows.switch, expected, 0)?;
@@ -242,6 +260,11 @@ impl LayoutLease {
         position(lease.child.window, child_bounds, 0)?;
         if rect(lease.child.window)? != plan.host
             || unsafe { GetParent(lease.child.window) } != lease.windows.root
+        {
+            return Err(ProbeError::UnsafeGeometry);
+        }
+        if placement == TaskbarPosition::ApplicationRight
+            && !lease.application_stable(buttons.ok_or(ProbeError::UnexpectedStructure)?)?
         {
             return Err(ProbeError::UnsafeGeometry);
         }
@@ -268,6 +291,19 @@ impl LayoutLease {
     }
     fn owns(&self) -> bool {
         self.windows.verify().is_ok() && self.ownership.owns(self.windows.switch)
+    }
+    pub(crate) fn application_stable(&self, buttons: &ButtonProbe) -> Result<bool, ProbeError> {
+        if self.position != TaskbarPosition::ApplicationRight {
+            return Ok(true);
+        }
+        if !self.valid() {
+            return Ok(false);
+        }
+        let coverage = buttons.inspect()?;
+        let split = self
+            .baseline
+            .application_split(&coverage, (320 * self.baseline.dpi / 96) as i32)?;
+        Ok(split == self.slot.left)
     }
     fn verify_reserved(&self, plan: ReservationPlan) -> Result<(), ProbeError> {
         if !self.owns() {

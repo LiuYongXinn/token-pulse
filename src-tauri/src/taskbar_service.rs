@@ -660,26 +660,19 @@ async fn run(
                 input.configuration.preferences.enabled
                     && input.configuration.preferences.fallback_to_mini,
             );
-            if !input.configuration.preferences.enabled
-                || input.configuration.preferences.position != TaskbarPosition::NotificationLeft
-            {
+            if !input.configuration.preferences.enabled {
                 close_host(&mut connection, &snapshot, &changed).await;
                 policy = None;
                 configuration = None;
                 visible(false);
                 failures = 0;
-                let disabled = !input.configuration.preferences.enabled;
                 publish(
                     &snapshot,
                     &changed,
-                    if disabled {
-                        TaskbarRuntimeState::Disabled
-                    } else {
-                        TaskbarRuntimeState::Unavailable
-                    },
+                    TaskbarRuntimeState::Disabled,
                     Some(input.configuration.settings_revision),
-                    (!disabled).then_some(TaskbarRuntimeIssue::UnsupportedPosition),
-                    (!disabled).then_some(ErrorCode::TaskbarUnsupported),
+                    None,
+                    None,
                     None,
                 );
                 continue;
@@ -738,6 +731,7 @@ async fn run(
                 let revision = input.configuration.settings_revision.clone();
                 let new_policy = (revision.clone(), input.privacy);
                 let new_configuration = HostConfiguration {
+                    position: input.configuration.preferences.position,
                     settings_revision: revision,
                     enabled: true,
                     display: input.configuration.preferences.display,

@@ -116,6 +116,7 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     connection
         .exchange(HostMessage::Configure {
             configuration: token_pulse_taskbar::HostConfiguration {
+                position: Default::default(),
                 settings_revision: DecimalInt::parse("1").unwrap(),
                 enabled: false,
                 display: token_pulse_taskbar::display::DisplayPreferences::default(),

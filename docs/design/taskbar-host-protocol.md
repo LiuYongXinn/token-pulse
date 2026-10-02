@@ -194,3 +194,13 @@ State 保留自有顶层控制窗口，NativeCanvas 的存活标记由本代次 
 新窗口代次递增 system_revision，清除只属于旧原生资源代次的失败状态；原生创建 / 当前绘制再次失败仍走既有错误与有界宿主重试。旧 Explorer 窗口或归属已失效时，布局释放维持 IdentityLost 等真实结果，不写入新 / 复用的 Shell HWND，也不携带旧几何进入新租约。销毁发生在模态菜单中时结束跟踪；旧点击 / 菜单意图不能转入新画布，详情保持隐藏直到新输入。禁用 / 清屏不因恢复而重新启用。
 
 自动普通测试只销毁自有隐藏窗口，不启用嵌入；正式 -TaskbarActions 在真实 Win10 任务栏中关闭自有 PID / 类的嵌入子窗口，并分别验证详情 + 待确认单击、模态菜单时的恢复。宿主 PID 不变、新类名与新详情、旧意图丢弃及最后原几何恢复通过；这不等于真实 Explorer 退出 / 重启或 Shell PID / 结构变化已经验收。
+
+## M13e6：受控位置与只读按钮几何
+
+HostConfiguration.position 为严格枚举 notification_left / application_right，旧内部配置缺失时默认前者；未知字符串拒绝，同修订位置变化拒绝，新修订先清屏。schema/taskbar-host-v1.json 已同步，正式应用和宿主成对部署，旧宿主拒绝新字段走既有错误 / 回退，不冒充位置应用成功。
+
+application_right 在专用无窗口 MTA 中使用 IUIAutomation2，针对已验证 MSTaskListW 直接 raw-view 子元素缓存 BoundingRectangle / ProcessId / IsOffscreen，AutomationElementMode_None；不读取名称、调用动作或跨线程传递 COM 对象。连接 / 事务 300 ms，请求 1200 ms，单项队列、最多 256 项；超时探测器失效，旧线程实际结束才可替换，硬阻塞拒绝该位置并保留进程监督。调用原则依据 [UI Automation 线程模型](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading)、[属性缓存](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-cachingforclients) 和 [IUIAutomation2](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/nn-uiautomationclient-iuiautomation2)。
+
+请求前后复核根 / 列表 HWND、Explorer PID / 创建时间和整组矩形。所有子矩形须完整包含在本次实际列表且可见；空列表保留最小区域，覆盖不确定 / offscreen / 越界失败。槽起点取最右按钮 + 8 DIP 与最小 320 DIP 应用区域的较大者，只在原 switch 内安排实测宽度。预留后再次验证按钮，展示前保持隐藏；变化时有条件释放租约、清除旧交互、从完整当前区域重新探测和挂接。空间不足沿用精简及明确回退，不能覆盖系统控件。
+
+只读开发工具 cargo run -p token-pulse-taskbar --example inspect_buttons -- --inspect-buttons 仅输出几何和数量，不预留布局 / 读取名称。-TaskbarActions 的自有合成窗口使用独立本窗口 AppUserModelID，验证真实按钮增减。依据 [窗口 AppUserModelID](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-id) 与 [SHGetPropertyStoreForWindow](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetpropertystoreforwindow)，在销毁前清空自有属性，不改其他窗口或进程级分组；此夹具仅 debug 可用。实际证据和边界见交付记录 M13e6。

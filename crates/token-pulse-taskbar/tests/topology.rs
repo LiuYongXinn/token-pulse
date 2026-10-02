@@ -63,3 +63,57 @@ fn occupied_width_cannot_be_reserved_or_overflowed() {
     assert!(compact.remaining_task_switch.width() > full.remaining_task_switch.width());
     assert_eq!(compact.host.width(), 198);
 }
+#[test]
+fn application_position_tracks_actual_buttons_keeps_gap_and_refuses_overflow_at_four_dpis() {
+    use token_pulse_taskbar::windows::buttons::ButtonCoverage;
+    for dpi in [96, 120, 144, 192] {
+        let topology = topology(dpi);
+        let scale = |v: i32| v * dpi as i32 / 96;
+        let button = ScreenRect {
+            right: topology.task_list.left + scale(420),
+            ..topology.task_list
+        };
+        let coverage = ButtonCoverage {
+            list: topology.task_list,
+            occupied: vec![button],
+        };
+        let plan = topology
+            .plan_application_right(scale(360), scale(320), &coverage)
+            .unwrap();
+        assert_eq!(plan.host.left, button.right + scale(8));
+        assert_eq!(plan.host.width(), scale(360));
+        assert_eq!(plan.remaining_task_switch.right, plan.host.left);
+        assert!(plan.host.right < topology.notification.left);
+        let empty = ButtonCoverage {
+            list: topology.task_list,
+            occupied: vec![],
+        };
+        let plan = topology
+            .plan_application_right(scale(360), scale(320), &empty)
+            .unwrap();
+        assert_eq!(plan.host.left, topology.task_switch.left + scale(320));
+        let full = ButtonCoverage {
+            list: topology.task_list,
+            occupied: vec![topology.task_list],
+        };
+        assert_eq!(
+            topology.plan_application_right(scale(1), scale(320), &full),
+            Err(ProbeError::InsufficientSpace)
+        );
+        let foreign = ButtonCoverage {
+            list: ScreenRect {
+                left: topology.task_list.left - 1,
+                ..topology.task_list
+            },
+            occupied: vec![],
+        };
+        assert_eq!(
+            topology.plan_application_right(scale(1), scale(320), &foreign),
+            Err(ProbeError::UnsafeGeometry)
+        );
+        assert_eq!(
+            topology.plan_application_right(i32::MAX, scale(320), &coverage),
+            Err(ProbeError::InsufficientSpace)
+        );
+    }
+}

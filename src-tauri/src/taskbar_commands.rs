@@ -15,13 +15,43 @@ pub(super) fn service(
         .clone()
 }
 pub(super) fn initialize(app: &tauri::AppHandle) {
+    if let Ok(path) = std::env::current_exe() {
+        initialize_at(app, path.with_file_name("token-pulse-taskbar-host.exe"));
+    }
+}
+#[cfg(debug_assertions)]
+pub(super) fn missing_host_fixture(app: &tauri::AppHandle, missing: bool) -> Result<(), String> {
+    let runtime = app.state::<super::RuntimeState>();
+    if !runtime
+        .data_directory
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().starts_with("native-probe-"))
+        || !std::env::args().any(|arg| arg == "--native-smoke")
+    {
+        return Err("host fixture requires explicit isolated native smoke".into());
+    }
+    let previous = runtime.taskbar.lock().map_err(|_| "taskbar lock")?.take();
+    if let Some(previous) = previous {
+        previous.shutdown();
+    }
+    let executable = if missing {
+        runtime.data_directory.join("token-pulse-taskbar-host.exe")
+    } else {
+        std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .with_file_name("token-pulse-taskbar-host.exe")
+    };
+    if missing && executable.exists() {
+        return Err("missing host fixture unexpectedly exists".into());
+    }
+    initialize_at(app, executable);
+    service(app).ok_or("replacement taskbar service missing")?;
+    Ok(())
+}
+fn initialize_at(app: &tauri::AppHandle, executable: std::path::PathBuf) {
     let read_app = app.clone();
     let notify_app = app.clone();
     let visible_app = app.clone();
-    let executable = match std::env::current_exe() {
-        Ok(path) => path.with_file_name("token-pulse-taskbar-host.exe"),
-        Err(_) => return,
-    };
     let result = super::taskbar_service::TaskbarService::start(
         executable,
         Arc::new(move || {

@@ -4152,6 +4152,7 @@ dependencies = [
  "token-pulse-core",
  "tokio",
  "uuid",
+ "windows",
  "windows-sys 0.61.2",
 ]
 

@@ -464,6 +464,10 @@
           "enabled": {
             "type": "boolean"
           },
+          "position": {
+            "$ref": "#/$defs/TaskbarPosition",
+            "default": "notification_left"
+          },
           "settings_revision": {
             "$ref": "#/$defs/DecimalInt"
           }
@@ -471,6 +475,7 @@
         "required": [
           "settings_revision",
           "enabled",
+          "position",
           "display"
         ],
         "type": "object"
@@ -870,6 +875,13 @@
           "show_weekly_reset"
         ],
         "type": "object"
+      },
+      "TaskbarPosition": {
+        "enum": [
+          "notification_left",
+          "application_right"
+        ],
+        "type": "string"
       },
       "TaskbarView": {
         "additionalProperties": false,

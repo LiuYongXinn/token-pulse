@@ -2,6 +2,7 @@
 //! Embedding is opt-in and delegated to the guarded, thread-owned layout lease.
 use super::{
     TransportError,
+    buttons::ButtonProbe,
     canvas::NativeCanvas,
     layout::{LayoutLease, RestoreDisposition, background},
     render::Palette,
@@ -18,6 +19,7 @@ use std::{
     sync::mpsc::{self, Receiver, SyncSender},
     thread::{self, JoinHandle},
 };
+use token_pulse_core::taskbar::TaskbarPosition;
 use tokio::{sync::oneshot, time::timeout};
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
@@ -53,7 +55,7 @@ enum Operation {
     Inspect,
     TakeActions,
     Enable(bool),
-    Configure(bool, DisplayPreferences),
+    Configure(bool, DisplayPreferences, TaskbarPosition),
 }
 struct Request {
     operation: Operation,
@@ -146,6 +148,8 @@ struct State {
     native_failed: bool,
     enabled: bool,
     preferences: DisplayPreferences,
+    position: TaskbarPosition,
+    buttons: Option<ButtonProbe>,
     layout: Option<LayoutLease>,
     embedding_failure: Option<ProbeError>,
     last_restore: Option<RestoreDisposition>,
@@ -219,12 +223,55 @@ impl State {
     }
     fn prepare(&mut self) -> Result<(), TransportError> {
         self.recreate_canvas()?;
+        if self.enabled && self.position == TaskbarPosition::ApplicationRight {
+            if self.buttons.as_ref().is_none_or(|probe| probe.finished()) {
+                self.buttons = Some(ButtonProbe::start().map_err(|_| TransportError::Native)?);
+            }
+            if let Some(layout) = &self.layout {
+                if layout.application_stable(self.buttons.as_ref().unwrap()) != Ok(true) {
+                    self.detach();
+                    self.topology = inspect_primary_taskbar();
+                }
+            }
+        }
         if !self.enabled || self.view.is_none() || self.layout.as_ref().is_some_and(|l| !l.valid())
         {
             self.detach();
             self.topology = inspect_primary_taskbar();
         }
         self.embedding_failure = None;
+        let application_available = if self.enabled
+            && self.position == TaskbarPosition::ApplicationRight
+            && self.layout.is_none()
+        {
+            match self
+                .topology
+                .as_ref()
+                .map_err(|error| *error)
+                .and_then(|topology| {
+                    let coverage = self
+                        .buttons
+                        .as_ref()
+                        .ok_or(ProbeError::UnexpectedStructure)?
+                        .inspect()?;
+                    let split =
+                        topology.application_split(&coverage, (320 * topology.dpi / 96) as i32)?;
+                    let available = topology.task_switch.right - split;
+                    if available <= 0 {
+                        Err(ProbeError::InsufficientSpace)
+                    } else {
+                        Ok(available)
+                    }
+                }) {
+                Ok(available) => Some(available),
+                Err(error) => {
+                    self.embedding_failure = Some(error);
+                    Some(0)
+                }
+            }
+        } else {
+            None
+        };
         if let Some(canvas) = self.canvas.as_mut() {
             canvas.clear_render().map_err(|_| TransportError::Native)?;
             if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
@@ -233,7 +280,9 @@ impl State {
                     .as_ref()
                     .map(|l| l.slot.width())
                     .unwrap_or_else(|| {
-                        topology.task_switch.width() - (320 * topology.dpi / 96) as i32
+                        application_available.unwrap_or(
+                            topology.task_switch.width() - (320 * topology.dpi / 96) as i32,
+                        )
                     });
                 if self.enabled {
                     match background() {
@@ -262,7 +311,13 @@ impl State {
                     .map_err(|_| TransportError::Native)?;
                 if self.enabled && self.layout.is_none() && self.embedding_failure.is_none() {
                     if let Some(plan) = canvas.plan() {
-                        match LayoutLease::attach(canvas.window, plan.width, &self.instance) {
+                        match LayoutLease::attach_at(
+                            canvas.window,
+                            plan.width,
+                            &self.instance,
+                            self.position,
+                            self.buttons.as_ref(),
+                        ) {
                             Ok(layout) => {
                                 self.layout = Some(layout);
                                 canvas.set_attached(true);
@@ -372,12 +427,13 @@ unsafe extern "system" fn procedure(
                             state.enabled = enabled;
                             state.prepare()
                         }
-                        Operation::Configure(enabled, preferences) => {
-                            if state.preferences != preferences {
+                        Operation::Configure(enabled, preferences, position) => {
+                            if state.preferences != preferences || state.position != position {
                                 state.detach();
                             }
                             state.enabled = enabled;
                             state.preferences = preferences;
+                            state.position = position;
                             state.prepare()
                         }
                         Operation::Inspect => {
@@ -532,7 +588,19 @@ impl NativeController {
         preferences
             .validate()
             .map_err(|_| crate::WireError::InvalidFrame)?;
-        self.request(Operation::Configure(enabled, preferences))
+        self.configure_at(enabled, preferences, TaskbarPosition::NotificationLeft)
+            .await
+    }
+    pub async fn configure_at(
+        &self,
+        enabled: bool,
+        preferences: DisplayPreferences,
+        position: TaskbarPosition,
+    ) -> Result<NativeReceipt, TransportError> {
+        preferences
+            .validate()
+            .map_err(|_| crate::WireError::InvalidFrame)?;
+        self.request(Operation::Configure(enabled, preferences, position))
             .await
     }
 }
@@ -577,6 +645,8 @@ unsafe fn native_thread(
             native_failed: false,
             enabled: false,
             preferences: DisplayPreferences::default(),
+            position: TaskbarPosition::NotificationLeft,
+            buttons: None,
             layout: None,
             embedding_failure: None,
             last_restore: None,

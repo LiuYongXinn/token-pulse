@@ -30,6 +30,7 @@ async fn main() {
         serde_json::from_str(include_str!("../../../fixtures/taskbar-display.json")).unwrap();
     fixture.settings_revision = DecimalInt::parse("1").unwrap();
     let mut configuration = HostConfiguration {
+        position: Default::default(),
         settings_revision: fixture.settings_revision.clone(),
         enabled: true,
         display: DisplayPreferences::default(),

@@ -367,7 +367,11 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
             native
                 .as_ref()
                 .ok_or(TransportError::Native)?
-                .configure(configuration.enabled, configuration.display)
+                .configure_at(
+                    configuration.enabled,
+                    configuration.display,
+                    configuration.position,
+                )
                 .await?;
         }
         if get_status {

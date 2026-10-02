@@ -1,4 +1,7 @@
 //! Owned local Windows transport. No shell, user-log or credential access.
+#[cfg(debug_assertions)]
+pub mod button_fixture;
+pub mod buttons;
 mod canvas;
 pub mod control;
 mod details_window;
