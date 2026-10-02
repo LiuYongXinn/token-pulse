@@ -2,6 +2,14 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16b3：NSIS 安装门禁与正常退出收尾
+
+新增 main-only install_update，精确 ready 修订 / 已验签私有对象再次核对；仅非 debug 正式 ID 的 NSIS 安装版可以启动安装。原生将已验证内存写入安全创建的 Temp `.exe`，格式无效或 CreateProcess 失败发布普通错误、保留应用服务，不调用退出；成功以固定 /P /UPDATE /R + 自有父 PID 启动后请求 Tauri 正常退出。复用既有任务栏恢复和后台停机，不使用 updater.install 的直接 std::process::exit。失败删除本次拥有的文件；成功保留公开签名安装器至系统临时目录，不持有认证 / 数据备份。
+
+NSIS overlay 增加 preinstall hook，在默认 Restart Manager 占用检查之前等待父进程退出（30 秒功能期限），无法确认或超时普通中止；没有主动强杀旧应用。实际 Windows 10 `scripts/verify-update-hook.ps1` 使用 NSIS 编译器 / 自有无注册写入的最小夹具，确认进入钩子后父进程尚存时不继续、父进程正常结束后完成，NATIVE_UPDATE_HOOK_OK / 退出 0。该夹具不安装产品、不改任务栏 / 注册 / 数据，不能代替真实完整升级。
+
+自动安装格式 / CreateProcess 失败检查通过；显式真实 HTTP / 签名 owner 夹具追加有效签名非可执行文本后的安装失败 / 不退出、旧修订及失败后无旧安装权，通过。Win10 两真实 WebView `-Updates` 追加主窗安装不可用和 mini 安装拒绝，通过 / 退出 0，1412 保留。strict all-target Clippy、release check、fmt / diff 通过，无性能测试。最终完整 NSIS 包尚需随正式 UI 重建；正式密钥 / GitHub 发布、实际更新替换与重启继续推进，不能宣称真实升级已验收。
+
 ## M16b2：真实签名提供方与正式更新 IPC
 
 接入锁定的 Tauri updater 2.12.0，发布清单固定为本仓库 GitHub Releases 的 `latest.json`，安装文件仅接受同仓库 release download 的 HTTPS `.exe`；重定向仅允许 GitHub 发布资产域，限制次数 / 期限，不关闭证书验证、不携带认证。构建时读取公开的 `TOKENPULSE_UPDATER_PUBLIC_KEY`，缺失或无效时不发起请求，保持 unavailable / publication_not_configured。当前尚未配置正式公钥，不能宣称实际发布通道就绪。

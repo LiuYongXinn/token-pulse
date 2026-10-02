@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+## 更新安装生命周期验证
+
+`pwsh -NoProfile -File scripts/verify-update-hook.ps1` 用已下载 NSIS 编译器生成自有 Temp 最小夹具，仅写同目录测试标记。验证安装器在父进程存在时等待，父进程正常退出才继续；通过 NATIVE_UPDATE_HOOK_OK 和退出 0。脚本检查拥有的 UUID Temp 路径，最后只删除该夹具和关闭其自有进程。该检查不安装产品、读取账户或改变 Explorer，不能替代完整安装 / 更新。
+
+`cargo test -p token-pulse-desktop --lib update_installer` 验证非可执行格式和系统 CreateProcess 拒绝，签名真实夹具进一步验证失败不请求退出。正式安装只允许 production NSIS 包，经 CAS 和验签对象核对后原生启动；debug 无安装能力。新 NSIS 包必须包含 windows/update-hooks.nsh，先等待本应用正常退出再做默认占用检查，避免在恢复任务栏时被强杀。当前完整正式更新仍待发布条件 / 系统升级验收；成功启动的公开签名安装器保留在系统 Temp。
+
 ## 签名更新提供方验证
 
 原生提供方固定本仓库 GitHub Releases `latest.json`，发布安装器仅接受同仓库 HTTPS `.exe`，需要通过 `TOKENPULSE_UPDATER_PUBLIC_KEY` 在编译时提供 Tauri 公开验证密钥。该变量仅为公钥，不能填写私钥；当前未配置时应用不发更新请求、正式状态为更新不可用。私钥不进入源码、前端、安装包或运行时配置。签名必须绑定发布版本，禁止降级；真正发布、安装入口及 UI 尚在实施。

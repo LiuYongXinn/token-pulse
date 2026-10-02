@@ -303,6 +303,29 @@ fn signed_local_download_checks_bytes_version_and_missing_version() {
                 if scenario == 0 {
                     assert_eq!(done.phase, UpdatePhase::ReadyToInstall);
                     assert_eq!(done.issue, None);
+                    let exits = Arc::new(AtomicUsize::new(0));
+                    let exited = Arc::clone(&exits);
+                    assert!(matches!(
+                        service.install_fixture(&offer.update_revision, Arc::new(|| {})),
+                        Err(ErrorCode::RevisionConflict)
+                    ));
+                    let installing = service
+                        .install_fixture(
+                            &done.update_revision,
+                            Arc::new(move || {
+                                exited.fetch_add(1, Ordering::AcqRel);
+                            }),
+                        )
+                        .unwrap();
+                    assert_eq!(installing.phase, UpdatePhase::Installing);
+                    let failed = terminal(&service, &[UpdatePhase::Installing]).await;
+                    assert_eq!(failed.phase, UpdatePhase::Error);
+                    assert_eq!(failed.issue, Some(UpdateIssue::InstallerUnavailable));
+                    assert_eq!(exits.load(Ordering::Acquire), 0);
+                    assert!(matches!(
+                        service.install_fixture(&failed.update_revision, Arc::new(|| {})),
+                        Err(ErrorCode::UpdateUnavailable)
+                    ));
                 } else {
                     assert_eq!(done.phase, UpdatePhase::Error);
                     assert_eq!(done.issue, Some(UpdateIssue::SignatureInvalid));

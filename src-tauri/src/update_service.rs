@@ -1,4 +1,4 @@
-//! One native update owner; installation is added separately after lifecycle integration.
+//! One native update owner; verified installation uses normal Tauri exit cleanup.
 use super::update_transport::{Candidate, Publication, VerifiedDownload};
 use std::{
     sync::{Arc, Mutex},
@@ -245,6 +245,76 @@ impl UpdateService {
             }
         });
         Ok(snapshot)
+    }
+    pub fn start_install<R: Runtime>(
+        self: &Arc<Self>,
+        app: AppHandle<R>,
+        expected: &DecimalInt,
+    ) -> Result<UpdateSnapshot, ErrorCode> {
+        self.install(
+            expected,
+            super::update_installer::supported(&app),
+            Arc::new(move || app.exit(0)),
+        )
+    }
+    fn install(
+        self: &Arc<Self>,
+        expected: &DecimalInt,
+        supported: bool,
+        exit: Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<UpdateSnapshot, ErrorCode> {
+        let (operation, artifact, snapshot) = {
+            let mut owner = self
+                .owner
+                .lock()
+                .map_err(|_| ErrorCode::UpdateUnavailable)?;
+            let current = owner.workflow.snapshot();
+            if &current.update_revision != expected {
+                return Err(ErrorCode::RevisionConflict);
+            }
+            if !supported {
+                return Err(ErrorCode::UpdateUnavailable);
+            }
+            if !owner.artifact.as_ref().is_some_and(|artifact| {
+                current
+                    .release
+                    .as_ref()
+                    .is_some_and(|release| artifact.version() == release.version)
+                    && artifact.len() > 0
+            }) {
+                return Err(
+                    if matches!(
+                        current.phase,
+                        UpdatePhase::Checking
+                            | UpdatePhase::Downloading
+                            | UpdatePhase::Verifying
+                            | UpdatePhase::Installing
+                    ) {
+                        ErrorCode::UpdateBusy
+                    } else {
+                        ErrorCode::UpdateUnavailable
+                    },
+                );
+            }
+            let operation = owner.workflow.begin_install(expected)?;
+            let artifact = owner.artifact.take().ok_or(ErrorCode::UpdateUnavailable)?;
+            (operation, artifact, owner.workflow.snapshot())
+        };
+        (self.notify)();
+        let service = Arc::clone(self);
+        tauri::async_runtime::spawn_blocking(move || match artifact.launch_installer() {
+            Ok(()) => exit(),
+            Err(issue) => service.failed(operation, issue),
+        });
+        Ok(snapshot)
+    }
+    #[cfg(test)]
+    pub(super) fn install_fixture(
+        self: &Arc<Self>,
+        expected: &DecimalInt,
+        exit: Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<UpdateSnapshot, ErrorCode> {
+        self.install(expected, true, exit)
     }
     fn failed(&self, operation: UpdateOperation, issue: UpdateIssue) {
         let issue = if matches!(

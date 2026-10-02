@@ -40,6 +40,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       for(const [command,args,code] of [
         ['check_for_updates',{requestId:'updates-check'},'UPDATE_UNAVAILABLE'],
         ['download_update',{requestId:'updates-download',request:{expected_update_revision:'0'}},'UPDATE_UNAVAILABLE'],
+        ['install_update',{requestId:'updates-install',request:{expected_update_revision:'0'}},'UPDATE_UNAVAILABLE'],
         ['download_update',{requestId:'updates-stale',request:{expected_update_revision:'1'}},'REVISION_CONFLICT'],
         ['get_update_status',{requestId:''},'INVALID_QUERY']
       ]){let denied=false;try{await invoke(command,args);}catch(e){denied=e.code===code;}if(!denied)throw new Error('UPDATES_CODE:'+command+':'+code);}
@@ -56,7 +57,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       const after=await invoke('get_price_rules',{requestId:'updates-prices-after',revision:null});
       if(after.data.price_revision!==before.data.price_revision||JSON.stringify((await read()).data)!==JSON.stringify(initial.data))throw new Error('UPDATES_REJECTED_MUTATION');
     "#).and_then(|_| super::mini_smoke::evaluate(app, &mini, r#"
-      for(const command of ['get_update_status','check_for_updates','download_update','plugin:updater|check']){
+      for(const command of ['get_update_status','check_for_updates','download_update','install_update','plugin:updater|check']){
         let denied=false;try{await invoke(command,{requestId:'updates-mini',request:{expected_update_revision:'0'}});}catch{denied=true;}if(!denied)throw new Error('UPDATES_MINI_ALLOWED:'+command);
       }
     "#));

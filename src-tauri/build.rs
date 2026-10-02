@@ -16,6 +16,7 @@ fn main() {
             "get_update_status",
             "check_for_updates",
             "download_update",
+            "install_update",
             "get_notify_integrations",
             "prepare_notify_integration",
             "apply_notify_integration",

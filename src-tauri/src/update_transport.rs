@@ -247,6 +247,9 @@ pub(super) struct VerifiedDownload {
     bytes: Vec<u8>,
 }
 impl VerifiedDownload {
+    pub fn launch_installer(&self) -> Result<(), UpdateIssue> {
+        super::update_installer::launch(&self.bytes)
+    }
     pub fn len(&self) -> usize {
         self.bytes.len()
     }

@@ -27,6 +27,23 @@ fn response(
         .map_err(|code| Box::new(AppError::new(code, id)))
 }
 #[tauri::command]
+pub fn install_update(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, super::RuntimeState>,
+    request: UpdateActionRequest,
+    request_id: String,
+) -> Result<PrivateResponse<UpdateSnapshot>, Box<AppError>> {
+    authorize(&window, &request_id)?;
+    response(
+        &state,
+        request_id,
+        state
+            .updates
+            .start_install(app, &request.expected_update_revision),
+    )
+}
+#[tauri::command]
 pub fn get_update_status(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,

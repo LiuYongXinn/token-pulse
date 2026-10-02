@@ -628,6 +628,10 @@ Rust / TS / schema 新增 UpdatePhase、UpdateIssue、UpdateRelease、UpdateSnap
 
 UpdateActionRequest 仅 expected_update_revision，deny_unknown_fields；网络结果与操作令牌只在 Rust 内部流转。新检查清除旧发布与进度，失败保留有限原因 / 已知进度但不能安装；迟到旧令牌被拒绝。元数据只含有界版本说明 / 日期，不返回认证、密钥、下载 URL、原生文件路径或底层错误原文；公开元数据不按用量隐私删除。该步骤仅为领域契约，未注册新的 Tauri 命令或 capability；真实网络 / 签名提供方、main-only IPC 与 UI 随后接入，不把状态机测试当作真实验签或安装证据。
 
+### M16b3：受限安装命令
+
+新增 main-only install_update，输入 requestId 和 request: UpdateActionRequest，响应 PrivateResponse<UpdateSnapshot>。严格拒绝未知字段、旧修订、非 ready / 无私有已驗证文件、并发安装；debug 或非 NSIS 正式安装版返回 UPDATE_UNAVAILABLE。新状态 installing 不表示安装已完成：启动器成功后请求正常退出，安装包等待旧进程结束再继续；失败通过 updates_changed 失效通知重读 Error / installer_unavailable 或 install_failed。前端不能传安装文件、启动参数或成功标志，mini / 通用插件权限继续关闭。
+
 ### M16b2：真实提供方与主窗口命令
 
 |命令|输入|成功响应|权限|

@@ -11,6 +11,7 @@
     "allow-get-update-status",
     "allow-check-for-updates",
     "allow-download-update",
+    "allow-install-update",
     "allow-get-notify-integrations",
     "allow-prepare-notify-integration",
     "allow-apply-notify-integration",
