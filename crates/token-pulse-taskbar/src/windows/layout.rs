@@ -1,25 +1,24 @@
 //! A thread-owned, conditional Explorer reservation. Only the verified Win10 adapter mutates
 //! Explorer. A destroyed/replaced window, lost owner property or changed parent geometry prevents
 //! restoration. The child remains hidden until all postconditions hold.
+use super::ownership::{LayoutRecord, Ownership, Phase, ProcessIdentity};
 use super::topology::{
     DpiGuard, ProbeError, ReservationPlan, ScreenRect, TaskbarTopology, TaskbarWindows, class_name,
     client_rect, discover_primary_taskbar, process_id, rect, wide,
 };
-use std::{marker::PhantomData, ptr, rc::Rc};
+use std::{marker::PhantomData, os::windows::io::AsRawHandle, ptr, rc::Rc};
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, GetLastError, HANDLE, HWND, SetLastError, WAIT_ABANDONED, WAIT_OBJECT_0,
     },
     Graphics::Gdi::{DCX_CACHE, DCX_WINDOW, GetDCEx, GetPixel, ReleaseDC},
-    System::Threading::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
+    System::Threading::{CreateMutexW, GetProcessId, ReleaseMutex, WaitForSingleObject},
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetParent, GetPropW, GetWindowLongPtrW, HWND_TOP, RemovePropW, SW_HIDE,
-        SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SetParent, SetPropW, SetWindowPos,
-        ShowWindow, WS_EX_LAYOUTRTL,
+        GWL_EXSTYLE, GetParent, GetWindowLongPtrW, HWND_TOP, SW_HIDE, SWP_NOACTIVATE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, SetParent, SetWindowPos, ShowWindow, WS_EX_LAYOUTRTL,
     },
 };
 
-const OWNER: &str = "TokenPulse.Taskbar.Layout.v1.owner";
 pub(crate) fn background() -> Result<u32, ProbeError> {
     let _dpi = DpiGuard::enter()?;
     let windows = discover_primary_taskbar()?;
@@ -84,6 +83,8 @@ pub enum RestoreDisposition {
     ExternalChange,
     IdentityLost,
     Failed,
+    NoRecord,
+    Uncertain,
 }
 #[derive(Debug, Clone, Copy)]
 struct Geometry {
@@ -171,15 +172,13 @@ pub(crate) struct LayoutLease {
     _mutex: LayoutMutex,
     child: OwnedWindow,
     previous_parent: OwnedWindow,
-    owner_key: Vec<u16>,
-    marker: usize,
-    geometry: Geometry,
+    ownership: Ownership,
     baseline: TaskbarTopology,
     pub(crate) slot: ScreenRect,
     active: bool,
 }
 impl LayoutLease {
-    pub(crate) fn attach(child: HWND, width: i32) -> Result<Self, ProbeError> {
+    pub(crate) fn attach(child: HWND, width: i32, instance: &str) -> Result<Self, ProbeError> {
         let _dpi = DpiGuard::enter()?;
         let windows = discover_primary_taskbar()?;
         let mutex = LayoutMutex::acquire(&windows)?;
@@ -188,10 +187,6 @@ impl LayoutLease {
         let original = relative(baseline.task_switch, windows.rebar)?;
         let expected = relative(plan.remaining_task_switch, windows.rebar)?;
         let parent = client_rect(windows.rebar)?;
-        let owner_key = wide(OWNER);
-        if !unsafe { GetPropW(windows.switch, owner_key.as_ptr()) }.is_null() {
-            return Err(ProbeError::UnexpectedStructure);
-        }
         let child = OwnedWindow::capture(child)?;
         let previous_parent = OwnedWindow::capture(unsafe { GetParent(child.window) })?;
         if !child.class.starts_with("TokenPulse.Taskbar.Readout.")
@@ -201,31 +196,34 @@ impl LayoutLease {
         {
             return Err(ProbeError::UnexpectedStructure);
         }
-        // A window property belongs to this window generation and vanishes on destruction.
-        // The marker is a nonzero random value, never a cross-process pointer to dereference.
-        let marker = (uuid::Uuid::new_v4().as_u128() as u32).max(1) as usize;
-        if unsafe { SetPropW(windows.switch, owner_key.as_ptr(), marker as HANDLE) } == 0 {
-            return Err(ProbeError::Os);
-        }
+        let ownership = Ownership::publish(
+            windows.switch,
+            instance,
+            LayoutRecord {
+                original,
+                expected,
+                parent_size: (parent.width(), parent.height()),
+                dpi: baseline.dpi,
+                host: Ownership::current_host()?,
+                shell: ProcessIdentity {
+                    pid: windows.pid,
+                    birth: windows.birth,
+                },
+            },
+        )?;
         let mut lease = Self {
             windows,
             _mutex: mutex,
             child,
             previous_parent,
-            owner_key,
-            marker,
-            geometry: Geometry {
-                original,
-                expected,
-                parent_size: (parent.width(), parent.height()),
-                dpi: baseline.dpi,
-            },
+            ownership,
             baseline,
             slot: plan.host,
             active: true,
         };
         // From here all failures run the same conditional cleanup through Drop.
         position(lease.windows.switch, expected, 0)?;
+        lease.ownership.reserved(lease.windows.switch)?;
         lease.verify_reserved(plan)?;
         unsafe {
             SetLastError(0);
@@ -269,9 +267,7 @@ impl LayoutLease {
         Ok(lease)
     }
     fn owns(&self) -> bool {
-        self.windows.verify().is_ok()
-            && unsafe { GetPropW(self.windows.switch, self.owner_key.as_ptr()) } as usize
-                == self.marker
+        self.windows.verify().is_ok() && self.ownership.owns(self.windows.switch)
     }
     fn verify_reserved(&self, plan: ReservationPlan) -> Result<(), ProbeError> {
         if !self.owns() {
@@ -330,52 +326,7 @@ impl LayoutLease {
                 }
             }
         }
-        if !self.owns() {
-            return RestoreDisposition::IdentityLost;
-        }
-        let result = match (
-            rect(self.windows.switch).and_then(|r| relative(r, self.windows.rebar)),
-            client_rect(self.windows.rebar),
-            self.windows.topology(),
-        ) {
-            (Ok(current), Ok(parent), Ok(topology)) => {
-                let disposition = self.geometry.restoration(current, parent, topology.dpi);
-                if disposition == RestoreDisposition::Restored {
-                    let original_screen = ScreenRect {
-                        left: self.geometry.original.left + topology.rebar.left,
-                        top: self.geometry.original.top + topology.rebar.top,
-                        right: self.geometry.original.right + topology.rebar.left,
-                        bottom: self.geometry.original.bottom + topology.rebar.top,
-                    };
-                    if self
-                        .windows
-                        .safe_slot(original_screen, self.child.window)
-                        .is_err()
-                    {
-                        RestoreDisposition::ExternalChange
-                    } else if position(self.windows.switch, self.geometry.original, 0).is_err()
-                        || rect(self.windows.switch)
-                            .and_then(|r| relative(r, self.windows.rebar))
-                            .ok()
-                            != Some(self.geometry.original)
-                    {
-                        RestoreDisposition::Failed
-                    } else {
-                        RestoreDisposition::Restored
-                    }
-                } else {
-                    disposition
-                }
-            }
-            _ => RestoreDisposition::Failed,
-        };
-        // Remove only our own marker; another owner/window generation must be left alone.
-        if self.owns() && result != RestoreDisposition::Failed {
-            unsafe {
-                RemovePropW(self.windows.switch, self.owner_key.as_ptr());
-            }
-        }
-        result
+        restore_owned(&self.windows, &self.ownership, false)
     }
 }
 impl Drop for LayoutLease {
@@ -384,9 +335,138 @@ impl Drop for LayoutLease {
     }
 }
 
+fn restore_owned(
+    windows: &TaskbarWindows,
+    ownership: &Ownership,
+    terminated: bool,
+) -> RestoreDisposition {
+    if windows.verify().is_err()
+        || !ownership.owns(windows.switch)
+        || ownership.record.shell
+            != (ProcessIdentity {
+                pid: windows.pid,
+                birth: windows.birth,
+            })
+    {
+        return RestoreDisposition::IdentityLost;
+    }
+    let record = ownership.record;
+    let geometry = Geometry {
+        original: record.original,
+        expected: record.expected,
+        parent_size: record.parent_size,
+        dpi: record.dpi,
+    };
+    let result = match (
+        rect(windows.switch).and_then(|r| relative(r, windows.rebar)),
+        client_rect(windows.rebar),
+        windows.topology(),
+    ) {
+        (Ok(current), Ok(parent), Ok(topology)) => {
+            let disposition = geometry.restoration(current, parent, topology.dpi);
+            if terminated
+                && ownership.phase == Phase::Prepared
+                && disposition == RestoreDisposition::AlreadyRestored
+            {
+                // The host died before confirming its synchronous SetWindowPos. Do not release
+                // ownership while a pending shrink could still be applied by Explorer.
+                RestoreDisposition::Uncertain
+            } else if disposition == RestoreDisposition::Restored {
+                let original_screen = ScreenRect {
+                    left: record.original.left + topology.rebar.left,
+                    top: record.original.top + topology.rebar.top,
+                    right: record.original.right + topology.rebar.left,
+                    bottom: record.original.bottom + topology.rebar.top,
+                };
+                if windows.safe_slot(original_screen, ptr::null_mut()).is_err() {
+                    RestoreDisposition::ExternalChange
+                } else if !ownership.owns(windows.switch) || windows.verify().is_err() {
+                    RestoreDisposition::IdentityLost
+                } else if position(windows.switch, record.original, 0).is_err()
+                    || rect(windows.switch)
+                        .and_then(|r| relative(r, windows.rebar))
+                        .ok()
+                        != Some(record.original)
+                {
+                    RestoreDisposition::Failed
+                } else {
+                    RestoreDisposition::Restored
+                }
+            } else {
+                disposition
+            }
+        }
+        _ => RestoreDisposition::Failed,
+    };
+    if !matches!(
+        result,
+        RestoreDisposition::Failed
+            | RestoreDisposition::Uncertain
+            | RestoreDisposition::IdentityLost
+    ) {
+        if windows.verify().is_err() {
+            return RestoreDisposition::IdentityLost;
+        }
+        if ownership.remove(windows.switch).is_err() {
+            return RestoreDisposition::Failed;
+        }
+    }
+    result
+}
+
+/// Caller supplies the kernel handle of its own child and the instance used to launch that child.
+/// A live process, wrong instance, wrong birth, replaced shell or changed layout cannot authorize
+/// a write. This is a native Rust API, not a frontend command or an arbitrary HWND endpoint.
+pub fn recover_terminated_host<H: AsRawHandle>(
+    instance: &str,
+    process: &H,
+) -> Result<RestoreDisposition, ProbeError> {
+    let handle = process.as_raw_handle().cast();
+    if unsafe { WaitForSingleObject(handle, 0) } != WAIT_OBJECT_0 {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    let identity = ProcessIdentity {
+        pid: unsafe { GetProcessId(handle) },
+        birth: super::topology::birth(handle)?,
+    };
+    if identity.pid == 0 {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    let _dpi = DpiGuard::enter()?;
+    let windows = discover_primary_taskbar()?;
+    let _mutex = LayoutMutex::acquire(&windows)?;
+    let Some(ownership) = Ownership::load(windows.switch, instance)? else {
+        return Ok(RestoreDisposition::NoRecord);
+    };
+    if ownership.record.host != identity {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    Ok(restore_owned(&windows, &ownership, true))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recovery_refuses_a_live_kernel_process_handle_before_any_window_operation() {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+        };
+        let handle = unsafe {
+            OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                0,
+                std::process::id(),
+            )
+        };
+        assert!(!handle.is_null());
+        let process = unsafe { OwnedHandle::from_raw_handle(handle.cast()) };
+        assert_eq!(
+            recover_terminated_host("00112233445566778899aabbccddeeff", &process),
+            Err(ProbeError::UnexpectedStructure)
+        );
+    }
     #[test]
     fn native_mutex_prevents_another_ui_thread_from_owning_layout_until_release() {
         let name = format!(

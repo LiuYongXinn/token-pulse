@@ -83,6 +83,7 @@ struct State {
     layout: Option<LayoutLease>,
     embedding_failure: Option<ProbeError>,
     last_restore: Option<RestoreDisposition>,
+    instance: String,
 }
 impl State {
     fn receipt(&self, window: HWND) -> NativeReceipt {
@@ -168,7 +169,7 @@ impl State {
                     .map_err(|_| TransportError::Native)?;
                 if self.enabled && self.layout.is_none() && self.embedding_failure.is_none() {
                     if let Some(plan) = canvas.plan() {
-                        match LayoutLease::attach(canvas.window, plan.width) {
+                        match LayoutLease::attach(canvas.window, plan.width, &self.instance) {
                             Ok(layout) => {
                                 self.layout = Some(layout);
                                 canvas.set_attached(true);
@@ -322,12 +323,19 @@ pub struct NativeController {
 }
 impl NativeController {
     pub fn start() -> Result<Self, TransportError> {
+        Self::start_for_instance(&uuid::Uuid::new_v4().simple().to_string())
+    }
+    pub fn start_for_instance(instance: &str) -> Result<Self, TransportError> {
+        if instance.len() != 32 || !instance.bytes().all(|c| c.is_ascii_hexdigit()) {
+            return Err(TransportError::InvalidStartup);
+        }
+        let instance = instance.to_ascii_lowercase();
         let (sender, receiver) = mpsc::sync_channel(4);
         let (ready_sender, ready) = mpsc::sync_channel(1);
         let thread = thread::Builder::new()
             .name("taskbar-native-ui".into())
             .spawn(move || {
-                let result = unsafe { native_thread(receiver, &ready_sender) };
+                let result = unsafe { native_thread(receiver, &ready_sender, instance) };
                 if result.is_err() {
                     let _ = ready_sender.send(Err(TransportError::Native));
                 }
@@ -390,6 +398,7 @@ impl Drop for NativeController {
 unsafe fn native_thread(
     receiver: Receiver<Request>,
     ready: &SyncSender<Result<usize, TransportError>>,
+    instance: String,
 ) -> Result<(), TransportError> {
     let dpi = unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
     if dpi.is_null() {
@@ -418,6 +427,7 @@ unsafe fn native_thread(
             layout: None,
             embedding_failure: None,
             last_restore: None,
+            instance,
         }),
     });
     let window_class = WNDCLASSEXW {

@@ -135,6 +135,7 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
         HostReply::PrivacyApplied { enabled: true }
     ));
     connection.shutdown().await.unwrap();
+    assert!(connection.last_cleanup().is_some());
     process.terminated().await;
     assert!(native_controllers(connection.process_id()).is_empty());
     assert_eq!(
@@ -148,6 +149,7 @@ async fn real_child_handshake_privacy_heartbeat_shutdown_and_drop_release_owned_
     let mut connection = HostConnection::launch(executable()).await.unwrap();
     let process = ProcessWait::open(connection.process_id());
     assert!(connection.exchange(HostMessage::Hello {}).await.is_err());
+    assert!(connection.last_cleanup().is_some()); // Failure result survives while owner is alive.
     // Failure closes the child immediately even while the owner object remains alive.
     process.terminated().await;
     assert_eq!(

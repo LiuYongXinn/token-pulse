@@ -68,7 +68,19 @@ Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTe
 
 背景像素用 GetDCEx 的显式 clipping 选项读取验证过的 ReBar 小区域，并在同线程 ReleaseDC；不读取窗口标题或其他应用画面。[Microsoft GetDCEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdcex) 最初 GetDC 受容器裁剪而取色失败，改用此有界方法后本机挂接通过。
 
-该模块完成正常路径的实际预留 / 显示 / 更新 / 脱离。父进程强制结束 Job 时宿主无法执行析构，跨进程布局归属记录及父端条件清理仍须下一模块实现并验证；因此生产管道尚不启用挂接。不能将本次正常 Drop 证明当作宿主崩溃、Explorer 重启、Win11 或物理多屏 / 四档 DPI 验收，也没有运行性能测试。
+该模块完成正常路径的实际预留 / 显示 / 更新 / 脱离。M13c3a 已补充已结束宿主的跨进程记录与父端条件恢复，见下一节；仍须完成父端自身异常退出、原生清理有界执行与正式配置状态，因此生产管道尚不启用挂接。不能将正常 Drop 证明当作全部生命周期、Explorer 重启、Win11 或物理多屏 / 四档 DPI 验收，也没有运行性能测试。
+
+## M13c3a：已结束宿主的布局归属记录与父端清理
+
+调整窗口前，把 17 个 u32 字段写入本实例命名的窗口属性：原客户端矩形、缩小后矩形、容器尺寸 / DPI、宿主与 Explorer 的 PID / 创建时间。每个 u32 分成两个 16 位半字加一保存，零仍可表达，空句柄表示缺失；不向跨进程窗口写入可解引用指针。全局 owner 标记另绑定完整 128 位实例 ID，不能仅凭截取的短标记判断同一实例。完整记录及 Prepared 阶段先写入、owner 最后发布；同步调整返回后确认 Reserved。发布失败不执行几何修改；未知阶段、缺失字段、非法范围或不满足最小任务宽度的记录均拒绝使用。[Microsoft 窗口属性](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setpropw)
+
+受控宿主的 UI 线程使用启动参数中的实例 ID，和已验证的管道会话保持一致。父端保留自己创建的 Child 内核句柄，关闭自有 Job 后等待该进程结束；恢复入口先以零等待确认该句柄已结束，再读取 PID 与创建时间，不按一个可能复用的裸 PID 寻找目标。[Microsoft 等待进程句柄](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)、[Microsoft 进程创建时间](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes)
+
+重新探测当前 Explorer，取得布局互斥量后加载同一完整实例记录；宿主 PID / 创建时间、Explorer 身份、窗口代际、当前几何及归属仍匹配，才沿用 M13c2 的条件恢复。匹配记录清理后移除 owner、实例头及本实例属性，并核对删除结果；不删除其他实例的记录。重复清理为 NoRecord，外部变化保持 ExternalChange，错误保留真实失败。若宿主在 Prepared 阶段结束而几何仍为原值，尚不能判断是否存在待执行缩小，返回 Uncertain 并保留归属，不凭原值宣称完成清理。
+
+HostProcess::stop 与 Drop、HostConnection 的错误关闭 / shutdown / Drop 已接入恢复，结果在连接仍存活时可检查。当前恢复 API 的原生窗口调用是同步的；正式启用前仍要落实隔离且有期限的执行、主进程自身被强制结束后的清理监督，以及未知准备阶段的重试 / 状态表达。本节完成“父端仍运行且宿主已结束”的条件恢复，不将它写成所有崩溃 / 无响应 / Explorer 重建已通过。
+
+默认 tests 不调整 Explorer。显式 check_taskbar_exit 开发程序先把自己的子进程加入自有 Job，才允许它显示合成读数；关闭 Job 后没有发送 shutdown 或禁用，父端恢复该已结束进程的实际预留区域。拒绝存活 / 错实例 / 错已结束进程句柄、实际恢复、重复清理、新实例重挂接均在本机 Win10 19045 / 实际 150% DPI 通过，其他进程不被终止。没有运行性能测试。
 
 ## 契约生成与当前验证
 

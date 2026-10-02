@@ -1,4 +1,5 @@
 use super::{HostProcess, security};
+use super::{RestoreDisposition, topology::ProbeError};
 use crate::{
     Envelope, HostMessage, HostReply, HostSession, MAX_FRAME_BYTES, PROTOCOL_VERSION, WireError,
 };
@@ -186,6 +187,7 @@ pub struct HostConnection {
     sent: i128,
     received: i128,
     closed: bool,
+    last_cleanup: Option<Result<RestoreDisposition, ProbeError>>,
 }
 impl HostConnection {
     pub async fn launch(executable: &Path) -> Result<Self, TransportError> {
@@ -204,6 +206,7 @@ impl HostConnection {
             sent: 0,
             received: 0,
             closed: false,
+            last_cleanup: None,
         };
         if !matches!(
             connection.exchange(HostMessage::Hello {}).await?,
@@ -216,10 +219,15 @@ impl HostConnection {
     pub fn process_id(&self) -> u32 {
         self.process_id
     }
+    pub fn last_cleanup(&self) -> Option<Result<RestoreDisposition, ProbeError>> {
+        self.last_cleanup
+    }
     fn close(&mut self) {
         self.closed = true;
         self.pipe.disconnect().ok();
-        self.process.take(); // Stop immediately if an acknowledgement cannot be trusted.
+        if let Some(mut process) = self.process.take() {
+            self.last_cleanup = Some(process.stop());
+        }
     }
     pub async fn exchange(&mut self, message: HostMessage) -> Result<HostReply, TransportError> {
         if self.closed {
@@ -273,11 +281,16 @@ impl HostConnection {
     }
     pub async fn shutdown(&mut self) -> Result<(), TransportError> {
         let reply = self.exchange(HostMessage::Shutdown {}).await?;
-        self.closed = true;
+        self.close();
         if !matches!(reply, HostReply::Stopped {}) {
             return Err(TransportError::PeerMismatch);
         }
         Ok(())
+    }
+}
+impl Drop for HostConnection {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
@@ -304,7 +317,9 @@ pub async fn run_host(startup: Startup) -> Result<(), TransportError> {
         );
         let reply = session.apply(incoming)?;
         if matches!(reply, HostReply::Ready {}) {
-            native = Some(super::control::NativeController::start()?);
+            native = Some(super::control::NativeController::start_for_instance(
+                &startup.instance,
+            )?);
         }
         if update_native {
             // Native cache changes finish on the UI thread before any privacy/shutdown ACK.

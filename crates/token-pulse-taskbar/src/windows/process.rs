@@ -1,3 +1,4 @@
+use super::{RestoreDisposition, recover_terminated_host, topology::ProbeError};
 use super::{Startup, TransportError};
 use std::{
     os::windows::{io::AsRawHandle, process::CommandExt},
@@ -34,6 +35,8 @@ impl Drop for Job {
 pub struct HostProcess {
     child: Child,
     job: Option<Job>,
+    instance: String,
+    cleanup: Option<Result<RestoreDisposition, ProbeError>>,
 }
 impl HostProcess {
     pub fn spawn(executable: &Path, startup: &Startup) -> Result<Self, TransportError> {
@@ -72,7 +75,12 @@ impl HostProcess {
             .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW)
             .spawn()
             .map_err(|_| TransportError::Spawn)?;
-        let mut owned = Self { child, job: None };
+        let mut owned = Self {
+            child,
+            job: None,
+            instance: startup.instance.clone(),
+            cleanup: None,
+        };
         unsafe {
             let raw = CreateJobObjectW(std::ptr::null(), std::ptr::null());
             if raw.is_null() {
@@ -143,11 +151,25 @@ impl HostProcess {
     pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
         self.child.try_wait()
     }
+    /// Stop only this created child, wait for its kernel process handle, then conditionally clean
+    /// its recorded layout. The native cleanup result is retained; failure is never called restored.
+    pub fn stop(&mut self) -> Result<RestoreDisposition, ProbeError> {
+        if let Some(result) = self.cleanup {
+            return result;
+        }
+        self.job.take();
+        let _ = self.child.kill();
+        let result = if self.child.wait().is_ok() {
+            recover_terminated_host(&self.instance, &self.child)
+        } else {
+            Err(ProbeError::Os)
+        };
+        self.cleanup = Some(result);
+        result
+    }
 }
 impl Drop for HostProcess {
     fn drop(&mut self) {
-        self.job.take();
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.stop();
     }
 }

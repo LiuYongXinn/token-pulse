@@ -111,4 +111,14 @@ cargo run -p token-pulse-taskbar --example render_taskbar -- --render-developmen
 cargo run -p token-pulse-taskbar --example check_taskbar_layout -- --native-taskbar-development-check
 ```
 
-该独立开发程序只截取其自身已验证的原生读数窗口，生成 test-results/taskbar-native-attachment 下两张 DEVELOPMENT-FIXTURE BMP 和说明，不截取桌面、系统控件或其他应用。检查原生文字、背景、费用估算与隐私清除；矩形使用物理 DPI 上下文。程序显式禁用和正常作用域析构都执行条件恢复；强制杀进程不等于正常析构，目前仍待父端归属清理实现。此次本机实际 150% DPI 证据见[交付记录](delivery-status.md)，不代表 Win11 / 所有 DPI / 多屏或系统按钮交互全部通过。
+该独立开发程序只截取其自身已验证的原生读数窗口，生成 test-results/taskbar-native-attachment 下两张 DEVELOPMENT-FIXTURE BMP 和说明，不截取桌面、系统控件或其他应用。检查原生文字、背景、费用估算与隐私清除；矩形使用物理 DPI 上下文。程序显式禁用和正常作用域析构都执行条件恢复；强制杀进程不等于正常析构，独立的父端恢复检查见下文。此次本机实际 150% DPI 证据见[交付记录](delivery-status.md)，不代表 Win11 / 所有 DPI / 多屏或系统按钮交互全部通过。
+
+## 显式已结束宿主的父端清理验收
+
+```powershell
+cargo run -p token-pulse-taskbar --example check_taskbar_exit -- --native-taskbar-exit-development-check
+```
+
+该开发程序启动自己编译出的子进程，先加入自有 Job 再通过私有 stdin 允许挂接。子进程只显示明确合成的任务栏夹具，父端关闭 Job 强制结束它，没有发送正常退出 / 禁用；随后使用所持 Child 内核句柄与本实例记录条件恢复。检查存活宿主、错误实例和其他已结束进程句柄不能恢复该区域；正确恢复后重复返回 NoRecord，新的自有实例可挂接并正常退出。只终止所创建的进程，不重启 Explorer、不读取真实账户 / 日志、不生成真实账户截图，默认 tests / CI 不执行此命令。
+
+本机 Win10 19045 / 实际 150% DPI 通过。Job 强制终止也可能返回退出码 0，因此按内核句柄结束状态及仍存留的归属记录判断，不用“退出码非零”代替异常清理证明。该验收让父端保持运行；主进程自身异常退出的清理监督、原生恢复的有界执行和正式管道配置随后接入，不扩大到已取消的数据恢复专项。
