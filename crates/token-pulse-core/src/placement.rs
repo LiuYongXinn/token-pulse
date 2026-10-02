@@ -93,6 +93,48 @@ impl WorkArea {
         }
         Ok(())
     }
+    /// Fit the client and its preferred minimum inside the work area, including decorations.
+    /// Round available physical pixels down so fractional DPI cannot put an edge off screen.
+    pub fn fit_client(
+        &self,
+        desired: (f64, f64),
+        preferred_minimum: (f64, f64),
+        frame: (f64, f64),
+    ) -> Result<ClientFit, ErrorCode> {
+        self.validate()?;
+        if [
+            desired.0,
+            desired.1,
+            preferred_minimum.0,
+            preferred_minimum.1,
+        ]
+        .into_iter()
+        .any(|n| !n.is_finite() || n <= 0.0 || n > 1_000_000.0)
+            || [frame.0, frame.1]
+                .into_iter()
+                .any(|n| !n.is_finite() || !(0.0..=1_000_000.0).contains(&n))
+        {
+            return Err(ErrorCode::InvalidQuery);
+        }
+        let available = (
+            (f64::from(self.width) - frame.0 * self.scale).floor() / self.scale,
+            (f64::from(self.height) - frame.1 * self.scale).floor() / self.scale,
+        );
+        if available.0 < 1.0 || available.1 < 1.0 {
+            return Err(ErrorCode::WindowUnavailable);
+        }
+        let minimum = (
+            preferred_minimum.0.min(available.0),
+            preferred_minimum.1.min(available.1),
+        );
+        Ok(ClientFit {
+            minimum,
+            size: (
+                desired.0.clamp(minimum.0, available.0),
+                desired.1.clamp(minimum.1, available.1),
+            ),
+        })
+    }
     pub fn capture(
         &self,
         x: i32,
@@ -126,12 +168,12 @@ impl WorkArea {
         let x = f64::from(self.x)
             + (placement.offset_x_dip * self.scale).clamp(
                 0.0,
-                (f64::from(self.width) - width_dip * self.scale).max(0.0),
+                (f64::from(self.width) - (width_dip * self.scale).ceil()).max(0.0),
             );
         let y = f64::from(self.y)
             + (placement.offset_y_dip * self.scale).clamp(
                 0.0,
-                (f64::from(self.height) - height_dip * self.scale).max(0.0),
+                (f64::from(self.height) - (height_dip * self.scale).ceil()).max(0.0),
             );
         if [x, y]
             .into_iter()
@@ -143,9 +185,95 @@ impl WorkArea {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClientFit {
+    pub minimum: (f64, f64),
+    pub size: (f64, f64),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decorated_main_fits_all_dpi_levels_without_hiding_edges_or_permanently_lowering_minimum() {
+        // Fixed 2560x1376 physical work area; independent expected client geometry.
+        for (scale, expected) in [
+            (1.0, (1280.0, 860.0)),
+            (1.25, (1280.0, 860.0)),
+            (1.5, (1280.0, 860.0)),
+            (2.0, (1264.0, 649.0)),
+        ] {
+            let area = WorkArea {
+                x: -2560,
+                y: 40,
+                width: 2560,
+                height: 1376,
+                scale,
+            };
+            let fit = area
+                .fit_client((1280.0, 860.0), (960.0, 680.0), (16.0, 39.0))
+                .unwrap();
+            assert_eq!(fit.size, expected);
+            assert_eq!(fit.minimum, (960.0, 680.0_f64.min(expected.1)));
+            let saved = WindowPlacement {
+                monitor: None,
+                offset_x_dip: 8000.0,
+                offset_y_dip: 8000.0,
+            };
+            let (x, y) = area
+                .restore(&saved, fit.size.0 + 16.0, fit.size.1 + 39.0)
+                .unwrap();
+            assert!(f64::from(x) + (fit.size.0 + 16.0) * scale <= 0.0);
+            assert!(f64::from(y) + (fit.size.1 + 39.0) * scale <= 1416.0);
+        }
+        let small = WorkArea {
+            x: 0,
+            y: 0,
+            width: 1201,
+            height: 751,
+            scale: 1.25,
+        };
+        let fit = small
+            .fit_client((1280.0, 860.0), (960.0, 680.0), (16.0, 39.0))
+            .unwrap();
+        assert_eq!(fit.size, (944.8, 561.6));
+        let larger = WorkArea {
+            width: 2560,
+            height: 1376,
+            scale: 1.0,
+            ..small
+        };
+        let restored = larger
+            .fit_client(fit.size, (960.0, 680.0), (16.0, 39.0))
+            .unwrap();
+        assert_eq!(restored.minimum, (960.0, 680.0));
+        assert_eq!(restored.size, (960.0, 680.0));
+    }
+    #[test]
+    fn invalid_client_geometry_and_work_area_smaller_than_frame_are_rejected() {
+        let area = WorkArea {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1040,
+            scale: 1.0,
+        };
+        for desired in [(f64::NAN, 860.0), (1280.0, 0.0), (f64::INFINITY, 860.0)] {
+            assert!(
+                area.fit_client(desired, (960.0, 680.0), (16.0, 39.0))
+                    .is_err()
+            );
+        }
+        assert!(
+            area.fit_client((1280.0, 860.0), (960.0, 680.0), (-1.0, 39.0))
+                .is_err()
+        );
+        assert!(
+            WorkArea { height: 20, ..area }
+                .fit_client((1280.0, 860.0), (960.0, 680.0), (16.0, 39.0))
+                .is_err()
+        );
+    }
     #[test]
     fn dpi_work_area_changes_and_disconnected_monitor_keep_exact_dip_offsets_visible() {
         let old = WorkArea {

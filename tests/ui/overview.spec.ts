@@ -2,6 +2,36 @@ import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
 import { syntheticQuota } from './quota-fixture';
 
+for (const viewport of [{ width: 944, height: 560 }, { width: 1264, height: 649 }]) {
+  test(`small work-area client ${viewport.width}x${viewport.height} keeps navigation and settings reachable`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+    const columns = await page.evaluate(() => ({
+      left: document.querySelector('.overview-left')!.getBoundingClientRect().right,
+      right: document.querySelector('.overview-right')!.getBoundingClientRect().left,
+    }));
+    expect(columns.left).toBeLessThan(columns.right);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    await page.screenshot({ path: `test-results/small-work-area-overview-${viewport.width}.png`, fullPage: true });
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await page.getByRole('tab', { name: '任务栏显示', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: '启用任务栏显示' })).toBeChecked();
+    await page.getByRole('checkbox', { name: '启用任务栏显示' }).uncheck();
+    const save = page.getByRole('button', { name: '保存任务栏设置', exact: true });
+    await expect(save).toBeEnabled();
+    await save.scrollIntoViewIfNeeded();
+    await expect(save).toBeInViewport();
+    await page.getByRole('button', { name: '重置任务栏草稿', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: '启用任务栏显示' })).toBeChecked();
+    await page.locator('main > footer').scrollIntoViewIfNeeded();
+    await expect(page.locator('main > footer')).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    await page.screenshot({ path: `test-results/small-work-area-settings-${viewport.width}.png`, fullPage: true });
+    await page.getByRole('button', { name: '总览', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '总览', exact: true })).toBeInViewport();
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic UI DTO bridge. No fixture is imported into production.
   await installSyntheticCalendar(page);

@@ -13,4 +13,4 @@ foreach ($phase in @('seed','restore','missing')) {
     if ($phaseExit -ne 0) { exit $phaseExit }
     if (-not ($output | Select-String -SimpleMatch "NATIVE_MAIN_WINDOW_COLD_OK: $phase")) { throw 'Main-window phase did not run; a development instance may be active.' }
 }
-Write-Host 'NATIVE_MAIN_WINDOW_COLD_SEQUENCE_OK: three independent processes, ordinary native placement, maximize/minimize exclusion, close/reopen, synthetic missing-monitor fallback'
+Write-Host 'NATIVE_MAIN_WINDOW_COLD_SEQUENCE_OK: three independent processes, ordinary native placement, maximize/minimize exclusion, close/reopen, synthetic small-work-area fit and missing-monitor fallback'

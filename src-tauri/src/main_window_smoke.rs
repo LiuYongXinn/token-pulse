@@ -273,6 +273,74 @@ fn verify(
     "#,
     )?;
     if phase == Phase::Seed {
+        // Exercise production fitting on this real window with a synthetic smaller work area.
+        // This does not change system DPI, display topology or the taskbar work area.
+        let original_client = window.inner_size().map_err(|e| e.to_string())?;
+        let original_position = window.outer_position().map_err(|e| e.to_string())?;
+        let smaller = token_pulse_core::placement::WorkArea {
+            x: work.position.x,
+            y: work.position.y,
+            width: work.size.width.min((960.0 * scale) as u32),
+            height: work.size.height.min((600.0 * scale) as u32),
+            scale,
+        };
+        super::main_window::fit_in_area(&window, smaller).map_err(|e| e.to_string())?;
+        wait(
+            || {
+                window
+                    .outer_size()
+                    .is_ok_and(|s| s.width <= smaller.width && s.height <= smaller.height)
+            },
+            "complete decorated window fits small work area",
+        )?;
+        let position = window.outer_position().map_err(|e| e.to_string())?;
+        let fitted_outer = window.outer_size().map_err(|e| e.to_string())?;
+        if position.x < smaller.x
+            || position.y < smaller.y
+            || i64::from(position.x) + i64::from(fitted_outer.width)
+                > i64::from(smaller.x) + i64::from(smaller.width)
+            || i64::from(position.y) + i64::from(fitted_outer.height)
+                > i64::from(smaller.y) + i64::from(smaller.height)
+        {
+            return Err("small work area left a window edge outside".into());
+        }
+        super::mini_smoke::evaluate(
+            app,
+            &window,
+            r#"
+          const nav=document.querySelector('nav[aria-label="主导航"]');
+          const settings=[...nav.querySelectorAll('button')].find(b=>b.textContent==='设置');
+          if(!settings)throw new Error('SMALL_NAV_MISSING');
+          settings.scrollIntoView();settings.click();
+          await wait(()=>document.querySelector('[role="tablist"]'));
+          const tabs=[...document.querySelectorAll('[role="tab"]')];
+          const taskbar=tabs.find(b=>b.textContent==='任务栏显示');
+          taskbar.scrollIntoView();taskbar.click();
+          await wait(()=>document.querySelector('.taskbar-settings-panel'));
+          const panel=document.querySelector('.taskbar-settings-panel');
+          if(!panel.textContent.includes('常驻读数'))throw new Error('SMALL_SETTINGS_MISSING');
+          const footer=document.querySelector('main>footer');footer.scrollIntoView();
+          const bounds=footer.getBoundingClientRect();
+          if(bounds.top<0||bounds.bottom>innerHeight+1)throw new Error('SMALL_FOOTER_UNREACHABLE');
+          const overview=[...nav.querySelectorAll('button')].find(b=>b.textContent==='总览');
+          overview.scrollIntoView();overview.click();
+          await wait(()=>document.querySelector('main h1')?.textContent==='总览');
+        "#,
+        )?;
+        super::main_window::fit_current(&window).map_err(|e| e.to_string())?;
+        window
+            .set_size(original_client)
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(original_position)
+            .map_err(|e| e.to_string())?;
+        wait(
+            || window.inner_size().is_ok_and(|s| s == original_client),
+            "ordinary size restored",
+        )?;
+        println!(
+            "NATIVE_MAIN_WINDOW_SMALL_WORK_AREA_OK: synthetic work area, actual decorated window and scrollable React navigation"
+        );
         // Leave a known final move pending; the next process proves the production exit save.
         let current = window.outer_position().map_err(|e| e.to_string())?;
         let final_x = current.x + 9;

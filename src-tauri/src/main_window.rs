@@ -66,6 +66,13 @@ fn restore(window: &WebviewWindow, placement: &WindowPlacement) -> Result<(), Er
     let (x, y) = area(&monitor).restore(placement, width, height)?;
     window
         .set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|_| ErrorCode::WindowUnavailable)?;
+    // Moving between monitors can change the native frame and DPI. Measure after the move.
+    fit_in_area(window, area(&monitor))?;
+    let (width, height) = outer_dip(window)?;
+    let (x, y) = area(&monitor).restore(placement, width, height)?;
+    window
+        .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|_| ErrorCode::WindowUnavailable)
 }
 pub(super) fn fit_current(window: &WebviewWindow) -> Result<(), ErrorCode> {
@@ -79,12 +86,42 @@ pub(super) fn fit_current(window: &WebviewWindow) -> Result<(), ErrorCode> {
             .primary_monitor()
             .map_err(|_| ErrorCode::WindowUnavailable)?)
         .ok_or(ErrorCode::WindowUnavailable)?;
+    fit_in_area(window, area(&monitor))
+}
+pub(super) fn fit_in_area(window: &WebviewWindow, work: WorkArea) -> Result<(), ErrorCode> {
+    if !normal(window)? {
+        return Ok(());
+    }
     let position = window
         .outer_position()
         .map_err(|_| ErrorCode::WindowUnavailable)?;
-    let placement = area(&monitor).capture(position.x, position.y, monitor.name().cloned())?;
+    let placement = work.capture(position.x, position.y, None)?;
+    let scale = window
+        .scale_factor()
+        .map_err(|_| ErrorCode::WindowUnavailable)?;
+    let client = window
+        .inner_size()
+        .map_err(|_| ErrorCode::WindowUnavailable)?
+        .to_logical::<f64>(scale);
     let (width, height) = outer_dip(window)?;
-    let (x, y) = area(&monitor).restore(&placement, width, height)?;
+    let fit = work.fit_client(
+        (client.width, client.height),
+        (960.0, 680.0),
+        (
+            (width - client.width).max(0.0),
+            (height - client.height).max(0.0),
+        ),
+    )?;
+    window
+        .set_min_size(Some(tauri::LogicalSize::new(fit.minimum.0, fit.minimum.1)))
+        .map_err(|_| ErrorCode::WindowUnavailable)?;
+    if (client.width - fit.size.0).abs() > 0.01 || (client.height - fit.size.1).abs() > 0.01 {
+        window
+            .set_size(tauri::LogicalSize::new(fit.size.0, fit.size.1))
+            .map_err(|_| ErrorCode::WindowUnavailable)?;
+    }
+    let (width, height) = outer_dip(window)?;
+    let (x, y) = work.restore(&placement, width, height)?;
     if (x, y) != (position.x, position.y) {
         window
             .set_position(tauri::PhysicalPosition::new(x, y))
