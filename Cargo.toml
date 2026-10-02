@@ -15,6 +15,7 @@ token-pulse-core = { path = "crates/token-pulse-core" }
 token-pulse-store = { path = "crates/token-pulse-store" }
 token-pulse-collector = { path = "crates/token-pulse-collector" }
 token-pulse-quota = { path = "crates/token-pulse-quota" }
+token-pulse-taskbar = { path = "crates/token-pulse-taskbar" }
 
 [profile.release]
 lto = "thin"

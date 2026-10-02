@@ -275,7 +275,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     }
                 }
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
-                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===4);
                 [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
                 await waitFor(()=>document.querySelector('input[aria-label="统计时区"]')?.value==='UTC');
                 const timezoneInput=document.querySelector('input[aria-label="统计时区"]');
@@ -337,7 +337,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 try {await invoke('set_display_privacy',{requestId:'native-smoke-privacy-conflict',request:{privacy:false,expected_settings_revision:'4'}});} catch(error) {privacyConflict=error.code==='REVISION_CONFLICT';}
                 ok=ok && privacyNoop.data.settings_revision==='5' && privatePickerBlocked && privacyConflict;
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
-                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===4);
                 [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
                 await waitFor(()=>document.querySelector('input[aria-label="隐私模式"]')?.checked===true && !document.querySelector('input[aria-label="隐私模式"]')?.disabled);
                 document.querySelector('input[aria-label="隐私模式"]').click();
@@ -399,7 +399,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
 
 
 
-            } catch (error) { console.error('Native IPC check:', error); }
+            } catch (error) { ok={error:error instanceof Error ? error.message : error.code ?? 'IPC_REJECTED'}; }
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
     "#,
@@ -412,11 +412,13 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     app.unlisten(policy_listener);
     app.unlisten(scope_listener);
     if ipc.as_deref() != Ok("true") {
-        return Err("WebView get_app_status IPC failed".into());
+        return Err(format!("WebView native IPC/UI check failed: {ipc:?}"));
     }
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
     if settings_events.len() != 12 {
-        return Err("display changes did not emit exactly twelve settings notifications".into());
+        return Err(format!(
+            "display changes did not emit exactly twelve settings notifications: {settings_events:?}"
+        ));
     }
     for (payload, revision) in settings_events.iter().zip([
         "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",

@@ -1,5 +1,8 @@
 //! Persistent taskbar intent; native capability is a separate runtime result.
-use crate::{error::ErrorCode, numeric::DecimalInt};
+use crate::{
+    error::ErrorCode,
+    numeric::{DecimalInt, EpochMs},
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -87,4 +90,59 @@ impl TaskbarPreferencesMutation {
             .map_err(|_| ErrorCode::InvalidQuery)?;
         Ok(())
     }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskbarRuntimeState {
+    Disabled,
+    Probing,
+    WaitingSnapshot,
+    Embedded,
+    Unavailable,
+    Recovering,
+    Suspended,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskbarRuntimeIssue {
+    UnsupportedVersion,
+    MissingTaskbar,
+    UnexpectedStructure,
+    UnsafeGeometry,
+    InsufficientSpace,
+    BackgroundUnavailable,
+    HostUnavailable,
+    HostTimeout,
+    ProtocolError,
+    UnsupportedPosition,
+    InputUnavailable,
+    CleanupUncertain,
+    CleanupFailed,
+    ExternalLayoutChange,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskbarCleanupOutcome {
+    NoRecord,
+    Restored,
+    AlreadyRestored,
+    ExternalChange,
+    IdentityLost,
+    Failed,
+    Uncertain,
+    Timeout,
+    Unavailable,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct TaskbarRuntimeSnapshot {
+    pub revision: DecimalInt,
+    pub state: TaskbarRuntimeState,
+    pub applied_settings_revision: Option<DecimalInt>,
+    pub issue: Option<TaskbarRuntimeIssue>,
+    pub error: Option<ErrorCode>,
+    pub compact: Option<bool>,
+    pub fallback_visible: Option<bool>,
+    pub last_cleanup: Option<TaskbarCleanupOutcome>,
+    pub last_snapshot_at_ms: Option<EpochMs>,
 }

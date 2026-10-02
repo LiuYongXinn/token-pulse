@@ -8,6 +8,10 @@
   "permissions": [
     "core:default",
     "allow-get-app-status",
+    "allow-get-taskbar-preferences",
+    "allow-set-taskbar-preferences",
+    "allow-get-taskbar-status",
+    "allow-retry-taskbar-embed",
     "allow-get-account-quota",
     "allow-get-account-service-config",
     "allow-choose-account-service",

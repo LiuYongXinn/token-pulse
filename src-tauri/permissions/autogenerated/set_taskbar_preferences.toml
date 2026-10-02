@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-taskbar-preferences"
+description = "Enables the set_taskbar_preferences command without any pre-configured scope."
+commands.allow = ["set_taskbar_preferences"]
+
+[[permission]]
+identifier = "deny-set-taskbar-preferences"
+description = "Denies the set_taskbar_preferences command without any pre-configured scope."
+commands.deny = ["set_taskbar_preferences"]

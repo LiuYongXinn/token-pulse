@@ -420,6 +420,14 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
         "windows":[{"window_id":"primary","duration_mins":10080,"used_percent":100,"remaining_percent":0,"resets_at_ms":null}]
     })).unwrap();
     let projected = TaskbarView::from_snapshots(&usage, &quota, false);
+    let without_account = TaskbarView::from_optional_snapshots(&usage, None, false);
+    without_account.validate().unwrap();
+    assert!(without_account.quota.is_none());
+    assert_eq!(without_account.usage_revision, projected.usage_revision);
+    assert_eq!(
+        without_account.costs[0].estimated_cost,
+        projected.costs[0].estimated_cost
+    );
     projected.validate().unwrap();
     assert!(projected.total_tokens.is_none());
     assert!(projected.input_tokens.is_none());

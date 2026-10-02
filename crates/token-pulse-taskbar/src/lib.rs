@@ -164,13 +164,22 @@ pub struct TaskbarView {
 }
 impl TaskbarView {
     pub fn from_snapshots(usage: &MiniUsageSnapshot, quota: &QuotaSnapshot, privacy: bool) -> Self {
+        Self::from_optional_snapshots(usage, Some(quota), privacy)
+    }
+    pub fn from_optional_snapshots(
+        usage: &MiniUsageSnapshot,
+        quota: Option<&QuotaSnapshot>,
+        privacy: bool,
+    ) -> Self {
         let known = usage.usage.usage_event_count.as_str() != "0"
             || matches!(usage.coverage.state, CoverageState::Complete);
-        let label = quota
-            .available_limits
-            .iter()
-            .find(|q| Some(&q.limit_id) == quota.selected_limit_id.as_ref())
-            .map(|q| q.display_name.as_ref().unwrap_or(&q.limit_id).clone());
+        let label = quota.and_then(|quota| {
+            quota
+                .available_limits
+                .iter()
+                .find(|q| Some(&q.limit_id) == quota.selected_limit_id.as_ref())
+                .map(|q| q.display_name.as_ref().unwrap_or(&q.limit_id).clone())
+        });
         Self {
             settings_revision: usage.settings_revision.clone(),
             usage_revision: usage.meta.data_revision.clone(),
@@ -201,7 +210,7 @@ impl TaskbarView {
                     })
                     .collect()
             },
-            quota: (!privacy).then(|| HostQuota {
+            quota: quota.filter(|_| !privacy).map(|quota| HostQuota {
                 connection_epoch: quota.connection_epoch.clone(),
                 revision: quota.quota_revision.clone(),
                 state: quota.state,

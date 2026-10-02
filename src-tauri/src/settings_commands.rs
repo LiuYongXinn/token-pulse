@@ -99,6 +99,11 @@ pub(super) fn update_privacy(
     policy: &PrivacyState,
     request: DisplayPrivacyMutation,
 ) -> token_pulse_store::StoreResult<DisplaySettingsSnapshot> {
+    let taskbar = super::taskbar_commands::service(app);
+    let _taskbar_pause = taskbar
+        .as_ref()
+        .map(|owner| owner.pause_publication())
+        .transpose()?;
     let (data, changed) = policy.commit_update(|| {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
         let (data, changed) = db.mutate_display_privacy(request, at)?;

@@ -143,3 +143,14 @@ cargo run -p token-pulse-taskbar --example check_taskbar_wire -- --native-taskba
 该开发程序启动上一步构建的正式原生宿主及清理监督，经当前用户受控管道发送合成 DTO 和显式配置。实际验证 waiting_snapshot → embedded、单行仅 Token 后读数空间缩小、新修订清除旧快照、隐私清屏 ACK 后任务栏恢复、重新显示与禁用，以及最后完整原几何恢复 / 前台焦点保持。只检查本次宿主 PID 与自有读数类的矩形，不读取其他窗口标题、不截取其他应用、不使用真实账户或日志；默认 tests / CI 不运行布局验收。
 
 本机 Win10 19045 / 150% DPI 已通过。生产 wire 具备显式启用能力，Tauri 管理器尚未调用它，普通应用保持默认禁用。该检查不代替原生鼠标、悬停 / 菜单、Win11、Explorer 重建或物理多屏 / 各档 DPI；没有运行性能测试。
+
+## 显式正式应用任务栏管理器验收
+
+```powershell
+npm run build
+pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar
+```
+
+`-Taskbar` 选择独立任务栏场景，使用 debug 专用 `native-probe-<UUID>` 数据目录、真实两个 WebView、正式宿主及 SQLite DTO。初始数据库无来源，未知用量 / 额度保留未知，不读取已有开发来源或真实账户；通过主窗口命令保存启用配置，并验证实际 embedded、mini 命令拒绝、共享隐私屏障、主窗口隐藏后最后成功快照时间继续推进、合成休眠消息 / 恢复、禁用以及嵌入时关闭后台服务。最后原任务栏几何恢复，输出 NATIVE_TASKBAR_MANAGER_OK 并以 0 退出；默认 tests 和不带 -Taskbar 的综合原生场景不调整任务栏。
+
+本机 Win10 19045 / 150% DPI 通过。电源检查仅向自有主窗口发送合成消息，不代表机器实际休眠；未做系统按钮实际点击、Win11 或完整物理多屏 / DPI。关闭时 WebView2 可能输出 Chrome_WidgetWin_0 注销错误 1412，本次场景断言及进程退出均成功，记录此诊断而不将其隐藏。当前综合原生回归另有真实键盘恢复失败，尚需复核，不能用任务栏独立通过代替综合回归通过。未运行性能测试。

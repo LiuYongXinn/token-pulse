@@ -1,3 +1,4 @@
+param([switch]$Taskbar)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -7,5 +8,9 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & cargo build -p token-pulse-desktop --features custom-protocol
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& (Join-Path $PSScriptRoot '..\target\debug\token-pulse-desktop.exe') --native-smoke
+& cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$probeArgs = @('--native-smoke')
+if ($Taskbar) { $probeArgs += '--native-taskbar-smoke' }
+& (Join-Path $PSScriptRoot '..\target\debug\token-pulse-desktop.exe') @probeArgs
 exit $LASTEXITCODE

@@ -2,6 +2,10 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_taskbar_preferences",
+            "set_taskbar_preferences",
+            "get_taskbar_status",
+            "retry_taskbar_embed",
             "get_account_quota",
             "get_account_service_config",
             "choose_account_service",
