@@ -221,6 +221,38 @@ fn native_selection_validation_rejects_relative_paths_and_shell_scripts() {
     ));
 }
 
+#[test]
+fn saved_executable_fingerprint_is_checked_at_configuration_and_actual_launch() {
+    use std::io::Write;
+    let home = tempfile::tempdir().unwrap();
+    let exe = home.path().join("verified-service.exe");
+    std::fs::copy(env!("CARGO_BIN_EXE_quota-fixture"), &exe).unwrap();
+    std::fs::write(home.path().join("fixture-mode"), "service").unwrap();
+    let target = NativeService::inspect(&exe, Some(home.path())).unwrap();
+    assert_eq!(target.executable_sha256.len(), 64);
+    let native = NativeService::from_target(&target).unwrap();
+    let mut session = StdioSession::launch(&native, "synthetic-transport-1").unwrap();
+    ready(&mut session);
+    session.close();
+    std::fs::remove_file(home.path().join("service.pid")).unwrap();
+    // A replacement after configuration validation must also fail at the launch boundary.
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&exe)
+        .unwrap()
+        .write_all(b"synthetic changed bytes")
+        .unwrap();
+    assert!(matches!(
+        NativeService::from_target(&target),
+        Err(ErrorCode::StaleConfirmation)
+    ));
+    assert!(matches!(
+        StdioSession::launch(&native, "new-transport"),
+        Err(ErrorCode::StaleConfirmation)
+    ));
+    assert!(!home.path().join("service.pid").exists());
+}
+
 #[cfg(windows)]
 #[test]
 fn owned_windows_job_kills_descendants_and_releases_inherited_pipes() {

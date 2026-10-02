@@ -522,3 +522,11 @@ get_account_quota / refresh_account_quota 正式注册为 main / mini 专用命�
 account_quota_changed 的 QuotaChanged 只含 connection_epoch / quota_revision / state，属于失效通知，不带账户信息或百分比。串行 owner 只在完整快照修订后发布；采集 usage_changed / 设置 settings_changed 与额度事件独立。transport RPC ID 映射到领域额度令牌 / 当时身份 epoch，通知身份变化时两层旧请求都失效。传输失败通过 connection_failed 明确标旧值陈旧；自动重连先清空新连接未证明的身份和值，不能沿用旧 epoch。
 
 默认服务不连接外部程序；当前 WebView 没有 connect / authorize / select_limit / disconnect 命令。后续 manage_account_connection 仅 main，从原生受控选择 / 明确授权取得配置。持续服务内部已经提供 epoch 约束的连接 / 断开及 quota_revision 约束的桶选择，但内部 Rust API 不等于前端连接能力已交付。可见性位和 power flags 由原生生命周期设置，任务栏消费者接口不代表任务栏宿主完成。授权 / UI / 在线真实账户继续实施。
+
+### 2.27 已实现的连接配置基础契约
+
+AccountServiceConfigSnapshot 为展示配置，含 settings_revision、可空 executable_display_path / home_display_path / executable_sha256、configured 和 auto_connect；不返回内部执行目标。AccountServiceSelectionRequest / Selection 约束 executable / home / default_home 原生选择、base_selection_handle、原设置修订和期限；AccountServiceConfigMutation 只携带选择能力 / auto_connect / 预期修订。路径通过最新隐私脱敏，home null 不转成假默认路径。程序 SHA-256 是已选择文件的变更检查，不是认证信息或发布签名。
+
+AccountConnectionRequest 为 connect（预期设置修订 / epoch / 确认指纹）、disconnect（预期 epoch）、select_limit（预期 epoch / quota_revision / 桶 ID）。严格未知字段拒绝，不含任意路径、参数、RPC、token 或登录输入；authorize 继续由后续实际登录模块定义。M12d1 仅实现契约、后台选择租约、持久 CAS 和启动指纹检查，管理命令尚未注册，不能将类型生成当作 UI / 授权完成。
+
+内部 account_service 配置与全局 settings_revision 同事务保存，默认不配置、不自动连接。未来 / 损坏配置拒绝；旧字段缺失兼容。选择租约与来源目录分域且只允许 main，五分钟过期，16 条有界；实际启动重新验证程序指纹，Windows 文件句柄在检查与 spawn 期间阻止写入 / 删除。程序变更必须重新选择 / 确认，不继续执行旧确认的不同字节。

@@ -1,6 +1,7 @@
 //! A single Writer publishes configuration and its revision atomically.
 mod opacity;
 mod passthrough;
+mod quota;
 mod shortcuts;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
@@ -48,6 +49,10 @@ pub(crate) fn read_stored(
                         .is_ok_and(|key| key.virtual_key().is_ok()),
                         "mini_window" => serde_json::from_value::<
                             token_pulse_core::placement::MiniWindowPreferences,
+                        >(field.clone())
+                        .is_ok_and(|value| value.validate().is_ok()),
+                        "account_service" => serde_json::from_value::<
+                            token_pulse_core::quota::AccountServicePreferences,
                         >(field.clone())
                         .is_ok_and(|value| value.validate().is_ok()),
                         "mini_scope" => serde_json::from_value::<

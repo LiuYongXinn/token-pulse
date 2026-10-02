@@ -359,6 +359,17 @@ impl PrivacyRedact for crate::quota::QuotaRefreshResult {
         self.quota.redact();
     }
 }
+impl PrivacyRedact for crate::quota::AccountServiceConfigSnapshot {
+    fn redact(&mut self) {
+        replace_known(&mut self.executable_display_path, "程序路径已隐藏", None);
+        replace_known(&mut self.home_display_path, "Home 路径已隐藏", None);
+    }
+}
+impl PrivacyRedact for crate::quota::AccountServiceSelection {
+    fn redact(&mut self) {
+        self.preview.redact();
+    }
+}
 impl PrivacyRedact for Job {
     fn redact(&mut self) {
         if let Some(error) = &mut self.error {

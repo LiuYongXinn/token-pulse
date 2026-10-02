@@ -24,6 +24,7 @@ use token_pulse_core::error::ErrorCode;
 pub struct NativeService {
     executable: PathBuf,
     home: Option<PathBuf>,
+    fingerprint: Option<String>,
 }
 impl NativeService {
     pub fn new(executable: &Path, home: Option<&Path>) -> Result<Self, ErrorCode> {
@@ -60,7 +61,47 @@ impl NativeService {
         if home.as_ref().is_some_and(|p| !p.is_dir()) {
             return Err(ErrorCode::InvalidQuery);
         }
-        Ok(Self { executable, home })
+        Ok(Self {
+            executable,
+            home,
+            fingerprint: None,
+        })
+    }
+    pub fn inspect(
+        executable: &Path,
+        home: Option<&Path>,
+    ) -> Result<token_pulse_core::quota::AccountServiceTarget, ErrorCode> {
+        let spec = Self::new(executable, home)?;
+        let (fingerprint, _) = hash_program(&spec.executable)?;
+        let target = token_pulse_core::quota::AccountServiceTarget {
+            executable_path: spec
+                .executable
+                .to_str()
+                .ok_or(ErrorCode::InvalidQuery)?
+                .into(),
+            home_path: spec
+                .home
+                .as_ref()
+                .map(|p| p.to_str().map(str::to_owned).ok_or(ErrorCode::InvalidQuery))
+                .transpose()?,
+            executable_sha256: fingerprint,
+        };
+        target.validate()?;
+        Ok(target)
+    }
+    pub fn from_target(
+        target: &token_pulse_core::quota::AccountServiceTarget,
+    ) -> Result<Self, ErrorCode> {
+        target.validate()?;
+        let mut spec = Self::new(
+            Path::new(&target.executable_path),
+            target.home_path.as_deref().map(Path::new),
+        )?;
+        if hash_program(&spec.executable)?.0 != target.executable_sha256 {
+            return Err(ErrorCode::StaleConfirmation);
+        }
+        spec.fingerprint = Some(target.executable_sha256.clone());
+        Ok(spec)
     }
 }
 
@@ -111,6 +152,17 @@ impl StdioSession {
             return Err(ErrorCode::InvalidQuery);
         }
         let mut command = Command::new(&spec.executable);
+        // Keep a deny-write/delete executable handle through spawn on Windows. The
+        // saved fingerprint is checked again at the actual launch, after queueing.
+        let _program_guard = if let Some(expected) = &spec.fingerprint {
+            let (actual, guard) = hash_program(&spec.executable)?;
+            if &actual != expected {
+                return Err(ErrorCode::StaleConfirmation);
+            }
+            Some(guard)
+        } else {
+            None
+        };
         command
             .arg("app-server")
             .stdin(Stdio::piped())
@@ -458,6 +510,32 @@ impl Drop for StdioSession {
     }
 }
 
+fn hash_program(path: &Path) -> Result<(String, std::fs::File), ErrorCode> {
+    use sha2::{Digest, Sha256};
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|_| ErrorCode::QuotaServiceUnavailable)?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 65_536];
+    loop {
+        let bytes = file
+            .read(&mut buffer)
+            .map_err(|_| ErrorCode::QuotaServiceUnavailable)?;
+        if bytes == 0 {
+            break;
+        }
+        hash.update(&buffer[..bytes]);
+    }
+    Ok((format!("{:x}", hash.finalize()), file))
+}
+
 #[cfg(windows)]
 fn resume_owned_primary(child: &Child) -> Result<(), ErrorCode> {
     use windows_sys::Win32::{
@@ -556,5 +634,29 @@ impl Drop for OwnedJob {
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(self.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::*;
+    #[test]
+    fn hash_has_an_independent_known_sha256_and_windows_guard_blocks_replacement_writes() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("synthetic-bytes");
+        std::fs::write(&file, b"abc").unwrap();
+        let (actual, guard) = hash_program(&file).unwrap();
+        assert_eq!(
+            actual,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        #[cfg(windows)]
+        {
+            assert!(std::fs::OpenOptions::new().write(true).open(&file).is_err());
+            assert!(std::fs::remove_file(&file).is_err());
+        }
+        drop(guard);
+        std::fs::write(&file, b"changed bytes").unwrap();
+        assert_ne!(hash_program(&file).unwrap().0, actual);
     }
 }

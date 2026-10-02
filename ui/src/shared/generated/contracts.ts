@@ -258,6 +258,18 @@ export type QuotaRefreshResult = { status: QuotaRefreshStatus, retry_after_ms: n
 
 export type QuotaChanged = { connection_epoch: string, quota_revision: DecimalInt, state: QuotaState, };
 
+export type AccountServiceConfigSnapshot = { settings_revision: DecimalInt, executable_display_path: string | null, home_display_path: string | null, executable_sha256: string | null, configured: boolean, auto_connect: boolean, };
+
+export type AccountServiceSelectionKind = "executable" | "home" | "default_home";
+
+export type AccountServiceSelectionRequest = { kind: AccountServiceSelectionKind, base_selection_handle: string | null, expected_settings_revision: DecimalInt, };
+
+export type AccountServiceSelection = { selection_handle: string, preview: AccountServiceConfigSnapshot, expires_at_ms: EpochMs, };
+
+export type AccountServiceConfigMutation = { selection_handle: string, auto_connect: boolean, expected_settings_revision: DecimalInt, };
+
+export type AccountConnectionRequest = { "kind": "connect", expected_settings_revision: DecimalInt, expected_connection_epoch: string, acknowledged_executable_sha256: string, } | { "kind": "disconnect", expected_connection_epoch: string, } | { "kind": "select_limit", expected_connection_epoch: string, expected_quota_revision: DecimalInt, limit_id: string, };
+
 export type MiniSnapshot = { usage_meta: SnapshotMeta, mini_scope: MiniScope, scope_display_name: string | null, usage: TokenTotals, pricing: PricingSummary, coverage: Coverage, quota: QuotaSnapshot, privacy: boolean, usage_last_success_ms: EpochMs | null, };
 
 export type JobKind = "import" | "reconcile" | "rebuild" | "export" | "backup" | "restore" | "price_revalue" | "clear";

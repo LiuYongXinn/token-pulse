@@ -1,6 +1,290 @@
 {
   "api_version": 1,
   "schemas": {
+    "AccountConnectionRequest": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "acknowledged_executable_sha256": {
+              "type": "string"
+            },
+            "expected_connection_epoch": {
+              "type": "string"
+            },
+            "expected_settings_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "kind": {
+              "const": "connect",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "expected_settings_revision",
+            "expected_connection_epoch",
+            "acknowledged_executable_sha256"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_connection_epoch": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "disconnect",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "expected_connection_epoch"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_connection_epoch": {
+              "type": "string"
+            },
+            "expected_quota_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "kind": {
+              "const": "select_limit",
+              "type": "string"
+            },
+            "limit_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "expected_connection_epoch",
+            "expected_quota_revision",
+            "limit_id"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "AccountConnectionRequest"
+    },
+    "AccountServiceConfigMutation": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auto_connect": {
+          "type": "boolean"
+        },
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "selection_handle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "selection_handle",
+        "auto_connect",
+        "expected_settings_revision"
+      ],
+      "title": "AccountServiceConfigMutation",
+      "type": "object"
+    },
+    "AccountServiceConfigSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auto_connect": {
+          "type": "boolean"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "executable_display_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executable_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "home_display_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "settings_revision",
+        "executable_display_path",
+        "home_display_path",
+        "executable_sha256",
+        "configured",
+        "auto_connect"
+      ],
+      "title": "AccountServiceConfigSnapshot",
+      "type": "object"
+    },
+    "AccountServiceSelection": {
+      "$defs": {
+        "AccountServiceConfigSnapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "auto_connect": {
+              "type": "boolean"
+            },
+            "configured": {
+              "type": "boolean"
+            },
+            "executable_display_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "executable_sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "home_display_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "settings_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "settings_revision",
+            "executable_display_path",
+            "home_display_path",
+            "executable_sha256",
+            "configured",
+            "auto_connect"
+          ],
+          "type": "object"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "EpochMs": {
+          "maximum": 8640000000000000,
+          "minimum": -8640000000000000,
+          "type": "integer"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "expires_at_ms": {
+          "$ref": "#/$defs/EpochMs"
+        },
+        "preview": {
+          "$ref": "#/$defs/AccountServiceConfigSnapshot"
+        },
+        "selection_handle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "selection_handle",
+        "preview",
+        "expires_at_ms"
+      ],
+      "title": "AccountServiceSelection",
+      "type": "object"
+    },
+    "AccountServiceSelectionKind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "executable",
+        "home",
+        "default_home"
+      ],
+      "title": "AccountServiceSelectionKind",
+      "type": "string"
+    },
+    "AccountServiceSelectionRequest": {
+      "$defs": {
+        "AccountServiceSelectionKind": {
+          "enum": [
+            "executable",
+            "home",
+            "default_home"
+          ],
+          "type": "string"
+        },
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "base_selection_handle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_settings_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "kind": {
+          "$ref": "#/$defs/AccountServiceSelectionKind"
+        }
+      },
+      "required": [
+        "kind",
+        "base_selection_handle",
+        "expected_settings_revision"
+      ],
+      "title": "AccountServiceSelectionRequest",
+      "type": "object"
+    },
     "AppError": {
       "$defs": {
         "ErrorCode": {
