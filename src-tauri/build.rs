@@ -34,6 +34,7 @@ fn main() {
             "start_job",
             "get_job",
             "list_jobs",
+            "get_rebuild_status",
             "cancel_job",
             "get_context_snapshot",
             "get_dashboard_bundle",

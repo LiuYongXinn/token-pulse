@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M10d1：`cargo test -p token-pulse-store --test jobs` 共 7 项，新增活跃作业被 55 条新历史遮挡的选择 / 优先级 / 终态错误检查；`npx playwright test tests/ui/jobs.spec.ts tests/ui/sources.spec.ts tests/ui/shell.spec.ts tests/ui/taskbar.spec.ts --workers=2` 10 项通过，新增诊断来源错误 / 空时间 / 同修订操作 / 进度读取失败保留 / 内部信息不展示；已有重建未知回复重试和取消保持。TS / 生产构建、store / desktop strict Clippy、fmt / 差异检查通过。实际查看 test-results 中深色 1280 与浅色 960 诊断截图，无横向溢出。`scripts/native-smoke.ps1` 实际 Win10 正式 WebView 输出 NATIVE_DIAGNOSTICS_OK；新命令 main-only，mini 实际拒绝。修正原生检查等待隐私提交 / 按钮可用后，小窗 / 位置各标记通过，但综合脚本在真实键盘恢复失败，退出 1，不能记为全套通过。没有用户 Home / 账户或性能检查；文件级错误定位及其他保留验收继续。
+
 M06f8：`cargo test -p token-pulse-store file_candidate::location --lib` 7 项；`file_candidate --lib` 和 `rebuild --lib` 各 29 项通过。`cargo test -p token-pulse-collector` 全部 63 项，replacement-service 共 8 项（新增 2 项）通过。store / collector / desktop strict Clippy、fmt 通过。合成 SQLite 验证保留读取进度、过期 CAS / 冻结输入、占用路径、歧义身份、边界及作业 / 整组账本 / 位置更新回滚。Win10 临时文件覆盖 reading / ready / claimed / failed 归档移动、4816 Token 与单一逻辑文件，以及实际 watcher 的运行中冻结作业撤销 / 独立服务重新发布 24。全部源字节保持；不读用户 Home / auth.json / 账户，无性能测试或 UI / 安装验收。后台镜像 / 分叉、真实格式、Win11 与物理多屏继续验收。
 
 M06f7：新增 `cargo test -p token-pulse-collector --test replacement-service` 6 项通过；collector 完整 61 项、store / collector / desktop strict Clippy 和 fmt 通过。Win10 实际 native watcher（轮询设到 1 小时以区分）、无 watcher 轮询、启动 / 唤醒、601 行跨读取 / 登记批次、未结束末行重开数据库续读、认领等待、整组依赖等待 / 失败后续读、读取中再次改写及发布后的真实 source_scan 确认。全部合成日志，不读用户 Home / auth.json，不测性能；人工窗口、Win11、多屏、真实格式覆盖及归档 / 替换交错组合继续验收。

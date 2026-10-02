@@ -83,7 +83,7 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await wait(()=>document.querySelector('.mini-quota')?.textContent.includes('未连接'));
       if(document.querySelector('.mini-tokens')?.textContent!=='—' || document.querySelector('.mini-quota')?.textContent.includes('0%'))throw new Error('UNKNOWN_VALUES_REPLACED');
       if(document.querySelector('.mini-cost')?.textContent.includes('$0.00'))throw new Error('UNKNOWN_COST_ZERO');
-      for(const command of ['get_sources','get_price_rules','set_display_theme','perform_window_action']) {
+      for(const command of ['get_sources','get_rebuild_status','get_price_rules','set_display_theme','perform_window_action']) {
         let denied=false;try{await invoke(command,{requestId:'mini-denied',action:'quit',revision:null,request:{theme:'light',expected_settings_revision:'13'}});}catch{denied=true;}
         if(!denied)throw new Error('MINI_PERMISSION_TOO_BROAD');
       }
@@ -126,6 +126,8 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       document.querySelector('button[aria-label="小窗隐私模式"]').click();
       await wait(()=>document.querySelector('button[aria-label="小窗隐私模式"]')?.getAttribute('aria-pressed')==='true');
       await wait(()=>document.querySelector('.mini-cost')?.textContent.includes('已隐藏'));
+      // Privacy hides optimistically; wait for the settings write before checking the persisted DTO.
+      await wait(()=>!document.querySelector('button[aria-label="小窗隐私模式"]')?.disabled);
       const s=await invoke('get_display_settings',{requestId:'mini-private-read'});
       if(!s.data.preferences.privacy || !s.display_policy.privacy)throw new Error('SHARED_PRIVACY_NOT_COMMITTED');
     "#,
@@ -147,6 +149,7 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await wait(()=>!document.querySelector('button[aria-label="小窗隐私模式"]')?.disabled);
       document.querySelector('button[aria-label="小窗隐私模式"]').click();
       await wait(()=>document.querySelector('button[aria-label="小窗隐私模式"]')?.getAttribute('aria-pressed')==='false');
+      await wait(()=>!document.querySelector('button[aria-label="隐藏小窗"]')?.disabled);
       document.querySelector('button[aria-label="隐藏小窗"]').click();
     "#,
     )?;

@@ -96,6 +96,17 @@ pub async fn get_job(
     Ok(PrivateResponse::new(request_id, job, state.privacy.clone()))
 }
 #[tauri::command]
+pub async fn get_rebuild_status(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request_id: String,
+) -> Result<PrivateResponse<Option<Job>>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    let db = db(&state, &request_id)?;
+    let job = blocking(&request_id, move || db.rebuild_status()).await?;
+    Ok(PrivateResponse::new(request_id, job, state.privacy.clone()))
+}
+#[tauri::command]
 pub async fn cancel_job(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,

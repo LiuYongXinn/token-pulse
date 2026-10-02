@@ -63,6 +63,44 @@ fn canonical_requests_are_durable_and_conflicting_keys_are_rejected() {
     assert_eq!(db.list_jobs(100).unwrap().len(), 1);
     assert_eq!(db.list_jobs(101).unwrap_err().code, ErrorCode::InvalidQuery);
 }
+
+#[test]
+fn basic_rebuild_status_does_not_lose_old_active_work_behind_new_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Database::open(dir.path()).unwrap();
+    assert!(db.rebuild_status().unwrap().is_none());
+    db.create_job("active".into(), request("active"), 1)
+        .unwrap();
+    advance(&db, "active", JobState::Queued, JobState::Running).unwrap();
+    db.create_job("next".into(), request("next"), 3).unwrap();
+    for index in 0..55 {
+        let id = format!("history-{index}");
+        db.create_job(id.clone(), request(&id), 10 + index).unwrap();
+        db.cancel_job(id, 100 + index).unwrap();
+    }
+    assert!(
+        db.list_jobs(50)
+            .unwrap()
+            .iter()
+            .all(|job| job.job_id != "active")
+    );
+    assert_eq!(db.rebuild_status().unwrap().unwrap().job_id, "active");
+    db.cancel_job("active".into(), 200).unwrap();
+    assert_eq!(
+        db.rebuild_status().unwrap().unwrap().state,
+        JobState::Cancelling
+    );
+    advance(&db, "active", JobState::Cancelling, JobState::Cancelled).unwrap();
+    assert_eq!(db.rebuild_status().unwrap().unwrap().job_id, "next");
+    db.cancel_job("next".into(), 300).unwrap();
+    let mut other = request("unrelated");
+    other.kind = JobKind::Import;
+    db.create_job("unrelated".into(), other, 400).unwrap();
+    let result = db.rebuild_status().unwrap().unwrap();
+    assert_eq!(result.job_id, "next");
+    assert_eq!(result.state, JobState::Cancelled);
+    assert_eq!(result.error.unwrap().code, ErrorCode::JobCancelled);
+}
 #[test]
 fn queued_cancel_is_final_and_running_cancel_waits_for_safe_boundary() {
     let dir = tempfile::tempdir().unwrap();

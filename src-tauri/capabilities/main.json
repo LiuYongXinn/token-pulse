@@ -32,6 +32,7 @@
     "allow-start-job",
     "allow-get-job",
     "allow-list-jobs",
+    "allow-get-rebuild-status",
     "allow-cancel-job",
     "allow-get-context-snapshot",
     "allow-get-price-rules",

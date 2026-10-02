@@ -106,6 +106,7 @@ export function getSources(): Promise<SourcesSnapshot> { return request('get_sou
 export function chooseSourceDirectory(kind: SourceDirectoryKind): Promise<SourceDirectorySelection | null> { return request('choose_source_directory', { kind }); }
 export function manageSource(action: ManageSourceAction, expectedSettingsRevision: string): Promise<SourcesSnapshot> { return request('manage_source', { action, expectedSettingsRevision }); }
 export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit: 50 }); }
+export function getRebuildStatus(): Promise<Job | null> { return request('get_rebuild_status'); }
 export function startJob(jobRequest: JobRequest): Promise<Job> { return request('start_job', { request: jobRequest }); }
 export function cancelJob(jobId: string): Promise<CancelJobResult> { return request('cancel_job', { jobId }); }
 export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }

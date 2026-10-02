@@ -140,6 +140,9 @@ range 左闭右开，start < end；时区必须合法 IANA 名称。ids 数量�
 |`get_price_rules`|revision 或当前、分页|规则版本、来源、匹配与生效时间|
 |`get_offline_price_catalog`|revision 或当前；main-only|OfflinePriceCatalogSnapshot，固定价格修订的事实目录或 null|
 |`get_job` / `list_jobs`|job_id / 状态与分页|持久进度与明确最终状态|
+|`get_rebuild_status`|request_id；main-only|`Job|null`；当前执行中、最早排队、否则最近重建结果，只返回一条|
+
+M10d1：正式诊断 UI 使用 `get_sources` 与 `get_rebuild_status`，不请求完整作业历史。重建状态在同一只读 SQLite 快照中先选择执行中作业，再选择最早 queued，均不存在时按 updated_at_ms 选最近终态；不受最近 50 条历史列表截断影响，也不返回其他 kind 的作业。null 表示没有重建记录，请求失败保持不可用 / 上次状态，不伪装成 null；复用精确十进制进度和 Job DTO，前端只展示状态、更新时间、文件 / 字节进度和可取消操作。旧 list / get 内部能力保持，mini 不获新命令权限，序列化沿用最新共享隐私策略。文件级必要错误定位仍需后续受限查询，不将设计表中的 `query_diagnostics` 当作已注册能力。
 
 M09g1b：目录请求 `{ revision: string|null, request_id }` 使用十进制修订；只读实际 SQLite 快照固定当前或已发布历史版本，不接受超前修订。`OfflinePriceCatalogSnapshot { price_revision, catalog|null }` 的目录含 format_version、catalog_id、verified_at_ms、provider、currency、short_context_max_input、reference_basis 和 entries；条目含确切模型、处理模式、上下文档位、四种精确每百万单价及官方来源。可空单价保留 null。目录无写入 IPC，使用内嵌正式事实；共享隐私在序列化时将 catalog 清空，前端同时受显示策略与请求代次门禁。价格设置页固定 get_price_rules 返回的版本读取目录，独立失败重试不会阻止自定义规则编辑。
 

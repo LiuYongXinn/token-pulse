@@ -101,6 +101,8 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     && Array.isArray(sources.data.sources) && typeof sources.data.settings_revision === 'string';
                 const jobs=await invoke('list_jobs',{requestId:'native-smoke-jobs',limit:20});
                 ok=ok && jobs.api_version===1 && jobs.request_id==='native-smoke-jobs' && Array.isArray(jobs.data) && jobs.data.length===0;
+                const rebuild=await invoke('get_rebuild_status',{requestId:'native-smoke-rebuild-status'});
+                ok=ok && rebuild.api_version===1 && rebuild.request_id==='native-smoke-rebuild-status' && rebuild.data===null;
                 const context=await invoke('get_context_snapshot',{requestId:'native-smoke-context',sessionKey:'native-probe-context'});
                 ok=ok && context.api_version===1 && context.request_id==='native-smoke-context'
                     && context.data.context_tokens===null && context.data.model_context_window===null
@@ -395,10 +397,13 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 await waitFor(()=>document.querySelector('section[aria-label="项目统计汇总"]'));
                 ok=ok && document.querySelector('.date-range-label')?.textContent==='2024-02-28 — 2024-02-29'
                     && document.querySelector('.price-instant-label')?.textContent==='2024-02-29T00:00:00.123Z';
-
-
-
-
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='采集诊断')?.click();
+                await waitFor(()=>document.querySelector('section[aria-label="来源采集状态"]')?.textContent.includes('尚未配置 Codex Home')
+                    && document.querySelector('.jobs-panel')?.textContent.includes('尚无重建记录'));
+                ok=ok && document.querySelectorAll('.jobs-panel .job-card').length===0
+                    && !document.querySelector('.jobs-panel')?.textContent.includes('作业编号');
+                [...document.querySelectorAll('nav button')].find(button=>button.textContent==='项目')?.click();
+                await waitFor(()=>document.querySelector('section[aria-label="项目统计汇总"]'));
             } catch (error) { ok={error:error instanceof Error ? error.message : error.code ?? 'IPC_REJECTED'}; }
             await invoke('plugin:event|emit', { event: 'native-smoke-ipc', payload: ok });
         })();
@@ -414,6 +419,9 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     if ipc.as_deref() != Ok("true") {
         return Err(format!("WebView native IPC/UI check failed: {ipc:?}"));
     }
+    println!(
+        "NATIVE_DIAGNOSTICS_OK: real main WebView, nullable rebuild status, source and rebuild empty states"
+    );
     let settings_events = settings_receiver.try_iter().collect::<Vec<_>>();
     if settings_events.len() != 12 {
         return Err(format!(

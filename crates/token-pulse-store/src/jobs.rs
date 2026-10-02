@@ -112,6 +112,17 @@ impl Database {
             ids.iter().map(|id| load(tx, id).map(|j| j.job)).collect()
         })
     }
+    /// Basic diagnostic progress: executing first, then next queued, otherwise last result.
+    /// Select before applying any history limit so old active work cannot disappear behind history.
+    pub fn rebuild_status(&self) -> StoreResult<Option<Job>> {
+        self.snapshot(|tx, _| {
+            let id: Option<String> = tx.query_row(
+                "SELECT job_id FROM jobs WHERE kind='rebuild' ORDER BY CASE WHEN state IN ('running','validating','publishing','cancelling') THEN 0 WHEN state='queued' THEN 1 ELSE 2 END, CASE WHEN state IN ('running','validating','publishing','cancelling','queued') THEN created_at_ms END ASC, updated_at_ms DESC, job_id DESC LIMIT 1",
+                [], |r| r.get(0),
+            ).optional()?;
+            id.map(|id| load(tx, &id).map(|value| value.job)).transpose()
+        })
+    }
     pub fn cancel_job(&self, id: String, at_ms: i64) -> StoreResult<CancelJobResult> {
         validate_request_id(&id)?;
         EpochMs::new(at_ms)?;
