@@ -6,6 +6,7 @@
   "bundle": {
     "targets": ["nsis"],
     "externalBin": ["binaries/token-pulse-taskbar-host"],
+    "resources": { "resources/third-party-notices.txt": "THIRD_PARTY_NOTICES.txt" },
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": false },
       "nsis": {

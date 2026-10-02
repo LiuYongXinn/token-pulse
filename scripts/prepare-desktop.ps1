@@ -14,6 +14,8 @@ try {
     if ($desktopTarget -notin @('x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')) {
         throw 'Installer target must be a supported Windows MSVC target.'
     }
+    & node (Join-Path $PSScriptRoot 'generate-third-party-notices.mjs') --target $desktopTarget
+    if ($LASTEXITCODE -ne 0) { throw 'Third-party notices could not be verified.' }
     $desktopProfile = if ($env:TAURI_ENV_DEBUG -eq 'true') { 'debug' } else { 'release' }
     $hostBuildArgs = @('build', '-p', 'token-pulse-taskbar', '--bin', 'token-pulse-taskbar-host')
     if ($desktopProfile -eq 'release') { $hostBuildArgs += '--release' }

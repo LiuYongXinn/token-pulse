@@ -2,3 +2,7 @@
 ui/src/shared/generated/*.ts text eol=lf
 schemas/*.json text eol=lf
 crates/token-pulse-store/migrations/*.sql text eol=lf
+
+# Preserve audited upstream license bytes (including original whitespace) across clones.
+scripts/third-party/*.txt -text -whitespace
+scripts/third-party/sources.json text eol=lf

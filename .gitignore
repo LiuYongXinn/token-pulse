@@ -25,5 +25,7 @@ Desktop.ini
 target/
 src-tauri/gen/
 src-tauri/binaries/
+/src-tauri/resources/third-party-notices.txt
+/src-tauri/resources/third-party-notices.txt.tmp
 playwright-report/
 test-results/

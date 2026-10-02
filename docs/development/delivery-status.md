@@ -2,6 +2,18 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16c：第三方声明与安装包资源
+
+新增按锁文件和目标生成的第三方声明，覆盖 Windows cargo resolve.nodes 中的 327 个 registry 依赖（含构建 / 测试，不声称全部进入运行时）、四个 npm 运行依赖、SQLite amalgamation、NSIS 和安装辅助插件，共 334 项。保留完整 LICENSE / NOTICE / COPYRIGHT / AUTHORS 文本，递归包含 ring 内部 once_cell / fiat 等许可，公开源包精确版本下载地址及 SHA-256；不写入本机绝对路径、账户信息或认证。MPL 依赖给出原版本完整源包入口，SQLite 另取实际 amalgamation 的源声明和版本，不把 Rust wrapper 的 MIT 当作 SQLite 本身许可。NSIS COPYING 包含压缩器条款与原有 LZMA 例外：[NSIS 原文](https://nsis.sourceforge.io/License) / [SQLite 原文](https://www.sqlite.org/copyright.html)。
+
+九个发布 crate 未附顶层完整许可时，采用所记录上游 Git 提交的许可文本；selectors 的实际源码声明指向 MPL 2.0，补入 Mozilla 官方文本。已审查文本在 scripts/third-party 保存来源及哈希，升级到未审查版本不沿用旧文本。安装辅助 DLL 的实际哈希对应官方 nsis_tauri_utils-v0.5.3 发布资产，使用该精确提交的原 MIT 文本；不猜测版本或替换作者声明。生成阶段无网络，使用已安装 / 已获取的锁定依赖；缺许可 / 校验失败 / 未审查来源或安装工具版本则停止准备，首次构建不要求事先存在 NSIS 缓存。
+
+prepare-desktop 在正式打包前生成独立资源，NSIS 映射到安装目录 THIRD_PARTY_NOTICES.txt。生成文件保持忽略，跟踪生成器、审查文本和来源；安装验收脚本增加文件存在 / SHA-256 一致和卸载移除检查，保留原有正式数据 / 注册拒绝门禁。没有新增运行时 CLI、外部工具依赖或 UI 布局变化。
+
+自动五项定向检查通过：目标图过滤 / 递归 vendor notice、未知新包缺正文拒绝、固定文本哈希 / 路径约束、npm 运行依赖与安装版本漂移、十份原文快照完整性。实际当前依赖连续生成相同结果：2,986,262 字节，SHA-256 2dad741130f6a68d7fcf87fba744043a1ba838e9d0cf8bfc846630ee006001e0。PowerShell 解析 / diff 检查通过；完整 NSIS 重建另记录。当前已有正式数据 / 产品位置注册，未重跑干净安装脚本，不以静态脚本断言替代实际安装 / 卸载。真正签名发布 / 完整升级与 Windows 条件继续推进，无性能测试。
+
+完整正式 `npm run tauri:build` 通过，最新 0.1.0 本地 NSIS 包 6,603,716 字节（6.30 MiB），SHA-256 fd29f91b1728f4437022fba72d665af6398c45f7f4f77e302dab8d421797e158。核对最终安装指令 File 包含 THIRD_PARTY_NOTICES.txt / 原生宿主，卸载 Delete 对应声明，原 preinstall 等待钩子保留。最新资源覆盖前一步 6.19 MiB 开发包；仍未配置正式签名公钥 / 发布签名，完整安装和真正升级证据未由重建自动获得。许可快照用 Git -text 保留原字节，防止 Windows 换行转换导致校验在克隆后失败；生成器 / 检查不修改用户原有未提交文件。
+
 ## M16b4：正式软件更新设置页
 
 设置新增软件更新页签并接四项正式 IPC；无演示数据 / 价格。显示当前 / 可用版本、实际成功时间、发布时刻、精确字节、未知长度和有限错误说明。按阶段限制动作；EOF / verifying 没有安装入口，ready 内联确认绑定显示版本 / 精确修订，状态变化后旧确认禁用，正式安装版才允许确认。版本说明以 React 文字显示，未知不显示最新或零。监听先登记后读取，事件仅失效；BigInt 拒绝低修订、独立查询序号与生命周期拒绝迟到结果，隐私 stamp 变化重读公开元数据，离页释放订阅 / 定时读取。

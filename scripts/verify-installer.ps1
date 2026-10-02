@@ -24,6 +24,7 @@ $installDirectory = Join-Path $acceptanceDirectory 'app'
 $appFile = Join-Path $installDirectory 'token-pulse-desktop.exe'
 $hostFile = Join-Path $installDirectory 'token-pulse-taskbar-host.exe'
 $uninstallerFile = Join-Path $installDirectory 'uninstall.exe'
+$noticesFile = Join-Path $installDirectory 'THIRD_PARTY_NOTICES.txt'
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -TypeDefinition @'
@@ -147,11 +148,12 @@ function Exit-ProductionApplication([System.Diagnostics.Process]$Application) {
 $installation = Start-Process -FilePath $Installer -ArgumentList ('/S /D=' + $installDirectory) -WindowStyle Hidden -PassThru
 if (-not $installation.WaitForExit(60000)) { throw 'Installer did not finish within the acceptance deadline.' }
 if ($installation.ExitCode -ne 0) { throw 'NSIS installation failed.' }
-foreach ($artifact in @($appFile, $hostFile, $uninstallerFile)) {
+foreach ($artifact in @($appFile, $hostFile, $uninstallerFile, $noticesFile)) {
     if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) { throw 'Required installed artifact missing.' }
 }
 if (-not [InstallerWindowProbe]::NsIsBinaryMatches((Join-Path $installerRoot 'target\release\token-pulse-desktop.exe'), $appFile)) { throw 'Installed application differs beyond the exact NSIS bundle marker.' }
 if ((Get-FileHash -LiteralPath $hostFile).Hash -ne (Get-FileHash -LiteralPath (Join-Path $installerRoot 'target\release\token-pulse-taskbar-host.exe')).Hash) { throw 'Installed native host differs from the release artifact.' }
+if ((Get-FileHash -LiteralPath $noticesFile).Hash -ne (Get-FileHash -LiteralPath (Join-Path $installerRoot 'src-tauri\resources\third-party-notices.txt')).Hash) { throw 'Installed third-party notices differ from the verified build resource.' }
 $registration = Get-ItemProperty -LiteralPath $uninstallKey
 if ($registration.InstallLocation.Trim('"') -ne $installDirectory -or $registration.DisplayVersion -ne $releaseVersion) {
     throw 'Current-user installation registration mismatch.'
@@ -199,7 +201,7 @@ $registeredUninstaller = (Get-ItemProperty -LiteralPath $uninstallKey).Uninstall
 if ($registeredUninstaller -ne $uninstallerFile) { throw 'Uninstaller ownership changed.' }
 $uninstall = Start-Process -FilePath $uninstallerFile -ArgumentList '/S' -WindowStyle Hidden -PassThru
 if (-not $uninstall.WaitForExit(60000) -or $uninstall.ExitCode -ne 0) { throw 'Uninstaller launch failed.' }
-Wait-InstallerCondition { -not (Test-Path -LiteralPath $appFile) -and -not (Test-Path -LiteralPath $hostFile) -and -not (Test-Path -LiteralPath $uninstallKey) } 'Normal uninstall did not remove binaries and registration.'
+Wait-InstallerCondition { -not (Test-Path -LiteralPath $appFile) -and -not (Test-Path -LiteralPath $hostFile) -and -not (Test-Path -LiteralPath $noticesFile) -and -not (Test-Path -LiteralPath $uninstallKey) } 'Normal uninstall did not remove binaries, notices and registration.'
 if (-not (Test-Path -LiteralPath $databaseFile) -or (Get-FileHash -LiteralPath $databaseFile).Hash -ne $dataHash) { throw 'Normal uninstall changed production data.' }
 if (Get-Process -Name token-pulse-desktop -ErrorAction SilentlyContinue) { throw 'Installed application process remains after normal shutdown.' }
 Write-Host 'INSTALLER_UNINSTALL_OK: installed files and registration removed; production SQLite retained unchanged'

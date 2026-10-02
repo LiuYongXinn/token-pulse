@@ -1,5 +1,15 @@
 # 本地开发与运行
 
+## 第三方声明生成与打包
+
+`npm run notices` 为本地 x64 Windows 生成 src-tauri/resources/third-party-notices.txt；其他已支持的 MSVC 目标由 prepare-desktop 传入实际 target。需锁定 npm 依赖和已获取的 Cargo registry 源，生成器调用 cargo metadata --locked --offline，只读取依赖 / 审查许可文本，不读账户或来源日志。默认正式 `npm run tauri:build` 自动生成，并由 NSIS 放到安装目录 THIRD_PARTY_NOTICES.txt；普通运行无需 Node / Cargo / 编译器。此生成文件忽略，源码跟踪生成器及 scripts/third-party 的十份审查原文 / SHA-256 / 来源。
+
+2026-10-03 完整 NSIS 重建通过，最新 0.1.0 本地包 6,603,716 字节（6.30 MiB），已包含声明资源及正常卸载指令。SHA-256 fd29f91b1728f4437022fba72d665af6398c45f7f4f77e302dab8d421797e158；仍无正式更新公钥 / 发布签名，不替代实际干净安装或更新。原文快照在 .gitattributes 标为 -text，保持不同 Git 换行设置下的原字节 / 哈希。
+
+`node --test scripts/third-party-notices.test.mjs` 为五项必要校验，覆盖缺正文 / 未审查版本拒绝、源文本完整性、目标图 / npm 运行依赖和 vendor 声明。当前生成覆盖 334 项：327 Rust Windows 图含构建 / 测试、四前端运行依赖和 SQLite / NSIS / helper 三项；并非都实际链接进运行时。重复生成字节一致。新依赖缺许可正文、缓存工具变化或锁版本变化必须补齐上游原文 / 审查来源，不能用 generic MIT 代替作者许可。NSIS / helper 当前审查为 3.11 / 0.5.3，首次构建不要求旧缓存，已有缓存则验证。
+
+verify-installer 检查已安装声明与准备资源的哈希相同，普通卸载移除声明同时保留 SQLite。必须满足原有干净配置条件才运行；已有正式数据或注册时保持拒绝，不为声明验证覆盖它们。完整构建与生成安装脚本可以验证资源进入打包指令，但不能替代实际安装 / 卸载。正式发布公钥 / 签名及实际更新仍待外部发布条件，无性能测试。
+
 ## 软件更新 UI 验证
 
 2026-10-03 接入更新 UI / 原生提供方 / 安装退出钩子后，`npm run tauri:build` 完整重建通过；本地最新 0.1.0 NSIS 包为 6,493,332 字节（6.19 MiB），替换原早期 5.22 MiB 开发产物。最新包尚无正式发布公钥 / 签名，不能当作真实自动升级就绪。生成脚本已核对 update-hooks 在占用检查前执行，宿主仍 externalBin 同目标打包；此前 M16a 安装记录不自动适用于新包，需要另在干净配置验收，不覆盖当前正式数据或安装注册。
