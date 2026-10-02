@@ -81,8 +81,26 @@ pub async fn choose_account_service(
         .map_err(|error| Box::new(AppError::new(error.code, request_id.clone())))?;
     let selections = state.quota_selections.clone();
     let privacy = state.privacy.clone();
+    #[cfg(all(debug_assertions, windows))]
+    let fixture_home = if std::env::args().any(|a| a == "--native-smoke")
+        && std::env::args().any(|a| a == "--native-account-dialogs-smoke")
+        && state
+            .data_directory
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("native-probe-"))
+    {
+        Some(state.data_directory.join("synthetic-account-dialog-home"))
+    } else {
+        None
+    };
     let result = tauri::async_runtime::spawn_blocking(
         move || -> Result<Option<AccountServiceSelection>, ErrorCode> {
+            #[cfg(all(debug_assertions, windows))]
+            if fixture_home.is_some()
+                && matches!(request.kind, AccountServiceSelectionKind::DetectLocal)
+            {
+                return Err(ErrorCode::PermissionDenied);
+            }
             let (preferences, revision) = db.account_service_preferences().map_err(|e| e.code)?;
             if revision != request.expected_settings_revision {
                 return Err(ErrorCode::RevisionConflict);
@@ -150,6 +168,22 @@ pub async fn choose_account_service(
                         )
                     }
                 };
+                #[cfg(all(debug_assertions, windows))]
+                if let Some(expected_home) = fixture_home {
+                    let expected = expected_home
+                        .canonicalize()
+                        .map_err(|_| ErrorCode::PermissionDenied)?;
+                    if exe
+                        .canonicalize()
+                        .map_err(|_| ErrorCode::PermissionDenied)?
+                        != expected.join("synthetic-codex.exe")
+                        || home.as_ref().is_some_and(|home| {
+                            home.canonicalize().ok().as_ref() != Some(&expected)
+                        })
+                    {
+                        return Err(ErrorCode::PermissionDenied);
+                    }
+                }
                 NativeService::inspect(&exe, home.as_deref())?
             };
             if !matches!(

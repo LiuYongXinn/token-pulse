@@ -2,6 +2,16 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M12m：真实账户程序Home选择与普通连接流程
+
+新增显式 `native-smoke.ps1 -AccountDialogs`，复用有界自有 Windows Common Item Dialog 驱动，分别核对程序 / Home 的准确标题、应用 PID、可见原生控件类别 / ID、输入值及关闭。实际程序选择器 Edit / ComboBox 使用 1148，文件夹选择器使用 1152；不以 Shell 列表项或泛化 UI Automation 角色代替定位。失败仅记录有限错误码和最多十二个控件类别 / 数字 ID，不输出路径 / 控件文字。驱动保持隐藏、等待 / 回收自有辅助进程，不发送全局输入。
+
+UUID native-probe 隔离库中的 synthetic-account-dialog-home / synthetic-codex.exe 是唯一允许目标；正式选择回调在 inspect / 程序指纹读取及能力签发之前校验 canonical 目标，显式场景也拒绝本地检测。实际 UI 未注入任何选择能力：取消程序选择保持未配置 / 修订；选择程序产生带 SHA 的草稿；取消 Home 选择保留原草稿；选择 Home 保留程序指纹；保存才推进持久配置，保存前后服务未启动。点击连接后实际合成 stdio 服务返回 ready / 75% / 五小时周期并由 React 显示；点击刷新走正式限流逻辑，断开清除旧额度 / 成功时间并保留配置修订。
+
+Win10 19045 / 150% 最终四个 `NATIVE_ACCOUNT_DIALOG_STEP_OK` 及 `NATIVE_ACCOUNT_DIALOGS_OK` 退出 0，原始 fixture-mode 和程序字节一致，测试结束应用 / 宿主 / 合成服务进程数量 0。这里验证实际 Windows 选择器和 WebView 的程序化交互，不等同物理输入，也不替代真实账户 / Win11 条件。刷新检查允许正式限流返回，只证明真实刷新入口和连接保持，不宣称本轮额外网络刷新成功。既有真实账户读取证据仍见账户专题。WebView2 注销 1412 提示继续保留。
+
+初轮文件选择器没有找到 1152；只读观测控件类别 / ID 后改为文件框的 1148。后续断开断言误将保留的空布局容器判为旧额度，改为核对零条窗口与权威 disconnected DTO。失败轮次没有计成功或放宽额度 / 修订 / 未启动服务断言。最终来源选择器完整回归也退出 0，17 Token / 未知 null / 未计价 / 源只读仍一致；四项账户页面 Playwright、desktop all-targets strict Clippy / release check / fmt 通过。PowerShell 解析 / diff 检查随提交复核，无性能测试。notify 选择流程继续独立推进，未重新打包安装器。
+
 ## M06g：真实文件夹选择与来源普通流程
 
 新增显式 `native-smoke.ps1 -SourceDialogs`，使用 UUID native-probe 隔离库及自有合成 Home，从实际 React 设置按钮打开正式 `choose_source_directory` 的 Windows Common Item Dialog；取消返回 null，不增加来源或推进配置。选择通过实际原生 Edit / Button 控件消息完成，核对应用 PID、精确对话框标题、控件类别 / ID、输入值及对话框关闭。辅助进程只操作本测试的窗口、不发送全局输入，失败尝试关闭自己的对话框，父端只收有限错误码，并等待 / 收集自己的辅助进程；不依赖真实账户或生产数据。

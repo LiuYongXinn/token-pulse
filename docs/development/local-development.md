@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+## Windows 账户程序 / Home 选择器验收
+
+先 `npm run build`，再执行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -AccountDialogs`。脚本构建合成 quota-fixture 和 debug 桌面应用，不构建任务栏宿主；实际 React 设置按钮打开正式程序 / 文件夹选择器，不注入能力句柄。仅显式 native-smoke、开发应用身份及 UUID native-probe 隔离库允许；canonical 目标必须属于本次 synthetic-account-dialog-home，其他选择在 inspect / 签发前拒绝。默认入口不会检测或连接真实账户。
+
+Win10 19045 / 150% 已通过四个取消 / 选择步骤、草稿保持、保存不启动、连接 / 75% 实际 DTO 渲染、受限刷新、断开清空并保留配置及源字节检查，NATIVE_ACCOUNT_DIALOGS_OK / 退出 0。既有来源选择器回归也通过。此为实际系统控件的程序化交互，物理输入 / Win11 分别验收；1412 提示保留，无性能测试。自动页面检查：`npx playwright test tests/ui/account-service.spec.ts` 四项通过。详情见[账户验证](account-quota-verification.md#m12m真实程序home选择器与普通连接流程)。此步骤未重新打包既有安装器。
+
 ## Windows 来源选择器验收
 
 先 `npm run build`，再运行 `pwsh -NoProfile -File scripts/native-smoke.ps1 -SourceDialogs`。仅 debug、显式 native-smoke 及 UUID native-probe 数据目录可运行；辅助脚本打开并操作测试进程自己的真实 Windows 文件夹选择器，取消 / 输入 / 确认后检查 React 来源管理和只读后台导入。控件定位核对 PID / 标题 / 类别 / ID，使用有界原生消息，不进行全局输入、抢其他进程焦点或操作其他窗口。误选路径在正式回调签发句柄之前必须拒绝，源码中这一限制仅用于本显式验收场景。

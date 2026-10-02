@@ -73,3 +73,9 @@ Win10 19045 实际进程输出 LocalSeed / LocalReady 两阶段 COLD_OK、EXISTI
 Win10 19045 实际完整场景两轮成功；最终必须有 NATIVE_TASKBAR_EXISTING_ACCOUNT_OK、LocalTaskbar COLD_OK / EXISTING_COLD_SEQUENCE_OK 与退出 0。新增场景门禁检查后 scene 共 3 项、taskbar details 8 / wire 13 项、desktop strict Clippy / release check / fmt / diff 通过。M12k 的响应边界修复与此验收分开提交；首次探针使用了错误的隐私戳字段，随后核对真实 DTO 才完成修复，失败不计成功证据。WebView2 注销 1412 保留。
 
 这是真实主端 / 独立原生宿主 / 当前账户的第三入口及任务栏可见时刷新证据；详情入口使用自有 WM_SETFOCUS，不能替代真实键盘焦点、物理悬停 / 点击、可访问性或截图像素检查。真实账户通知 / 身份变化、登录过期 / 实际重置、完整 Explorer 生命周期、实际拥挤 / 自动隐藏、Windows 11 / 物理多屏 / DPI 仍保留。未运行性能测试；M14 与迁移保护取消范围不变。
+
+## M12m：真实程序Home选择器与普通连接流程
+
+显式 `pwsh -NoProfile -File scripts/native-smoke.ps1 -AccountDialogs` 从实际设置按钮打开真实 Windows 程序 / 文件夹选择器，不注入选择句柄。应用与驱动仅允许本次 UUID 隔离目录中的合成程序 / Home，回调在 inspect / 能力签发之前拒绝其他目标。程序取消保持未配置修订，选择产生带 SHA 草稿；Home 取消保留草稿，选择保留程序指纹。保存前后没有启动服务，点击连接才启动自有合成 stdio 子进程；正式 React 显示 ready / 75% / 五小时周期。刷新走正式限流返回，断开清空窗口和成功时间、保留已保存配置。源程序 / fixture-mode 字节未变。
+
+Win10 19045 / 150% 四个 STEP_OK 和 ACCOUNT_DIALOGS_OK 退出 0，结束应用 / 宿主 / 合成服务数量 0；来源选择器完整回归、账户页面四项 Playwright、desktop strict Clippy / release / fmt 通过。首次文件框控件与文件夹控件 ID 不同及断开空容器误判各自修正后重跑，不计失败轮为通过。真实系统控件通过程序化消息操作，未证明物理输入 / Win11。合成账户不代替既有 M12i / M12j / M12l 真实账户证据；本轮不声称实际网络刷新成功。WebView2 1412 保留，未运行性能测试、未重新打包。

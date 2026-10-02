@@ -1,4 +1,4 @@
-param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs)
+param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -10,7 +10,7 @@ if (-not ($Notify -or $Updates -or $SourceDialogs)) {
 }
 & cargo build -p token-pulse-desktop --features custom-protocol
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-if (-not ($Notify -or $Updates -or $SourceDialogs)) {
+if (-not ($Notify -or $Updates -or $SourceDialogs -or $AccountDialogs)) {
     & cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
@@ -25,5 +25,6 @@ if ($RecoveryRoutes) { $probeArgs += '--native-recovery-routes-smoke' }
 if ($Notify) { $probeArgs += '--native-notify-smoke' }
 if ($Updates) { $probeArgs += '--native-updates-smoke' }
 if ($SourceDialogs) { $probeArgs += '--native-source-dialogs-smoke' }
+if ($AccountDialogs) { $probeArgs += '--native-account-dialogs-smoke' }
 & (Join-Path $PSScriptRoot '..\target\debug\token-pulse-desktop.exe') @probeArgs
 exit $LASTEXITCODE

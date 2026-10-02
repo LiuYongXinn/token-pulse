@@ -1,7 +1,7 @@
 //! Explicit own-home acceptance through the real Windows folder dialog and actual React UI.
+use super::native_dialog_driver::DialogDriver;
 use std::{
     fs,
-    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
 use tauri::Manager;
@@ -18,76 +18,6 @@ pub fn start(app: tauri::AppHandle) {
         }
         app.exit(if result.is_ok() { 0 } else { 1 });
     });
-}
-struct DialogDriver(Child);
-impl DialogDriver {
-    fn start(action: &str, folder: &std::path::Path) -> Result<Self, String> {
-        use std::os::windows::process::CommandExt;
-        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .ok_or("repository missing")?
-            .join("scripts/native-source-dialog-driver.ps1");
-        let child = Command::new("pwsh.exe")
-            .args(["-NoProfile", "-NonInteractive", "-File"])
-            .arg(script)
-            .args([
-                "-ApplicationId",
-                &std::process::id().to_string(),
-                "-Action",
-                action,
-                "-Folder",
-            ])
-            .arg(folder)
-            .creation_flags(0x0800_0000)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|_| "owned dialog driver could not start")?;
-        Ok(Self(child))
-    }
-    fn finish(&mut self) -> Result<(), String> {
-        let deadline = Instant::now() + Duration::from_secs(25);
-        while Instant::now() < deadline {
-            if let Some(status) = self.0.try_wait().map_err(|_| "dialog driver wait failed")? {
-                let mut diagnostics = String::new();
-                if let Some(mut error) = self.0.stderr.take() {
-                    use std::io::Read;
-                    let _ = error.read_to_string(&mut diagnostics);
-                }
-                return if status.success() {
-                    Ok(())
-                } else {
-                    let code = [
-                        "DIALOG_NOT_FOUND",
-                        "DIALOG_PATH_FIELD_MISSING",
-                        "DIALOG_PATH_VALUE_MISSING",
-                        "DIALOG_ACTION_MISSING",
-                        "DIALOG_API_FAILED",
-                        "DIALOG_NOT_CLOSED",
-                        "DIALOG_ACTION_TYPE_INVALID",
-                        "DIALOG_AMBIGUOUS_CONTROL",
-                        "DIALOG_PATH_SET_FAILED",
-                        "DIALOG_ACTION_FAILED",
-                    ]
-                    .into_iter()
-                    .find(|code| diagnostics.contains(code))
-                    .unwrap_or("DIALOG_DRIVER_START_FAILED");
-                    Err(format!("owned dialog driver rejected scene: {code}"))
-                };
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        Err("owned dialog driver deadline".into())
-    }
-}
-impl Drop for DialogDriver {
-    fn drop(&mut self) {
-        if matches!(self.0.try_wait(), Ok(None)) {
-            let _ = self.0.kill();
-        }
-        let _ = self.0.wait();
-    }
 }
 fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<super::RuntimeState>();
@@ -125,7 +55,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     "#,
     )?;
     for action in ["cancel", "select"] {
-        let mut driver = DialogDriver::start(action, &folder)?;
+        let mut driver = DialogDriver::start("source", action, &folder)?;
         let scene = super::mini_smoke::evaluate_with_timeout(
             app,
             &main,
