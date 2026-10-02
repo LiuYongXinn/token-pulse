@@ -103,6 +103,7 @@ export async function onPriceRulesChanged(refresh: () => void): Promise<() => vo
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getSources(): Promise<SourcesSnapshot> { return request('get_sources'); }
+export function queryDiagnostics(sourceId: string | null): Promise<import('./generated/contracts').DiagnosticsSnapshot> { return request('query_diagnostics', { request: { source_id: sourceId } }); }
 export function chooseSourceDirectory(kind: SourceDirectoryKind): Promise<SourceDirectorySelection | null> { return request('choose_source_directory', { kind }); }
 export function manageSource(action: ManageSourceAction, expectedSettingsRevision: string): Promise<SourcesSnapshot> { return request('manage_source', { action, expectedSettingsRevision }); }
 export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit: 50 }); }

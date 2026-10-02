@@ -142,6 +142,10 @@ range 左闭右开，start < end；时区必须合法 IANA 名称。ids 数量�
 |`get_job` / `list_jobs`|job_id / 状态与分页|持久进度与明确最终状态|
 |`get_rebuild_status`|request_id；main-only|`Job|null`；当前执行中、最早排队、否则最近重建结果，只返回一条|
 
+M10d2 注册正式 `query_diagnostics`：请求 `{ request: { source_id: string|null }, request_id }`，null 为全部，非空必须匹配已保存来源；不接受任意路径、时间 / 历史游标或原文参数。`DiagnosticsSnapshot { data_revision, issues, has_more }` 在同一只读快照选择当前保存的问题；每来源 / 位置 / 类别 / 错误码只返回一处最近代表位置，最多 20 处，额外一处仅决定 has_more。`DiagnosticIssue { issue_id, source_id|null, kind, code|null, path|null, byte_offset|null }` 的 issue_id 为受控来源类别与内部标识的 SHA-256，偏移为精确十进制；不存在的位置 / 错误码保持 null。kind 限定日志格式 / 用量记录、未确认用量、未归属累计段、缺失文件和目录核对。没有诊断原文、metadata / 继承 evidence、事件载荷或向量字段。
+
+只选择未解决诊断和当前指针选定物理代次、活动账本的 pending / unattributed；候选、退役、未选定代次、历史账本及 inherited / duplicate 排除。缺失文件仍保留已保存事实与原位置；启用且根目录匹配的当前扫描错误使用来源根位置，不制造文件偏移。最新共享隐私在序列化时隐藏已知 path，null 仍为 null，mini 没有命令权限。正式 UI 接入来源筛选、代表位置、精确偏移和失败保留 / 旧响应丢弃；M10d1 的文件级接口待实现说明为历史阶段。
+
 M10d1：正式诊断 UI 使用 `get_sources` 与 `get_rebuild_status`，不请求完整作业历史。重建状态在同一只读 SQLite 快照中先选择执行中作业，再选择最早 queued，均不存在时按 updated_at_ms 选最近终态；不受最近 50 条历史列表截断影响，也不返回其他 kind 的作业。null 表示没有重建记录，请求失败保持不可用 / 上次状态，不伪装成 null；复用精确十进制进度和 Job DTO，前端只展示状态、更新时间、文件 / 字节进度和可取消操作。旧 list / get 内部能力保持，mini 不获新命令权限，序列化沿用最新共享隐私策略。文件级必要错误定位仍需后续受限查询，不将设计表中的 `query_diagnostics` 当作已注册能力。
 
 M09g1b：目录请求 `{ revision: string|null, request_id }` 使用十进制修订；只读实际 SQLite 快照固定当前或已发布历史版本，不接受超前修订。`OfflinePriceCatalogSnapshot { price_revision, catalog|null }` 的目录含 format_version、catalog_id、verified_at_ms、provider、currency、short_context_max_input、reference_basis 和 entries；条目含确切模型、处理模式、上下文档位、四种精确每百万单价及官方来源。可空单价保留 null。目录无写入 IPC，使用内嵌正式事实；共享隐私在序列化时将 catalog 清空，前端同时受显示策略与请求代次门禁。价格设置页固定 get_price_rules 返回的版本读取目录，独立失败重试不会阻止自定义规则编辑。

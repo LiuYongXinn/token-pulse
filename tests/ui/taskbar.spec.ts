@@ -24,6 +24,8 @@ test.beforeEach(async ({ page }) => {
           if (command === 'get_app_status') return response({ version: 'synthetic-taskbar-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'error', storage_error: null, quota: 'not_configured', taskbar: 'not_configured' });
           if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
           if (command === 'list_jobs') return response([]);
+          if (command === 'get_rebuild_status') return response(null);
+          if (command === 'query_diagnostics') return response({data_revision:'1',issues:[],has_more:false});
           if (command === 'get_taskbar_preferences') { if (failRead) throw { code: 'DB_READ_FAILED' }; return response({ preferences: structuredClone(preferences), settings_revision: revision }); }
           if (command === 'get_taskbar_status') return response(structuredClone(status));
           if (command === 'set_taskbar_preferences') {

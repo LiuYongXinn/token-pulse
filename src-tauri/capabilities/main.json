@@ -27,6 +27,7 @@
     "allow-set-mini-scope",
     "allow-perform-window-action",
     "allow-get-sources",
+    "allow-query-diagnostics",
     "allow-choose-source-directory",
     "allow-manage-source",
     "allow-start-job",

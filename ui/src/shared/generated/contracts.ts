@@ -330,6 +330,14 @@ export type JobState = "queued" | "running" | "validating" | "publishing" | "can
 
 export type Job = { job_id: string, kind: JobKind, state: JobState, phase: string, discovered_files: DecimalInt, discovery_complete: boolean, processed_files: DecimalInt, processed_bytes: DecimalInt, accepted_events: DecimalInt, pending_observations: DecimalInt, can_cancel: boolean, error: AppError | null, created_at_ms: EpochMs, updated_at_ms: EpochMs, };
 
+export type DiagnosticsRequest = { source_id: string | null, };
+
+export type DiagnosticKind = "log_record" | "unconfirmed_usage" | "unattributed_usage" | "missing_file" | "directory_scan";
+
+export type DiagnosticIssue = { issue_id: string, source_id: string | null, kind: DiagnosticKind, code: ErrorCode | null, path: string | null, byte_offset: DecimalInt | null, };
+
+export type DiagnosticsSnapshot = { data_revision: DecimalInt, issues: Array<DiagnosticIssue>, has_more: boolean, };
+
 export type JobScope = { "kind": "all", } | { "kind": "sources", source_ids: Array<string>, } | { "kind": "sessions", session_keys: Array<string>, };
 
 export type JobRequest = { kind: JobKind, scope: JobScope, request_key: string, };

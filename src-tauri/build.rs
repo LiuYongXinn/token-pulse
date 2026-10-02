@@ -29,6 +29,7 @@ fn main() {
             "perform_window_action",
             "mini_window_action",
             "get_sources",
+            "query_diagnostics",
             "choose_source_directory",
             "manage_source",
             "start_job",

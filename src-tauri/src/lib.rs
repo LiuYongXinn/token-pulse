@@ -245,6 +245,7 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                if std::env::args().any(|arg|arg=="--native-diagnostics-smoke") {diagnostics_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg|arg=="--native-price-revalue-smoke") {price_revalue_smoke::start(app.handle().clone());return Ok(());}
                 if std::env::args().any(|arg| arg == "--native-offline-prices-smoke") {
                     offline_prices_smoke::start(app.handle().clone());
@@ -278,7 +279,7 @@ pub fn run() {
                 quota_commands::update_native_visibility(window);
             }
         })
-        .invoke_handler(tauri::generate_handler![navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::get_rebuild_status,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,revalue_commands::get_price_revalue_status,revalue_commands::start_price_revalue,revalue_commands::cancel_price_revalue,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::query_diagnostics,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::get_job,job_commands::list_jobs,job_commands::get_rebuild_status,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,revalue_commands::get_price_revalue_status,revalue_commands::start_price_revalue,revalue_commands::cancel_price_revalue,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let context = tauri::generate_context!();
     #[cfg(debug_assertions)]
     let context = {
@@ -341,6 +342,8 @@ pub fn run() {
         });
 }
 
+#[cfg(debug_assertions)]
+mod diagnostics_smoke;
 mod job_commands;
 mod mini_commands;
 mod mini_opacity;

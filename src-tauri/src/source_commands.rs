@@ -6,6 +6,7 @@ use std::{
 use tauri::{Manager, State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use token_pulse_core::{
+    diagnostics::{DiagnosticsRequest, DiagnosticsSnapshot},
     error::{AppError, ErrorCode},
     numeric::DecimalInt,
     privacy::PrivateResponse,
@@ -45,6 +46,32 @@ pub async fn get_sources(
     Ok(PrivateResponse::new(
         request_id,
         snapshot,
+        state.privacy.clone(),
+    ))
+}
+#[tauri::command]
+pub async fn query_diagnostics(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: DiagnosticsRequest,
+    request_id: String,
+) -> Result<PrivateResponse<DiagnosticsSnapshot>, Box<AppError>> {
+    authorized(&window, &request_id)?;
+    request
+        .validate()
+        .map_err(|code| Box::new(AppError::new(code, request_id.clone())))?;
+    let db = state
+        .database
+        .as_ref()
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?
+        .clone();
+    let result = tauri::async_runtime::spawn_blocking(move || db.diagnostics(&request))
+        .await
+        .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    Ok(PrivateResponse::new(
+        request_id,
+        result,
         state.privacy.clone(),
     ))
 }

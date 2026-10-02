@@ -10,6 +10,7 @@ test('synthetic job IPC fixture shows accepted cancellation until final state an
       const response=(data:unknown)=>({api_version:1,request_id:args.requestId,display_policy:{settings_revision:'1',privacy:false},data});
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if(command==='get_app_status')return response({version:'synthetic-test',development:true,data_directory:'synthetic-test',collector:'ready',storage:'ready',storage_error:null,quota:'not_configured',taskbar:'not_implemented'});
+      if(command==='query_diagnostics')return response({data_revision:'1',issues:[],has_more:false});
       if(command==='get_rebuild_status')return response(structuredClone(jobs[0]??null));
       if(command==='get_sources')return response({settings_revision:'1',sources:[]});
       if(command==='get_taskbar_status')return response({revision:'0',state:'disabled',applied_settings_revision:null,issue:null,error:null,compact:null,fallback_visible:null,fallback_error:null,action_error:null,last_cleanup:null,last_snapshot_at_ms:null});
@@ -48,6 +49,7 @@ test('basic diagnostics show source failures, unknown scan times and one rebuild
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic', development: true, data_directory: 'synthetic', collector: 'error', storage: 'ready', storage_error: null, quota: 'ready', taskbar: 'not_implemented' });
       if (command === 'get_sources') { if (failRead) throw { code: 'SOURCE_UNREADABLE' }; return response({ settings_revision: String(revision), sources: [{ ...source }] }); }
+      if (command === 'query_diagnostics') return response({data_revision:'1',issues:[],has_more:false});
       if (command === 'get_rebuild_status') { if (failProgress) throw { code: 'DB_CORRUPT' }; return response({ ...job }); }
       if (command === 'get_taskbar_status') return response({ revision: '0', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, action_error: null, last_cleanup: null, last_snapshot_at_ms: null });
       if (command === 'manage_source') {

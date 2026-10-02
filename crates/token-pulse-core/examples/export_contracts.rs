@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 use token_pulse_core::calendar::{
     CalendarBucket, CalendarSelection, CalendarSelectionRequest, CalendarSelectionResult, Grain,
 };
+use token_pulse_core::diagnostics::*;
 use token_pulse_core::jobs::*;
 use token_pulse_core::mini::*;
 use token_pulse_core::pricing::offline::*;
@@ -197,6 +198,10 @@ fn main() {
         JobKind,
         JobState,
         Job,
+        DiagnosticsRequest,
+        DiagnosticKind,
+        DiagnosticIssue,
+        DiagnosticsSnapshot,
         JobScope,
         JobRequest,
         CancelJobResult,

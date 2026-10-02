@@ -2356,6 +2356,280 @@
       "title": "DecimalMoney",
       "type": "string"
     },
+    "DiagnosticIssue": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DiagnosticKind": {
+          "enum": [
+            "log_record",
+            "unconfirmed_usage",
+            "unattributed_usage",
+            "missing_file",
+            "directory_scan"
+          ],
+          "type": "string"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "CANDIDATE_OBSOLETE",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "QUOTA_PROTOCOL_ERROR",
+            "QUOTA_SERVICE_UNAVAILABLE",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "byte_offset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issue_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DiagnosticKind"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "issue_id",
+        "source_id",
+        "kind",
+        "code",
+        "path",
+        "byte_offset"
+      ],
+      "title": "DiagnosticIssue",
+      "type": "object"
+    },
+    "DiagnosticKind": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "log_record",
+        "unconfirmed_usage",
+        "unattributed_usage",
+        "missing_file",
+        "directory_scan"
+      ],
+      "title": "DiagnosticKind",
+      "type": "string"
+    },
+    "DiagnosticsRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "title": "DiagnosticsRequest",
+      "type": "object"
+    },
+    "DiagnosticsSnapshot": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "DiagnosticIssue": {
+          "additionalProperties": false,
+          "properties": {
+            "byte_offset": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "code": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorCode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "issue_id": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/DiagnosticKind"
+            },
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "issue_id",
+            "source_id",
+            "kind",
+            "code",
+            "path",
+            "byte_offset"
+          ],
+          "type": "object"
+        },
+        "DiagnosticKind": {
+          "enum": [
+            "log_record",
+            "unconfirmed_usage",
+            "unattributed_usage",
+            "missing_file",
+            "directory_scan"
+          ],
+          "type": "string"
+        },
+        "ErrorCode": {
+          "enum": [
+            "INVALID_QUERY",
+            "UNSUPPORTED_API",
+            "SOURCE_UNREADABLE",
+            "UNSUPPORTED_FORMAT",
+            "UNSUPPORTED_SETTINGS_VERSION",
+            "AMBIGUOUS_USAGE",
+            "CHECKPOINT_CONFLICT",
+            "CANDIDATE_OBSOLETE",
+            "DB_WRITE_FAILED",
+            "DISK_FULL",
+            "DB_CORRUPT",
+            "MIGRATION_FAILED",
+            "SNAPSHOT_EXPIRED",
+            "CURSOR_INVALID",
+            "REVISION_CONFLICT",
+            "STALE_CONFIRMATION",
+            "REQUEST_KEY_CONFLICT",
+            "PRICE_RULE_CONFLICT",
+            "JOB_CANCELLED",
+            "JOB_INTERRUPTED",
+            "QUOTA_DISCONNECTED",
+            "QUOTA_UNSUPPORTED",
+            "QUOTA_TIMEOUT",
+            "QUOTA_AUTH_REQUIRED",
+            "QUOTA_PROTOCOL_ERROR",
+            "QUOTA_SERVICE_UNAVAILABLE",
+            "TASKBAR_UNSUPPORTED",
+            "TASKBAR_NO_SPACE",
+            "TASKBAR_EMBED_FAILED",
+            "NUMERIC_OVERFLOW",
+            "PERMISSION_DENIED",
+            "INVALID_USAGE",
+            "WINDOW_UNAVAILABLE",
+            "SHORTCUT_CONFLICT",
+            "SHORTCUT_UNAVAILABLE"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "data_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticIssue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "data_revision",
+        "issues",
+        "has_more"
+      ],
+      "title": "DiagnosticsSnapshot",
+      "type": "object"
+    },
     "DimensionSelection": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "oneOf": [

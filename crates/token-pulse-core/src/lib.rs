@@ -6,6 +6,7 @@ pub mod accounting;
 pub mod adapter;
 pub mod calendar;
 pub mod canonical;
+pub mod diagnostics;
 pub mod domain;
 pub mod error;
 pub mod jobs;
