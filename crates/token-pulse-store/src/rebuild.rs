@@ -381,13 +381,11 @@ impl Database {
     }
     pub fn fail_rebuild(&self, job_id: String, code: ErrorCode, at_ms: i64) -> StoreResult<()> {
         EpochMs::new(at_ms)?;
-        self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;let job=jobs::load(&tx,&job_id)?;
-            if token_pulse_core::jobs::finished(job.job.state) {return Err(ErrorCode::RevisionConflict.into());}
-            for id in job.checkpoint.candidate_ledger_ids {tx.execute("UPDATE ledger_generations SET state='failed' WHERE ledger_id=?1 AND state='candidate'",[id])?;}
-            let state=if code==ErrorCode::JobCancelled {"cancelled"} else if code==ErrorCode::JobInterrupted {"interrupted"} else {"failed"};
-            tx.execute("UPDATE jobs SET state=?1,error_code=?2,updated_at_ms=?3 WHERE job_id=?4",params![state,code.to_string(),at_ms,job_id])?;
-            crate::file_candidate::rebuild::fail_owned(&tx,Some(&job_id),code,at_ms)?;
-            tx.commit()?;Ok(())
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            fail_in_tx(&tx, &job_id, code, at_ms)?;
+            tx.commit()?;
+            Ok(())
         })
     }
     pub fn validate_candidate(&self, job_id: &str) -> StoreResult<()> {
@@ -402,6 +400,36 @@ impl Database {
         EpochMs::new(at_ms)?;
         self.write(move |conn| publish(conn, &job_id, at_ms, || Ok(())))
     }
+}
+pub(crate) fn fail_in_tx(
+    tx: &Transaction<'_>,
+    job_id: &str,
+    code: ErrorCode,
+    at_ms: i64,
+) -> StoreResult<()> {
+    let job = jobs::load(tx, job_id)?;
+    if token_pulse_core::jobs::finished(job.job.state) {
+        return Err(ErrorCode::RevisionConflict.into());
+    }
+    for id in job.checkpoint.candidate_ledger_ids {
+        tx.execute(
+            "UPDATE ledger_generations SET state='failed' WHERE ledger_id=?1 AND state='candidate'",
+            [id],
+        )?;
+    }
+    let state = if code == ErrorCode::JobCancelled {
+        "cancelled"
+    } else if code == ErrorCode::JobInterrupted {
+        "interrupted"
+    } else {
+        "failed"
+    };
+    tx.execute(
+        "UPDATE jobs SET state=?1,error_code=?2,updated_at_ms=?3 WHERE job_id=?4",
+        params![state, code.to_string(), at_ms, job_id],
+    )?;
+    crate::file_candidate::rebuild::fail_owned(tx, Some(job_id), code, at_ms)?;
+    Ok(())
 }
 fn validate(tx: &Transaction<'_>, m: &RebuildManifest) -> StoreResult<()> {
     for ledger in &m.ledgers {

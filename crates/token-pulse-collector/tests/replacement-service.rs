@@ -359,3 +359,168 @@ fn frozen_dependency_reads_wait_and_resume_after_failure() {
     collector.shutdown();
     jobs.shutdown();
 }
+#[test]
+fn physical_replacement_moved_to_archive_keeps_one_file_and_corrects_old_usage() {
+    for state in ["reading", "ready", "claimed", "failed"] {
+        let (_data, logs, db, path) = setup();
+        collect_file(&db, "source", &path, 1).unwrap();
+        let original_file = db
+            .file_checkpoint("source", path.to_str().unwrap(), None)
+            .unwrap()
+            .unwrap()
+            .file_id;
+        fs::rename(&path, logs.path().join("old-outside-rollouts.jsonl")).unwrap();
+        let mut bytes = log("new", if state == "reading" { 601 } else { 3 }, 8);
+        if state == "reading" {
+            let tail = call(8);
+            bytes.extend(&tail[..tail.len() - 1]);
+        }
+        fs::write(&path, &bytes).unwrap();
+        let read = read_replacement_file(&db, "source", &path, 2).unwrap();
+        let job = if matches!(state, "claimed" | "failed") {
+            Some(
+                db.enqueue_file_candidate_rebuild(
+                    read.generation_id.clone(),
+                    read.checkpoint_revision,
+                    3,
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        };
+        fs::create_dir(logs.path().join("archived_sessions")).unwrap();
+        let archived = logs.path().join("archived_sessions").join("change.jsonl");
+        fs::rename(&path, &archived).unwrap();
+        if state == "reading" {
+            append(&archived, b"\n");
+        }
+        if state == "failed" {
+            assert!(
+                token_pulse_collector::replay::execute_rebuild(
+                    &db,
+                    &job.unwrap().job_id,
+                    || false,
+                    || 4
+                )
+                .is_err()
+            );
+        }
+        let collector = start_collector(&db, false);
+        let jobs = JobService::start(db.clone()).unwrap();
+        let expected = if state == "reading" { "4816" } else { "24" };
+        wait(&db, || complete(&db) && total(&db) == expected);
+        assert_eq!(
+            db.snapshot(|tx, _| Ok(tx.query_row(
+                "SELECT COUNT(*) FROM source_files",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?))
+            .unwrap(),
+            1,
+            "{state}"
+        );
+        let current = db
+            .file_checkpoint("source", archived.to_str().unwrap(), None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.file_id, original_file);
+        if matches!(state, "reading" | "ready") {
+            assert_eq!(current.file_generation_id, read.generation_id);
+        }
+        assert_eq!(
+            fs::read(&archived).unwrap(),
+            if state == "reading" {
+                [bytes.as_slice(), b"\n"].concat()
+            } else {
+                bytes
+            }
+        );
+        collector.shutdown();
+        jobs.shutdown();
+    }
+}
+
+#[test]
+fn native_watcher_relocates_claimed_candidate_before_independent_jobs_restart_it() {
+    use token_pulse_core::{jobs::JobProgress, protocol::JobState};
+    use token_pulse_store::{ErrorCode, jobs::JobAdvance};
+    let (_data, logs, db, path) = setup();
+    collect_file(&db, "source", &path, 1).unwrap();
+    let original = db
+        .file_checkpoint("source", path.to_str().unwrap(), None)
+        .unwrap()
+        .unwrap();
+    fs::rename(&path, logs.path().join("old-outside-rollouts.jsonl")).unwrap();
+    let bytes = log("new", 3, 8);
+    fs::write(&path, &bytes).unwrap();
+    let read = read_replacement_file(&db, "source", &path, 2).unwrap();
+    let job = db
+        .enqueue_file_candidate_rebuild(read.generation_id.clone(), read.checkpoint_revision, 3)
+        .unwrap();
+    db.advance_job(
+        job.job_id.clone(),
+        JobAdvance {
+            expected: JobState::Queued,
+            next: JobState::Running,
+            progress: JobProgress::default(),
+            checkpoint: db.get_job(&job.job_id).unwrap().checkpoint,
+            error: None,
+            at_ms: 4,
+        },
+    )
+    .unwrap();
+    db.register_file_candidate_inputs(read.generation_id.clone(), job.job_id.clone(), -1, 4)
+        .unwrap();
+    db.prepare_rebuild(job.job_id.clone(), 4).unwrap();
+    fs::create_dir(logs.path().join("archived_sessions")).unwrap();
+    let collector = start_collector(&db, true);
+    wait(&db, || {
+        db.snapshot(|tx, _| {
+            Ok(tx.query_row(
+                "SELECT discovery_complete FROM source_scan_state WHERE source_id='source'",
+                [],
+                |r| r.get::<_, bool>(0),
+            )?)
+        })
+        .unwrap_or(false)
+    });
+    assert_eq!(total(&db), "6");
+    let archived = logs.path().join("archived_sessions").join("change.jsonl");
+    fs::rename(&path, &archived).unwrap();
+    // The single-batch API must not create a second logical file before the scheduler relocates it.
+    assert_eq!(
+        collect_file(&db, "source", &archived, 5)
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::CheckpointConflict
+    );
+    wait(&db, || {
+        db.file_checkpoint("source", archived.to_str().unwrap(), None)
+            .unwrap()
+            .is_some()
+    });
+    assert_eq!(db.get_job(&job.job_id).unwrap().job.state, JobState::Failed);
+    assert_eq!(total(&db), "6");
+    assert_eq!(
+        db.file_checkpoint("source", archived.to_str().unwrap(), None)
+            .unwrap()
+            .unwrap()
+            .file_id,
+        original.file_id
+    );
+    let jobs = JobService::start(db.clone()).unwrap();
+    wait(&db, || complete(&db) && total(&db) == "24");
+    assert_eq!(
+        db.snapshot(
+            |tx, _| Ok(tx.query_row("SELECT COUNT(*) FROM source_files", [], |r| r
+                .get::<_, i64>(0))?)
+        )
+        .unwrap(),
+        1
+    );
+    assert_eq!(fs::read(&archived).unwrap(), bytes);
+    collector.shutdown();
+    jobs.shutdown();
+}

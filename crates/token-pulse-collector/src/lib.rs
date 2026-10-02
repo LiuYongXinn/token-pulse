@@ -81,6 +81,12 @@ fn collect_file_with_hook(
     )
     .map_err(|e| e.code())?;
     if saved.is_none() {
+        if database
+            .file_candidate_at_identity(source_id, &batch.file_identity)?
+            .is_some()
+        {
+            return Err(ErrorCode::CheckpointConflict.into());
+        }
         if let Some(moved) =
             database.file_checkpoint(source_id, &path_text, Some(&batch.file_identity))?
         {

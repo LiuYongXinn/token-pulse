@@ -3,6 +3,8 @@ use crate::{
     CollectionReceipt, collect_file, replacement::read_replacement_file, validate_source_file,
 };
 use std::{path::Path, time::Duration};
+use token_pulse_core::reader::{self, ReaderCheckpoint, ReaderLimits};
+use token_pulse_store::file_candidate::location::FileCandidateRelocation;
 use token_pulse_store::{Database, ErrorCode, StoreResult};
 
 pub(super) enum Read {
@@ -10,6 +12,7 @@ pub(super) enum Read {
     Pending {
         delay: Duration,
         error: Option<ErrorCode>,
+        reconcile: bool,
     },
 }
 fn replacement(db: &Database, source: &str, path: &Path, at: i64) -> StoreResult<Read> {
@@ -19,6 +22,7 @@ fn replacement(db: &Database, source: &str, path: &Path, at: i64) -> StoreResult
         return Ok(Read::Pending {
             delay: Duration::from_millis(100),
             error: None,
+            reconcile: false,
         });
     }
     Ok(Read::Pending {
@@ -32,6 +36,7 @@ fn replacement(db: &Database, source: &str, path: &Path, at: i64) -> StoreResult
         } else {
             Some(ErrorCode::CheckpointConflict)
         },
+        reconcile: false,
     })
 }
 pub(super) fn collect(db: &Database, source: &str, path: &Path, at: i64) -> StoreResult<Read> {
@@ -46,6 +51,7 @@ pub(super) fn collect(db: &Database, source: &str, path: &Path, at: i64) -> Stor
             return Ok(Read::Pending {
                 delay: Duration::from_millis(100),
                 error: None,
+                reconcile: false,
             });
         }
         if let Some(candidate) = db.active_file_read_candidate(&current.file_id)? {
@@ -54,9 +60,41 @@ pub(super) fn collect(db: &Database, source: &str, path: &Path, at: i64) -> Stor
                 return Ok(Read::Pending {
                     delay: Duration::from_millis(100),
                     error: None,
+                    reconcile: false,
                 });
             }
             return replacement(db, source, path, at);
+        }
+    } else {
+        let probe = reader::read_batch(
+            path,
+            "relocation-probe",
+            &ReaderCheckpoint::default(),
+            &ReaderLimits {
+                records: 1,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| e.code())?;
+        if let Some(candidate) = db.file_candidate_at_identity(source, &probe.file_identity)? {
+            match std::fs::symlink_metadata(&candidate.base.path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return Err(ErrorCode::SourceUnreadable.into()),
+                Ok(_) => return Err(ErrorCode::CheckpointConflict.into()),
+            }
+            db.relocate_file_candidate(FileCandidateRelocation {
+                generation_id: candidate.checkpoint.file_generation_id,
+                expected_checkpoint_revision: candidate.checkpoint.checkpoint_revision,
+                expected_path: candidate.base.path,
+                path: path.to_str().ok_or(ErrorCode::InvalidQuery)?.into(),
+                identity: probe.file_identity,
+                at_ms: at,
+            })?;
+            return Ok(Read::Pending {
+                delay: Duration::ZERO,
+                error: None,
+                reconcile: true,
+            });
         }
     }
     match collect_file(db, source, path, at) {

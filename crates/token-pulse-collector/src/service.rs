@@ -524,7 +524,12 @@ impl CollectorService {
                                             s.error = scan_error;
                                         }
                                     }
-                                    Ok(scheduled::Read::Pending { delay, error }) => {
+                                    Ok(scheduled::Read::Pending {
+                                        delay,
+                                        error,
+                                        reconcile: changed,
+                                    }) => {
+                                        reconcile |= changed;
                                         // Reading, an unfinished tail and an owning job are normal
                                         // correction phases. Never confirm the old file generation.
                                         retries.insert(key.clone(), (0, Instant::now() + delay));
