@@ -7,6 +7,7 @@ pub mod batch;
 mod canonical_progress;
 pub mod collection;
 mod database;
+pub mod file_candidate;
 pub mod jobs;
 pub mod leases;
 pub mod maintenance;

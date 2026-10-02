@@ -1,7 +1,7 @@
 //! A prepared accounting batch becomes durable in exactly one transaction.
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use token_pulse_core::domain::{
     ACCOUNTING_VERSION, ContentAnchor, EffectiveMetadata, NormalizedObservation,
     ObservationQuality, PARSER_VERSION, ReaderContext, UsageVector,
@@ -76,13 +76,15 @@ pub struct ContextWrite {
     pub model_context_window: Option<i64>,
     pub quality: ObservationQuality,
 }
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DiagnosticMetadata {
     pub parser_version: Option<String>,
     pub expected_revision: Option<i64>,
     pub actual_revision: Option<i64>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DiagnosticWrite {
     pub diagnostic_id: String,
     pub source_id: Option<String>,
