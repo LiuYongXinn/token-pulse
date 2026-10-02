@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M15a4：`cargo test -p token-pulse-integration --lib notify_config::windows` 新增 6 项（5 实际事务 / 1 有限错误码）；`cargo test -p token-pulse-integration --test notify_config_file` 新增 4 项实际文件 / ACL / 条件修改检查。完整 `--features test-fixture` 52 项、正式 headless 4 项通过；两包 strict Clippy all-targets、fmt / diff 与 release check 通过。`pwsh -NoProfile -File scripts/native-smoke.ps1 -Notify` 现在在隔离合成 Home 通过真正文件计划启用 / 撤销，已通过采集 3→10→11 / 原命令 / 暂停 / 重复 / 源只读 / 主窗隐藏、用户新设置保留、reload 后监听 0 与旧 headless 无 marker。退出 0，WebView2 1412 仍记录。配置写入 provider 当前需要可用的本地 NTFS 事务，System32 动态加载；不支持时返回有限不可用，不运行不安全覆盖降级。TxF 的 Microsoft 限制、Win11 / 其他卷未验证及正式设置未接入均明确留在[交付记录](delivery-status.md#m15a4配置文件的条件启用与保真撤销)。未修改真实 Home，没有性能测试。
+
 M15b4 定向：`cargo test -p token-pulse-integration --features test-fixture --test notify_original` 新增 5 项独立预期 / 实际 Win10 子进程检查，包含确切 JSON 尾参数、输出丢弃、失败保留 wake、相对路径、拒绝 dispatcher / 同盘硬链接、5 秒功能超时及自有子进程树结束。全 integration `--features test-fixture` 42 项；正式 `cargo test -p token-pulse-desktop --test notify_headless` 4 项通过。`pwsh -NoProfile -File scripts/native-smoke.ps1 -Notify` 现明确保留合成旧 cmd.exe / 固定 `exit 0`，真实采集仍为 3→10→11、隐私内容不入采集 DTO / 持久登记，源和配置不变 / 主窗隐藏，退出 0。不是自动套 shell，不改真实 Home，test-only 原命令 fixture 不打包。两包 all-targets strict Clippy / fmt / release check 通过；WebView2 1412 提示仍记录。文件启用 / 撤销和设置 UI 待实现，未做性能测试。详见[交付记录](delivery-status.md#m15b4受控保留原-notify-与独立唤醒结果)。
 
 2026-10-03 按用户允许再复测任务栏 wire：全屏 Windows.UI.Core.CoreWindow 遮挡自有前台夹具，FOREGROUND_FIXTURE_REFUSED / 退出 101；输入尚未发送，本次不计通过，M13e7 之前的通过证据保留。不要通过发送自有窗口消息冒充本次真实桌面复测成功。

@@ -1,4 +1,5 @@
-//! Byte-preserving root `notify` plans. This module neither writes files nor executes commands.
+//! Pure byte-preserving root `notify` plans. The Windows adapter applies bounded file plans;
+//! these pure functions never write files or execute commands.
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fmt, ops::Range, path::Path};

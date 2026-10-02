@@ -222,6 +222,14 @@ Publishing 是短事务临界段，不接受强制中断；已进入该段的取
 
 ## 8. notify 唤醒与恢复路径
 
+M15a4 已落地 Windows 配置文件计划 / 条件应用 / 条件撤销。只读预览同时绑定规范 Home 的物理身份、config.toml 的物理身份 / 存在状态和完整字节摘要；相同字节但另一个文件或 Home、缺省文件后来出现空文件，也拒绝过期计划。预览仅提供 notify 前后值及是否创建配置，不输出整份配置。撤销从最新配置准备，保留其他新设置；notify 已修改 / 删除则归属冲突，预览后再变动也不能覆盖。原有只读 headless / owner API 不启动事务、不写文件。
+
+文件写入 provider 目前使用可选 Windows NTFS 事务，将重新读取、身份 / 摘要校验、写入 / 截断 / 同步和提交放在一个 OS 事务中。Home 目录句柄保持到提交、拒绝重解析 / 非本地磁盘路径；config 以实际句柄拒绝目录 / 重解析 / 硬链接。没有配置临时副本或备份文件；现有文件在原身份上发布，保留原 owner / group / DACL。缺省配置以 CREATE_NEW 在事务内创建，其他程序竞争创建不会被覆盖；失败 / 普通释放不发布中间字节。事务的非事务读者仍读旧版本，普通竞争写入和路径替换在提交前被拒绝。本机 Win10 / NTFS 的上述边界已有实际 API 验证。
+
+该 provider 通过 System32 动态加载 KTM / 查询系统 API，只在应用计划时使用，普通应用启动 / 只读采集没有 KTM 导入依赖。事务 timeout 配置为 5 秒；这不是对底层阻塞磁盘调用的硬实时保证。不支持的 API、文件系统或 EFS 条件返回有限 `notify_config_transaction_unavailable`，不退回有覆盖竞态的写法，保留其他功能。Microsoft 明确建议新应用优先考虑替代方案且 TxF 可能不再出现在未来系统，本步骤如实保留这一技术限制，不将该 provider 宣称为通用 Windows 文件写入能力；ReFS / 不支持的卷及 Windows 11 仍需分别确认实际能力。[Microsoft TxF 说明](https://learn.microsoft.com/en-us/windows/win32/fileio/transactional-ntfs-portal)、[CreateFileTransacted 的支持与隔离约束](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createfiletransactedw)。这是 notify 单文件接入的事务边界，不新增已取消的备份 / 数据故障恢复体系。
+
+新增 6 项库边界检查（5 项实际事务、1 项有限错误码）与 4 项实际文件外部 API 检查；integration 总 52 项、正式 headless 4 项通过。正式 Win10 `-Notify` 现在在合成 Home 先登记恢复记录，再通过实际文件计划启用，完成原命令 / 离线 / 在线采集，最后撤销保留用户新设置、reload 关闭监听、旧 headless 忽略且不创建 marker；退出 0。没有改真实 Home 或运行性能测试。登记退休、main-only IPC / 差异预览 / 正式设置继续实施；下述文件操作尚未实现的历史说明按本增量收敛。
+
 M15b4 已接明确 chain_original=true 的原程序执行，先核对当前 exe / 完整 notify 归属，发送 wake 后、执行前再次只读核对配置。两条结果分开：原程序失败不撤销已经排入的唤醒 / marker，本地唤醒失败也不静默抹掉仍有效的原命令选择。完整 provider JSON 仅在 OS / 内存中作为原数组的一个尾参数原样转发，不加入最小 NotifyInvocation / 采集 DTO，不保存或回显正文。只执行不可变登记中的旧参数，不采用 JSON cwd / 程序；保留实际调用者工作目录与环境。本地 exe 查找有界，不自动套 shell / 解释批处理，原程序本身就是明确保留的解释器时沿用其原数组。当前 dispatcher 的规范路径 / 大小写与真实文件身份别名均拒绝。
 
 原子事实仍仅来自采集器。原程序先暂停创建、null 标准流 / 无新控制台，加入唯一非继承 KILL_ON_JOB_CLOSE Job 后再恢复本次主线程；5 秒功能等待，正常 / 失败 / 超时均关闭本次 Job，不留后代，有限错误无输出或正文。主 owner 允许健康 chain=true 登记，不在主进程执行原程序。全 integration 42 项 / 正式 headless 4 项、保留合成原命令后的实际 Win10 主进程采集均通过；文件启用 / 撤销、登记退休及正式设置仍待接入。下述历史 runner 不可用限制由本增量收敛；本步未修改真实用户 Home，没有性能测试。

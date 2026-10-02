@@ -13,7 +13,10 @@ use token_pulse_core::{
 };
 use token_pulse_integration::{
     notify_channel::NotifyCapability,
-    notify_config::{ManagedNotifyCommand, prepare_enable},
+    notify_config::{
+        ManagedNotifyCommand,
+        windows::{prepare_enable_file, prepare_restore_file, read_config},
+    },
     notify_registry::{NotifyRegistration, windows::NotifyRegistry},
 };
 use token_pulse_store::{SourceRecord, source_management::SourceMutation};
@@ -24,7 +27,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_NOTIFY_COLLECTOR_OK: explicitly retained synthetic original, offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected, config unchanged"
+                "NATIVE_NOTIFY_COLLECTOR_OK: conditional config install and undo preserving user settings, explicitly retained synthetic original, offline marker, normal restart drain, real production headless online and duplicate hints, hidden primary remains hidden, readonly log totals 3/10/11, source pause respected"
             ),
             Err(error) => eprintln!("NATIVE_NOTIFY_COLLECTOR_FAILED: {error}"),
         }
@@ -162,17 +165,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         "# synthetic fixture\r\nnotify={}\r\nmodel='unpriced-fixture'\r\n",
         serde_json::to_string(&original).map_err(|_| "original encoding")?
     );
-    let plan = prepare_enable(before.as_bytes(), &command).map_err(|_| "notify plan")?;
-    let config = plan
-        .apply_to(before.as_bytes())
-        .map_err(|_| "notify fixture config")?;
-    fs::write(root.join("config.toml"), &config).map_err(|_| "fixture config write")?;
+    fs::write(root.join("config.toml"), before.as_bytes()).map_err(|_| "fixture base config")?;
+    let plan = prepare_enable_file(&root, &command).map_err(|_| "notify file plan")?;
     let registration =
         NotifyRegistration::from_prepared(&root, cap, plan.restore_record().clone(), true)
             .map_err(|_| "fixture registration")?;
     registry
         .create(&registration)
         .map_err(|_| "fixture registration save")?;
+    plan.apply()
+        .map_err(|_| "notify conditional installation")?;
+    let config = read_config(&root).map_err(|_| "installed config readback")?;
     let id = registration.capability().registration_id();
     {
         let owner = state.notify.lock().map_err(|_| "notify owner lock")?;
@@ -307,6 +310,39 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
             .readonly()
     {
         return Err("source or config changed by app".into());
+    }
+    // A later unrelated user setting must survive controlled undo through the same file writer.
+    let mut changed = config;
+    changed.extend_from_slice(b"new_key='user-kept'\r\n");
+    fs::write(root.join("config.toml"), &changed).map_err(|_| "fixture unrelated user edit")?;
+    prepare_restore_file(&root, plan.restore_record())
+        .map_err(|_| "notify undo plan")?
+        .apply()
+        .map_err(|_| "notify conditional undo")?;
+    let expected = format!("{before}new_key='user-kept'\r\n");
+    if read_config(&root).map_err(|_| "restored config readback")? != expected.as_bytes() {
+        return Err("notify undo overwrote user setting".into());
+    }
+    state
+        .notify
+        .lock()
+        .map_err(|_| "notify owner reload lock")?
+        .as_ref()
+        .map_err(|_| "notify owner reload")?
+        .reload();
+    wait(
+        || {
+            state.notify.lock().is_ok_and(|owner| {
+                owner
+                    .as_ref()
+                    .is_ok_and(|service| service.status().listener_count == Some(0))
+            })
+        },
+        "undo removes current listener",
+    )?;
+    invoke(probe, id, "after-undo")?;
+    if registry.has_pending(id).map_err(|_| "after undo marker")? {
+        return Err("inactive config still queued notification".into());
     }
     Ok(())
 }

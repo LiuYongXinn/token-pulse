@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M15a4（2026-10-03）已实现配置文件条件启用 / 撤销，目录 / 文件身份、缺省 vs 空、完整摘要与当前 notify 归属检查，保真字节 / 原 ACL / 用户新设置。当前写入 provider 依赖可选 NTFS 事务，动态加载，不支持时明确有限错误，不把本机支持推断为所有 Windows / 文件系统支持。新增 10 项、integration 总 52 / 正式 exe 4 项和两包 strict Clippy / release check 通过；实际 Win10 `-Notify` 已完成真实文件启用 → 原命令 / 正式采集 3→10→11 → 保真撤销 / 监听关闭 / 旧提示忽略，退出 0，1412 仍记录。未改真实 Home、无性能测试；登记退休 / 操作管理器、正式 IPC / UI 接下来继续。旧文件操作待办按此收敛，provider 的 Microsoft TxF 限制与其他环境待验证保留，见[交付记录](delivery-status.md#m15a4配置文件的条件启用与保真撤销)。
+
 M15b4（2026-10-03）已接明确保留的原 notify 到正式 headless：当前配置 / exe 所有权与执行前复核、本地 exe 解析 / 无隐式 shell、自有暂停进程 / Job / 5 秒等待、输出丢弃及唤醒与原程序独立结果。新增 5 项原程序检查、integration 总 42 / 正式 exe 4 项通过；保留合成原命令后的正式 Win10 `-Notify` 采集 3→10→11 与暂停 / 重复 / 隐藏窗口 / 源只读通过。strict Clippy / fmt / release check 通过，1412 诊断仍记录。真实配置没有修改；文件启用 / 撤销、登记退休、main-only IPC / UI 接下来继续。下方 chain=true 仍拒绝的历史说明按此收敛，无性能测试。任务栏本轮复测被全屏系统 CoreWindow 覆盖，在发送输入前拒绝，不记通过。详见[交付记录](delivery-status.md#m15b4受控保留原-notify-与独立唤醒结果)。
 
 M15b3（2026-10-03）已贯通主 notify owner / 合并补扫 / 离线消费与采集器，新增服务 4 项、integration 总 37 / headless 3 项与 strict Clippy / release check 通过。正式 Win10 `native-smoke.ps1 -Notify` 的 offline 3、online 10、暂停后恢复 11、重复不计 / 隐藏主窗不激活 / 源只读与配置不变通过，退出 0。初始化未知计数保留 null，坏记录隔离 / reload / 单 owner / 正常关闭验证。未改真实配置、无性能测试；保真文件操作、原通知 runner、正式 IPC / UI 接下来继续。详见[交付记录](delivery-status.md#m15b3主进程-notify-owner离线消费与实际采集贯通)。
