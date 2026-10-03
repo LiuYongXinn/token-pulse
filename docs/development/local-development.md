@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+发布顺序按 2026-10-03 用户确认：全部验证完成后再推送到 GitHub。当前仅本地构建、签名、验签与验收，不推送代码或公开发布资产；待环境验证的项目不计通过。项目签名密钥用于开发者发布，用户安装 / 更新不需输入或验证密钥，应用自动验签。
+
 2026-10-03 最新范围更正：继续进行 Windows 10 验收，Windows 11 适配 / 验收取消；后续历史 Win11 待办不再是交付门槛。用户已选择新项目更新签名密钥，公钥默认内嵌源码；M16h 及更早包没有此公钥，新签名包另作记录。
 
 ## 项目更新签名密钥与本机签名
@@ -89,6 +91,8 @@ verify-installer 检查已安装声明与准备资源的哈希相同，普通卸
 先 `npm run build`，再 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Updates`，会通过真实 React 设置按钮检查当前编译公钥下的更新页、刷新、共享隐私公开版本及权限 / null 回归；合法公钥对应 idle / 尚未检查，未配置或非法显式覆盖对应 unavailable。合法公钥时不调用检查联网，未经候选的下载拒绝；mini 与直接 plugin 命令继续拒绝。需 NATIVE_UPDATES_IPC_OK / 退出 0。此前 Win10 19045 的未配置场景通过属于历史证据；新公钥场景另记，WebView2 注销 1412 保留。真实发布 / 安装仍需正式发布资产，不用隔离页检查替代。
 
 ## 更新安装生命周期验证
+
+新增显式启动交接检查：`cargo test -p token-pulse-desktop --lib update_transport::install_acceptance::signed_nsis_handoff_uses_exact_arguments_and_requests_exit_once -- --ignored --exact --nocapture`。需要本机已安装 Node / Tauri CLI 与缓存的 NSIS 编译器；默认测试不执行。它在自有 Temp 编译只写标记的无界面 NSIS，用临时密钥签版本 99.0.0，再经过正式下载 / 验签 / 版本 / staging / CreateProcess 通路，独立核对真实参数、旧修订 / 重复安装拒绝和单次退出回调。Win10 NATIVE_SIGNED_NSIS_HANDOFF_OK 已通过；仅回调计数，不实际退出 Tauri，不安装产品或验证完整升级。测试原始签名输出不打印；正式 HTTPS / 固定发布源与安装门禁不变。详见[交接记录](delivery-status.md#m16k真实签名-nsis-的原生启动交接)。
 
 `pwsh -NoProfile -File scripts/verify-update-hook.ps1` 用已下载 NSIS 编译器生成自有 Temp 最小夹具，仅写同目录测试标记。验证安装器在父进程存在时等待，父进程正常退出才继续；通过 NATIVE_UPDATE_HOOK_OK 和退出 0。脚本检查拥有的 UUID Temp 路径，最后只删除该夹具和关闭其自有进程。该检查不安装产品、读取账户或改变 Explorer，不能替代完整安装 / 更新。
 

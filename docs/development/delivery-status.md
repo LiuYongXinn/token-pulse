@@ -2,6 +2,18 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+2026-10-03 用户明确要求全部验证完成后再推送到 GitHub：本地候选保持未发布，当前不推送代码、创建远端 release 或上传资产。环境受限验收不记为通过；后续按此顺序推进，不再等待之前的公开发布选择问题。
+
+## M16k：真实签名 NSIS 的原生启动交接
+
+新增独立 opt-in 检查 `update_transport::install_acceptance::signed_nsis_handoff_uses_exact_arguments_and_requests_exit_once`，只在测试中使用新的自有 Temp 目录、缓存 NSIS 编译器及安装的 Tauri CLI。最小 NSIS 为无界面的用户级夹具，仅向同目录写参数和完成标记；不包含 TokenPulse 安装文件、注册表、快捷方式、父进程等待或用户数据操作。编译 / 签名子进程隐藏且超时有界，原始输出不打印；使用临时签名密钥，不读取正式项目私钥。
+
+实际更新插件通过只允许本次 127.0.0.1 端口和固定两个路径的测试发布提供方下载，验签并核对签名版本 99.0.0 后，生产 UpdateService / staging / CreateProcess 通路启动该 NSIS。夹具独立读到参数 `/P /UPDATE /R /TOKENPULSE_PARENT=<本次测试进程 PID>`，退出回调恰好一次；旧修订安装返回 RevisionConflict，安装中的重复请求返回 UpdateBusy，不产生第二次退出。真实 HTTP 请求恰好两次，验签前没有参数 / 完成标记或退出请求。
+
+Win10 19045.6466 / 150% 显式检查输出 NATIVE_SIGNED_NSIS_HANDOFF_OK、退出 0；transport 普通检查 2 项通过，两个 opt-in 场景默认忽略，desktop all-targets strict Clippy / fmt 与 diff 通过。这是自动测试调用真实 Windows 原生启动器的窄范围检查：退出回调被测试计数器替代，未实际退出 Tauri / 清理任务栏，也未安装或升级 TokenPulse；现有独立父进程等待检查与这项启动交接分开，不能合并宣称完整产品升级通过。HTTP 仅属 debug 隔离夹具，生产 HTTPS / 固定发布源 / 公钥及安装门禁均未改动。成功启动的公开签名夹具按生产 staging 行为保留在系统 Temp，本次自有测试目录与临时密钥在结束后清理。
+
+未重新打包：该变更仅测试代码与文档，M16j 的正式安装包和签名保持。新包干净安装 / 普通卸载、完整高版本更新、原生菜单 / 输入 / Explorer 生命周期以及物理多屏 / 四档 DPI 等 Windows 10 待验项仍保留。Win11 取消，现有正式数据与原未提交内容保持。
+
 ## M16j：新项目公钥下的安装包与本地签名发布资产
 
 M16i 对应源码（提交 `545d61a`）完整执行 `npm run tauri:build`，TS / Vite、334 项第三方声明、x64 release 宿主、桌面及 NSIS 均退出 0。新包默认内嵌项目公钥，用户安装 / 更新应用不需要输入、复制或手动验证密钥；应用下载后自动验签。密钥文件只用于开发者发布，本轮没有新增产品密钥输入界面。
