@@ -40,7 +40,9 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let listener = app.listen("updates_changed", move |_| {
         let _ = sender.try_send(());
     });
-    let result = super::mini_smoke::evaluate(app, &main, r#"
+    let main_checks = r#"
+      const expectedVersion=__COMPILED_VERSION__;
+      window.__tokenPulseUpdatesExpectedVersion=expectedVersion;
       const sources=await invoke('get_sources',{requestId:'updates-isolated-sources'});
       const config=await invoke('get_account_service_config',{requestId:'updates-isolated-account'});
       if(sources.data.sources.length||config.data.auto_connect)throw new Error('UPDATES_NOT_ISOLATED');
@@ -49,7 +51,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       const initial=await read();
       const configured=initial.data.phase==='idle'&&initial.data.issue===null;
       const unavailable=initial.data.phase==='unavailable'&&initial.data.issue==='publication_not_configured';
-      if((!configured&&!unavailable)||initial.data.update_revision!=='0'||initial.data.release!==null||initial.data.last_checked_at_ms!==null||initial.data.downloaded_bytes!==null||initial.data.total_bytes!==null||initial.data.current_version!=='0.1.0')throw new Error('UPDATES_UNKNOWN_STATE');
+      if((!configured&&!unavailable)||initial.data.update_revision!=='0'||initial.data.release!==null||initial.data.last_checked_at_ms!==null||initial.data.downloaded_bytes!==null||initial.data.total_bytes!==null||initial.data.current_version!==expectedVersion)throw new Error('UPDATES_UNKNOWN_STATE');
       window.__tokenPulseUpdatesConfigured=configured;
       const checks=[
         ['download_update',{requestId:'updates-download',request:{expected_update_revision:'0'}},configured?'INVALID_QUERY':'UPDATE_UNAVAILABLE'],
@@ -71,7 +73,8 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await invoke('set_display_privacy',{requestId:'updates-show',request:{privacy:false,expected_settings_revision:current.data.settings_revision}});
       const after=await invoke('get_price_rules',{requestId:'updates-prices-after',revision:null});
       if(after.data.price_revision!==before.data.price_revision||JSON.stringify((await read()).data)!==JSON.stringify(initial.data))throw new Error('UPDATES_REJECTED_MUTATION');
-    "#).and_then(|_| super::mini_smoke::evaluate(app, &mini, r#"
+    "#.replace("__COMPILED_VERSION__", &serde_json::to_string(env!("CARGO_PKG_VERSION")).map_err(|_| "compiled version")?);
+    let result = super::mini_smoke::evaluate(app, &main, &main_checks).and_then(|_| super::mini_smoke::evaluate(app, &mini, r#"
       for(const command of ['get_update_status','check_for_updates','download_update','install_update','plugin:updater|check']){
         let denied=false;try{await invoke(command,{requestId:'updates-mini',request:{expected_update_revision:'0'}});}catch{denied=true;}if(!denied)throw new Error('UPDATES_MINI_ALLOWED:'+command);
       }
@@ -81,18 +84,20 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       await wait(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='软件更新'));
       [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='软件更新').click();
       const configured=window.__tokenPulseUpdatesConfigured;
+      const expectedVersion=window.__tokenPulseUpdatesExpectedVersion;
+      if(typeof expectedVersion!=='string')throw new Error('UPDATES_EXPECTED_VERSION');
       const expectedPhase=configured?'尚未检查更新':'更新不可用';
       await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
       const panel=document.querySelector('.update-panel');
       const button=(name)=>[...panel.querySelectorAll('button')].find(n=>n.textContent===name);
       if(!button('检查更新')||button('检查更新').disabled===configured||button('安装更新')||panel.textContent.includes('未配置有效的更新签名公钥')===configured||panel.textContent.includes('当前已是最新版本')||panel.querySelector('progress'))throw new Error('UPDATES_UI_AVAILABILITY');
-      if(!panel.textContent.includes('0.1.0')||!panel.textContent.includes('尚未提供'))throw new Error('UPDATES_UI_NULL');
+      if(!panel.textContent.includes(expectedVersion)||!panel.textContent.includes('尚未提供'))throw new Error('UPDATES_UI_NULL');
       button('刷新更新状态').click();
       await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
       const settings=await invoke('get_display_settings',{requestId:'updates-ui-privacy'});
       await invoke('set_display_privacy',{requestId:'updates-ui-hide',request:{privacy:true,expected_settings_revision:settings.data.settings_revision}});
       await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
-      if(!document.querySelector('.update-panel').textContent.includes('0.1.0'))throw new Error('UPDATES_UI_PRIVATE_PUBLIC_VERSION');
+      if(!document.querySelector('.update-panel').textContent.includes(expectedVersion))throw new Error('UPDATES_UI_PRIVATE_PUBLIC_VERSION');
       const hidden=await invoke('get_display_settings',{requestId:'updates-ui-hidden'});
       await invoke('set_display_privacy',{requestId:'updates-ui-show',request:{privacy:false,expected_settings_revision:hidden.data.settings_revision}});
     "#));

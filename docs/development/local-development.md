@@ -1,6 +1,10 @@
 # 本地开发与运行
 
-本地正式包验签使用 `pwsh -NoProfile -File scripts/verify-release-artifact.ps1 -Installer <安装包> -Signature <签名> -Report <新报告路径>`，父目录必须存在，报告不得已存在。入口明确等待本次 release 维护进程退出并检查它的退出码，不能直接调用 GUI exe 后读取可能残留的 LASTEXITCODE。安装验收的显式本地状态入口已复用此脚本；检查不启动 Tauri、安装器、网络或读取签名私钥。见[当前验收总表](delivery-status.md#当前范围核对2026-10-03m16m)及[本轮验证](delivery-status.md#m16m显式等待-release-验证进程与当前验收总表同步)。
+M16n：0.1.1 本地升级候选已完整构建、使用同一项目密钥签名并实际验签，固定源清单已准备且未上传；已安装 0.1.0 保留。更新页原生检查已随编译版本验证，实际 main / mini WebView 场景退出 0。完整自动升级仍未验，发布顺序答复前不推送 / 发布。见[候选与验证记录](delivery-status.md#m16n011-本地签名升级候选与升版后的原生更新页)。
+
+0.1.1 候选安装包：[TokenPulse_0.1.1_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.1_x64-setup.exe)，SHA-256 `6f50baa9cb7806382ab7b3628d7563729aab0278c8bb074e771ce86c33c3e13a`；[候选清单](../../target/release/publish/v0.1.1-20261003-ff6162077a1c4c4a844c94a87b65621a/latest.json)与[实际验签报告](../../target/release/publish/v0.1.1-20261003-ff6162077a1c4c4a844c94a87b65621a/release-verification.json)。它是未安装 / 未发布的本地候选，原 0.1.0 基线保留供完整升级验收；当前 release 验证程序绑定 0.1.1，不能将它用于生成旧版本的成功报告。
+
+本地正式包验签使用 `pwsh -NoProfile -File scripts/verify-release-artifact.ps1 -Installer <安装包> -Signature <签名> -Report <新报告路径>`，父目录必须存在，报告不得已存在。入口明确等待本次 release 维护进程退出并检查它的退出码，不能直接调用 GUI exe 后读取可能残留的 LASTEXITCODE。安装验收的显式本地状态入口已复用此脚本；检查不启动 Tauri、安装器、网络或读取签名私钥。见[当前验收总表](delivery-status.md#当前范围核对2026-10-03m16n)及[本轮验证](delivery-status.md#m16m显式等待-release-验证进程与当前验收总表同步)。
 
 M13g4：2026-10-03 用户解锁后，已有 `check_taskbar_wire` 真实鼠标 / 焦点 / 布局检查，以及 `check_taskbar_accessibility` 的显式 actions 标志均退出 0，五个原生菜单 Invoke 到宿主动作通过。合成动作不转发正式应用，物理键盘 / Narrator 与标准应用托盘菜单仍独立。见[当前原生验收记录](delivery-status.md#m13g4解锁后的真实任务栏输入与五项-uia-菜单动作)。
 
@@ -24,7 +28,7 @@ M13g4：2026-10-03 用户解锁后，已有 `check_taskbar_wire` 真实鼠标 / 
 
 签完后使用下方 `release:prepare` 的实际 release 程序复核签名、文件和版本，生成新的本地资产目录；正式公开发布与实际完整升级分别验收。若同名 `.sig` 已存在，签名脚本拒绝覆盖，需要明确使用新的发布产物目录；不要混用旧包 / 新公钥。下方旧“未配置公钥”记录表示当时包状态。
 
-当前最新完整安装包为 M16j：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,606 字节，SHA-256 `9e3c22780697dee8c8d38b1699a592aa833469dfdce9809294a92e275133f250`。旁边 `.exe.sig` 是已验证的 Tauri 更新签名，应用自动更新时用它验签；用户安装和更新均无需手动输入密钥。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 全部通过，内嵌新项目公钥并保留位置 / 尺寸 / 同 DPI 工作区适配及 Tab 修复。下方旧包状态按历史保留；Windows 11 已取消，Windows 10 物理兼容与新包安装 / 完整升级仍继续。详见[最新构建记录](delivery-status.md#m16j新项目公钥下的安装包与本地签名发布资产)。
+已安装 0.1.0 基线包为 M16j：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,606 字节，SHA-256 `9e3c22780697dee8c8d38b1699a592aa833469dfdce9809294a92e275133f250`。旁边 `.exe.sig` 是已验证的 Tauri 更新签名，应用自动更新时用它验签；用户安装和更新均无需手动输入密钥。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 全部通过，内嵌新项目公钥并保留位置 / 尺寸 / 同 DPI 工作区适配及 Tab 修复。下方旧包状态按历史保留；Windows 11 已取消，Windows 10 物理兼容与新包安装 / 完整升级仍继续。详见[最新构建记录](delivery-status.md#m16j新项目公钥下的安装包与本地签名发布资产)。
 
 已验证本地发布候选：[latest.json](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/latest.json)及[签名验证记录](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/release-verification.json)。同目录包含可上传的安装包与签名。当前未上传，公开固定清单的未认证 HEAD 请求返回 HTTP 404，不能当作实际联网更新完成；这套 0.1.0 包是新公钥初始基线，完整自动升级还需要后续更高版本发布资产及对应本机升级验收；当前发布顺序问题答复前不上传。
 
@@ -72,7 +76,7 @@ Win10 19045 / 150% 已完整通过：NATIVE_SOURCE_DIALOGS_OK / 退出 0，17 To
 
 `npm run release:prepare -- --desktop <同次构建的桌面exe> --installer <NSIS安装包> --signature <安装包.sig> --output <尚不存在的输出目录> --published-at <UTC时间> [--notes <UTF-8说明文件>]` 只生成本地资产，不上传 GitHub、不生成密钥、不读取认证或正式数据。UTC 时间采用 `2026-10-03T00:00:00.000Z` 形式；版本必须在 Cargo workspace、package.json、tauri.conf.json 一致，安装器名称必须为 `TokenPulse_<版本>_x64-setup.exe` 或对应 arm64。生成清单固定使用本仓库 `releases/download/v<版本>/`，无任意发布 URL 参数。
 
-发布者先选择版本并同步上述三处，再执行 `npm run tauri:build`，默认使用已经确认的新项目公钥；本机 `npm run release:sign` 解密 DPAPI 密码并签同版本包，无需把私钥 / 密码填入命令或聊天。必须使用这次构建的桌面 exe 与 NSIS 安装包，不混用旧产物。如确实使用另一套受控密钥，才显式设置 `TOKENPULSE_UPDATER_PUBLIC_KEY` 覆盖并由发布者提供相应签名；处理后恢复构建环境。准备工具不处理私钥。
+发布者先选择版本并同步上述三处与 package-lock 的根版本，再用 `cargo metadata --offline --format-version 1 --filter-platform x86_64-pc-windows-msvc > $null` 同步 Cargo.lock，确认仅项目包版本变化；`--no-deps` 不会完成此锁文件同步。然后执行 `npm run tauri:build`，默认使用已经确认的新项目公钥；本机 `npm run release:sign` 解密 DPAPI 密码并签同版本包，无需把私钥 / 密码填入命令或聊天。必须使用这次构建的桌面 exe 与 NSIS 安装包，不混用旧产物。如确实使用另一套受控密钥，才显式设置 `TOKENPULSE_UPDATER_PUBLIC_KEY` 覆盖并由发布者提供相应签名；处理后恢复构建环境。准备工具不处理私钥。
 
 桌面 exe 的维护入口 `--verify-update-release <安装包> <签名> <新报告路径>` 使用实际编译公钥、编译版本与 target。release 构建才能执行，debug 返回 13；参数错误 12，验证 / 文件失败 14，成功 0。签名全局验证成功后才读取可信 version 字段；缺失、重复或与当前版本不符拒绝。没有初始化 Tauri / 单实例 / 数据库 / 来源 / 账户或运行安装器，报告 create_new，不覆盖旧文件。该入口不是 renderer IPC，也不授予主窗 / 小窗文件或任意验证权限。
 
