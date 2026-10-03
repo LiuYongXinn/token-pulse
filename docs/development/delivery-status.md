@@ -4,6 +4,8 @@
 
 2026-10-03 用户明确要求全部验证完成后再推送到 GitHub：本地候选保持未发布，当前不推送代码、创建远端 release 或上传资产。环境受限验收不记为通过；后续按此顺序推进，不再等待之前的公开发布选择问题。
 
+后续环境复核：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备，需要用户提供独立 Windows 10 测试环境的访问方式。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录；本次自有应用 / 宿主 / wire / UIA 进程均已退出。未覆盖安装、清除现有数据或修改显示器 / DPI；没有推送到 GitHub。完整安装 / 升级和物理系统矩阵仍按实际环境继续，不用更多窄夹具替代这些最终验收。
+
 ## M16k：真实签名 NSIS 的原生启动交接
 
 新增独立 opt-in 检查 `update_transport::install_acceptance::signed_nsis_handoff_uses_exact_arguments_and_requests_exit_once`，只在测试中使用新的自有 Temp 目录、缓存 NSIS 编译器及安装的 Tauri CLI。最小 NSIS 为无界面的用户级夹具，仅向同目录写参数和完成标记；不包含 TokenPulse 安装文件、注册表、快捷方式、父进程等待或用户数据操作。编译 / 签名子进程隐藏且超时有界，原始输出不打印；使用临时签名密钥，不读取正式项目私钥。
