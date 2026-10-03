@@ -1,8 +1,9 @@
-param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
+param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
 if ($TaskbarExplorerRestart -and $PSBoundParameters.Count -ne 1) { throw 'Actual Explorer restart acceptance must be the only selected scene.' }
-if (($PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume) -and $PSBoundParameters.Count -ne 1) { throw 'Native power acceptance must be the only selected scene.' }
+if ($ApplicationRight -and -not ($PowerTaskbarMessages -or $PowerTaskbarResume)) { throw 'ApplicationRight requires one exclusive taskbar power scene.' }
+if (($PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume) -and ($PSBoundParameters.Count -ne $(if ($ApplicationRight) { 2 } else { 1 }) -or (@($PowerMessages,$PowerResume,$PowerTaskbarMessages,$PowerTaskbarResume) | Where-Object { $_ }).Count -ne 1)) { throw 'Native power acceptance must be the only selected scene, with optional ApplicationRight for taskbar power.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 }
@@ -24,6 +25,7 @@ if ($PowerMessages) { $probeArgs += '--native-power-messages-smoke' }
 if ($PowerResume) { $probeArgs += '--native-power-resume-smoke' }
 if ($PowerTaskbarMessages) { $probeArgs += '--native-power-taskbar-messages-smoke' }
 if ($PowerTaskbarResume) { $probeArgs += '--native-power-taskbar-resume-smoke' }
+if ($ApplicationRight) { $probeArgs += '--application-right' }
 if ($PriceAliases) { $probeArgs += '--native-price-alias-smoke' }
 if ($OfflinePrices) { $probeArgs += '--native-offline-prices-smoke' }
 if ($PriceRevalue) { $probeArgs += '--native-price-revalue-smoke' }

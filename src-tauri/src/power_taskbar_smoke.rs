@@ -4,7 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::Manager;
-use token_pulse_core::{numeric::DecimalInt, taskbar::TaskbarRuntimeState};
+use token_pulse_core::{
+    numeric::DecimalInt,
+    taskbar::{TaskbarPosition, TaskbarRuntimeState},
+};
 use token_pulse_taskbar::windows::topology::{TaskbarTopology, inspect_primary_taskbar};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT},
@@ -24,8 +27,9 @@ pub struct Probe {
     shell_pid: u32,
     shell_root: usize,
     shell_process: HeldProcess,
+    position: TaskbarPosition,
 }
-pub fn prepare(app: &tauri::AppHandle) -> Result<Probe, String> {
+pub fn prepare(app: &tauri::AppHandle, position: TaskbarPosition) -> Result<Probe, String> {
     super::mini_window::show(app)?;
     let mini = app.get_webview_window("mini").ok_or("power mini missing")?;
     mini.hide().map_err(|error| error.to_string())?;
@@ -37,7 +41,12 @@ pub fn prepare(app: &tauri::AppHandle) -> Result<Probe, String> {
     super::mini_smoke::evaluate(
         app,
         &main,
-        r#"
+        &(format!(
+            r#"
+        const position={};
+        "#,
+            serde_json::to_string(&position).map_err(|error| error.to_string())?
+        ) + r#"
         const sessions=await invoke('query_mini_sessions',{requestId:'power-taskbar-sessions',request:{query:{search:'',page_size:10},cursor:null}});
         if(sessions.data.options.length!==1||sessions.data.next_cursor!==null)throw new Error('POWER_FIXTURE_SESSION_NOT_UNIQUE');
         const scope=await invoke('get_mini_scope',{requestId:'power-taskbar-scope-read'});
@@ -45,10 +54,12 @@ pub fn prepare(app: &tauri::AppHandle) -> Result<Probe, String> {
         const display=await invoke('get_display_settings',{requestId:'power-taskbar-privacy-read'});
         if(display.data.preferences.privacy)await invoke('set_display_privacy',{requestId:'power-taskbar-privacy-save',request:{privacy:false,expected_settings_revision:display.data.settings_revision}});
         const current=await invoke('get_taskbar_preferences',{requestId:'power-taskbar-enable-read'});
-        await invoke('set_taskbar_preferences',{requestId:'power-taskbar-enable',request:{preferences:{...current.data.preferences,enabled:true,fallback_to_mini:false,position:'notification_left'},expected_settings_revision:current.data.settings_revision}});
+        await invoke('set_taskbar_preferences',{requestId:'power-taskbar-enable',request:{preferences:{...current.data.preferences,enabled:true,fallback_to_mini:false,position},expected_settings_revision:current.data.settings_revision}});
+        const saved=await invoke('get_taskbar_preferences',{requestId:'power-taskbar-position-before'});
+        if(saved.data.preferences.position!==position||!saved.data.preferences.enabled||saved.data.preferences.fallback_to_mini)throw new Error('POWER_TASKBAR_POSITION_MISMATCH');
         const usage=await invoke('get_mini_usage',{requestId:'power-taskbar-before-usage'});
         if(usage.data.usage.total_tokens!=='3'||usage.data.mini_scope.kind!=='session')throw new Error('POWER_BEFORE_USAGE_MISMATCH:'+JSON.stringify(usage.data));
-    "#,
+    "#),
     )?;
     wait_fresh(app, "3", 0)?;
     let service = super::taskbar_commands::service(app).ok_or("power taskbar service missing")?;
@@ -82,6 +93,7 @@ pub fn prepare(app: &tauri::AppHandle) -> Result<Probe, String> {
         shell_pid,
         shell_root,
         shell_process,
+        position,
     })
 }
 impl Probe {
@@ -143,12 +155,17 @@ impl Probe {
         super::mini_smoke::evaluate(
             app,
             &main,
-            r#"
+            &(format!(
+                r#"const position={};"#,
+                serde_json::to_string(&self.position).map_err(|error| error.to_string())?
+            ) + r#"
+            const saved=await invoke('get_taskbar_preferences',{requestId:'power-taskbar-position-after'});
+            if(saved.data.preferences.position!==position||!saved.data.preferences.enabled||saved.data.preferences.fallback_to_mini)throw new Error('POWER_TASKBAR_RESUMED_POSITION_MISMATCH');
             const status=await invoke('get_taskbar_status',{requestId:'power-taskbar-resumed-status'});
             if(status.data.state!=='embedded'||status.data.issue!==null||status.data.error!==null||status.data.action_error!==null)throw new Error('POWER_TASKBAR_STATUS_MISMATCH');
             const usage=await invoke('get_mini_usage',{requestId:'power-taskbar-resumed-usage'});
             if(usage.data.usage.total_tokens!=='10'||usage.data.mini_scope.kind!=='session')throw new Error('POWER_RESUMED_USAGE_MISMATCH');
-        "#,
+        "#),
         )?;
         super::taskbar_smoke::own_readout_message(app, WM_SETFOCUS, 0, 0)?;
         let (_, visible, text) = super::taskbar_smoke::own_details(app)?;
@@ -181,6 +198,10 @@ impl Probe {
         }
         println!(
             "NATIVE_POWER_TASKBAR_GEOMETRY_OK: same_shell=true verification={geometry:?} current_full_width=true"
+        );
+        println!(
+            "NATIVE_POWER_TASKBAR_POSITION_OK: position={} preferences_preserved=true",
+            serde_json::to_string(&self.position).map_err(|error| error.to_string())?
         );
         println!(
             "NATIVE_POWER_TASKBAR_OK: old_host={} resumed_host={host} same_host={same_host} old_host_retired={} tokens=3/10 fresh_snapshot=true old_details_hidden=true no_unexpected_actions=true geometry_restored=true physical_input=false computer_restart=false",

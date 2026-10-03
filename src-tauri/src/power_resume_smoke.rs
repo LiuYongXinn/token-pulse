@@ -11,6 +11,7 @@ use tauri::Manager;
 use token_pulse_core::{
     numeric::EpochMs,
     protocol::{CoverageState, DateRange, DimensionSelection, UsageFilter},
+    taskbar::TaskbarPosition,
 };
 use token_pulse_store::SourceRecord;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -24,16 +25,36 @@ pub enum Scene {
     SystemObserver,
     AuthoredTaskbarMessages,
     SystemTaskbarObserver,
+    AuthoredTaskbarRightMessages,
+    SystemTaskbarRightObserver,
 }
 impl Scene {
     fn authored(self) -> bool {
-        matches!(self, Self::AuthoredMessages | Self::AuthoredTaskbarMessages)
+        matches!(
+            self,
+            Self::AuthoredMessages
+                | Self::AuthoredTaskbarMessages
+                | Self::AuthoredTaskbarRightMessages
+        )
     }
     fn taskbar(self) -> bool {
         matches!(
             self,
-            Self::AuthoredTaskbarMessages | Self::SystemTaskbarObserver
+            Self::AuthoredTaskbarMessages
+                | Self::SystemTaskbarObserver
+                | Self::AuthoredTaskbarRightMessages
+                | Self::SystemTaskbarRightObserver
         )
+    }
+    fn position(self) -> TaskbarPosition {
+        if matches!(
+            self,
+            Self::AuthoredTaskbarRightMessages | Self::SystemTaskbarRightObserver
+        ) {
+            TaskbarPosition::ApplicationRight
+        } else {
+            TaskbarPosition::NotificationLeft
+        }
     }
 }
 fn parse(args: &[String]) -> Result<Option<Scene>, &'static str> {
@@ -54,6 +75,16 @@ fn parse(args: &[String]) -> Result<Option<Scene>, &'static str> {
         ["--native-smoke", "--native-power-taskbar-resume-smoke"] => {
             Ok(Some(Scene::SystemTaskbarObserver))
         }
+        [
+            "--native-smoke",
+            "--native-power-taskbar-messages-smoke",
+            "--application-right",
+        ] => Ok(Some(Scene::AuthoredTaskbarRightMessages)),
+        [
+            "--native-smoke",
+            "--native-power-taskbar-resume-smoke",
+            "--application-right",
+        ] => Ok(Some(Scene::SystemTaskbarRightObserver)),
         _ => Err("native power acceptance requires its exclusive exact scene"),
     }
 }
@@ -207,7 +238,7 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
     )?;
     // Complete window/scope initialization before parking and appending the pending data.
     let taskbar = if scene.taskbar() {
-        Some(super::power_taskbar_smoke::prepare(app)?)
+        Some(super::power_taskbar_smoke::prepare(app, scene.position())?)
     } else {
         None
     };
@@ -363,7 +394,46 @@ mod tests {
             parse(&args(&["--native-smoke", "--native-taskbar-actions-smoke"])),
             Ok(None)
         );
+        for (flag, scene) in [
+            (
+                "--native-power-taskbar-messages-smoke",
+                Scene::AuthoredTaskbarRightMessages,
+            ),
+            (
+                "--native-power-taskbar-resume-smoke",
+                Scene::SystemTaskbarRightObserver,
+            ),
+        ] {
+            assert_eq!(
+                parse(&args(&["--native-smoke", flag, "--application-right"])),
+                Ok(Some(scene))
+            );
+            assert!(scene.taskbar());
+            assert_eq!(scene.position(), TaskbarPosition::ApplicationRight);
+        }
+        assert!(Scene::AuthoredTaskbarRightMessages.authored());
+        assert!(!Scene::SystemTaskbarRightObserver.authored());
+        assert_eq!(
+            Scene::SystemTaskbarObserver.position(),
+            TaskbarPosition::NotificationLeft
+        );
         for invalid in [
+            vec![
+                "--native-smoke",
+                "--native-power-resume-smoke",
+                "--application-right",
+            ],
+            vec![
+                "--native-smoke",
+                "--application-right",
+                "--native-power-taskbar-resume-smoke",
+            ],
+            vec![
+                "--native-smoke",
+                "--native-power-taskbar-resume-smoke",
+                "--application-right",
+                "--application-right",
+            ],
             vec!["--native-power-resume-smoke"],
             vec!["--native-power-taskbar-resume-smoke"],
             vec![

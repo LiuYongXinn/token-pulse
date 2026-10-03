@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+任务栏右侧电源验收：`pwsh -NoProfile -File scripts/native-smoke.ps1 -PowerTaskbarMessages -ApplicationRight` 仅运行隔离自有消息场景；`pwsh -NoProfile -File scripts/verify-power-resume.ps1 -Taskbar -ApplicationRight` 默认仅预检，追加 `-ActualStandby` 才实际让整机 S3 睡眠 / 唤醒，不重启。右侧标志不能与普通采集电源或其他场景混用。睡眠前后正式 settings IPC 核对位置与启用 / 回退，驱动要求该位置的成功标记。Win10 19045 / 150% 的同 M16v release 宿主与 debug 桌面右侧消息及真实 S3 均退出 0，3→10、新快照 / 详情、窗口和导航保持、宿主正常退休及完整几何 Exact；前一模块左侧的真实 S3 保持独立证据，详见[M13g13](delivery-status.md#m13g13应用图标右侧的真实-s3-恢复链)。混合验收不代替正式安装版物理输入或全包验收。
+
 ## 关键页面截图评审产物
 
 2026-10-03 的[24 张截图画廊](../../target/page-review/2026-10-03-a32d1c6/index.html)和[来源 / 图像摘要清单](../../target/page-review/2026-10-03-a32d1c6/manifest.json)以当前源码 `a32d1c6` / 0.1.1 为基准，保存于忽略的 `target/page-review/`。主窗口 / 小窗使用正式 React 组件与浏览器测试桥中的合成 DTO，任务栏使用正式原生 GDI 渲染器的合成夹具；均不表示已安装应用的真实账户或消费实拍。长页保留完整滚动截图，区域图与原生详情首屏单独标注。截图场景 13 项和定向原生像素检查 1 项通过，详细范围与限制见[截图记录](delivery-status.md#2026-10-03关键页面截图评审)。本地清理构建产物会移除画廊，需要保留时复制整个目录；材料未上传 GitHub。
