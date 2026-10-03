@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-04 02:28 已对正式安装 0.1.3 精确基线做一次只读窗口 / 显示 / WTS 核查：实际 144 DPI / 150%、单活动桌面表面、主窗 1280×860 / 隐藏紧凑小窗 280×220 DIP；WTS flags=0 仍锁屏，但本时点输入桌面可读 / 前台句柄存在，须分别报告，不能用旧失败值或少数前置项代替物理通过。回执位于本机忽略 review 目录，读取线程 DPI context 已恢复，没有系统缩放 / 输入 / 设置变化；见[只读复核记录](delivery-status.md#2026-10-04正式安装版的只读-windows-上下文复核)。实际其他 DPI / 多屏仍待验，不需要重复要求解锁来进行这些只读或独立开发检查。
+
 2026-10-04 M09h3b2b2c 无新界面 / 契约 / DDL；源码 schema v14、费用缓存 v4。`cargo test -p token-pulse-core -p token-pulse-store --lib --tests` 的 450 项通过、1 性能夹具 ignored；`cargo clippy --workspace --all-targets -- -D warnings`、`cargo check -p token-pulse-desktop --release` 与 fmt 通过。日志位于 target/conditional-history-*.log。新增历史 / 旧平价 / 别名修订间隔 / 撤价 / 坏历史 / v3 缓存门控场景是合成请求与临时 SQLite，不代表实际模式采集或新安装；正式 0.1.3 未改。后续条件输入指纹 / 后台金额 / 公开依据继续，见[第 15 节](../design/price-accounting.md#15-固定目录历史与条件估价时点m09h3b2b2c)。
 
 2026-10-04 M09h3b2b2b 源码升 schema v14，首次启动旧已发布目录会在原发布修订下补建条件身份；这是确定性参考元数据，不是猜模式或价格更新。自动复核仍用 core / store lib / tests（442 项全套）及新增容量测试 1 项，共 443 通过、1 性能夹具 ignored；workspace strict Clippy / release desktop check 与新增 store Clippy 通过。日志位于 target/conditional-rule-publication-*.log / target/conditional-rule-capacity-*.log。六组新临时库场景覆盖 v13 迁移、旧快照 / 幂等 / 回滚 / 外键 / 损坏拒绝 / 容量，不是用户真实库或正式安装验收。公开及本机仍原 0.1.3 / schema v13，生产条件金额继续；见[专题第 14 节](../design/price-accounting.md#14-不可变条件规则身份与普通规则隔离m09h3b2b2b)。

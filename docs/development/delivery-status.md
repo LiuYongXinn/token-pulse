@@ -1,5 +1,13 @@
 # 实施与交付记录
 
+## 2026-10-04：正式安装版的只读 Windows 上下文复核
+
+02:28 本机 / 2026-10-03T18:28:42Z 重新核对正式 PID 84776 的路径、启动时间及 NSIS 0.1.3-6e2698a 精确二进制基线，读取前后同一进程。Win10 build 19045；主窗 / 小窗均为 per-monitor aware、GetDpiForWindow=144，客户区分别 1920×1290 / 420×330 像素，即 1280×860 / 280×220 DIP，主窗可见、小窗隐藏。EnumDisplayMonitors 当前一个活动桌面表面，2560×1440 / 工作区 2560×1380；GetScaleFactorForMonitor 成功 / 150%，QDC_ONLY_ACTIVE_PATHS 缓冲容量 1，不把缓冲容量当作已枚举的路径数。仅将检查线程设为 per-monitor 坐标，finally 恢复，不改变系统缩放 / 布局或窗口。接口依据 2026-10-04 核实：[GetDpiForWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdpiforwindow)、[GetScaleFactorForMonitor](https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getscalefactorformonitor)、[显示缓冲容量](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdisplayconfigbuffersizes)。
+
+当前 WTS Level1 / 活动连接返回 session_flags=0，Win10 仍报告锁屏；这次 OpenInputDesktop 可读且前台句柄存在，和此前 access denied / null 的时点不同，不能继续复述旧值，也不能仅据这两个条件记物理输入就绪。[Microsoft WTS 标志定义](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_w)的 0=锁定、1=解锁，反转缺陷只涉及 Windows 7 / Server 2008 R2。仅读取必要状态头，没有用户名 / 域内容或任意窗口正文；未发送输入、请求解锁、操作系统设置 / 重启或记物理键鼠通过。100 / 125 / 200% 的实际系统缩放、多屏 / 切换 / 断屏和其他保留原生验收仍未由本检查证明；当前 150% 几何基线重新确认。
+
+只读脚本与 CreateNew 回执保存在本机忽略目录 target/release/review/v0.1.3-6e2698a/windows-context-95b86b2087314950921f5447f115d946.ps1 / .json。这不是新的安装、视觉 / 物理交互或源码条件金额验收，安装仍原 0.1.3。本轮另有 b3ac3ec 的目录历史真实代码进展；后续继续费用条件输入 / 后台金额与能实际完成的原生验证，不将整体标为完成。
+
 ## M09h3b2b2c：目录历史、条件估价时点与费用缓存 v4
 
 2026-10-04 复核发现上一阶段只装配最新目录，旧请求条件报价缺失，关闭的旧 Standard 平价行也不能作为该历史目录的参考识别。本增量以原目录 / 引入修订 / 安装时间构造固定历史，检查发布顺序、唯一性 / 时间及摘要，按事件或指定时点选相应目录；相同时点较晚发布替代，撤掉模型 / 模式不退回旧报价。捕获旧价格修订只含当时可见目录，别名 / 自定义 / 来源排序继续原语义。
