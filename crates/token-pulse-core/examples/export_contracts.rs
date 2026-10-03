@@ -7,6 +7,7 @@ use token_pulse_core::diagnostics::*;
 use token_pulse_core::jobs::*;
 use token_pulse_core::mini::*;
 use token_pulse_core::pricing::offline::*;
+use token_pulse_core::pricing::request::{RequestConsumptionBinding, RequestInputEvidence};
 use token_pulse_core::pricing::revalue::*;
 use token_pulse_core::pricing::{
     ModelAlias, ModelAliasDraft, ModelAliasMutation, PriceChanged, PriceOrigin, PriceOutcome,
@@ -152,6 +153,8 @@ fn main() {
         ClassificationKind,
         RawTokenCount,
         RawUsageVector,
+        RequestConsumptionBinding,
+        RequestInputEvidence,
         UsageEventSort,
         UsageEventsQuery,
         UsageEventsRequest,

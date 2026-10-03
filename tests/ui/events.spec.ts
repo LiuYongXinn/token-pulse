@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
           const events = Array.from({ length: 53 }, (_, index) => {
             const total = index === 0 ? '9007199254740993' : index === 1 ? '0' : '1';
             const vector = { input_total: index === 2 ? null : total, cached_input: index === 2 ? null : '0', output_total: index === 2 ? null : '0', reasoning_output: null, cache_write_input: index === 2 ? null : index === 3 ? '1' : '0', reported_total: total };
-            return { event_id: `synthetic-event-${index}`, session_key: 'synthetic-session', session_display_name: 'Synthetic 会话', occurred_at_ms: query.filter.range.start_ms+(53-index)*1000, model: index === 2 ? null : index === 0 ? 'Synthetic Model' : index === 1 ? 'Synthetic EUR Model' : 'Synthetic Zero Rate Model', provider: index === 2 ? null : 'Synthetic Provider', project_id: index === 2 ? null : 'project', project_display_name: index === 2 ? null : 'Synthetic Project', source_ids: ['synthetic-source','synthetic-mirror'], turn_id: null, total_tokens: total, usage: vector, raw_last: index === 0 ? { ...vector, input_total: '-1' } : null, raw_cumulative: index === 0 ? { ...vector, input_total: '9007199254741093', reported_total: '9007199254741093' } : null, calculation_method: 'last_with_baseline', quality_flags: ['confirmed'], price: index === 3 ? { status: 'unpriced', reason: 'insufficient_usage' } : index === 2 ? { status: 'unpriced', reason: 'unknown_model' } : { status: 'priced', rule_id: index === 0 ? 'synthetic-rule' : index === 1 ? 'synthetic-eur-rule' : 'synthetic-zero-rate-rule', currency: index === 1 ? 'EUR' : 'USD', cost_atoms: index === 0 ? revision === '3' ? '9007199254740993' : '18014398509481986' : '0', estimated_cost: index === 0 ? amount : '0.000000000000000' }, parser_version: 'synthetic-parser', accounting_version: 'synthetic-accounting' };
+            return { event_id: `synthetic-event-${index}`, session_key: 'synthetic-session', session_display_name: 'Synthetic 会话', occurred_at_ms: query.filter.range.start_ms+(53-index)*1000, model: index === 2 ? null : index === 0 ? 'Synthetic Model' : index === 1 ? 'Synthetic EUR Model' : 'Synthetic Zero Rate Model', provider: index === 2 ? null : 'Synthetic Provider', project_id: index === 2 ? null : 'project', project_display_name: index === 2 ? null : 'Synthetic Project', source_ids: ['synthetic-source','synthetic-mirror'], turn_id: null, total_tokens: total, usage: vector, raw_last: index === 0 ? { ...vector, input_total: '-1' } : null, raw_cumulative: index === 0 ? { ...vector, input_total: '9007199254741093', reported_total: '9007199254741093' } : null, request_input: index === 0 ? { input_tokens: '272001', binding: 'different_consumption' } : index === 1 ? { input_tokens: '0', binding: 'full_request' } : null, calculation_method: 'last_with_baseline', quality_flags: ['confirmed'], price: index === 3 ? { status: 'unpriced', reason: 'insufficient_usage' } : index === 2 ? { status: 'unpriced', reason: 'unknown_model' } : { status: 'priced', rule_id: index === 0 ? 'synthetic-rule' : index === 1 ? 'synthetic-eur-rule' : 'synthetic-zero-rate-rule', currency: index === 1 ? 'EUR' : 'USD', cost_atoms: index === 0 ? revision === '3' ? '9007199254740993' : '18014398509481986' : '0', estimated_cost: index === 0 ? amount : '0.000000000000000' }, parser_version: 'synthetic-parser', accounting_version: 'synthetic-accounting' };
           });
           const next = offset+query.page_size < events.length ? String(++serial).padStart(151,'a') : null;
           if (next) cursors.set(next, { query: JSON.stringify(query), offset: offset+query.page_size, snapshot });
@@ -76,6 +76,32 @@ test('events retain precise vectors, unknown values, true zero price and stable 
   await page.locator('.event-table>tbody>tr').first().getByRole('button', { name: 'Synthetic 会话', exact: true }).click();
   await expect(page.getByRole('heading', { name: '会话', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: '会话', exact: true })).toContainText('Synthetic 会话');
+});
+
+test('request input stays distinct from consumption, shows true zero and unknown, and never claims mode matching', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
+  const evidence = page.getByLabel('synthetic-event-0 核算依据', { exact: true });
+  await expect(evidence.getByText('272,001 Token', { exact: true })).toBeVisible();
+  await expect(evidence.getByText('与本笔增量不同，不能据此选档', { exact: true })).toBeVisible();
+  await expect(evidence.getByText('尚未采集，不能据此确认完整计费', { exact: true })).toBeVisible();
+  await evidence.screenshot({ path: testInfo.outputPath('request-input-dark.png') });
+  await page.getByRole('button', { name: '查看 synthetic-event-1 核算依据', exact: true }).click();
+  const zero = page.getByLabel('synthetic-event-1 核算依据', { exact: true });
+  await expect(zero.getByText('0 Token', { exact: true })).toBeVisible();
+  await expect(zero.getByText('对应完整请求用量', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 960, height: 860 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const bounds = await zero.evaluate(element => {
+    const panel = element.getBoundingClientRect();
+    const viewport = element.closest('.event-table-wrap')!.getBoundingClientRect();
+    const details = element.querySelector('dl')!.getBoundingClientRect();
+    return { panelRight: panel.right, viewportRight: viewport.right, detailsRight: details.right };
+  });
+  expect(bounds.panelRight).toBeLessThanOrEqual(bounds.viewportRight);
+  expect(bounds.detailsRight).toBeLessThanOrEqual(bounds.viewportRight);
+  await zero.screenshot({ path: testInfo.outputPath('request-input-zero-light-960.png') });
+  await page.getByRole('button', { name: '查看 synthetic-event-2 核算依据', exact: true }).click();
+  await expect(page.getByLabel('synthetic-event-2 核算依据', { exact: true }).getByText('未知（缺少可核对的响应记录）', { exact: true })).toBeVisible();
 });
 
 test('expired or mismatched continuations never append fresh data to a frozen event page', async ({ page }) => {

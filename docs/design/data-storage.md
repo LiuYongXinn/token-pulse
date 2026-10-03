@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M09h3b1 无新 DDL / 价格版本 / 费用缓存变更。明细查询只从规范消费观察中投影已有 request_usage、物理位置、有效回合、last / cumulative 的必要字段；不反序列化或输出整份观察 JSON。独立验证身份、前后位置、向量 / 覆盖与线程包含关系后，再与事件 source_total_tokens 及六项用量核对完整消费，不能用已推导 total_tokens 补原报告缺失。无效可选证据返回 null，不破坏已验证 Token；旧分页读取事务继续保留其证据，下一快照才看到更新。条件费用 / 缓存匹配后续另接，见[计价专题第 10 节](price-accounting.md#10-公开请求输入与完整消费关联m09h3b1)。
+
 M09h1c 手动来源重读复用现有表，无新 DDL：JobCheckpoint 的内部 reread_sources 缺省 false 并省略旧 JSON，明确请求与 queued 作业同事务保存，重试不能混用普通重建的 request_key，进行中不能改意图。file_rebuild_candidates 在候选 reading 起建立所有权，EOF 认领时更新该读检查点修订；注册和冻结输入仍只接受完整 claimed。调度及活动提交检查所有权，终态收尾覆盖 reading / ready / claimed，正式切换复用候选 / 物理 / 账本验证，旧读取快照与结果保持。未读文件正文入库，历史原始源仍只读；公开操作下一阶段接入。
 
 M09h3a 无新 DDL / 价格修订：nullable pending_request_usage 保存在既有 ReaderContext JSON，消费观察中 request_usage 保存必要响应证据，均由原单写批次事务提交。未知字段省略，旧保存字节 / 解析兼容保持；跨批次、实际 SQLite 重新打开、只读文件字节保持与唯一消费已验证。未新增认证 / 正文 / 任意 metadata 存储，也未接公开请求输入 DTO 或条件费用缓存，见[计价专题第 8 节](price-accounting.md#8-单响应输入证据的采集m09h3a)。

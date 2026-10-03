@@ -238,6 +238,10 @@ export type RawTokenCount = string;
 
 export type RawUsageVector = { input_total: RawTokenCount | null, cached_input: RawTokenCount | null, cache_write_input: RawTokenCount | null, output_total: RawTokenCount | null, reasoning_output: RawTokenCount | null, reported_total: RawTokenCount | null, };
 
+export type RequestConsumptionBinding = "full_request" | "different_consumption";
+
+export type RequestInputEvidence = { input_tokens: DecimalInt, binding: RequestConsumptionBinding, };
+
 export type UsageEventSort = "time_desc" | "total_desc";
 
 export type UsageEventsQuery = { filter: UsageFilter, price_basis: PriceBasis, sort: UsageEventSort, page_size: number, };
@@ -248,7 +252,7 @@ export type UsageEventRow = { event_id: string, session_key: string, session_dis
 /**
  * Published increment; raw_last/cumulative retain original source vectors.
  */
-usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsageVector | null, calculation_method: string, quality_flags: Array<string>, price: PriceOutcome, parser_version: string, accounting_version: string, };
+usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsageVector | null, request_input: RequestInputEvidence | null, calculation_method: string, quality_flags: Array<string>, price: PriceOutcome, parser_version: string, accounting_version: string, };
 
 export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
 

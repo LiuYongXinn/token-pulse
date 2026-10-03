@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M09h3b1 在 UsageEventRow 追加必需但可 null 的 request_input；已知值仅含 input_tokens（非负精确十进制字符串）及 binding（full_request / different_consumption）。unknown 返回 null，真实零返回字符串 "0"，不公开响应 ID、请求内部位置或任意 JSON。full_request 表示已保存响应向量与该事件原始可信消费完整一致，包括可空分项 / 原始报告总量；different_consumption 保留可靠请求输入，但不允许据此为部分消费选档。公开 DTO 不含实际模式 / 地区；full_request 也不表示完整条件计价。Rust / TS / schema 同步，复用原明细租约与权限，详见[计价专题第 10 节](price-accounting.md#10-公开请求输入与完整消费关联m09h3b1)。
+
 M09h1d 增加正式 main-only `start_source_reread`，接收原 JobRequest（kind 必须 rebuild，scope 为 all / sources，request_key 幂等），返回沿用最新隐私策略的 Job；sessions 范围返回 INVALID_QUERY，其他 kind 返回 UNSUPPORTED_API。意图内部持久保存，不暴露任意文件路径 / SQL / 原生句柄。主窗能力白名单与命令注册同步，mini 没有权限。原 start_job 的保存观察重建保持；状态 / 进度 / 取消继续 get_rebuild_status / cancel_job，新增受控阶段 reading_source_files 转为“正在重读已启用来源”。实际 Win10 隔离 React / IPC 验证与源码同提交，不视为正式安装包已更新。
 
 M09h2 PriceRule / PriceRuleDraft 新增 nullable cache_write_rate_atoms 精确原子字符串，沿用现有 main-only 价格查询 / 保存 / 历史命令和预期价格修订，不开放新的文件或通用权限。Rust → TS / schema 同步生成；空写入费率表示未知，字符串 "0" 是明确免费。用量 cache_write_input 继续单独保存覆盖，费率修改不填补事实中的 null。请求条件未知时不能以四项公式接入代替模式 / 分档证据，详见[计价专题](price-accounting.md#7-四费率估算m09h2)。

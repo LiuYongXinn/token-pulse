@@ -11007,6 +11007,47 @@
       "title": "RecoveryShortcutSnapshot",
       "type": "object"
     },
+    "RequestConsumptionBinding": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "full_request",
+        "different_consumption"
+      ],
+      "title": "RequestConsumptionBinding",
+      "type": "string"
+    },
+    "RequestInputEvidence": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "RequestConsumptionBinding": {
+          "enum": [
+            "full_request",
+            "different_consumption"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/RequestConsumptionBinding"
+        },
+        "input_tokens": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "binding"
+      ],
+      "title": "RequestInputEvidence",
+      "type": "object"
+    },
     "ScopeStart": {
       "$defs": {
         "EpochMs": {
@@ -16184,6 +16225,29 @@
           ],
           "type": "object"
         },
+        "RequestConsumptionBinding": {
+          "enum": [
+            "full_request",
+            "different_consumption"
+          ],
+          "type": "string"
+        },
+        "RequestInputEvidence": {
+          "additionalProperties": false,
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/RequestConsumptionBinding"
+            },
+            "input_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "input_tokens",
+            "binding"
+          ],
+          "type": "object"
+        },
         "UnpricedCode": {
           "enum": [
             "unknown_model",
@@ -16267,6 +16331,16 @@
             }
           ]
         },
+        "request_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestInputEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "session_display_name": {
           "type": "string"
         },
@@ -16309,6 +16383,7 @@
         "usage",
         "raw_last",
         "raw_cumulative",
+        "request_input",
         "calculation_method",
         "quality_flags",
         "price",
@@ -16667,6 +16742,29 @@
           ],
           "type": "object"
         },
+        "RequestConsumptionBinding": {
+          "enum": [
+            "full_request",
+            "different_consumption"
+          ],
+          "type": "string"
+        },
+        "RequestInputEvidence": {
+          "additionalProperties": false,
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/RequestConsumptionBinding"
+            },
+            "input_tokens": {
+              "$ref": "#/$defs/DecimalInt"
+            }
+          },
+          "required": [
+            "input_tokens",
+            "binding"
+          ],
+          "type": "object"
+        },
         "SnapshotMeta": {
           "additionalProperties": false,
           "properties": {
@@ -16925,6 +17023,16 @@
                 }
               ]
             },
+            "request_input": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RequestInputEvidence"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "session_display_name": {
               "type": "string"
             },
@@ -16967,6 +17075,7 @@
             "usage",
             "raw_last",
             "raw_cumulative",
+            "request_input",
             "calculation_method",
             "quality_flags",
             "price",

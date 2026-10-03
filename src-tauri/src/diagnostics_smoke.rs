@@ -209,5 +209,80 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     println!(
         "NATIVE_SOURCE_REREAD_OK: React action, main-only IPC, durable intent, verified new generation, retry key, readonly bytes and one consumption"
     );
+    verify_request_input(app)?;
+    Ok(())
+}
+
+fn verify_request_input(app: &tauri::AppHandle) -> Result<(), String> {
+    use serde_json::json;
+    let state = app.state::<super::RuntimeState>();
+    let db = state.database.as_ref().map_err(|e| e.to_string())?;
+    let root = state.data_directory.join("synthetic-request-input-source");
+    fs::create_dir_all(root.join("sessions")).map_err(|e| e.to_string())?;
+    let path = root.join("sessions/input.jsonl");
+    let usage = json!({"input_tokens":272001,"cached_input_tokens":100,"cache_write_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":272011});
+    let records = [
+        json!({"type":"session_meta","payload":{"id":"request-input-fixture","timestamp":"2026-10-03T00:00:00Z","model_provider":"synthetic"}}),
+        json!({"type":"turn_context","payload":{"model":"synthetic-model","turn_id":"request-input-turn"}}),
+        json!({"type":"token_usage_record","payload":{"thread_id":"request-input-fixture","turn_id":"request-input-turn","root_turn_id":"synthetic-root","session_id":"synthetic-runtime","response_id":"private-response-fixture","usage":usage,"turn_token_usage":usage,"thread_token_usage":usage}}),
+        json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":usage,"total_token_usage":usage,"model_context_window":1000000}}}),
+    ];
+    let bytes: Vec<u8> = records
+        .into_iter()
+        .flat_map(|mut record| {
+            record["timestamp"] = "2026-10-03T00:00:01Z".into();
+            let mut line = serde_json::to_vec(&record).unwrap();
+            line.push(b'\n');
+            line
+        })
+        .collect();
+    fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    let mut permissions = fs::metadata(&path)
+        .map_err(|e| e.to_string())?
+        .permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).map_err(|e| e.to_string())?;
+    db.add_source(SourceRecord {
+        source_id: "native-request-input".into(),
+        root_path: root.to_str().ok_or("fixture root unavailable")?.into(),
+        directory_identity: None,
+        kind: "local".into(),
+        enabled: true,
+        created_at_ms: 1,
+    })
+    .map_err(|e| e.to_string())?;
+    token_pulse_collector::collect_file(db, "native-request-input", &path, 2)
+        .map_err(|e| e.to_string())?;
+    let main = app.get_webview_window("main").ok_or("main missing")?;
+    super::mini_smoke::evaluate_with_timeout(
+        app,
+        &main,
+        r#"
+      const range={start_ms:1790985600000,end_ms:1791072000000,timezone:'UTC'};
+      const filter={range,sources:{kind:'ids',ids:['native-request-input'],include_unknown:false},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}};
+      const result=await invoke('query_usage_events',{requestId:'native-request-input-projection',request:{query:{filter,price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null}});
+      const event=result.data.events[0];
+      if(result.data.events.length!==1 || event.request_input?.input_tokens!=='272001' || event.request_input.binding!=='full_request' || event.total_tokens!=='272011' || event.price.status!=='unpriced')throw Error('NATIVE_REQUEST_INPUT_PROJECTION');
+      if(JSON.stringify(result.data).includes('private-response-fixture'))throw Error('NATIVE_REQUEST_INPUT_ID_LEAK');
+      [...document.querySelectorAll('.sidebar nav button')].find(b=>b.textContent==='明细').click();
+      await wait(()=>document.querySelector('.event-table')?.textContent.includes('synthetic-model'));
+      [...document.querySelectorAll('.event-table button')].find(b=>b.textContent==='查看依据').click();
+      await wait(()=>document.querySelector('.event-evidence')?.textContent.includes('272,001 Token'));
+      const evidence=document.querySelector('.event-evidence');
+      if(!evidence.textContent.includes('对应完整请求用量') || !evidence.textContent.includes('尚未采集，不能据此确认完整计费'))throw Error('NATIVE_REQUEST_INPUT_UI');
+    "#,
+        Duration::from_secs(15),
+    )?;
+    if fs::read(&path).map_err(|e| e.to_string())? != bytes
+        || !fs::metadata(&path)
+            .map_err(|e| e.to_string())?
+            .permissions()
+            .readonly()
+    {
+        return Err("request input source changed".into());
+    }
+    println!(
+        "NATIVE_REQUEST_INPUT_OK: readonly synthetic source, exact response input, whole consumption binding, actual DTO/React, unknown conditions, no response identity exposed"
+    );
     Ok(())
 }

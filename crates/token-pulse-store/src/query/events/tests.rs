@@ -50,6 +50,101 @@ fn install(db: &Database) {
 }
 
 #[test]
+fn exact_request_input_is_snapshot_consistent_and_distinct_from_consumption_and_cumulative() {
+    use token_pulse_core::{
+        domain::{NormalizedObservation, PhysicalPosition, RequestUsageEvidence},
+        pricing::request::RequestConsumptionBinding,
+    };
+    for full in [true, false] {
+        let (_dir, db) = setup();
+        let mut batch = fixture();
+        let NormalizedObservation::Usage(observed) = &mut batch.observations[0].record else {
+            panic!("fixture usage")
+        };
+        observed.physical_position.byte_offset = 10;
+        observed.effective_metadata.turn_id = Some("turn".into());
+        observed.effective_metadata.cwd =
+            Some("E:\\private-synthetic-parent\\VisibleProject".into());
+        let response_usage = observed.last.unwrap();
+        let cumulative = UsageVector {
+            input_total: Some(500000),
+            reported_total: Some(500010),
+            ..response_usage
+        };
+        observed.cumulative = Some(cumulative);
+        observed.model_context_window = Some(1000000);
+        observed.request_usage = Some(Box::new(RequestUsageEvidence {
+            response_id: "response-internal-only".into(),
+            turn_id: "turn".into(),
+            usage: response_usage,
+            thread_usage: cumulative,
+            physical_position: PhysicalPosition {
+                file_generation_id: "generation".into(),
+                byte_offset: 0,
+                byte_end: 10,
+            },
+        }));
+        if !full {
+            batch.events[0].usage = UsageVector {
+                input_total: Some(20),
+                cached_input: Some(5),
+                output_total: Some(5),
+                reasoning_output: Some(1),
+                reported_total: Some(25),
+                ..Default::default()
+            };
+        }
+        db.commit(batch).unwrap();
+        let page = fetch(&db, &request_for_test());
+        let evidence = page.events[0].request_input.as_ref().unwrap();
+        assert_eq!(evidence.input_tokens.as_str(), "100");
+        assert_eq!(
+            evidence.binding,
+            if full {
+                RequestConsumptionBinding::FullRequest
+            } else {
+                RequestConsumptionBinding::DifferentConsumption
+            }
+        );
+        assert_eq!(
+            page.summary.total_tokens.as_str(),
+            if full { "110" } else { "25" }
+        );
+        let encoded = serde_json::to_string(&page).unwrap();
+        assert!(
+            !encoded.contains("response-internal-only")
+                && !encoded.contains("private-synthetic-parent")
+        );
+        extra(&db, "newer-zero", 2000, 0, (None, None), None, None);
+        let mut continuation = request(UsageEventSort::TimeDesc, 1);
+        let first = fetch(&db, &continuation);
+        assert!(first.events[0].request_input.is_none());
+        continuation.cursor = first.next_cursor;
+        db.write(|connection| {connection.execute("UPDATE observations SET normalized_json=json_set(normalized_json,'$.request_usage',NULL) WHERE observation_id='observation'",[])?;Ok(())}).unwrap();
+        let old_page = fetch(&db, &continuation);
+        assert_eq!(
+            old_page.events[0].request_input.as_ref().unwrap().binding,
+            evidence.binding
+        );
+        assert_eq!(old_page.meta.data_revision, first.meta.data_revision);
+        // Optional malformed/stale evidence must not invalidate independently published Tokens.
+        for value in ["null", "{}", "{\"response_id\":\"bad\"}"] {
+            let json = value.to_owned();
+            db.write(move|connection| {connection.execute("UPDATE observations SET normalized_json=json_set(normalized_json,'$.request_usage',json(?1)) WHERE observation_id='observation'",[json])?;Ok(())}).unwrap();
+            let page = fetch(&db, &request_for_test());
+            assert!(page.events[0].request_input.is_none());
+            assert_eq!(
+                page.summary.total_tokens.as_str(),
+                if full { "110" } else { "25" }
+            );
+        }
+    }
+}
+fn request_for_test() -> UsageEventsRequest {
+    request(UsageEventSort::TimeDesc, 200)
+}
+
+#[test]
 fn known_cache_write_pricing_and_persistent_fee_cache_do_not_charge_ordinary_input_twice() {
     use token_pulse_core::{domain::NormalizedObservation, pricing::UnpricedCode};
     for writes in [0, 20] {

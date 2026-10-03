@@ -1,5 +1,17 @@
 # 实施与交付记录
 
+## M09h3b1：公开精确请求输入、完整消费关联与明细依据
+
+已把保存的单响应必要证据投影到 UsageEventRow.request_input，公开精确非负字符串 input_tokens 和 full_request / different_consumption；无证据 / 校验失败返回 null，真实零保留。重新验证身份、同代次位置顺序、回合、last / cumulative 向量覆盖与线程包含关系；完整消费比对使用原 source_total_tokens，不能用推导合计补缺失。坏辅助证据不破坏独立可信 Token，不返回 response_id / 任意 JSON / 位置。Rust → TS / schema 同步，无新 DDL、价格 / 费用缓存改变。
+
+正式明细依据新增完整文字请求输入、关联与模式 / 地区未知说明；输入可靠但本笔为部分消费时明确不能据此选档。原导航、主题、价格审计 / 原始向量保持，表格容器控制依据可视宽度，窄容器上下排列，修正首次截图发现的右列裁切并加边界断言。
+
+自动测试：core / store / collector lib + integration 44 组共 495 项通过、1 既有性能夹具 ignored（未运行性能测试）；新独立预期覆盖 0 / 272000 / 272001 / >2^53、累计 / 窗口区别、部分消费及 null 覆盖、非法身份 / 位置 / 包含关系、坏可选证据，实际 SQLite 固定分页与新快照正确分离。37 Vitest、6 明细 Playwright、TypeScript / Vite、workspace strict Clippy、release-cfg 编译、契约漂移 / fmt / diff 通过，日志 target/request-input-*.log。1280 深色 / 960 浅色依据截图已查看，保存 target/page-review/2026-10-03-request-input/；合成桥只用于开发验证，不代表真实用户消费。
+
+实际系统检查：Win10 19045 / 150% DPI、隔离 native-probe 库及自有只读来源，真实读取 / Collector / SQLite / 主窗 IPC / React 显示单响应输入 272001、完整消费 272011、未计价、缺模式 / 地区及无响应 ID 泄露；文件 bytes / readonly 属性保持。NATIVE_REQUEST_INPUT_OK 与既有来源重读 / 诊断定位检查通过，受控进程实际退出 0。WebView 程序操作不能替代物理键盘 / 焦点，正式实例占用恢复键的 SHORTCUT_CONFLICT 和 WebView 类注销 1412 仍保留。
+
+本增量并未实现自动上下文价格选择；h3b2 的条件规则 / 历史 / 缓存 / 混合费用、h4 实际模式与 h5 地区证据继续。37 条参考规则保持，gpt-6.1-sol 仍未完整自动计价。早期 h3a / h1d 的公开 DTO 待办由本节完成，保留其当时记录。正式安装 / 发布仍 0.1.2，没有改真实用户库 / 日志、读 auth.json、保存正文或重启电脑，用户未提交内容分离保留。
+
 ## M09h1d：诊断页明确重读与实际 Win10 通路
 
 正式诊断页增加“重读已启用来源”，说明与原保存用量重建的区别及暂停来源的历史保留。共用精确进度 / 状态 / 取消，不新增完整任务历史；reading_source_files 使用普通说明。不同操作不能混用回复丢失后的 request_key，进行中禁用其他提交，原操作可安全重试，失败 / 取消终态恢复按钮。

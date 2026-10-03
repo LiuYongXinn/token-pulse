@@ -4,6 +4,7 @@ use crate::{
     error::ErrorCode,
     numeric::{DecimalInt, EpochMs},
     pricing::PriceOutcome,
+    pricing::request::RequestInputEvidence,
     protocol::{Coverage, PriceBasis, PricingSummary, SnapshotMeta, TokenTotals, UsageFilter},
 };
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
@@ -128,6 +129,7 @@ pub struct UsageEventRow {
     pub usage: RawUsageVector,
     pub raw_last: Option<RawUsageVector>,
     pub raw_cumulative: Option<RawUsageVector>,
+    pub request_input: Option<RequestInputEvidence>,
     pub calculation_method: String,
     #[schemars(length(max = 16))]
     pub quality_flags: Vec<String>,
