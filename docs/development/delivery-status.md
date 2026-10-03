@@ -6,6 +6,18 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M16r：Explorer 正常重启资格的只读检查
+
+继续为真实 Explorer 生命周期准备受控验收方法，新增 `scripts/inspect-explorer-restart.ps1`。此入口只有只读检查，不声明 / 调用 RmShutdown、RmRestart、系统重启、进程结束或窗口消息。限定 Win10 19045 x64；核对唯一主任务栏、系统 explorer.exe 路径、同一会话及内核创建时间，在检查结束再次验证 Shell PID / HWND 未改变。不读取窗口标题、用户名、域或认证。
+
+通过 Windows Restart Manager 创建本次临时会话，只登记明确的 PID + 创建时间，不登记文件 / 服务或遍历其他应用；有界取得列表后核对唯一同一进程 / 会话、RmExplorer 类型、Restartable 和 reboot reasons，并在 finally 结束本次 RM 会话。未知字段保持 null，不把失败当作无重启原因。原生 ABI 大小 12 / 668 在调用前校验，枚举失败 / 多个主任务栏均拒绝。文件窗口（含隐藏窗口）与白名单外的可见 Explorer 窗口使 Eligible=false；默认输出成功代表检查完成，不代表重启验收成功。
+
+本机实际退出 0，ShellPid=7552 / SessionId=1；RmGetList=0、RegisteredProcesses=1、ApplicationType=4、Restartable=true、RebootReasons=0，说明当前 RM 查询没有要求电脑重启。实际 FileWindowCount=0，但同进程有两个可见 ApplicationFrameWindow，用途尚未核实，Reason=UnknownVisibleExplorerWindowsPresent / Eligible=false。复核输出保存在 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-inspection-a8a53722003d44ce8308cbdbd4405def/inspection.json`。没有关闭这些窗口、重启 Explorer 或重启电脑；正式应用 PID 92688 保留。用户同时明确“不要重启电脑”，已同步实施计划第 7 节，后续不主动触发 Windows 重启 / 关机。
+
+此证据将限制从泛称“锁屏不能测”细化为实际进程重启资格与用户窗口状态。后续 Explorer 完整验收仍需在明确的可控 Shell 状态下绑定宿主、观察旧进程结束及新代次恢复；本入口不缩减或替代该场景。规则依据 [RM_PROCESS_INFO](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/ns-restartmanager-rm_process_info) 和 [RmGetList](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmgetlist)，实际改变进程时应遵循 [RmShutdown](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmshutdown) / [RmRestart](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/nf-restartmanager-rmrestart) 的正常关闭、同会话及出错后恢复要求；当前没有执行这两项调用。
+
+脚本动态 C# / 真实 RM 查询、PowerShell AST / diff 随提交核对；实际正向重启未验。生产程序、候选包 / 密钥与用户数据保持，未推送 GitHub，无性能测试。
+
 ## M16q：无需桌面输入的三项原生功能复测
 
 用户指出不能把所有剩余场景都归因于锁屏。本轮直接运行既有受控原生入口，而非再次只检查锁屏或重复要求解锁。三项均使用 UUID 隔离开发数据库、真实 WebView / SQLite / 生产实现；自有 HWND 消息、DOM / IPC 和后台子进程不依赖 SendInput，没有删除输入归属保护或改变正式设置。复测后的 WTS 头为 SessionId=1 / ConnectionState=0 / SessionFlags=0；正式标准目录 0.1.0 的 PID 92688 保留，开发应用及原生宿主均已退出。

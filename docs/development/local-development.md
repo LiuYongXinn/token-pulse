@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+Explorer 重启资格只读检查：`pwsh -NoProfile -File scripts/inspect-explorer-restart.ps1`。不关闭窗口、结束进程、重启 Explorer 或电脑；精确 PID / 创建时间登记 Restart Manager，核对可重启状态及同进程的未知可见窗口。M16r 的当前结果为 Restartable=true / RebootReasons=0，但两个用途未确认的可见 ApplicationFrameWindow 使 Eligible=false，实际重启未执行。用户要求不要重启电脑，后续验收不主动触发 Windows 重启 / 关机。见[资格检查与限制](delivery-status.md#m16rexplorer-正常重启资格的只读检查)。
+
 锁屏下可运行受控原生功能检查：`pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions`、`-RecoveryRoutes`、`-Notify` 分别验证任务栏完整消息通路、小窗交互恢复 / 透明度及 notify 配置 / headless / 采集。M16q 三项本机实际退出 0，使用真实 WebView / 原生实现及隔离开发数据库，不发送物理键鼠、不修改正式设置。实际输入 / Narrator、多屏 / DPI、真实休眠和账户变化、正式源完整升级分别保留独立验收边界，不能统称为锁屏无法测试。见[本轮方法与证据](delivery-status.md#m16q无需桌面输入的三项原生功能复测)。
 
 M16p：用户要求直接测试后，标准安装 0.1.0 的后台窗口命令 / 单实例 / 正常退出 / 冷启动序列实际退出 0；46 张非设置表及数据 / 价格修订前后完全一致。统计 / 小窗恢复原隐藏状态，正式应用保留运行。此检查用本应用受限窗口消息，不发送物理输入，托盘弹出菜单仍未验；不需要锁屏解锁即可执行上述后台序列。证据和临时程序见[本轮实际验收记录](delivery-status.md#m16p正式安装版的后台窗口控制与冷启动复测)。
