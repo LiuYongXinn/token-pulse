@@ -202,6 +202,11 @@ fn prefix_is_proven(prefix: &[UsageSignature], strong_identity: bool) -> bool {
                         last.cached_input,
                     )
                     && component_progression(
+                        before.cache_write_input,
+                        after.cache_write_input,
+                        last.cache_write_input,
+                    )
+                    && component_progression(
                         before.reasoning_output,
                         after.reasoning_output,
                         last.reasoning_output,

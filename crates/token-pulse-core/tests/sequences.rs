@@ -51,6 +51,83 @@ fn vector(v: [i64; 5]) -> UsageVector {
         reported_total: Some(v[4]),
     }
 }
+
+#[test]
+fn weak_header_mirror_progression_requires_the_independent_cache_write_component() {
+    let id = SequenceIdentity {
+        created_at_ms: None,
+        ..identity("synthetic-write-mirror")
+    };
+    let mut before = vector([100, 20, 10, 2, 110]);
+    before.cache_write_input = Some(20);
+    let mut last = vector([50, 10, 5, 1, 55]);
+    last.cache_write_input = Some(10);
+    for (writes, expected) in [
+        (
+            Some(30),
+            SequenceDecision::Mirror {
+                aligned_prefix: 2,
+                incoming_continuation: 0,
+            },
+        ),
+        (Some(35), SequenceDecision::PendingInsufficientEvidence),
+        (Some(10), SequenceDecision::PendingInsufficientEvidence),
+        (None, SequenceDecision::PendingInsufficientEvidence),
+    ] {
+        let mut after = vector([150, 30, 15, 3, 165]);
+        after.cache_write_input = writes;
+        let records = [
+            UsageSignature {
+                event_time_ms: Some(1),
+                request_identity: None,
+                stream_hint: None,
+                last: Some(before),
+                cumulative: Some(before),
+                explicit_episode_start: false,
+            },
+            UsageSignature {
+                event_time_ms: Some(2),
+                request_identity: None,
+                stream_hint: None,
+                last: Some(last),
+                cumulative: Some(after),
+                explicit_episode_start: false,
+            },
+        ];
+        assert_eq!(
+            align_mirror(&sequence(&id, &records), &sequence(&id, &records)),
+            expected
+        );
+    }
+    // Legacy all-unknown write counters still support the original full-vector progression.
+    before.cache_write_input = None;
+    last.cache_write_input = None;
+    let records = [
+        UsageSignature {
+            event_time_ms: Some(1),
+            request_identity: None,
+            stream_hint: None,
+            last: Some(before),
+            cumulative: Some(before),
+            explicit_episode_start: false,
+        },
+        UsageSignature {
+            event_time_ms: Some(2),
+            request_identity: None,
+            stream_hint: None,
+            last: Some(last),
+            cumulative: Some(vector([150, 30, 15, 3, 165])),
+            explicit_episode_start: false,
+        },
+    ];
+    assert_eq!(
+        align_mirror(&sequence(&id, &records), &sequence(&id, &records)),
+        SequenceDecision::Mirror {
+            aligned_prefix: 2,
+            incoming_continuation: 0
+        }
+    );
+}
 fn signatures(f: &Fixture, keys: &[String]) -> Vec<UsageSignature> {
     keys.iter()
         .map(|key| {
