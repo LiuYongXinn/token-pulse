@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use ts_rs::TS;
 
+mod request;
+pub use request::{RequestPriceEvidence, RequestPriceSelectionError, SelectedRequestReference};
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema, TS,
 )]
