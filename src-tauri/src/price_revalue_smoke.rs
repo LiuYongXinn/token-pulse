@@ -63,6 +63,7 @@ pub fn seed(db: &Database) -> StoreResult<()> {
             session_key: Some("synthetic-session".into()),
             payload_fingerprint: "synthetic-hash".into(),
             record: NormalizedObservation::Usage(UsageObservation {
+                request_usage: None,
                 physical_position: PhysicalPosition {
                     file_generation_id: "synthetic-generation".into(),
                     byte_offset: 0,

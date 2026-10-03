@@ -47,6 +47,7 @@ pub(crate) fn fixture() -> WriteBatch {
         reported_total: Some(110),
     };
     let observation = UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: "generation".into(),
             byte_offset: 0,

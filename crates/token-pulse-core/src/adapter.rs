@@ -29,6 +29,9 @@ pub fn adapt(
     if bytes.iter().all(u8::is_ascii_whitespace) {
         return AdaptedRecord::Ignored;
     }
+    // Fail closed across any intervening nonblank record, including malformed input.
+    // The pending record survives batch/restart via the atomic ReaderContext checkpoint.
+    let pending_request = context.pending_request_usage.take();
     let value: Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(_) => {
@@ -132,6 +135,20 @@ pub fn adapt(
                 metadata: context.metadata.clone(),
             }))
         }
+        "token_usage_record" => {
+            match request_usage(root.get("payload"), position.clone(), context) {
+                Ok(evidence) => {
+                    context.pending_request_usage = Some(Box::new(evidence));
+                    // It is auxiliary proof, never a second consumption event.
+                    AdaptedRecord::Ignored
+                }
+                Err(()) => diagnostic(
+                    position,
+                    ErrorCode::UnsupportedFormat,
+                    "invalid_request_usage_record",
+                ),
+            }
+        }
         "event_msg" => {
             let Some(payload) = root.get("payload").and_then(Value::as_object) else {
                 return diagnostic(
@@ -211,11 +228,30 @@ pub fn adapt(
                     return diagnostic(position, ErrorCode::InvalidUsage, "invalid_context_window");
                 }
             };
+            let request_usage = pending_request.filter(|evidence| {
+                evidence.physical_position.file_generation_id == position.file_generation_id
+                    && evidence.physical_position.byte_end <= position.byte_offset
+                    && context.metadata.turn_id.as_ref() == Some(&evidence.turn_id)
+                    && last == Some(evidence.usage)
+                    && cumulative == Some(evidence.thread_usage)
+            });
+            let request_identity = request_usage.as_ref().and_then(|evidence| {
+                context
+                    .metadata
+                    .provider
+                    .as_ref()
+                    .filter(|p| !p.is_empty() && p.len() <= 256 && !p.chars().any(char::is_control))
+                    .map(|provider| VerifiedRequestIdentity {
+                        namespace: format!("codex-responses:{provider}"),
+                        request_id: evidence.response_id.clone(),
+                    })
+            });
             AdaptedRecord::Observation(Box::new(NormalizedObservation::Usage(UsageObservation {
                 physical_position: position,
                 session_key: session,
                 event_time_ms: time,
-                request_identity: None,
+                request_identity,
+                request_usage,
                 stream_hint: None,
                 last,
                 cumulative,
@@ -232,6 +268,51 @@ pub fn adapt(
             "unsupported_record_type",
         ),
     }
+}
+
+fn request_usage(
+    value: Option<&Value>,
+    physical_position: PhysicalPosition,
+    context: &ReaderContext,
+) -> Result<RequestUsageEvidence, ()> {
+    let payload = value.and_then(Value::as_object).ok_or(())?;
+    let identity = |key| -> Result<String, ()> {
+        payload
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty() && s.len() <= 256 && !s.chars().any(char::is_control))
+            .map(str::to_owned)
+            .ok_or(())
+    };
+    let thread = identity("thread_id")?;
+    let turn_id = identity("turn_id")?;
+    // Validate the documented layout, but retain only identities needed for association.
+    identity("session_id")?;
+    identity("root_turn_id")?;
+    if context.provider_session_id.as_ref() != Some(&thread)
+        // Collector can resolve the logical session key to a canonical alias.
+        || context.session_key.as_ref().is_none_or(|key| key.is_empty())
+        || context.metadata.turn_id.as_ref() != Some(&turn_id)
+    {
+        return Err(());
+    }
+    physical_position.validate().map_err(|_| ())?;
+    let response_usage = usage(payload.get("usage"))?.ok_or(())?;
+    let thread_usage = usage(payload.get("thread_token_usage"))?.ok_or(())?;
+    let turn_usage = usage(payload.get("turn_token_usage"))?.ok_or(())?;
+    for vector in [response_usage, thread_usage, turn_usage] {
+        vector.validated_total().map_err(|_| ())?.ok_or(())?;
+    }
+    if response_usage.input_total.is_none() || response_usage.output_total.is_none() {
+        return Err(());
+    }
+    Ok(RequestUsageEvidence {
+        response_id: identity("response_id")?,
+        turn_id,
+        usage: response_usage,
+        thread_usage,
+        physical_position,
+    })
 }
 fn string(map: &Map<String, Value>, key: &str) -> Result<Option<String>, ()> {
     match map.get(key) {

@@ -91,3 +91,23 @@ M09h1a 阶段没有第四种价格费率，已知正数写入返回 insufficient
 费用缓存版本升到 2，集合 ID / 指纹 / 读取过滤都包含新版本；旧 ready v1 集合被排除，查询同价格版本即时补算，后台补建新集合。价格更新只改变费用估算，旧实际读取快照和历史修订保留原结果，Token / 检查点不变。编辑器可保存独立写入费率、真实零或空未知；规则表显示四费率并注明包含关系，共享主题 / 隐私 / 历史流程保持。
 
 自动验证包括 729 组普通 / 命中 / 写入类别独立预期、未知 / 零 / 正数、等价费率 / 零剩余输入、超 JS 精度整数、费率上界、v11→v12 旧 null、实际并发旧快照 / 价格历史 / 重开 / 旧缓存排除与补建。core / store 415 项通过，1 既有性能夹具 ignored；前端 37 单元及 11 浏览器检查通过。隔离 Win10 实际 WebView / SQLite / IPC 验证四项 1300 原子、UI 替换写入价为零后自动补建 700 原子、历史费率及消费 / 检查点保持；合成数据不表示真实账户账单。正式 0.1.2 安装 / 发布包尚无 M09h1a / M09h2，实际历史补读、单请求上下文、响应模式和地区证据继续按 M09h1 / h3–h5 推进。
+
+## 8. 单响应输入证据的采集（M09h3a）
+
+2026-10-03 核实官方 Codex 固定源码 `b741e480e203f037ca726bc2a76d99a8e8668e66`，不是只凭字段名判断语义。`TokenUsageInfo.fill_to_context_window` 会制造填满窗口的 last / total，普通 token_count 不能无条件证明真实请求输入；新 `token_usage_record` 的 usage 来自一次完成响应，并携带 response_id、线程 / 回合与线程累计。RawResponseCompleted 是实时事件，官方 rollout 策略不保存它；TokenUsageRecord 没有实际服务模式字段。turn_context / ThreadSettingsSnapshot 中的 service_tier 是设置，不能当作响应确认模式。
+
+适配器已接 token_usage_record 的明确布局，只提取必要响应 ID、回合 ID、用量、线程累计和物理位置，不保存原始 metadata / 正文 / 运行时会话 ID。线程 ID 必须匹配已知来源会话、回合必须匹配有效元数据，身份长度 / 控制字符、整数 / 包含关系及完整响应输入输出均校验。该记录仅作为辅助证据，不另造消费事件。pending 证据随原 ReaderContext 检查点原子保存，可跨批次 / 重启；Box 只控制 Rust 内存布局，不改变必要 JSON 形状。
+
+随后 token_count 在同文件代次、前后物理位置、回合和完整 last / cumulative 向量都匹配时，必要观察保存 request_usage；明确提供方下建立对应 response_id 的请求身份。任意中间非空记录、无效行、元数据变化、向量 / 覆盖不同或重复使用都不能沿用该证据；失败仅缺请求证据，原 Token 核算照常。采集器规范化会话别名不等于来源线程 ID 改变，关联核对 provider_session_id，不假定内部会话键一定是 codex:<id>。旧无证据字段省略序列化，旧格式字节保持，已跨过的历史不自动重解析。
+
+本阶段已验证可靠输入量 272000 / 272001 与累计 500000 / 模型窗口 1000000 分别保存，不能用后二者选档。core / store / collector 42 组共 484 项通过，1 既有性能夹具 ignored；新增辅助记录边界 / 身份 / 覆盖 / 位置 / 重复 / 旧序列化以及真实只读文件、SQLite 检查点跨批次 / 重启 / 一笔消费 / 正文不保存检查。workspace strict Clippy、release-cfg 编译、契约漂移及 fmt 通过。该结果是自动测试与 Win10 实际文件 IO，不是正式安装 UI 或真实用户日志验收。
+
+**未完成部分**：公开精确请求输入 DTO、与可信完整消费的计价绑定、每请求 Short / Long 规则选择和混合分档汇总继续 M09h3b；实际模式证据继续 M09h4。现有 37 条参考规则保持，gpt-6.1-sol 未因证据采集增量而变成默认完整自动计价。新格式不存在或无法严格绑定时保持请求条件未知，不能从会话累计、窗口或用户设置补造条件。
+
+固定官方依据：
+
+- [Protocol 的响应记录与 TokenUsageInfo](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/protocol/src/protocol.rs)：区分完成响应与窗口填充计数。
+- [历史记录序列化](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/history/src/rollout_payload.rs)：token_usage_record 的明确持久布局。
+- [采样完成处理](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/src/session/turn.rs)与[会话记录处理](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/src/session/mod.rs)：先保留完成响应，再更新兼容用量及发送计数。
+- [官方持久化策略](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/rollout/src/policy.rs)：RawResponseCompleted 不写入普通 rollout，不把实时事件能力冒充本地日志证据。
+- [官方响应记录测试](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/tests/suite/token_usage_rollout.rs)：多次响应、回合 / 线程累积和缺 usage 的行为来源。

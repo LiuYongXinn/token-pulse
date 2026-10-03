@@ -27,6 +27,7 @@ fn observation(
     cumulative: UsageVector,
 ) -> UsageObservation {
     UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: "synthetic".into(),
             byte_offset: offset,

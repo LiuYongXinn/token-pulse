@@ -130,6 +130,9 @@ pub struct ReaderContext {
     pub provider_session_id: Option<String>,
     pub session_key: Option<String>,
     pub metadata: EffectiveMetadata,
+    /// One preceding durable response-usage record; never inferred from counters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_request_usage: Option<Box<RequestUsageEvidence>>,
     #[serde(default)]
     pub oversized_line: Option<OversizedLineState>,
     #[serde(default)]
@@ -161,6 +164,17 @@ pub struct VerifiedRequestIdentity {
     pub request_id: String,
 }
 
+/// Necessary fields from Codex's durable token_usage_record, not chat or billing metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestUsageEvidence {
+    pub response_id: String,
+    pub turn_id: String,
+    pub usage: UsageVector,
+    pub thread_usage: UsageVector,
+    pub physical_position: PhysicalPosition,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UsageObservation {
@@ -168,6 +182,8 @@ pub struct UsageObservation {
     pub session_key: String,
     pub event_time_ms: Option<i64>,
     pub request_identity: Option<VerifiedRequestIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_usage: Option<Box<RequestUsageEvidence>>,
     pub stream_hint: Option<String>,
     pub last: Option<UsageVector>,
     pub cumulative: Option<UsageVector>,

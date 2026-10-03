@@ -231,6 +231,7 @@ fn independent_sequence_fixture_proves_mirrors_and_inheritance_or_keeps_pending(
 }
 fn usage() -> UsageObservation {
     UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: "a".into(),
             byte_offset: 0,
@@ -344,6 +345,7 @@ fn aligned_parent_prefix_seeds_child_without_billing_inherited_usage() {
         }
     );
     let from_signature = |signature: &UsageSignature, session: &str, index: u64| UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: session.into(),
             byte_offset: index,

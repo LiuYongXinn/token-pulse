@@ -131,6 +131,7 @@ fn invalid_partial_last_or_cumulative_never_advances_accounting_state() {
         reported_total: Some(10),
     };
     let mut observation = UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: "synthetic".into(),
             byte_offset: 0,

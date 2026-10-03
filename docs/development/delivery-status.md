@@ -1,5 +1,15 @@
 # 实施与交付记录
 
+## M09h3a：可靠单响应输入证据与跨批次检查点
+
+核实官方固定 Codex 源码 b741e480e203f037ca726bc2a76d99a8e8668e66，普通 last 有窗口填充 / 重算路径，不能直接当请求输入；token_usage_record 保存完成响应 usage / response_id / 回合及线程累计，RawResponseCompleted 实时事件不进普通 rollout，配置 service_tier 不等于实际模式。依据与核实日见[计价专题第 8 节](../design/price-accounting.md#8-单响应输入证据的采集m09h3a)。
+
+接入明确 token_usage_record 辅助格式，身份与向量验证后只保留必要字段；同代次位置 / 回合 / 完整 last 和 cumulative 都匹配才关联随后 token_count，并建立有明确提供方的响应身份。pending 随原 ReaderContext 事务保存，request_usage 随必要观察保存，跨批次 / 重启不丢；任意中间非空记录、无效行、元数据或覆盖不符均不沿用，重复计数不复用。辅助记录不另计消费，缺证明保留原 Token 和未知条件；旧 None 字段省略序列化，不自动重解析已跨过历史。
+
+自动验证：core / store / collector lib + integration 42 组 484 项通过，1 既有性能夹具 ignored。新增 272000 / 272001 与累计 / 窗口区分、身份 / 向量 / 代次 / 位置 / 覆盖不匹配、坏记录、checkpoint round-trip 与旧字节；真实 Win10 临时只读来源在 500 条记录分界后重开 SQLite，证据保留且只产生一笔 272011 Token，原始字节 / readonly 属性保持、正文与无关身份不保存、再次核对不重复。测试发现规范会话键经采集器解析为别名，修正关联为来源线程 ID 而非假定内部键的字符串形式；较大的可空证据采用 Box，JSON 不变。workspace all-targets strict Clippy、release-cfg desktop check、契约漂移及 fmt / diff 通过，日志在忽略目录 target/request-usage-*.log。
+
+本模块未改 UI / 公共 DTO / 四费率规则 / 安装包，不将自动真实文件 IO 冒充正式安装原生或用户日志验收。M09h3b 的公开精确输入 / 完整消费绑定 / 分档与混合汇总、M09h4 的实际模式及历史拒绝记录受控补读继续；37 条参考规则保持，gpt-6.1-sol 等条件模型仍未完整自动计价。原有未提交文件分离保留。
+
 ## M09h1b：镜像递进证明包含缓存写入
 
 复核发现，弱会话头（没有可靠创建时间 / 请求身份）的镜像序列证明虽然逐条比较了含写入字段的签名，但“完整计数向量递进”辅助证明遗漏写入分项。现在同时要求 before.cache_write_input + last.cache_write_input = after.cache_write_input，nullable 覆盖也一致；无证据的下降、不同增量或已知变未知均不能作为该递进证明。旧全未知写入仍按原完整五项递进处理，不填零、不放宽单记录或身份规则。

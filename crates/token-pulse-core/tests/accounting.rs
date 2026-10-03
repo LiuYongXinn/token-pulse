@@ -39,6 +39,7 @@ fn vector(v: [Option<i64>; 5]) -> UsageVector {
 }
 fn observation(index: usize, step: &Step) -> UsageObservation {
     UsageObservation {
+        request_usage: None,
         physical_position: PhysicalPosition {
             file_generation_id: "synthetic-generation".into(),
             byte_offset: index as u64 * 100,
@@ -274,7 +275,7 @@ proptest! {
             let last=UsageVector {input_total:Some(*input),cache_write_input: None, cached_input:Some((*cache).min(*input)),output_total:Some(*output),reasoning_output:Some((*reasoning).min(*output)),reported_total:Some(*input+*output)};
             let components=[last.input_total,last.cached_input,last.output_total,last.reasoning_output,last.reported_total];
             for j in 0..5 {totals[j]+=components[j].unwrap();}
-            let usage=UsageObservation {physical_position:PhysicalPosition{file_generation_id:"g".into(),byte_offset:i as u64,byte_end:i as u64+1},session_key:"session".into(),event_time_ms:Some(123),request_identity:None,stream_hint:Some("trusted".into()),last:Some(last),cumulative:Some(vector(totals.map(Some))),effective_metadata:EffectiveMetadata{model:Some(format!("model-{i}")),..Default::default()},explicit_episode_start:false,model_context_window:None};
+            let usage=UsageObservation { request_usage: None,physical_position:PhysicalPosition{file_generation_id:"g".into(),byte_offset:i as u64,byte_end:i as u64+1},session_key:"session".into(),event_time_ms:Some(123),request_identity:None,stream_hint:Some("trusted".into()),last:Some(last),cumulative:Some(vector(totals.map(Some))),effective_metadata:EffectiveMetadata{model:Some(format!("model-{i}")),..Default::default()},explicit_episode_start:false,model_context_window:None};
             let result=account(&state,&usage,&AccountingEvidence{independent_new_stream:i==0,..Default::default()});
             prop_assert!(matches!(result.quality,ObservationQuality::Confirmed|ObservationQuality::Duplicate));
             if let Some(event)=result.event_usage {engine_sum+=i128::from(event.input_total.unwrap())+i128::from(event.output_total.unwrap());}

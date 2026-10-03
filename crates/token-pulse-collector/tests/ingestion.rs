@@ -33,6 +33,97 @@ fn count(db: &Database, table: &str) -> i64 {
 }
 
 #[test]
+fn request_usage_checkpoint_across_batches_and_restart_retains_one_read_only_consumption() {
+    use serde_json::json;
+    use token_pulse_core::domain::NormalizedObservation;
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, "local", logs.path(), true);
+    let path = logs.path().join("sessions/request.jsonl");
+    let usage = json!({"input_tokens":272001,"cached_input_tokens":100,"cache_write_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":272011});
+    let mut records = vec![
+        json!({"type":"session_meta","payload":{"id":"thread","model_provider":"synthetic"}}),
+        json!({"type":"turn_context","payload":{"turn_id":"turn","model":"synthetic-model"}}),
+    ];
+    records.extend((0..497).map(
+        |_| json!({"type":"response_item","payload":{"text":"SYNTHETIC_BODY_MUST_NOT_SURVIVE"}}),
+    ));
+    records.push(json!({"type":"token_usage_record","payload":{"thread_id":"thread","turn_id":"turn","root_turn_id":"root","session_id":"runtime-session","response_id":"response","usage":usage,"turn_token_usage":usage,"thread_token_usage":usage}}));
+    records.push(json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":usage,"total_token_usage":usage,"model_context_window":1000000}}}));
+    let original: Vec<u8> = records
+        .into_iter()
+        .flat_map(|mut r| {
+            r["timestamp"] = "2026-10-03T00:00:00Z".into();
+            let mut line = serde_json::to_vec(&r).unwrap();
+            line.push(b'\n');
+            line
+        })
+        .collect();
+    fs::write(&path, &original).unwrap();
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).unwrap();
+    let first = collect_file(&db, "local", &path, 5000).unwrap();
+    assert!(first.has_more);
+    assert_eq!(total(&db), "0");
+    let checkpoint = db
+        .file_checkpoint("local", path.to_str().unwrap(), None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        checkpoint
+            .context
+            .pending_request_usage
+            .as_ref()
+            .unwrap()
+            .usage
+            .input_total,
+        Some(272001)
+    );
+    drop(db);
+    let db = Database::open(data.path()).unwrap();
+    let second = collect_file(&db, "local", &path, 5001).unwrap();
+    assert!(!second.has_more);
+    assert_eq!(total(&db), "272011");
+    assert_eq!(count(&db, "usage_events"), 1);
+    db.snapshot(|tx, _| {
+        let mut statement = tx.prepare("SELECT normalized_json FROM observations")?;
+        let mut verified = false;
+        for row in statement.query_map([], |r| r.get::<_, String>(0))? {
+            let text = row?;
+            assert!(
+                !text.contains("SYNTHETIC_BODY_MUST_NOT_SURVIVE")
+                    && !text.contains("runtime-session")
+            );
+            if let NormalizedObservation::Usage(u) = serde_json::from_str(&text)? {
+                assert_eq!(
+                    u.request_usage.as_ref().unwrap().usage.input_total,
+                    Some(272001)
+                );
+                assert_eq!(u.request_identity.as_ref().unwrap().request_id, "response");
+                verified = true;
+            }
+        }
+        assert!(verified);
+        Ok(())
+    })
+    .unwrap();
+    assert!(
+        db.file_checkpoint("local", path.to_str().unwrap(), None)
+            .unwrap()
+            .unwrap()
+            .context
+            .pending_request_usage
+            .is_none()
+    );
+    collect_file(&db, "local", &path, 5002).unwrap();
+    assert_eq!(total(&db), "272011");
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(fs::metadata(&path).unwrap().permissions().readonly());
+}
+
+#[test]
 fn import_restart_append_and_archive_use_real_database_without_double_counting() {
     let data = tempfile::tempdir().unwrap();
     let logs = tempfile::tempdir().unwrap();
