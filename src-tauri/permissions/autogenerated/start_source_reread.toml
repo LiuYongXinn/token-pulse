@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-source-reread"
+description = "Enables the start_source_reread command without any pre-configured scope."
+commands.allow = ["start_source_reread"]
+
+[[permission]]
+identifier = "deny-start-source-reread"
+description = "Denies the start_source_reread command without any pre-configured scope."
+commands.deny = ["start_source_reread"]

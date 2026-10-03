@@ -9,7 +9,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_DIAGNOSTIC_POSITIONS_OK: own readonly rollout, exact position, missing file, real main UI/IPC, latest privacy, mini denied, resume replacement resolves issues without losing source bytes"
+                "NATIVE_DIAGNOSTIC_POSITIONS_OK: own readonly rollout, exact position, missing file, real main UI/IPC, latest privacy, mini denied, resume replacement and explicit source reread preserve source bytes"
             ),
             Err(error) => eprintln!("NATIVE_DIAGNOSTIC_POSITIONS_FAILED: {error}"),
         }
@@ -97,6 +97,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         &mini,
         r#"
       let denied=false;try{await invoke('query_diagnostics',{requestId:'mini-diagnostic-denied',request:{source_id:null}});}catch{denied=true;}if(!denied)throw new Error('MINI_DIAGNOSTICS_PERMISSION');
+      denied=false;try{await invoke('start_source_reread',{requestId:'mini-source-read-denied',request:{kind:'rebuild',scope:{kind:'all'},request_key:'mini-source-read-denied'}});}catch{denied=true;}if(!denied)throw new Error('MINI_SOURCE_READ_PERMISSION');
     "#,
     )?;
     let corrected = [head.as_slice(),b"{\"timestamp\":\"1970-01-01T00:00:01Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"total_tokens\":9}}}}\n"].concat();
@@ -136,5 +137,77 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     {
         return Err("corrected total or readonly source bytes changed".into());
     }
+    let before = db
+        .file_checkpoint("native-diagnostics", path.to_str().unwrap(), None)
+        .map_err(|e| e.to_string())?
+        .ok_or("source checkpoint missing")?;
+    let mut permissions = fs::metadata(&path)
+        .map_err(|e| e.to_string())?
+        .permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).map_err(|e| e.to_string())?;
+    super::mini_smoke::evaluate_with_timeout(
+        app,
+        &main,
+        r#"
+      let rejected=false;try{await invoke('start_source_reread',{requestId:'reread-invalid-scope',request:{kind:'rebuild',scope:{kind:'sessions',session_keys:['native-fixture']},request_key:'reread-invalid-scope'}});}catch(e){rejected=e.code==='INVALID_QUERY';}if(!rejected)throw Error('REREAD_SESSION_SCOPE_ACCEPTED');
+      await wait(()=>[...document.querySelectorAll('.jobs-panel button')].some(b=>b.textContent==='重读已启用来源'&&!b.disabled));
+      [...document.querySelectorAll('.jobs-panel button')].find(b=>b.textContent==='重读已启用来源').click();
+      await wait(()=>document.querySelector('.job-notice')?.textContent.startsWith('来源重读已提交'));
+      const end=Date.now()+12000;
+      for(;;){const job=await invoke('get_rebuild_status',{requestId:'native-reread-status'});if(job.data?.state==='succeeded'){window.__nativeRereadJob=job.data.job_id;break;}if(['failed','cancelled','interrupted'].includes(job.data?.state))throw Error('NATIVE_REREAD_TERMINAL_'+job.data.state);if(Date.now()>end)throw Error('NATIVE_REREAD_TIMEOUT');await new Promise(r=>setTimeout(r,100));}
+      [...document.querySelectorAll('.jobs-panel button')].find(b=>b.textContent==='刷新重建状态').click();
+      await wait(()=>document.querySelector('.job-card')?.textContent.includes('已完成'));
+      if(!document.querySelector('.jobs-panel').textContent.includes('补齐旧版未识别的记录'))throw Error('REREAD_EXPLANATION_MISSING');
+    "#,
+        Duration::from_secs(18),
+    )?;
+    let job = db
+        .rebuild_status()
+        .map_err(|e| e.to_string())?
+        .ok_or("reread job missing")?;
+    let stored = db.get_job(&job.job_id).map_err(|e| e.to_string())?;
+    if !stored.checkpoint.reread_sources
+        || stored.job.state != token_pulse_core::protocol::JobState::Succeeded
+    {
+        return Err("explicit read intent or result missing".into());
+    }
+    let key = serde_json::to_string(&stored.request.request_key).map_err(|e| e.to_string())?;
+    let id = serde_json::to_string(&job.job_id).map_err(|e| e.to_string())?;
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        &format!(
+            "const retry=await invoke('start_source_reread',{{requestId:'reread-idempotent',request:{{kind:'rebuild',scope:{{kind:'all'}},request_key:{key}}}}});if(retry.data.job_id!=={id})throw Error('REREAD_NOT_IDEMPOTENT');"
+        ),
+    )?;
+    let after = db
+        .file_checkpoint("native-diagnostics", path.to_str().unwrap(), None)
+        .map_err(|e| e.to_string())?
+        .ok_or("new checkpoint missing")?;
+    let repeated: String = db
+        .snapshot(|tx, _| {
+            Ok(tx.query_row(
+                "SELECT sum_token_decimal(total_tokens) FROM active_usage_events",
+                [],
+                |r| r.get(0),
+            )?)
+        })
+        .map_err(|e| e.to_string())?;
+    if before.file_generation_id == after.file_generation_id
+        || repeated != "9"
+        || fs::read(&path).map_err(|e| e.to_string())? != corrected
+        || !fs::metadata(&path)
+            .map_err(|e| e.to_string())?
+            .permissions()
+            .readonly()
+    {
+        return Err(
+            "source reread failed to replace generation or changed consumption/source".into(),
+        );
+    }
+    println!(
+        "NATIVE_SOURCE_REREAD_OK: React action, main-only IPC, durable intent, verified new generation, retry key, readonly bytes and one consumption"
+    );
     Ok(())
 }

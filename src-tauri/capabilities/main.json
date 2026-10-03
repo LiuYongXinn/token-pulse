@@ -40,6 +40,7 @@
     "allow-choose-source-directory",
     "allow-manage-source",
     "allow-start-job",
+    "allow-start-source-reread",
     "allow-get-job",
     "allow-list-jobs",
     "allow-get-rebuild-status",

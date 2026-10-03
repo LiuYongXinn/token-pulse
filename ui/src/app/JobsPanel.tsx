@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { getRebuildStatus, startJob, cancelJob, runtimeError } from '../shared/runtime';
+import { getRebuildStatus, startJob, startSourceReread, cancelJob, runtimeError } from '../shared/runtime';
 import type { Job, JobState } from '../shared/generated/contracts';
 import { whenFull } from './usage-display';
 
 const states: Record<JobState, string> = { queued: '等待执行', running: '正在执行', validating: '正在验证', publishing: '正在发布', cancelling: '正在安全取消', succeeded: '已完成', cancelled: '已取消', failed: '失败', interrupted: '已中断' };
 const finished = new Set<JobState>(['succeeded', 'cancelled', 'failed', 'interrupted']);
-const phases: Record<string, string> = { queued: '等待执行', planning: '正在准备', registering_inputs: '正在准备', replaying_observations: '正在核算', validating: '正在验证', publishing: '正在发布', complete: '完成' };
+const phases: Record<string, string> = { queued: '等待执行', planning: '正在准备', reading_source_files: '正在重读已启用来源', registering_inputs: '正在准备', replaying_observations: '正在核算', validating: '正在验证', publishing: '正在发布', complete: '完成' };
 const full = (n: string) => BigInt(n).toLocaleString('zh-CN');
 
 export function JobsPanel({ timezone }: { timezone: string | null }) {
@@ -16,6 +16,7 @@ export function JobsPanel({ timezone }: { timezone: string | null }) {
   const [busy, setBusy] = useState(false);
   const mounted = useRef(false), serial = useRef(0), writing = useRef(false);
   const pendingRequest = useRef<string | null>(null);
+  const pendingReread = useRef(false);
   const job = snapshot?.job ?? null;
   const activeJob = job !== null && !finished.has(job.state);
   const refresh = async () => {
@@ -37,20 +38,22 @@ export function JobsPanel({ timezone }: { timezone: string | null }) {
     catch (e) { if (mounted.current) setActionError(runtimeError(e)); }
     finally { writing.current = false; if (mounted.current) setBusy(false); }
   };
-  const rebuild = () => run(async () => {
-    pendingRequest.current ??= crypto.randomUUID();
-    const created = await startJob({ kind: 'rebuild', scope: { kind: 'all' }, request_key: pendingRequest.current });
+  const rebuild = (reread = false) => run(async () => {
+    if (pendingRequest.current !== null && pendingReread.current !== reread) return;
+    if (pendingRequest.current === null) { pendingRequest.current = crypto.randomUUID(); pendingReread.current = reread; }
+    const created = await (reread ? startSourceReread : startJob)({ kind: 'rebuild', scope: { kind: 'all' }, request_key: pendingRequest.current });
     pendingRequest.current = null;
-    if (mounted.current) setNotice(`重建已提交，${states[created.state]}。`);
+    if (mounted.current) setNotice(`${reread ? '来源重读' : '重建'}已提交，${states[created.state]}。`);
   });
   const cancel = (id: string) => run(async () => {
     const result = await cancelJob(id);
     if (mounted.current) setNotice(result === 'too_late' ? '重建已进入发布，结果将完整提交。' : result === 'already_finished' ? '重建已结束。' : '已请求安全取消，等待当前批次结束。');
   });
   return <section className="panel jobs-panel" aria-label="基本重建进度">
-    <div className="panel-heading"><div><h2>账本重建</h2><p className="muted">重新核算已采集的用量，通过验证后更新统计。执行过程中保留当前结果。</p></div><div className="source-actions">
+    <div className="panel-heading"><div><h2>账本重建</h2><p className="muted">重建重新核算已保存的用量；重读会重新读取已启用来源中已发现的日志，补齐旧版未识别的记录。暂停来源保留已保存历史，通过验证后更新统计。</p></div><div className="source-actions">
       <button onClick={() => void refresh()} disabled={busy}>刷新重建状态</button>
-      <button className="primary" onClick={() => void rebuild()} disabled={busy || snapshot === null || error !== null || (activeJob && pendingRequest.current === null)}>重建全部账本</button>
+      <button onClick={() => void rebuild(true)} disabled={busy || snapshot === null || error !== null || (activeJob && pendingRequest.current === null) || (pendingRequest.current !== null && !pendingReread.current)}>重读已启用来源</button>
+      <button className="primary" onClick={() => void rebuild()} disabled={busy || snapshot === null || error !== null || (activeJob && pendingRequest.current === null) || (pendingRequest.current !== null && pendingReread.current)}>重建全部账本</button>
     </div></div>
     {(actionError ?? error) && <div className="notice" role="alert">{actionError ?? error}{error && snapshot && '；显示上次读取的状态。'}</div>}
     {notice && <p role="status" className="job-notice">{notice}</p>}

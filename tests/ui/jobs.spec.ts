@@ -1,6 +1,54 @@
 import { installSyntheticCalendar } from './calendar-bridge';
 import { test, expect } from '@playwright/test';
 
+test('explicit source reread keeps its own retry key, progress, safe cancellation and original rebuild action', async ({ page }, testInfo) => {
+  await installSyntheticCalendar(page);
+  await page.addInitScript(() => {
+    let job: Record<string, unknown> | null = null, key: string | null = null, lost = true;
+    Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
+      const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data });
+      if (command.startsWith('plugin:event|')) return 0;
+      if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
+      if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
+      if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
+      if (command === 'query_diagnostics') return response({ data_revision: '1', issues: [], has_more: false });
+      if (command === 'get_taskbar_status') return response({ revision: '0', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, action_error: null, last_cleanup: null, last_snapshot_at_ms: null });
+      if (command === 'get_rebuild_status') return response(structuredClone(job));
+      if (command === 'start_source_reread') {
+        const request = args.request as { kind: string; scope: { kind: string }; request_key: string };
+        if (request.kind !== 'rebuild' || request.scope.kind !== 'all' || (key !== null && key !== request.request_key)) throw Error('read intent or key changed');
+        key = request.request_key;
+        job ??= { job_id: 'synthetic-reread', kind: 'rebuild', state: 'running', phase: 'reading_source_files', discovered_files: '2', discovery_complete: true, processed_files: '0', processed_bytes: '9007199254740993', accepted_events: '0', pending_observations: '0', can_cancel: true, error: null, created_at_ms: 1000, updated_at_ms: 2000 };
+        if (lost) { lost = false; throw Error('synthetic lost source-read reply'); }
+        return response(structuredClone(job));
+      }
+      if (command === 'cancel_job') { job!.state = 'cancelling'; return response('accepted'); }
+      throw Error(`unexpected source-read fixture command ${command}`);
+    } }, __completeSourceRead: () => { job!.state = 'cancelled'; job!.can_cancel = false; } });
+  });
+  await page.goto('/'); await page.getByRole('button', { name: '采集诊断', exact: true }).click();
+  const panel = page.getByRole('region', { name: '基本重建进度' });
+  const read = panel.getByRole('button', { name: '重读已启用来源', exact: true });
+  const rebuild = panel.getByRole('button', { name: '重建全部账本', exact: true });
+  await expect(read).toBeEnabled(); await read.click();
+  await expect(panel.getByText('synthetic lost source-read reply')).toBeVisible();
+  await expect(rebuild).toBeDisabled(); await read.click();
+  await expect(panel.getByText('来源重读已提交，正在执行。')).toBeVisible();
+  await expect(panel.getByText(/正在重读已启用来源/)).toBeVisible();
+  await expect(panel.getByText('已处理 9,007,199,254,740,993 字节')).toBeVisible();
+  await expect(read).toBeDisabled(); await expect(rebuild).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath('source-reread-dark.png'), fullPage: true });
+  await page.setViewportSize({ width: 960, height: 860 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('source-reread-light-960.png'), fullPage: true });
+  await panel.getByRole('button', { name: '取消重建', exact: true }).click();
+  await expect(panel.getByText('正在安全取消')).toBeVisible();
+  await page.evaluate(() => (window as unknown as { __completeSourceRead: () => void }).__completeSourceRead());
+  await panel.getByRole('button', { name: '刷新重建状态' }).click();
+  await expect(panel.getByText('已取消', { exact: true })).toBeVisible();
+  await expect(read).toBeEnabled(); await expect(rebuild).toBeEnabled();
+});
+
 test('synthetic job IPC fixture shows accepted cancellation until final state and retains request idempotency', async ({ page }) => {
   await installSyntheticCalendar(page);
   await page.addInitScript(() => {

@@ -57,6 +57,7 @@ fn main() {
             "choose_source_directory",
             "manage_source",
             "start_job",
+            "start_source_reread",
             "get_job",
             "list_jobs",
             "get_rebuild_status",

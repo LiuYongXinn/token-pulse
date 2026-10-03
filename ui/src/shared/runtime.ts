@@ -123,6 +123,7 @@ export function manageSource(action: ManageSourceAction, expectedSettingsRevisio
 export function listJobs(): Promise<Job[]> { return request('list_jobs', { limit: 50 }); }
 export function getRebuildStatus(): Promise<Job | null> { return request('get_rebuild_status'); }
 export function startJob(jobRequest: JobRequest): Promise<Job> { return request('start_job', { request: jobRequest }); }
+export function startSourceReread(jobRequest: JobRequest): Promise<Job> { return request('start_source_reread', { request: jobRequest }); }
 export function cancelJob(jobId: string): Promise<CancelJobResult> { return request('cancel_job', { jobId }); }
 export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }
 export function getDashboardBundle(query: DashboardRequest): Promise<DashboardBundle> { return request('get_dashboard_bundle', { request: query }); }

@@ -39,8 +39,26 @@ async fn blocking<T: Send + 'static>(
 pub async fn start_job(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,
+    request: JobRequest,
+    request_id: String,
+) -> Result<PrivateResponse<Job>, Box<AppError>> {
+    submit_job(window, state, request, request_id, false).await
+}
+#[tauri::command]
+pub async fn start_source_reread(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: JobRequest,
+    request_id: String,
+) -> Result<PrivateResponse<Job>, Box<AppError>> {
+    submit_job(window, state, request, request_id, true).await
+}
+async fn submit_job(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
     mut request: JobRequest,
     request_id: String,
+    reread_sources: bool,
 ) -> Result<PrivateResponse<Job>, Box<AppError>> {
     authorized(&window, &request_id)?;
     request
@@ -59,7 +77,12 @@ pub async fn start_job(
     let db = db(&state, &request_id)?;
     let id = uuid::Uuid::new_v4().to_string();
     let job = blocking(&request_id, move || {
-        db.create_job(id, request, token_pulse_collector::jobs::now_ms()?)
+        let at = token_pulse_collector::jobs::now_ms()?;
+        if reread_sources {
+            db.create_source_reread_job(id, request, at)
+        } else {
+            db.create_job(id, request, at)
+        }
     })
     .await?;
     if let Ok(service) = &state.jobs {

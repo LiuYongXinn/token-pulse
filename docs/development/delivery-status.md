@@ -1,5 +1,17 @@
 # 实施与交付记录
 
+## M09h1d：诊断页明确重读与实际 Win10 通路
+
+正式诊断页增加“重读已启用来源”，说明与原保存用量重建的区别及暂停来源的历史保留。共用精确进度 / 状态 / 取消，不新增完整任务历史；reading_source_files 使用普通说明。不同操作不能混用回复丢失后的 request_key，进行中禁用其他提交，原操作可安全重试，失败 / 取消终态恢复按钮。
+
+正式 main-only start_source_reread 使用原 JobRequest / Job / 隐私包装，与 queued 持久意图和任务服务联通；kind / scope 校验拒绝 sessions 或不支持类别，应用注册 / capability / 生成权限同步。mini 不获权限，原 start_job 重建保持。无需增加公开 DTO 或 schema 表，不提供任意文件读取入口。
+
+自动检查：TypeScript / Vite 构建、5 项作业 / 诊断 Playwright、契约漂移、workspace all-targets strict Clippy、release-cfg desktop check、fmt / diff 通过。新增场景覆盖回复丢失同 key 重试、模式隔离、真实精确大整数进度、取消 / 终态及两种原操作；检查 1280 深色与 960 浅色截图，无溢出 / 遮挡，主窗导航与布局保持。截图为明确合成 DTO，保留在 target/page-review/2026-10-03-source-reread/，不是正式账户统计。
+
+实际系统：Win10 19045 / 150% DPI，隔离 native-probe 数据与自有合成来源，真实主 / 小窗 WebView、正式 React 操作 / IPC、后台作业和 SQLite；重读切换新代次，原总量 9 和 readonly 源字节保持，重复请求返回同一作业，非法 sessions 与 mini 调用拒绝，诊断定位 / 隐私及来源变化原场景继续通过。输出 NATIVE_SOURCE_REREAD_OK / NATIVE_DIAGNOSTIC_POSITIONS_OK，受控进程退出 0，stdout / stderr 在 target/manual-reread-native-*.log。界面操作由自有 WebView 程序调用，不能替代物理键盘 / 焦点验收；正式实例占用恢复键的 SHORTCUT_CONFLICT 和 WebView2 类注销 1412 仍保留。
+
+已安装 / 已发布仍 0.1.2，未写真实用户库、未读 auth.json、未保存正文、未改实际源日志、未重启电脑。h1c 所说的入口下一阶段接入已由本节完成，签名候选 / 正式安装和真实此前拒绝历史的补读待验；精确请求 DTO / 完整消费绑定 / 分档、响应实际模式 / 地区继续推进，工具 / 多模态 / 在线价格为已列扩展。
+
 ## M09h1c：手动来源重读后端与候选所有权
 
 确认普通账本重建只重放必要观察，无法恢复旧适配器已拒绝且检查点跨过的记录。增加明确手动作业的来源重读意图，queued 请求原子保存并拒绝不同读模式复用同 request_key；内部 checkpoint 可空扩展缺省 false / 省略旧字节，重启保持且进行中不可改。只选择作用范围内已登记、启用的本地文件，从零分批只读解析；普通发现仍处理未登记文件，暂停来源继续重放保存历史。
