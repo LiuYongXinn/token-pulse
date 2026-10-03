@@ -98,7 +98,7 @@ M09h1a 阶段没有第四种价格费率，已知正数写入返回 insufficient
 
 适配器已接 token_usage_record 的明确布局，只提取必要响应 ID、回合 ID、用量、线程累计和物理位置，不保存原始 metadata / 正文 / 运行时会话 ID。线程 ID 必须匹配已知来源会话、回合必须匹配有效元数据，身份长度 / 控制字符、整数 / 包含关系及完整响应输入输出均校验。该记录仅作为辅助证据，不另造消费事件。pending 证据随原 ReaderContext 检查点原子保存，可跨批次 / 重启；Box 只控制 Rust 内存布局，不改变必要 JSON 形状。
 
-随后 token_count 在同文件代次、前后物理位置、回合和完整 last / cumulative 向量都匹配时，必要观察保存 request_usage；明确提供方下建立对应 response_id 的请求身份。任意中间非空记录、无效行、元数据变化、向量 / 覆盖不同或重复使用都不能沿用该证据；失败仅缺请求证据，原 Token 核算照常。采集器规范化会话别名不等于来源线程 ID 改变，关联核对 provider_session_id，不假定内部会话键一定是 codex:<id>。旧无证据字段省略序列化，旧格式字节保持，已跨过的历史不自动重解析。
+随后 token_count 在同文件代次、前后物理位置、回合和完整 last / cumulative 向量都匹配时，必要观察保存 request_usage 及其中的响应 ID，供后续计价关联；不将稀疏辅助字段映射到既有核算 request_identity，防止改变旧镜像 / 继承前缀。任意中间非空记录、无效行、元数据变化、向量 / 覆盖不同或重复使用都不能沿用该证据；失败仅缺请求证据，原 Token 核算照常。采集器规范化会话别名不等于来源线程 ID 改变，关联核对 provider_session_id，不假定内部会话键一定是 codex:<id>。旧无证据字段省略序列化，旧格式字节保持，已跨过的历史不自动重解析。
 
 本阶段已验证可靠输入量 272000 / 272001 与累计 500000 / 模型窗口 1000000 分别保存，不能用后二者选档。core / store / collector 42 组共 484 项通过，1 既有性能夹具 ignored；新增辅助记录边界 / 身份 / 覆盖 / 位置 / 重复 / 旧序列化以及真实只读文件、SQLite 检查点跨批次 / 重启 / 一笔消费 / 正文不保存检查。workspace strict Clippy、release-cfg 编译、契约漂移及 fmt 通过。该结果是自动测试与 Win10 实际文件 IO，不是正式安装 UI 或真实用户日志验收。
 
@@ -111,3 +111,5 @@ M09h1a 阶段没有第四种价格费率，已知正数写入返回 insufficient
 - [采样完成处理](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/src/session/turn.rs)与[会话记录处理](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/src/session/mod.rs)：先保留完成响应，再更新兼容用量及发送计数。
 - [官方持久化策略](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/rollout/src/policy.rs)：RawResponseCompleted 不写入普通 rollout，不把实时事件能力冒充本地日志证据。
 - [官方响应记录测试](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/tests/suite/token_usage_rollout.rs)：多次响应、回合 / 线程累积和缺 usage 的行为来源。
+
+M09h3a2 兼容收尾：有辅助响应记录的原文件与没有该记录的旧镜像 / 分叉副本，仍采用原必要核算签名；response_id 仅保存在计价辅助证据中。独立镜像与继承前缀检查确认两种记录可继续对齐，原可信消费不因辅助证据的稀疏覆盖而失效。稀疏来源本身不能补造缺失计价条件，后续费用绑定使用规范消费的必要观察证据。

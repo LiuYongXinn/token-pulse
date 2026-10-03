@@ -1,5 +1,12 @@
 # 实施与交付记录
 
+## M09h3a2：稀疏计价证据与核算签名分离
+
+提交后兼容复核发现，将新响应 ID 写入已有 request_identity 会改变核算签名；缺辅助记录的旧镜像或分叉副本可能无法与有证据的规范序列对齐。本增量取消该映射，响应 ID 继续只保存在 request_usage 中，配对条件 / 检查点 / 消费原子保存保持，旧镜像 / 分叉的必要核算签名独立于计价证据覆盖。上一条 M09h3a 中“建立响应身份”的阶段描述按本节收敛，不是当前核算字段的状态。
+
+新增独立检查证明同一用量有 / 无辅助证据的签名相同，镜像对齐与父子继承前缀成立，规范消费仍保留精确请求输入。core 请求 / 序列 / 写入 15 项与 collector 导入 / live canonical / replay 14 项定向回归通过，包含实际只读来源跨批次 / SQLite 重开 / 单笔消费；core / collector all-targets strict Clippy、fmt / diff 通过。未改 UI / 公共 DTO / 价格 / 安装包，后续 h3b 条件绑定不从缺证据的镜像猜测响应输入或实际模式。
+
+
 ## M09h3a：可靠单响应输入证据与跨批次检查点
 
 核实官方固定 Codex 源码 b741e480e203f037ca726bc2a76d99a8e8668e66，普通 last 有窗口填充 / 重算路径，不能直接当请求输入；token_usage_record 保存完成响应 usage / response_id / 回合及线程累计，RawResponseCompleted 实时事件不进普通 rollout，配置 service_tier 不等于实际模式。依据与核实日见[计价专题第 8 节](../design/price-accounting.md#8-单响应输入证据的采集m09h3a)。

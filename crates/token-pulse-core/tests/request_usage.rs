@@ -68,11 +68,8 @@ fn durable_response_input_survives_checkpoint_and_binds_exact_single_response_no
         assert_eq!(evidence.thread_usage.input_total, Some(500000));
         assert_eq!(observed.model_context_window, Some(1000000));
         assert_eq!(evidence.physical_position, position(0));
-        let identity = observed.request_identity.as_ref().unwrap();
-        assert_eq!(
-            (&*identity.namespace, &*identity.request_id),
-            ("codex-responses:synthetic", "response")
-        );
+        assert_eq!(evidence.response_id, "response");
+        assert!(observed.request_identity.is_none());
         assert!(reopened.pending_request_usage.is_none());
         assert!(
             usage(feed(&count(input), 2, &mut reopened))
@@ -155,5 +152,70 @@ fn invalid_auxiliary_records_do_not_invent_evidence_and_legacy_serialization_is_
         !serde_json::to_string(&context())
             .unwrap()
             .contains("pending_request_usage")
+    );
+}
+
+#[test]
+fn sparse_auxiliary_evidence_cannot_change_mirror_or_inherited_prefix_identity() {
+    use token_pulse_core::sequence::{
+        SequenceDecision, SequenceIdentity, SessionSequence, UsageSignature, align_lineage,
+        align_mirror,
+    };
+    let mut c = context();
+    feed(&record(272001), 0, &mut c);
+    let mut observed = usage(feed(&count(272001), 1, &mut c));
+    observed.event_time_ms = Some(1000);
+    let mut legacy = observed.clone();
+    legacy.request_usage = None;
+    let current = [UsageSignature::from(&observed)];
+    let sparse = [UsageSignature::from(&legacy)];
+    assert_eq!(current, sparse);
+    let parent = SequenceIdentity {
+        provider_namespace: "synthetic".into(),
+        provider_session_id: "thread".into(),
+        created_at_ms: Some(1),
+        parent_provider_id: None,
+    };
+    let reference = SessionSequence {
+        identity: &parent,
+        records: &current,
+        starts_at_session_head: true,
+        scanned_to_upper_bound: true,
+    };
+    let mirror = SessionSequence {
+        identity: &parent,
+        records: &sparse,
+        starts_at_session_head: true,
+        scanned_to_upper_bound: true,
+    };
+    assert_eq!(
+        align_mirror(&reference, &mirror),
+        SequenceDecision::Mirror {
+            aligned_prefix: 1,
+            incoming_continuation: 0
+        }
+    );
+    let child = SequenceIdentity {
+        provider_session_id: "child".into(),
+        parent_provider_id: Some("thread".into()),
+        ..parent.clone()
+    };
+    let inherited = SessionSequence {
+        identity: &child,
+        records: &sparse,
+        starts_at_session_head: true,
+        scanned_to_upper_bound: true,
+    };
+    assert_eq!(
+        align_lineage(&[reference], &inherited),
+        SequenceDecision::Inherited {
+            aligned_prefix: 1,
+            child_continuation: 0
+        }
+    );
+    // A canonical response still retains its own input proof for later price binding.
+    assert_eq!(
+        observed.request_usage.unwrap().usage.input_total,
+        Some(272001)
     );
 }

@@ -235,22 +235,13 @@ pub fn adapt(
                     && last == Some(evidence.usage)
                     && cumulative == Some(evidence.thread_usage)
             });
-            let request_identity = request_usage.as_ref().and_then(|evidence| {
-                context
-                    .metadata
-                    .provider
-                    .as_ref()
-                    .filter(|p| !p.is_empty() && p.len() <= 256 && !p.chars().any(char::is_control))
-                    .map(|provider| VerifiedRequestIdentity {
-                        namespace: format!("codex-responses:{provider}"),
-                        request_id: evidence.response_id.clone(),
-                    })
-            });
             AdaptedRecord::Observation(Box::new(NormalizedObservation::Usage(UsageObservation {
                 physical_position: position,
                 session_key: session,
                 event_time_ms: time,
-                request_identity,
+                // Pricing evidence is sparse in older mirrors and copied lineage.
+                // Keep the immutable legacy sequence identity independent of its availability.
+                request_identity: None,
                 request_usage,
                 stream_hint: None,
                 last,

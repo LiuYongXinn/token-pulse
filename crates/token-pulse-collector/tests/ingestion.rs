@@ -101,7 +101,8 @@ fn request_usage_checkpoint_across_batches_and_restart_retains_one_read_only_con
                     u.request_usage.as_ref().unwrap().usage.input_total,
                     Some(272001)
                 );
-                assert_eq!(u.request_identity.as_ref().unwrap().request_id, "response");
+                assert_eq!(u.request_usage.as_ref().unwrap().response_id, "response");
+                assert!(u.request_identity.is_none());
                 verified = true;
             }
         }
