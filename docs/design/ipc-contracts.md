@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-04 M09h3b2b2a / b 不新增公开 DTO 或 IPC：内部核心条件报价入口与 schema v14 的条件索引不允许渲染端填入实际模式。PriceRulesSnapshot 继续只返回普通参考 / 用户规则及别名，172 条证据门控报价身份不混入普通规则编辑器；原目录 DTO 仍可浏览全部事实。生产查询 / 缓存条件金额与公开匹配依据后续，实际模式 / 地区未知保持原表达，详见[计价专题第 13 / 14 节](price-accounting.md#13-配置计价入口的条件金额选择m09h3b2b2a)。
+
 M09h3b2b1 扩展 UnpricedCode / PriceOutcome 的合法原因 incomplete_pricing_conditions，区别“目录没有报价”与“目录有条件价格但必要条件 / 计价链路尚未完整确认”；主窗口共享 reasonNames 显示“计费条件尚未完整确认”。缺模式 / 地区时不返回 guessed Standard、金额零或虚构匹配规则。原明细 / 汇总 / 重估命令及隐私保持，Rust → TS / schema 同步；持久原因 / 固定历史与缓存 v3 见[计价专题第 12 节](price-accounting.md#12-条件未完整确认的正式未计价状态m09h3b2b1)。
 
 M09h3b1 在 UsageEventRow 追加必需但可 null 的 request_input；已知值仅含 input_tokens（非负精确十进制字符串）及 binding（full_request / different_consumption）。unknown 返回 null，真实零返回字符串 "0"，不公开响应 ID、请求内部位置或任意 JSON。full_request 表示已保存响应向量与该事件原始可信消费完整一致，包括可空分项 / 原始报告总量；different_consumption 保留可靠请求输入，但不允许据此为部分消费选档。公开 DTO 不含实际模式 / 地区；full_request 也不表示完整条件计价。Rust / TS / schema 同步，复用原明细租约与权限，详见[计价专题第 10 节](price-accounting.md#10-公开请求输入与完整消费关联m09h3b1)。

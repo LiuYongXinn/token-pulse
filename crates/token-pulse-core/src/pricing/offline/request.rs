@@ -89,6 +89,31 @@ impl OfflinePriceCatalog {
                     && (entry.context == OfflineContextBand::All || entry.context == band)
             })
             .ok_or(E::MissingQuote)?;
+        self.reference_for_entry(entry, revision, created_at)
+    }
+    /// Immutable quote identities for persistence, never unconditional matching rules.
+    /// Actual request evidence must still pass select_request_reference before pricing.
+    pub fn request_reference_rules(
+        &self,
+        revision: DecimalInt,
+        created_at: EpochMs,
+    ) -> Result<Vec<SelectedRequestReference>, RequestPriceSelectionError> {
+        self.validate()
+            .map_err(|_| RequestPriceSelectionError::InvalidCatalog)?;
+        self.entries
+            .iter()
+            .map(|entry| self.reference_for_entry(entry, revision.clone(), created_at))
+            .collect()
+    }
+    fn reference_for_entry(
+        &self,
+        entry: &super::OfflinePriceEntry,
+        revision: DecimalInt,
+        created_at: EpochMs,
+    ) -> Result<SelectedRequestReference, RequestPriceSelectionError> {
+        use RequestPriceSelectionError as E;
+        let tier = entry.tier;
+        let model = &entry.model_exact;
         let tier_key = match tier {
             OfflinePriceTier::Standard => "standard",
             OfflinePriceTier::Batch => "batch",
@@ -107,7 +132,7 @@ impl OfflinePriceCatalog {
             introduced_revision: revision,
             retired_revision: None,
             provider: self.provider.clone(),
-            model_exact: model.into(),
+            model_exact: model.clone(),
             source_id: None,
             currency: self.currency.clone(),
             // Verification is not evidence of rates before this instant.

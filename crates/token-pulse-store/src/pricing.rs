@@ -49,7 +49,7 @@ fn read_rule(row: &Row<'_>) -> StoreResult<PriceRule> {
     Ok(rule)
 }
 pub fn rules_at(tx: &Transaction<'_>, revision: i64) -> StoreResult<PriceRulesSnapshot> {
-    let mut statement=tx.prepare(&format!("SELECT {COLUMNS} FROM price_rules WHERE introduced_revision<=?1 AND (retired_revision IS NULL OR retired_revision>?1) ORDER BY provider,model_exact,rule_id LIMIT 4097"))?;
+    let mut statement=tx.prepare(&format!("SELECT {COLUMNS} FROM price_rules WHERE introduced_revision<=?1 AND (retired_revision IS NULL OR retired_revision>?1) AND request_conditional=0 AND NOT EXISTS(SELECT 1 FROM conditional_price_rules c WHERE c.rule_id=price_rules.rule_id) ORDER BY provider,model_exact,rule_id LIMIT 4097"))?;
     let mut rows = statement.query([revision])?;
     let mut rules = Vec::new();
     while let Some(row) = rows.next()? {
@@ -140,7 +140,7 @@ fn apply(
         if overlaps {
             return Err(ErrorCode::PriceRuleConflict.into());
         }
-        let count:i64=tx.query_row("SELECT COUNT(*) FROM price_rules WHERE introduced_revision<=?1 AND (retired_revision IS NULL OR retired_revision>?1)",[next],|r|r.get(0))?;
+        let count:i64=tx.query_row("SELECT COUNT(*) FROM price_rules WHERE introduced_revision<=?1 AND (retired_revision IS NULL OR retired_revision>?1) AND request_conditional=0 AND NOT EXISTS(SELECT 1 FROM conditional_price_rules c WHERE c.rule_id=price_rules.rule_id)",[next],|r|r.get(0))?;
         if count >= 4096 {
             return Err(ErrorCode::InvalidQuery.into());
         }

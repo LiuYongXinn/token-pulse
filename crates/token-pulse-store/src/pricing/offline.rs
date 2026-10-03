@@ -1,9 +1,10 @@
 use super::*;
 use token_pulse_core::pricing::offline::{OfflinePriceCatalog, OfflinePriceCatalogSnapshot};
+mod conditional;
 
-fn insert_rule(tx: &Transaction<'_>, rule: &PriceRule) -> StoreResult<()> {
+fn insert_rule(tx: &Transaction<'_>, rule: &PriceRule, conditional: bool) -> StoreResult<()> {
     rule.validate()?;
-    tx.execute("INSERT INTO price_rules(rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms,cache_write_rate_atoms) VALUES(?1,?2,NULL,?3,?4,NULL,?5,?6,?7,?8,?9,?10,?11,'offline',?12,?13,?14)",params![rule.rule_id,i64::try_from(rule.introduced_revision.value()).map_err(|_|ErrorCode::NumericOverflow)?,rule.provider,rule.model_exact,rule.currency,rule.effective_from_ms.value(),rule.effective_to_ms.map(|v|v.value()),rule.priority,rule.input_rate_atoms.as_str(),rule.cached_rate_atoms.as_ref().map(|v|v.as_str()),rule.output_rate_atoms.as_str(),rule.origin_reference,rule.created_at_ms.value(),rule.cache_write_rate_atoms.as_ref().map(|v|v.as_str())])?;
+    tx.execute("INSERT INTO price_rules(rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms,cache_write_rate_atoms,request_conditional) VALUES(?1,?2,NULL,?3,?4,NULL,?5,?6,?7,?8,?9,?10,?11,'offline',?12,?13,?14,?15)",params![rule.rule_id,i64::try_from(rule.introduced_revision.value()).map_err(|_|ErrorCode::NumericOverflow)?,rule.provider,rule.model_exact,rule.currency,rule.effective_from_ms.value(),rule.effective_to_ms.map(|v|v.value()),rule.priority,rule.input_rate_atoms.as_str(),rule.cached_rate_atoms.as_ref().map(|v|v.as_str()),rule.output_rate_atoms.as_str(),rule.origin_reference,rule.created_at_ms.value(),rule.cache_write_rate_atoms.as_ref().map(|v|v.as_str()),conditional])?;
     Ok(())
 }
 pub(super) fn snapshot_at(
@@ -54,6 +55,9 @@ impl Database {
             drop(statement);
             if let Some(existing) = existing {
                 if existing != digest { return Err(ErrorCode::PriceRuleConflict.into()); }
+                // Deterministic quote metadata may be absent in pre-v14 installations.
+                // Its identity derives from the original publication, not this boot time.
+                conditional::materialize_all(&tx)?;
                 tx.commit()?;
                 return Ok(current);
             }
@@ -73,11 +77,12 @@ impl Database {
                     history.retired_revision = None;
                     history.effective_to_ms = Some(catalog.verified_at_ms);
                     history.created_at_ms = at;
-                    insert_rule(&tx,&history)?;
+                    insert_rule(&tx,&history,false)?;
                 }
             }
-            for rule in catalog.flat_standard_rules(decimal(next)?,at)? { insert_rule(&tx,&rule)?; }
+            for rule in catalog.flat_standard_rules(decimal(next)?,at)? { insert_rule(&tx,&rule,false)?; }
             tx.execute("INSERT INTO offline_price_catalogs(catalog_id,content_sha256,catalog_json,introduced_revision,verified_at_ms,installed_at_ms) VALUES(?1,?2,?3,?4,?5,?6)",params![catalog.catalog_id,digest,json,next,catalog.verified_at_ms.value(),at.value()])?;
+            conditional::materialize_all(&tx)?;
             // Validate the complete candidate before making its revision visible.
             let candidate = rules_at(&tx,next)?;
             PriceCatalog::new(candidate.rules,candidate.aliases,candidate.price_revision)?;

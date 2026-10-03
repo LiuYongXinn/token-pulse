@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-04 M09h3b2b2b 源码升 schema v14，首次启动旧已发布目录会在原发布修订下补建条件身份；这是确定性参考元数据，不是猜模式或价格更新。自动复核仍用 core / store lib / tests（442 项全套）及新增容量测试 1 项，共 443 通过、1 性能夹具 ignored；workspace strict Clippy / release desktop check 与新增 store Clippy 通过。日志位于 target/conditional-rule-publication-*.log / target/conditional-rule-capacity-*.log。六组新临时库场景覆盖 v13 迁移、旧快照 / 幂等 / 回滚 / 外键 / 损坏拒绝 / 容量，不是用户真实库或正式安装验收。公开及本机仍原 0.1.3 / schema v13，生产条件金额继续；见[专题第 14 节](../design/price-accounting.md#14-不可变条件规则身份与普通规则隔离m09h3b2b2b)。
+
 2026-10-04 M09h3b2b2a 配置核心条件金额已通过独立预期和原存储回归，复核命令为 `cargo test -p token-pulse-core -p token-pulse-store --lib --tests`（437 项通过，1 性能夹具 ignored）、`cargo clippy -p token-pulse-core -p token-pulse-store --all-targets -- -D warnings`；日志位于忽略目录 `target/conditional-engine-regression.log` / `target/conditional-engine-clippy-final.log`。最初测试金额字段 / 字符串与数字格式检查失败已修正，失败日志保留。本增量仅核心入口，不含生产持久条件金额或实际模式采集，没有新安装 / UI 验收；见[计价专题第 13 节](../design/price-accounting.md#13-配置计价入口的条件金额选择m09h3b2b2a)。
 
 2026-10-04 M16y3 已公开 [0.1.3 候选](https://github.com/LiuYongXinn/token-pulse/releases/tag/v0.1.3)；三资产匿名下载 / 版本绑定验签、正式安装版生产渠道“当前已是最新版本”检查通过。本轮 0.1.3 安装为本地签名 NSIS，未重复线上安装；0.1.0→0.1.2 线上闭环保留其独立证据。最新限制及回执见[交付记录](delivery-status.md)。以下准备 / 公开 0.1.2 是此前阶段，不能覆盖本段当前状态。
