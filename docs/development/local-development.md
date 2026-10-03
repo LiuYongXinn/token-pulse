@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+## 关键页面截图评审产物
+
+2026-10-03 的[24 张截图画廊](../../target/page-review/2026-10-03-a32d1c6/index.html)和[来源 / 图像摘要清单](../../target/page-review/2026-10-03-a32d1c6/manifest.json)以当前源码 `a32d1c6` / 0.1.1 为基准，保存于忽略的 `target/page-review/`。主窗口 / 小窗使用正式 React 组件与浏览器测试桥中的合成 DTO，任务栏使用正式原生 GDI 渲染器的合成夹具；均不表示已安装应用的真实账户或消费实拍。长页保留完整滚动截图，区域图与原生详情首屏单独标注。截图场景 13 项和定向原生像素检查 1 项通过，详细范围与限制见[截图记录](delivery-status.md#2026-10-03关键页面截图评审)。本地清理构建产物会移除画廊，需要保留时复制整个目录；材料未上传 GitHub。
+
 任务栏电源场景：`pwsh -NoProfile -File scripts/native-smoke.ps1 -PowerTaskbarMessages` 独占模式，使用标记的自有主 HWND 电源消息；`-PowerTaskbarResume` 只观察系统消息，不触发睡眠。真实驱动为 `pwsh -NoProfile -File scripts/verify-power-resume.ps1 -ActualStandby -Taskbar`，默认不带 ActualStandby 时仍仅预检。需已有 debug 桌面 / 前端及同目录宿主；驱动记录宿主摘要。先通过真实 WebView 固定会话 / 开启任务栏，再暂停并追加合成待处理数据，恢复前提前计入即失败；恢复后核对 10 Token 原生 caption / 详情、新快照与窗口 / 导航，正常退出后核对同一 Explorer 和完整当前任务区。只接受完全相同或严格仅共享通知边界变化，其他几何 / DPI / 缩短区域拒绝。本机最终 M16v 同包宿主 + debug 桌面实际 S3 退出 0、走 Exact；混合验收与历史失败范围见[M13g12](delivery-status.md#m13g12任务栏宿主的真实-s3-恢复链)。
 
 真实电源验收：`pwsh -NoProfile -File scripts/verify-power-resume.ps1` 默认只预检，不启动观察应用或睡眠；输出新临时证据目录。显式追加 `-ActualStandby` 会暂停整机程序，要求已有 debug 桌面二进制与前端产物、当前没有其他 debug 实例、电源 / 唤醒 / 本进程已有权限 / 系统事件全部满足。匹配自有 READY 与内核进程身份后请求 S3，设定 UTC 40 秒唤醒期限，保留唤醒事件；不重启、关机、休眠、提权或更改电源策略。恢复后要求独立 System S3 睡眠 / 恢复记录与正式采集补扫断言，权限和 native 资源完整清理。本机一次实际退出 0，请求到返回约 66 秒，具体唤醒来源未证明；此测试使用隔离 debug SQLite，不能替代正式包 / 任务栏宿主整体验收。证据与限制见[M07r2](delivery-status.md#m07r2真实-s3-睡眠与恢复补扫)。
