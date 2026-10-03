@@ -56,8 +56,7 @@ if ($UseExistingLocalState) {
     # The actual compiled public key/version verifier runs without initializing the app.
     $signature = $Installer + '.sig'
     if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) { throw 'Signed local-state acceptance requires the installer signature.' }
-    & (Join-Path $installerRoot 'target\release\token-pulse-desktop.exe') '--verify-update-release' $Installer $signature (Join-Path $acceptanceDirectory 'release-verification.json')
-    if ($LASTEXITCODE -ne 0) { throw 'Actual release signature/version verification failed.' }
+    $null = & (Join-Path $PSScriptRoot 'verify-release-artifact.ps1') -Installer $Installer -Signature $signature -Report (Join-Path $acceptanceDirectory 'release-verification.json')
     Write-Host ('INSTALLER_EXISTING_STATE_OK: explicit local-state acceptance; database safeguard and release signature verified; evidence=' + $acceptanceDirectory)
 }
 $installDirectory = Join-Path $acceptanceDirectory 'app'

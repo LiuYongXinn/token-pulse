@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+本地正式包验签使用 `pwsh -NoProfile -File scripts/verify-release-artifact.ps1 -Installer <安装包> -Signature <签名> -Report <新报告路径>`，父目录必须存在，报告不得已存在。入口明确等待本次 release 维护进程退出并检查它的退出码，不能直接调用 GUI exe 后读取可能残留的 LASTEXITCODE。安装验收的显式本地状态入口已复用此脚本；检查不启动 Tauri、安装器、网络或读取签名私钥。见[当前验收总表](delivery-status.md#当前范围核对2026-10-03m16m)及[本轮验证](delivery-status.md#m16m显式等待-release-验证进程与当前验收总表同步)。
+
 M13g4：2026-10-03 用户解锁后，已有 `check_taskbar_wire` 真实鼠标 / 焦点 / 布局检查，以及 `check_taskbar_accessibility` 的显式 actions 标志均退出 0，五个原生菜单 Invoke 到宿主动作通过。合成动作不转发正式应用，物理键盘 / Narrator 与标准应用托盘菜单仍独立。见[当前原生验收记录](delivery-status.md#m13g4解锁后的真实任务栏输入与五项-uia-菜单动作)。
 
 本机已按用户授权安装 TokenPulse 0.1.0，标准用户目录为 `C:/Users/Amin/AppData/Local/TokenPulse/`；正式安装后总览独立运行、文件 / 注册匹配通过，保留安装供使用。现有数据目录保持，基本安装 / 普通卸载已实测，不再以缺少独立虚拟机阻塞这两项；更高版本完整自动更新及物理系统项目仍需分别验收。见[本机安装记录](delivery-status.md#m16l用户授权的本机真实安装启动与普通卸载)。
@@ -24,7 +26,7 @@ M13g4：2026-10-03 用户解锁后，已有 `check_taskbar_wire` 真实鼠标 / 
 
 当前最新完整安装包为 M16j：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,606 字节，SHA-256 `9e3c22780697dee8c8d38b1699a592aa833469dfdce9809294a92e275133f250`。旁边 `.exe.sig` 是已验证的 Tauri 更新签名，应用自动更新时用它验签；用户安装和更新均无需手动输入密钥。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 全部通过，内嵌新项目公钥并保留位置 / 尺寸 / 同 DPI 工作区适配及 Tab 修复。下方旧包状态按历史保留；Windows 11 已取消，Windows 10 物理兼容与新包安装 / 完整升级仍继续。详见[最新构建记录](delivery-status.md#m16j新项目公钥下的安装包与本地签名发布资产)。
 
-已验证本地发布候选：[latest.json](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/latest.json)及[签名验证记录](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/release-verification.json)。同目录包含可上传的安装包与签名。当前未上传，公开固定清单的未认证 HEAD 请求返回 HTTP 404，不能当作实际联网更新完成；这套 0.1.0 包是新公钥初始基线，完整自动升级还需要后续更高版本与独立安装环境。
+已验证本地发布候选：[latest.json](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/latest.json)及[签名验证记录](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/release-verification.json)。同目录包含可上传的安装包与签名。当前未上传，公开固定清单的未认证 HEAD 请求返回 HTTP 404，不能当作实际联网更新完成；这套 0.1.0 包是新公钥初始基线，完整自动升级还需要后续更高版本发布资产及对应本机升级验收；当前发布顺序问题答复前不上传。
 
 ## 主窗口位置冷启动验收
 
