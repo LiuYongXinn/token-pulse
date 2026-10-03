@@ -445,6 +445,8 @@ mod passthrough_smoke;
 mod power;
 #[cfg(all(debug_assertions, windows))]
 mod power_resume_smoke;
+#[cfg(all(debug_assertions, windows))]
+mod power_taskbar_smoke;
 #[cfg(debug_assertions)]
 mod price_alias_smoke;
 mod price_commands;

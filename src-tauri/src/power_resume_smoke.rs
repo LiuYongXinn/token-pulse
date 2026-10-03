@@ -22,6 +22,19 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 pub enum Scene {
     AuthoredMessages,
     SystemObserver,
+    AuthoredTaskbarMessages,
+    SystemTaskbarObserver,
+}
+impl Scene {
+    fn authored(self) -> bool {
+        matches!(self, Self::AuthoredMessages | Self::AuthoredTaskbarMessages)
+    }
+    fn taskbar(self) -> bool {
+        matches!(
+            self,
+            Self::AuthoredTaskbarMessages | Self::SystemTaskbarObserver
+        )
+    }
 }
 fn parse(args: &[String]) -> Result<Option<Scene>, &'static str> {
     if !args.iter().any(|arg| arg.starts_with("--native-power-")) {
@@ -35,6 +48,12 @@ fn parse(args: &[String]) -> Result<Option<Scene>, &'static str> {
     {
         ["--native-smoke", "--native-power-messages-smoke"] => Ok(Some(Scene::AuthoredMessages)),
         ["--native-smoke", "--native-power-resume-smoke"] => Ok(Some(Scene::SystemObserver)),
+        ["--native-smoke", "--native-power-taskbar-messages-smoke"] => {
+            Ok(Some(Scene::AuthoredTaskbarMessages))
+        }
+        ["--native-smoke", "--native-power-taskbar-resume-smoke"] => {
+            Ok(Some(Scene::SystemTaskbarObserver))
+        }
         _ => Err("native power acceptance requires its exclusive exact scene"),
     }
 }
@@ -73,7 +92,11 @@ pub fn record_event(app: &tauri::AppHandle, event: u32) {
 pub fn start(app: tauri::AppHandle, scene: Scene) {
     thread::spawn(move || {
         thread::sleep(Duration::from_secs(2));
-        if let Err(error) = verify(&app, scene) {
+        let result = verify(&app, scene);
+        if let Some(service) = super::taskbar_commands::service(&app) {
+            service.shutdown();
+        }
+        if let Err(error) = result {
             eprintln!("NATIVE_POWER_ACCEPTANCE_FAILED: {error}");
             app.exit(1);
         } else {
@@ -182,6 +205,12 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
         Duration::from_secs(15),
         "baseline source scanned",
     )?;
+    // Complete window/scope initialization before parking and appending the pending data.
+    let taskbar = if scene.taskbar() {
+        Some(super::power_taskbar_smoke::prepare(app)?)
+    } else {
+        None
+    };
     // Park the fixture before appending: periodic proof jobs must not be mistaken for resume.
     // This direct preparation is distinct from the power events observed below.
     collector.suspend();
@@ -219,21 +248,35 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
         "NATIVE_POWER_READY: scene={scene:?} pid={} fixture_parked=true baseline_tokens=3 pending_tokens=7 watcher=false poll_seconds=3600 computer_restart=false",
         std::process::id()
     );
-    match scene {
-        Scene::AuthoredMessages => {
-            authored_message(&main, PBT_APMSUSPEND)?;
-            authored_message(&main, PBT_APMRESUMEAUTOMATIC)?;
+    if scene.authored() {
+        authored_message(&main, PBT_APMSUSPEND)?;
+        if let Some(probe) = &taskbar {
+            probe.wait_suspended(app)?;
         }
-        Scene::SystemObserver => {}
+        authored_message(&main, PBT_APMRESUMEAUTOMATIC)?;
     }
-    wait(
-        || {
-            let observed = events.snapshot();
-            observed.0 > before.0 && (observed.1 > before.1 || observed.2 > before.2)
-        },
-        Duration::from_secs(150),
-        "suspend and resume events observed",
-    )?;
+    let power_deadline = Instant::now() + Duration::from_secs(150);
+    loop {
+        let observed = events.snapshot();
+        if observed.0 > before.0 && (observed.1 > before.1 || observed.2 > before.2) {
+            break;
+        }
+        if database
+            .usage_totals(&filter())
+            .map_err(|_| "waiting power totals")?
+            .total_tokens
+            .as_str()
+            != "3"
+        {
+            return Err(format!(
+                "pending fixture collected before the suspend/resume barrier: events={observed:?} baseline={before:?}"
+            ));
+        }
+        if Instant::now() >= power_deadline {
+            return Err("suspend and resume events not observed within deadline".into());
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
     wait(
         || {
             !collector.status().suspended
@@ -248,7 +291,7 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
         Duration::from_secs(15),
         "resume rescan collected pending source",
     )?;
-    if scene == Scene::AuthoredMessages {
+    if scene.authored() && !scene.taskbar() {
         authored_message(&main, PBT_APMRESUMESUSPEND)?;
         authored_message(&main, PBT_APMRESUMEAUTOMATIC)?;
         thread::sleep(Duration::from_millis(250));
@@ -268,8 +311,11 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
     {
         return Err("resume duplicated data, changed source or opened main".into());
     }
+    if let Some(probe) = taskbar {
+        probe.verify_resumed(app)?;
+    }
     let observed = events.snapshot();
-    let marker = if scene == Scene::AuthoredMessages {
+    let marker = if scene.authored() {
         "NATIVE_POWER_MESSAGES_OK"
     } else {
         "NATIVE_POWER_RESUME_OBSERVER_OK"
@@ -279,7 +325,7 @@ fn verify(app: &tauri::AppHandle, scene: Scene) -> Result<(), String> {
         observed.0 - before.0,
         observed.1 - before.1,
         observed.2 - before.2,
-        scene == Scene::AuthoredMessages
+        scene.authored()
     );
     Ok(())
 }
@@ -300,11 +346,31 @@ mod tests {
             Ok(Some(Scene::SystemObserver))
         );
         assert_eq!(
+            parse(&args(&[
+                "--native-smoke",
+                "--native-power-taskbar-messages-smoke"
+            ])),
+            Ok(Some(Scene::AuthoredTaskbarMessages))
+        );
+        assert_eq!(
+            parse(&args(&[
+                "--native-smoke",
+                "--native-power-taskbar-resume-smoke"
+            ])),
+            Ok(Some(Scene::SystemTaskbarObserver))
+        );
+        assert_eq!(
             parse(&args(&["--native-smoke", "--native-taskbar-actions-smoke"])),
             Ok(None)
         );
         for invalid in [
             vec!["--native-power-resume-smoke"],
+            vec!["--native-power-taskbar-resume-smoke"],
+            vec![
+                "--native-smoke",
+                "--native-power-taskbar-resume-smoke",
+                "--native-power-resume-smoke",
+            ],
             vec![
                 "--native-smoke",
                 "--native-power-resume-smoke",

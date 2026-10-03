@@ -1,5 +1,5 @@
 # Default preflight only. -ActualStandby pauses the whole computer; never restarts it.
-param([switch]$ActualStandby, [string]$EvidenceDirectory)
+param([switch]$ActualStandby, [switch]$Taskbar, [string]$EvidenceDirectory)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) {
     throw 'This acceptance requires reviewed Windows 10 build 19045 x64.'
@@ -33,7 +33,7 @@ $baselineRecord = Get-WinEvent -LogName System -MaxEvents 1 -ErrorAction Stop
 $preflight = [pscustomobject]@{
     Schema = 1; Power = $power; Privilege = $privilege; SystemRecordBaseline = $baselineRecord.RecordId
     Eligible = ($power.Eligible -eq $true -and $power.HibernationFilePresent -eq $false -and $privilege.PrivilegePresent -eq $true -and $privilege.TokenClosed -eq $true)
-    ActualStandbyRequested = [bool]$ActualStandby; ComputerRestart = $false; PolicyChanged = $false
+    ActualStandbyRequested = [bool]$ActualStandby; TaskbarRequested = [bool]$Taskbar; ComputerRestart = $false; PolicyChanged = $false
 }
 $preflight | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'preflight.json')
 if (-not $ActualStandby) {
@@ -47,13 +47,17 @@ if (@(Get-Process token-pulse-desktop -ErrorAction SilentlyContinue | Where-Obje
 }
 $stdout = Join-Path $EvidenceDirectory 'observer.stdout.log'
 $stderr = Join-Path $EvidenceDirectory 'observer.stderr.log'
-$observer = Start-Process -FilePath $executable -ArgumentList @('--native-smoke','--native-power-resume-smoke') -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+$scene = if ($Taskbar) { 'SystemTaskbarObserver' } else { 'SystemObserver' }
+$sceneArgument = if ($Taskbar) { '--native-power-taskbar-resume-smoke' } else { '--native-power-resume-smoke' }
+$hostExecutable = [IO.Path]::Combine([IO.Path]::GetDirectoryName($executable),'token-pulse-taskbar-host.exe')
+$hostSha256 = if ($Taskbar) { (Get-FileHash -LiteralPath $hostExecutable -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
+$observer = Start-Process -FilePath $executable -ArgumentList @('--native-smoke',$sceneArgument) -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 $observerStart = $observer.StartTime.ToUniversalTime().Ticks
-$readyDeadline = [DateTime]::UtcNow.AddSeconds(25)
+$readyDeadline = [DateTime]::UtcNow.AddSeconds(45)
 $ready = $false
 while (-not $observer.HasExited -and [DateTime]::UtcNow -lt $readyDeadline) {
     if (Test-Path -LiteralPath $stdout) {
-        $readyLine = "NATIVE_POWER_READY: scene=SystemObserver pid=$($observer.Id) fixture_parked=true baseline_tokens=3 pending_tokens=7 watcher=false poll_seconds=3600 computer_restart=false"
+        $readyLine = "NATIVE_POWER_READY: scene=$scene pid=$($observer.Id) fixture_parked=true baseline_tokens=3 pending_tokens=7 watcher=false poll_seconds=3600 computer_restart=false"
         if (@(Get-Content -LiteralPath $stdout | Where-Object { $_ -ceq $readyLine }).Count -eq 1) { $ready = $true; break }
     }
     Start-Sleep -Milliseconds 100
@@ -81,15 +85,17 @@ while ($driver.SleepInvoked -and $driver.RequestUtc -and [DateTime]::UtcNow -lt 
 }
 $records | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'system-power-events.json')
 $observerOutput = Get-Content -LiteralPath $stdout -Raw
+$taskbarPassed = [bool]$Taskbar -and $observerOutput -match '(?m)^NATIVE_POWER_TASKBAR_OK: .*tokens=3/10 fresh_snapshot=true old_details_hidden=true no_unexpected_actions=true geometry_restored=true physical_input=false computer_restart=false\r?$'
 $passed = $driver.SleepInvoked -and $driver.RequestSucceeded -eq $true -and $driver.Reason -eq 'StandbyRequestReturnedNeedsOsEvidence' -and
     $driver.TimerCancelled -eq $true -and $driver.TimerClosed -eq $true -and $driver.PrivilegeRestored -eq $true -and $driver.TokenClosed -eq $true -and
     $driver.TickAfter -ge $driver.TickBefore -and $observer.ExitCode -eq 0 -and $suspend.Count -eq 1 -and $resume.Count -eq 1 -and
-    $observerOutput -match '(?m)^NATIVE_POWER_RESUME_OBSERVER_OK: .*totals=3/10 source_readonly=true hidden_main=true authored_messages=false actual_system_transition_requires_os_evidence=true computer_restart=false\r?$'
+    $observerOutput -match '(?m)^NATIVE_POWER_RESUME_OBSERVER_OK: .*totals=3/10 source_readonly=true hidden_main=true authored_messages=false actual_system_transition_requires_os_evidence=true computer_restart=false\r?$' -and
+    (-not $Taskbar -or $taskbarPassed)
 $result = [pscustomobject]@{
     Schema = 1; Passed = [bool]$passed; Driver = $driver; SystemEvents = $records; ObserverPid = $observer.Id
     ObserverStartUtcTicks = $observerStart; ObserverExecutableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
     ObserverExitCode = $observer.ExitCode; EvidenceDirectory = $EvidenceDirectory; PhysicalInput = $false; ComputerRestart = $false
-    ProductionPackageAcceptance = $false; TaskbarSleepAcceptance = $false; HardwareWakeSourceProven = $false
+    ProductionPackageAcceptance = $false; TaskbarSleepAcceptance = ($passed -and $taskbarPassed); TaskbarHostSha256 = $hostSha256; HardwareWakeSourceProven = $false
 }
 $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'result.json')
 $result | ConvertTo-Json -Depth 5
