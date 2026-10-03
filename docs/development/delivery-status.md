@@ -1,5 +1,11 @@
 # 实施与交付记录
 
+## M16z1：0.1.4 候选版本与构建准备
+
+2026-10-04 npm / Tauri / workspace 及锁文件七个本项目包同步为 0.1.4，第三方依赖未变。本候选包含 34e4718、9ad0489、b3ac3ec 的配置条件核心、schema v14 条件报价身份和固定目录历史 / 缓存 v4；它们不代表实际模式 / 地区已可采集，生产缺必要证据继续未计价或明确参考估算。当前正式安装 / 公开仍原 0.1.3，版本准备不能写为已经升级。
+
+Windows x86_64 的 locked / offline metadata 通过，发布准备工具 6 项测试通过。首次无目标过滤的 offline metadata 因未缓存 Android 非目标依赖失败；改为 --filter-platform x86_64-pc-windows-msvc 后通过，未添加依赖或为本次 Windows 交付下载其他平台依赖。后续完整构建、同密钥验签、本机正常退出 / 安装与旧数据保留仍需实际验证。此版本准备单独提交，README / 索引等用户未提交内容保持；没有安装、推送、重启电脑或执行性能测试。
+
 ## 2026-10-04：正式安装版的只读 Windows 上下文复核
 
 02:28 本机 / 2026-10-03T18:28:42Z 重新核对正式 PID 84776 的路径、启动时间及 NSIS 0.1.3-6e2698a 精确二进制基线，读取前后同一进程。Win10 build 19045；主窗 / 小窗均为 per-monitor aware、GetDpiForWindow=144，客户区分别 1920×1290 / 420×330 像素，即 1280×860 / 280×220 DIP，主窗可见、小窗隐藏。EnumDisplayMonitors 当前一个活动桌面表面，2560×1440 / 工作区 2560×1380；GetScaleFactorForMonitor 成功 / 150%，QDC_ONLY_ACTIVE_PATHS 缓冲容量 1，不把缓冲容量当作已枚举的路径数。仅将检查线程设为 per-monitor 坐标，finally 恢复，不改变系统缩放 / 布局或窗口。接口依据 2026-10-04 核实：[GetDpiForWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdpiforwindow)、[GetScaleFactorForMonitor](https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getscalefactorformonitor)、[显示缓冲容量](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdisplayconfigbuffersizes)。

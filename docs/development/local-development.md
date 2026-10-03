@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-04 M16z1 源码版本为 0.1.4；Windows 前置可用 `cargo metadata --locked --offline --filter-platform x86_64-pc-windows-msvc --format-version 1` 核对。发布准备工具 6 项通过；不把版本同步当成本机 / 线上升级。当前正式安装 / 公开仍 0.1.3，完整构建及同密钥签名、本机数据保留后续执行，详见[交付记录](delivery-status.md#m16z10-1-4-候选版本与构建准备)。
+
 2026-10-04 02:28 已对正式安装 0.1.3 精确基线做一次只读窗口 / 显示 / WTS 核查：实际 144 DPI / 150%、单活动桌面表面、主窗 1280×860 / 隐藏紧凑小窗 280×220 DIP；WTS flags=0 仍锁屏，但本时点输入桌面可读 / 前台句柄存在，须分别报告，不能用旧失败值或少数前置项代替物理通过。回执位于本机忽略 review 目录，读取线程 DPI context 已恢复，没有系统缩放 / 输入 / 设置变化；见[只读复核记录](delivery-status.md#2026-10-04正式安装版的只读-windows-上下文复核)。实际其他 DPI / 多屏仍待验，不需要重复要求解锁来进行这些只读或独立开发检查。
 
 2026-10-04 M09h3b2b2c 无新界面 / 契约 / DDL；源码 schema v14、费用缓存 v4。`cargo test -p token-pulse-core -p token-pulse-store --lib --tests` 的 450 项通过、1 性能夹具 ignored；`cargo clippy --workspace --all-targets -- -D warnings`、`cargo check -p token-pulse-desktop --release` 与 fmt 通过。日志位于 target/conditional-history-*.log。新增历史 / 旧平价 / 别名修订间隔 / 撤价 / 坏历史 / v3 缓存门控场景是合成请求与临时 SQLite，不代表实际模式采集或新安装；正式 0.1.3 未改。后续条件输入指纹 / 后台金额 / 公开依据继续，见[第 15 节](../design/price-accounting.md#15-固定目录历史与条件估价时点m09h3b2b2c)。
