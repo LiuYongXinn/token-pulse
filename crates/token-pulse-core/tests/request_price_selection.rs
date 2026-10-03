@@ -122,6 +122,309 @@ fn atoms(outcome: &PriceOutcome) -> i128 {
     };
     cost_atoms.value()
 }
+
+#[test]
+fn configured_engine_prices_each_full_request_and_accumulates_mixed_bands() {
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&catalog())
+        .unwrap();
+    let short = observation(200000, Some(100), Some(25));
+    let long = observation(272001, Some(100), Some(25));
+    let short_event = event(short.last.unwrap());
+    let long_event = event(long.last.unwrap());
+    let short_result = engine.estimate_with_request(
+        &short_event,
+        &PriceBasis::EventTime {},
+        Some(evidence(&short, Some(OfflinePriceTier::Standard))),
+    );
+    let long_result = engine.estimate_with_request(
+        &long_event,
+        &PriceBasis::EventTime {},
+        Some(evidence(&long, Some(OfflinePriceTier::Fast))),
+    );
+    // Independent disjoint input/output oracle, including the whole long output.
+    assert_eq!(atoms(&short_result), 200_235_000_000_000);
+    assert_eq!(atoms(&long_result), 3_809_692_000_000_000);
+    let PriceOutcome::Priced { rule_id, .. } = &long_result else {
+        unreachable!()
+    };
+    assert_eq!(
+        rule_id,
+        "offline/openai-text-synthetic/synthetic-conditional/fast/long"
+    );
+    let mut sum = PricingAccumulator::new(PriceBasis::EventTime {});
+    sum.push(200017, short_result).unwrap();
+    sum.push(272018, long_result).unwrap();
+    let summary = sum.summary(false).unwrap();
+    assert_eq!(summary.priced_total_tokens.as_str(), "472035");
+    assert_eq!(
+        summary.currencies[0]
+            .estimated_cost
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "4.009927000000000"
+    );
+}
+
+#[test]
+fn configured_engine_keeps_aliases_explicit_rule_precedence_and_source_ambiguity() {
+    let reference = catalog();
+    let o = observation(200000, Some(100), Some(25));
+    let alias = ModelAlias {
+        alias_id: "alias".into(),
+        provider: "openai".into(),
+        alias: "snapshot".into(),
+        canonical_model: "synthetic-conditional".into(),
+        introduced_revision: n(1),
+        retired_revision: None,
+    };
+    let alias_event = PricingEvent {
+        model: Some("snapshot"),
+        ..event(o.last.unwrap())
+    };
+    let engine = PriceCatalog::new(vec![], vec![alias.clone()], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    let quote = engine.estimate_with_request(
+        &alias_event,
+        &PriceBasis::EventTime {},
+        Some(evidence(&o, Some(OfflinePriceTier::Standard))),
+    );
+    assert_eq!(atoms(&quote), 200_235_000_000_000);
+    let mut fixed = reference
+        .select_request_reference(
+            &event(o.last.unwrap()),
+            Some(evidence(&o, Some(OfflinePriceTier::Standard))),
+            n(1),
+            time(1000),
+        )
+        .unwrap()
+        .rule;
+    fixed.rule_id = "fixed-estimate".into();
+    fixed.origin = PriceOrigin::Custom;
+    fixed.input_rate_atoms = n(0);
+    fixed.cached_rate_atoms = Some(n(0));
+    fixed.cache_write_rate_atoms = Some(n(0));
+    fixed.output_rate_atoms = rate_atoms("2").unwrap();
+    let mut source = fixed.clone();
+    source.rule_id = "source-estimate".into();
+    source.source_id = Some("left".into());
+    source.currency = "EUR".into();
+    source.output_rate_atoms = rate_atoms("3").unwrap();
+    let engine = PriceCatalog::new(
+        vec![fixed.clone(), source.clone()],
+        vec![alias.clone()],
+        n(4),
+    )
+    .unwrap()
+    .with_offline_reference(&reference)
+    .unwrap();
+    let source_ids = vec!["left".into()];
+    let from_source = PricingEvent {
+        source_ids: &source_ids,
+        ..alias_event
+    };
+    // Explicit estimates do not require or infer a real processing mode.
+    assert_eq!(
+        atoms(&engine.estimate_with_request(&alias_event, &PriceBasis::EventTime {}, None)),
+        34_000_000_000
+    );
+    let result = engine.estimate_with_request(
+        &from_source,
+        &PriceBasis::EventTime {},
+        Some(evidence(&o, Some(OfflinePriceTier::Ultrafast))),
+    );
+    assert_eq!(atoms(&result), 51_000_000_000);
+    let PriceOutcome::Priced {
+        currency, rule_id, ..
+    } = result
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        (currency.as_str(), rule_id.as_str()),
+        ("EUR", "source-estimate")
+    );
+    let mut other = source.clone();
+    other.rule_id = "other-source".into();
+    other.source_id = Some("right".into());
+    let engine = PriceCatalog::new(vec![fixed, source, other], vec![alias], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    let source_ids = vec!["left".into(), "right".into()];
+    let mirrored = PricingEvent {
+        source_ids: &source_ids,
+        ..alias_event
+    };
+    assert!(matches!(
+        engine.estimate_with_request(
+            &mirrored,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::AmbiguousRule
+        }
+    ));
+}
+
+#[test]
+fn configured_engine_requires_conditions_and_respects_historical_basis() {
+    let mut reference = catalog();
+    reference.entries.retain(|entry| {
+        !(entry.tier == OfflinePriceTier::Fast && entry.context == OfflineContextBand::Long)
+    });
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    let o = observation(272001, Some(100), Some(25));
+    let original = event(o.last.unwrap());
+    for proof in [
+        None,
+        Some(evidence(&o, None)),
+        Some(evidence(&o, Some(OfflinePriceTier::Fast))),
+    ] {
+        assert!(matches!(
+            engine.estimate_with_request(&original, &PriceBasis::EventTime {}, proof),
+            PriceOutcome::Unpriced {
+                reason: UnpricedCode::IncompletePricingConditions
+            }
+        ));
+    }
+    let partial = PricingEvent {
+        usage: UsageVector {
+            reported_total: None,
+            ..original.usage
+        },
+        ..original
+    };
+    assert!(matches!(
+        engine.estimate_with_request(
+            &partial,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Standard)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    let old = PricingEvent {
+        occurred_at_ms: time(500),
+        ..original
+    };
+    assert!(matches!(
+        engine.estimate_with_request(
+            &old,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Standard)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &old,
+            &PriceBasis::SpecifiedTime {
+                specified_at_ms: time(2000)
+            },
+            Some(evidence(&o, Some(OfflinePriceTier::Standard)))
+        )),
+        1_904_846_000_000_000
+    );
+    assert_eq!(original.usage.validated_total().unwrap(), Some(272018));
+}
+
+#[test]
+fn confirmed_modes_replace_only_attached_flat_references_and_never_fall_back() {
+    let mut reference = catalog();
+    reference.entries = [(OfflinePriceTier::Standard, 1), (OfflinePriceTier::Fast, 4)]
+        .into_iter()
+        .map(|(tier, factor)| OfflinePriceEntry {
+            model_exact: "synthetic-flat".into(),
+            tier,
+            context: OfflineContextBand::All,
+            input_per_million: factor.to_string(),
+            cached_per_million: Some((factor * 2).to_string()),
+            cache_write_per_million: None,
+            output_per_million: (factor * 5).to_string(),
+            reference: "https://developers.openai.com/api/docs/pricing".into(),
+        })
+        .collect();
+    let rules = reference.flat_standard_rules(n(4), time(1000)).unwrap();
+    let engine = PriceCatalog::new(rules.clone(), vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    let o = observation(1000, Some(100), Some(0));
+    let event = PricingEvent {
+        model: Some("synthetic-flat"),
+        ..event(o.last.unwrap())
+    };
+    assert_eq!(
+        atoms(&engine.estimate(&event, &PriceBasis::EventTime {})),
+        1_185_000_000_000
+    );
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, None))
+        )),
+        1_185_000_000_000
+    );
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        4_740_000_000_000
+    );
+    assert!(matches!(
+        engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Batch)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    let mut invalid = o.clone();
+    invalid.effective_metadata.turn_id = Some("other".into());
+    assert!(matches!(
+        engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&invalid, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    let mut explicit = rules[0].clone();
+    explicit.rule_id = "independent-offline-reference".into();
+    explicit.priority = 2;
+    explicit.output_rate_atoms = rate_atoms("10").unwrap();
+    let engine = PriceCatalog::new(vec![explicit], vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        1_270_000_000_000
+    );
+}
 #[test]
 fn each_request_selects_all_four_rates_and_whole_output_with_exact_input_boundaries() {
     let catalog = catalog();

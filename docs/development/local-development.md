@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-04 M09h3b2b2a 配置核心条件金额已通过独立预期和原存储回归，复核命令为 `cargo test -p token-pulse-core -p token-pulse-store --lib --tests`（437 项通过，1 性能夹具 ignored）、`cargo clippy -p token-pulse-core -p token-pulse-store --all-targets -- -D warnings`；日志位于忽略目录 `target/conditional-engine-regression.log` / `target/conditional-engine-clippy-final.log`。最初测试金额字段 / 字符串与数字格式检查失败已修正，失败日志保留。本增量仅核心入口，不含生产持久条件金额或实际模式采集，没有新安装 / UI 验收；见[计价专题第 13 节](../design/price-accounting.md#13-配置计价入口的条件金额选择m09h3b2b2a)。
+
 2026-10-04 M16y3 已公开 [0.1.3 候选](https://github.com/LiuYongXinn/token-pulse/releases/tag/v0.1.3)；三资产匿名下载 / 版本绑定验签、正式安装版生产渠道“当前已是最新版本”检查通过。本轮 0.1.3 安装为本地签名 NSIS，未重复线上安装；0.1.0→0.1.2 线上闭环保留其独立证据。最新限制及回执见[交付记录](delivery-status.md)。以下准备 / 公开 0.1.2 是此前阶段，不能覆盖本段当前状态。
 
 2026-10-04 本机已从 0.1.2 正常退出并安装签名候选 0.1.3，schema v13 / 费用缓存 v3、四费率、明确来源重读和请求依据已进入安装产物；公开 GitHub 仍 0.1.2。完整 NSIS / release 宿主构建、同一密钥正式验签、安装文件 / 注册信息及旧列摘要保留通过；真实正式 UI 重读 176 个文件成功，候选验证后恢复可信用量，条件不全费用继续未计价。见[交付记录 M16y2](delivery-status.md)。重建不能累加各次重放的事件数。纯核心条件选择不能代替缺失的实际模式 / 地区证据，0.1.3 线上更新尚未验证；下方旧安装版本描述保留历史时点。

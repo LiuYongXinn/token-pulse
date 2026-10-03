@@ -339,6 +339,7 @@ pub struct PriceCatalog {
     index: Models<Vec<usize>>,
     aliases: Models<BTreeSet<String>>,
     conditional_references: Models<EpochMs>,
+    offline_reference: Option<offline::OfflinePriceCatalog>,
     pub revision: DecimalInt,
 }
 impl PriceCatalog {
@@ -357,6 +358,7 @@ impl PriceCatalog {
             index: BTreeMap::new(),
             aliases: BTreeMap::new(),
             conditional_references: BTreeMap::new(),
+            offline_reference: None,
             revision,
         };
         for rule in rules {
@@ -400,12 +402,13 @@ impl PriceCatalog {
         }
         Ok(result)
     }
-    /// Catalog facts explain absent conditional pricing; they never create a flat rule.
+    /// Keep a validated snapshot for conditional quotes; never flatten its request conditions.
     pub fn with_offline_reference(
         mut self,
         catalog: &offline::OfflinePriceCatalog,
     ) -> Result<Self, ErrorCode> {
         catalog.validate()?;
+        self.conditional_references.clear();
         let flat: BTreeSet<&str> = catalog
             .entries
             .iter()
@@ -424,9 +427,20 @@ impl PriceCatalog {
                     .insert(entry.model_exact.clone(), catalog.verified_at_ms);
             }
         }
+        self.offline_reference = Some(catalog.clone());
         Ok(self)
     }
     pub fn estimate(&self, event: &PricingEvent<'_>, basis: &PriceBasis) -> PriceOutcome {
+        self.estimate_with_request(event, basis, None)
+    }
+    /// Request evidence never overrides explicit rules or supplies a default actual mode.
+    /// Store callers must retain the chosen conditional rule before caching its identity.
+    pub fn estimate_with_request(
+        &self,
+        event: &PricingEvent<'_>,
+        basis: &PriceBasis,
+        evidence: Option<offline::RequestPriceEvidence<'_>>,
+    ) -> PriceOutcome {
         let (Some(provider), Some(model)) = (event.provider, event.model) else {
             return unpriced(UnpricedCode::UnknownModel);
         };
@@ -476,6 +490,43 @@ impl PriceCatalog {
         if ambiguous {
             return unpriced(UnpricedCode::AmbiguousRule);
         }
+        // Explicit custom/source rules and unrelated offline references retain their rank.
+        // A confirmed actual tier may replace only this snapshot's flat reference rule.
+        let reference = self.offline_reference.as_ref().filter(|catalog| {
+            catalog.provider == provider
+                && time >= catalog.verified_at_ms
+                && catalog
+                    .entries
+                    .iter()
+                    .any(|entry| entry.model_exact == canonical)
+                && winner.is_none_or(|rule| {
+                    rule.origin == PriceOrigin::Offline
+                        && rule.priority == 0
+                        && rule.rule_id == format!("offline/{}/{canonical}", catalog.catalog_id)
+                })
+        });
+        if let Some(reference) = reference.filter(|_| {
+            evidence
+                .as_ref()
+                .is_some_and(|proof| proof.actual_tier.is_some())
+        }) {
+            let canonical_event = PricingEvent {
+                provider: event.provider,
+                model: Some(canonical),
+                source_ids: event.source_ids,
+                occurred_at_ms: event.occurred_at_ms,
+                usage: event.usage,
+            };
+            return match reference.select_request_reference_validated(
+                &canonical_event,
+                evidence,
+                self.revision.clone(),
+                reference.verified_at_ms,
+            ) {
+                Ok(selected) => outcome_for_rule(event.usage, &selected.rule),
+                Err(_) => unpriced(UnpricedCode::IncompletePricingConditions),
+            };
+        }
         let Some(rule) = winner else {
             if self
                 .conditional_references
@@ -487,21 +538,25 @@ impl PriceCatalog {
             }
             return unpriced(UnpricedCode::MissingRule);
         };
-        match estimate_atoms(event.usage, rule) {
-            Ok(atoms) => match (
-                DecimalInt::from_nonnegative(atoms),
-                DecimalMoney::from_atoms(atoms),
-            ) {
-                (Ok(cost_atoms), Ok(estimated_cost)) => PriceOutcome::Priced {
-                    rule_id: rule.rule_id.clone(),
-                    currency: rule.currency.clone(),
-                    cost_atoms,
-                    estimated_cost,
-                },
-                _ => unpriced(UnpricedCode::Overflow),
+        outcome_for_rule(event.usage, rule)
+    }
+}
+
+fn outcome_for_rule(usage: UsageVector, rule: &PriceRule) -> PriceOutcome {
+    match estimate_atoms(usage, rule) {
+        Ok(atoms) => match (
+            DecimalInt::from_nonnegative(atoms),
+            DecimalMoney::from_atoms(atoms),
+        ) {
+            (Ok(cost_atoms), Ok(estimated_cost)) => PriceOutcome::Priced {
+                rule_id: rule.rule_id.clone(),
+                currency: rule.currency.clone(),
+                cost_atoms,
+                estimated_cost,
             },
-            Err(reason) => unpriced(reason),
-        }
+            _ => unpriced(UnpricedCode::Overflow),
+        },
+        Err(reason) => unpriced(reason),
     }
 }
 

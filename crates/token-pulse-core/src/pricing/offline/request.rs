@@ -45,6 +45,17 @@ impl OfflinePriceCatalog {
     ) -> Result<SelectedRequestReference, RequestPriceSelectionError> {
         use RequestPriceSelectionError as E;
         self.validate().map_err(|_| E::InvalidCatalog)?;
+        self.select_request_reference_validated(event, evidence, revision, created_at)
+    }
+    /// PriceCatalog owns a validated immutable clone, so it need not revalidate every event.
+    pub(crate) fn select_request_reference_validated(
+        &self,
+        event: &PricingEvent<'_>,
+        evidence: Option<RequestPriceEvidence<'_>>,
+        revision: DecimalInt,
+        created_at: EpochMs,
+    ) -> Result<SelectedRequestReference, RequestPriceSelectionError> {
+        use RequestPriceSelectionError as E;
         let (Some(provider), Some(model)) = (event.provider, event.model) else {
             return Err(E::UnknownModel);
         };
