@@ -6,6 +6,18 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g4：解锁后的真实任务栏输入与五项 UIA 菜单动作
+
+2026-10-03 用户回复“已解锁，可以复测”后，直接运行现有显式原生例程，不修改输入归属保护。`check_taskbar_wire --native-taskbar-wire-development-check` 退出 0：WaitingSnapshot → Embedded、仅 Token 时 Embedded、关闭后 Disabled；真实 actual_hover / actual_single_double / revision_privacy_clear / geometry_restored / passive_focus_preserved 均为 true，cleanup 为 Ok(NoRecord)。这是新的当前 Win10 真实鼠标、焦点和几何证据，补充旧 M13e7，而非重复把锁屏拒绝计为通过。
+
+随后 `check_taskbar_accessibility --native-taskbar-accessibility-actions-development-check` 退出 0，输出 NATIVE_TASKBAR_UIA_PUBLIC_OK / ACTIONS_OK / MENU_OK / UIA_OK。实际自有宿主的五项标准菜单 Invoke 分别产生 OpenFloat / OpenStats / OpenTaskbarSettings / SetPrivacy(true) / DisableTaskbar，精确设置修订与唯一消费通过；完整精度 / null / 0、可聚焦名称、隐私 ACK 清空 / 新隐私名称及恢复原任务栏几何全部通过。菜单动作由本次合成探针消费，没有转发到正式应用或改用户设置；此项证明原生菜单到生产宿主管道的动作通路，不把它表述为五个生产页面已经由物理点击打开。
+
+标准安装应用的托盘回调检查仍未观察到菜单。锁屏元数据最初识别到同会话 LockApp / Windows.UI.Core.CoreWindow，DWM cloaked=0；源码核对确认消息 6002 正确，托盘库只有 GetCursorPos 和图标矩形可用后才进入菜单。补充当前运行时 GetCursorPos 成功。只读图标探针最初错误假设内部 ID=1，返回 E_FAIL；核对固定 tray-icon 0.25.1 的 Builder 消耗唯一 ID 后，实际内部 ID=2，查询返回 S_FALSE(1) 与矩形。它不满足库内 S_OK 比较，不能沿用错误 ID 的结果认定图标丢失，也未将非 S_OK 矩形用于输入。真实通知区域 / 隐藏图标场景仍需单独验证；没有强制改用户图标显示偏好或给其他应用发送消息。
+
+后续只读 WTS 当前会话头字段为 SessionId=1、ConnectionState=0、SessionFlags=0，按[Microsoft WTS 会话标志定义](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wtsinfoex_level1_w)该时点已锁定；查询仅解析头字段，不读取用户名 / 域 / 登录时间。没有在此状态继续发送输入，没有关闭 / 绕过 LockApp。不能由后来锁屏反向否定本轮已退出 0 的输入和菜单动作检查。
+
+未改生产 / 验收代码或重建安装包；正式标准目录中的 0.1.0 应用保留运行，两个自有原生探针 / 宿主均退出。基本安装 / 卸载仍由 M16l 证明；物理键盘 / Narrator、标准应用托盘交互、实际 Explorer 重启 / 自动隐藏 / 拥挤、多屏 / 四档系统 DPI、真实账户外部状态和完整高版本自动更新仍保留，不计取消的 Win11 或性能测试。GitHub 保持未推送 / 未发布。
+
 ## M16l：用户授权的本机真实安装、启动与普通卸载
 
 2026-10-03 用户明确要求“直接在本机安装测试”，授权复用已有本地数据；不再将独立虚拟机作为基本安装 / 卸载的前置条件。初检没有卸载注册、正式安装目录或快捷方式，仅有旧保留的安装路径键与 SQLite 数据。原数据 schema v10，来源 / 会话 / 消费事件均为 0；没有清空、迁移回旧库或添加演示来源。

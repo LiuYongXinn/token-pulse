@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g4：2026-10-03 用户解锁后，已有 `check_taskbar_wire` 真实鼠标 / 焦点 / 布局检查，以及 `check_taskbar_accessibility` 的显式 actions 标志均退出 0，五个原生菜单 Invoke 到宿主动作通过。合成动作不转发正式应用，物理键盘 / Narrator 与标准应用托盘菜单仍独立。见[当前原生验收记录](delivery-status.md#m13g4解锁后的真实任务栏输入与五项-uia-菜单动作)。
+
 本机已按用户授权安装 TokenPulse 0.1.0，标准用户目录为 `C:/Users/Amin/AppData/Local/TokenPulse/`；正式安装后总览独立运行、文件 / 注册匹配通过，保留安装供使用。现有数据目录保持，基本安装 / 普通卸载已实测，不再以缺少独立虚拟机阻塞这两项；更高版本完整自动更新及物理系统项目仍需分别验收。见[本机安装记录](delivery-status.md#m16l用户授权的本机真实安装启动与普通卸载)。
 
 在用户明确授权复用本地状态后，使用 `pwsh -NoProfile -File scripts/verify-installer.ps1 -UseExistingLocalState`。该标志只允许现有数据 / 无 exe 的保留产品路径键，不允许替换已有注册安装或正在运行的应用。测试前只保全 db / WAL / SHM 和旧产品键并核对实际 release 签名，保全文件留在 UUID Temp 目录，不自动恢复覆盖。当前正式安装存在时会先拒绝，普通用户直接通过系统安装器维护 / 卸载，测试脚本不会自动移除它。
