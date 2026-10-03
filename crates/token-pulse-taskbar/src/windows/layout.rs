@@ -3,21 +3,19 @@
 //! restoration. The child remains hidden until all postconditions hold.
 use super::buttons::ButtonProbe;
 use super::ownership::{LayoutRecord, Ownership, Phase, ProcessIdentity};
+#[cfg(test)]
+use super::topology::hidden_at_bottom;
 use super::topology::{
     DpiGuard, ProbeError, ReservationPlan, ScreenRect, TaskbarTopology, TaskbarWindows, class_name,
-    client_rect, discover_primary_taskbar, process_id, rect, wide,
+    client_rect, discover_primary_taskbar, process_id, rect, root_auto_hidden, wide,
 };
 use std::{marker::PhantomData, os::windows::io::AsRawHandle, ptr, rc::Rc};
 use token_pulse_core::taskbar::TaskbarPosition;
-use windows::Win32::UI::Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, GetLastError, HANDLE, HWND, SetLastError, WAIT_ABANDONED, WAIT_OBJECT_0,
     },
-    Graphics::Gdi::{
-        DCX_CACHE, DCX_WINDOW, GetDCEx, GetMonitorInfoW, GetPixel, MONITOR_DEFAULTTONEAREST,
-        MONITORINFO, MonitorFromWindow, ReleaseDC,
-    },
+    Graphics::Gdi::{DCX_CACHE, DCX_WINDOW, GetDCEx, GetPixel, ReleaseDC},
     System::Threading::{CreateMutexW, GetProcessId, ReleaseMutex, WaitForSingleObject},
     UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GetParent, GetWindowLongPtrW, HWND_TOP, SW_HIDE, SWP_NOACTIVATE, SWP_NOZORDER,
@@ -265,14 +263,6 @@ fn aligned_reference(
     }
     Ok((reference, dx, dy))
 }
-fn hidden_at_bottom(taskbar: ScreenRect, monitor: ScreenRect) -> bool {
-    taskbar.valid()
-        && monitor.valid()
-        && taskbar.left == monitor.left
-        && taskbar.right == monitor.right
-        && taskbar.top >= monitor.bottom.saturating_sub(2)
-        && taskbar.bottom > monitor.bottom
-}
 fn position(window: HWND, bounds: ScreenRect, flags: u32) -> Result<(), ProbeError> {
     if !bounds.valid()
         || unsafe {
@@ -457,37 +447,11 @@ impl LayoutLease {
         let split = reference.application_split(&coverage, (320 * reference.dpi / 96) as i32)?;
         Ok(Some(split) == self.slot.left.checked_add(dx))
     }
-    fn fully_auto_hidden(&self) -> Result<bool, ProbeError> {
-        let _dpi = DpiGuard::enter()?;
-        let topology = self.windows.topology()?;
-        let monitor = unsafe { MonitorFromWindow(self.windows.root, MONITOR_DEFAULTTONEAREST) };
-        let mut info: MONITORINFO = unsafe { std::mem::zeroed() };
-        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-        if monitor.is_null() || unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
-            return Err(ProbeError::Os);
-        }
-        let bounds = info.rcMonitor;
-        if !hidden_at_bottom(
-            topology.taskbar,
-            ScreenRect {
-                left: bounds.left,
-                top: bounds.top,
-                right: bounds.right,
-                bottom: bounds.bottom,
-            },
-        ) {
-            return Ok(false);
-        }
-        let mut data = APPBARDATA {
-            cbSize: std::mem::size_of::<APPBARDATA>() as u32,
-            ..Default::default()
-        };
-        let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &mut data) };
+    pub(crate) fn fully_auto_hidden(&self) -> Result<bool, ProbeError> {
         self.windows.verify()?;
-        if state & !3usize != 0 {
-            return Err(ProbeError::UnexpectedStructure);
-        }
-        Ok(state & ABS_AUTOHIDE as usize != 0)
+        let hidden = root_auto_hidden(self.windows.root)?;
+        self.windows.verify()?;
+        Ok(hidden)
     }
     pub(crate) fn renew_hidden_reservation(&mut self) -> Result<bool, ProbeError> {
         let _dpi = DpiGuard::enter()?;

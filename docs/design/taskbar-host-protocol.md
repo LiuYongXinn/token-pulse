@@ -60,6 +60,8 @@ Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTe
 
 ## M13c2：线程所有的布局租约
 
+M13g11 补充系统完全自动隐藏语义：Embedded 表示严格验证的预留 / 父子挂接仍成立，不保证任务栏根本身处于可见样式。只有整个底部任务栏在对应显示器外、系统自动隐藏开启、租约 / 归属 / DPI / 几何有效且读数自身 WS_VISIBLE 保持时，effective readout_visible=false 不使其误报 Os；读数自身隐藏仍拒绝。根暂时隐藏时仅在同一系统证明下按控件自身可见样式枚举，普通过滤与未知结构保护保持。系统刷新可以保留此有效隐藏租约，但必须先清动作 / 详情意图并更新主题 / 数据；其他变化保持原脱离流程，TaskbarCreated 继续丢弃旧代次。规则与实际证据见[M13g11](../development/delivery-status.md#m13g11系统自动隐藏与读数自身可见性的区分)。
+
 仅支持已声明的 Win10 19045 水平主任务栏。探测保留 Explorer 进程句柄和创建时间，操作前后重新检查存活、类名、PID、父子关系及物理矩形；额外 ReBar 工具栏或预留区域内其他根子窗口拒绝挂接。布局互斥量按 Explorer PID / 创建时间命名，限一个 UI 线程持有；任务列表窗口上的随机非零 owner 属性绑定本次窗口代际，不作为可解引用指针。
 
 先按真实文字测量宽度规划，至少保留 320 DIP 任务按钮空间；同步缩小 MSTaskSwWClass，复核任务列表子窗口已跟随缩小、通知区与任务栏容器不变后，才把自有 WS_CHILD 读数挂到 Shell_TrayWnd。子窗口只在已预留矩形内提升到 ReBar 背景之上，不创建桌面覆盖窗或激活窗口。[Microsoft SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos) `SetParent` 不自动修正窗口样式，跨进程 DPI 行为需要单独检查；本实现保持子窗口样式，挂接后再次进入物理坐标上下文并核对实际矩形。[Microsoft SetParent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setparent)

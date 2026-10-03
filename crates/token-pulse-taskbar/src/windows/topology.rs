@@ -1,9 +1,13 @@
 //! Read-only Explorer topology probe and pure reservation plan. No layout mutations.
 use std::{mem, ptr};
+use windows::Win32::UI::Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage};
 use windows_sys::{
     Wdk::System::SystemServices::RtlGetVersion,
     Win32::{
         Foundation::{CloseHandle, FILETIME, HANDLE, HWND, LPARAM, RECT, WAIT_TIMEOUT},
+        Graphics::Gdi::{
+            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        },
         System::{
             SystemInformation::{GetWindowsDirectoryW, OSVERSIONINFOW},
             Threading::{
@@ -17,8 +21,9 @@ use windows_sys::{
                 SetThreadDpiAwarenessContext,
             },
             WindowsAndMessaging::{
-                EnumChildWindows, FindWindowW, GetClassNameW, GetClientRect, GetParent,
-                GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+                EnumChildWindows, FindWindowW, GWL_STYLE, GetClassNameW, GetClientRect, GetParent,
+                GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+                WS_VISIBLE,
             },
         },
     },
@@ -240,6 +245,7 @@ struct Child {
     class: String,
 }
 struct Children {
+    hidden_root: bool,
     windows: Vec<Child>,
     overflow: bool,
     examined: usize,
@@ -251,7 +257,10 @@ unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
         children.overflow = true;
         return 0;
     }
-    if unsafe { IsWindowVisible(window) } == 0 {
+    if unsafe { IsWindowVisible(window) } == 0
+        && !(children.hidden_root
+            && unsafe { GetWindowLongPtrW(window, GWL_STYLE) } as u32 & WS_VISIBLE != 0)
+    {
         return 1;
     }
     let mut class = [0; 128];
@@ -336,6 +345,55 @@ pub(crate) fn client_rect(window: HWND) -> Result<ScreenRect, ProbeError> {
         bottom: rect.bottom,
     })
 }
+pub(crate) fn hidden_at_bottom(taskbar: ScreenRect, monitor: ScreenRect) -> bool {
+    taskbar.valid()
+        && monitor.valid()
+        && taskbar.left == monitor.left
+        && taskbar.right == monitor.right
+        && taskbar.top >= monitor.bottom.saturating_sub(2)
+        && taskbar.bottom > monitor.bottom
+}
+/// Callers verify the Shell kernel identity before and after this read-only predicate.
+pub(crate) fn root_auto_hidden(root: HWND) -> Result<bool, ProbeError> {
+    let _dpi = DpiGuard::enter()?;
+    let monitor = unsafe { MonitorFromWindow(root, MONITOR_DEFAULTTONEAREST) };
+    let mut info: MONITORINFO = unsafe { mem::zeroed() };
+    info.cbSize = mem::size_of::<MONITORINFO>() as u32;
+    if monitor.is_null() || unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+        return Err(ProbeError::Os);
+    }
+    let bounds = info.rcMonitor;
+    if !hidden_at_bottom(
+        rect(root)?,
+        ScreenRect {
+            left: bounds.left,
+            top: bounds.top,
+            right: bounds.right,
+            bottom: bounds.bottom,
+        },
+    ) {
+        return Ok(false);
+    }
+    let mut data = APPBARDATA {
+        cbSize: mem::size_of::<APPBARDATA>() as u32,
+        ..Default::default()
+    };
+    let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &mut data) };
+    if state & !3usize != 0 {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    Ok(state & ABS_AUTOHIDE as usize != 0)
+}
+fn hidden_root_for_inspection(root: HWND) -> Result<bool, ProbeError> {
+    if unsafe { IsWindowVisible(root) } != 0 {
+        return Ok(false);
+    }
+    if root_auto_hidden(root)? {
+        Ok(true)
+    } else {
+        Err(ProbeError::UnexpectedStructure)
+    }
+}
 pub(crate) struct TaskbarWindows {
     pub(crate) root: HWND,
     pub(crate) rebar: HWND,
@@ -350,6 +408,7 @@ impl TaskbarWindows {
     pub(crate) fn safe_slot(&self, slot: ScreenRect, child: HWND) -> Result<(), ProbeError> {
         self.verify()?;
         let mut children = Children {
+            hidden_root: hidden_root_for_inspection(self.root)?,
             windows: vec![],
             overflow: false,
             examined: 0,
@@ -452,6 +511,7 @@ pub(crate) fn discover_primary_taskbar() -> Result<TaskbarWindows, ProbeError> {
     }
     let process = verify_explorer(pid)?;
     let mut children = Children {
+        hidden_root: hidden_root_for_inspection(root)?,
         windows: vec![],
         overflow: false,
         examined: 0,

@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g11 新增失败现场只读样式 / 几何及有限普通重试诊断，原严格断言不变。显式自动隐藏例程可追加 `--own-setting-refresh`（可与 `--application-right` 合用），向唯一匹配自有宿主 Control 窗口发送有期限同步零载荷设置消息；不会广播或发送物理输入。两位置的真实自动隐藏 / 新 Snapshot / 自有设置刷新 / 恢复与退出几何已通过，69 项检查与严格 Clippy 通过，完整应用与 release 宿主跨正常 Explorer 恢复通过。中间 M16u 包遇到根 WS_VISIBLE 清除时误报的失败已保留，当前修复需重新完整打包；下方旧“最新候选”仅是历史，未安装升级 / 发布。详见[根因和证据](delivery-status.md#m13g11系统自动隐藏与读数自身可见性的区分)。
+
 M13g10 已确认并修复下方 M13g9 的通知区宽度竞态：只有正常存活租约持有完整原拓扑且当前精确为自有预留时，允许通知区共用边界变化后的有条件释放；终止 guardian 规则不变。debug 场景可显式设置 `TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS=1` 取得有限恢复差异 / 成功日志，正式 release 不输出。68 项自动检查、严格 Clippy / fmt、完整 Tauri 动作回归和真实完整应用匹配失败形态后成功恢复均通过；参见[实际证据](delivery-status.md#m13g10通知区边界变化后的有条件预留释放)。M16t 旧签名包不含此生产修复，需从新提交重建并签名；历史“未收敛”描述不代表当前根因仍未知，不重启电脑或提前推送。
 
 完整桌面应用的 Explorer 验收入口：`pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarExplorerRestart`，需要已有 `npm run build` 前端产物；此开关必须独占，使用 UUID 隔离空数据库、真实 WebView / 生产后台 actor / 独立宿主。会通过既有资格校验后正常关闭 / 恢复 Explorer；不重启电脑、不强杀、不发送输入，也不属于普通 cargo test / 默认 smoke。`TOKENPULSE_ACCEPTANCE_PWSH` 可指定 PowerShell 路径。最终检查持有的同一宿主内核对象、新窗口代次、重启后新快照、主 WebView 状态 / 隐私屏障、禁用进程退出和新 Shell 的独立稳定几何。三轮完整成功与一次未收敛 ExternalChange 竞态分别保留；不能把本入口存在或成功轮次当成整个任务栏验收结束。详见[完整应用检查与剩余问题](delivery-status.md#m13g9完整-tauri-应用的真实-explorer-恢复入口与未收敛竞态)。

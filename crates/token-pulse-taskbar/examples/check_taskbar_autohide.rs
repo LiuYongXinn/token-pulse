@@ -11,16 +11,22 @@ async fn main() {
         HostConfiguration, HostDisplayState, HostMessage, HostReply, TaskbarView,
     };
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    if arguments != ["--native-taskbar-autohide-development-check"]
-        && arguments
-            != [
-                "--native-taskbar-autohide-development-check",
-                "--application-right",
-            ]
+    if arguments.first().map(String::as_str) != Some("--native-taskbar-autohide-development-check")
+        || arguments.len() > 3
+        || arguments.iter().skip(1).any(|argument| {
+            argument != "--application-right" && argument != "--own-setting-refresh"
+        })
+        || arguments
+            .iter()
+            .skip(1)
+            .any(|argument| arguments.iter().filter(|other| *other == argument).count() != 1)
     {
         std::process::exit(2);
     }
-    let position = if arguments.len() == 2 {
+    let position = if arguments
+        .iter()
+        .any(|argument| argument == "--application-right")
+    {
         token_pulse_core::taskbar::TaskbarPosition::ApplicationRight
     } else {
         token_pulse_core::taskbar::TaskbarPosition::NotificationLeft
@@ -120,6 +126,31 @@ async fn main() {
         tokio::time::sleep(Duration::from_millis(200)).await;
     };
     let hidden_status = status(&mut connection).await;
+    // Preserve the actual failure reason and observed physical motion before asserting.
+    // This opt-in probe must not lose evidence merely because embedding was rejected.
+    println!(
+        "ACTUAL_AUTOHIDE_HIDDEN_STATUS: top={} bottom={} status={hidden_status:?} same_host={host_pid}",
+        hidden_bounds.0, hidden_bounds.1
+    );
+    if hidden_status.state != HostDisplayState::Embedded {
+        dump_owned_visibility(host_pid);
+        // Inspect ordinary fresh-snapshot retries without replacing the failed first assertion.
+        // This distinguishes transient animation from an unavailable host throughout hiding.
+        for attempt in 1..=5 {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            connection
+                .exchange(HostMessage::Snapshot {
+                    view: Box::new(view.clone()),
+                })
+                .await
+                .expect("bounded hidden failure diagnostic remains responsive");
+            let retry = status(&mut connection).await;
+            println!(
+                "ACTUAL_AUTOHIDE_FAILURE_RETRY: attempt={attempt} bounds={:?} status={retry:?} same_host={host_pid}",
+                shell.bounds()
+            );
+        }
+    }
     assert_eq!(
         hidden_status.state,
         HostDisplayState::Embedded,
@@ -138,11 +169,52 @@ async fn main() {
         .expect("hidden valid DC does not close host pipe");
     let hidden_refresh = status(&mut connection).await;
     println!("ACTUAL_AUTOHIDE_REFRESH: {hidden_refresh:?}");
+    if hidden_refresh.state != HostDisplayState::Embedded {
+        dump_owned_visibility(host_pid);
+    }
     assert_eq!(
         hidden_refresh.state,
         HostDisplayState::Embedded,
         "a fresh hidden snapshot retains valid embedding"
     );
+    if arguments
+        .iter()
+        .any(|argument| argument == "--own-setting-refresh")
+    {
+        let previous_revision = hidden_refresh.system_revision;
+        own_setting_refresh(host_pid);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let refreshed = loop {
+            let observed = status(&mut connection).await;
+            if observed.system_revision != previous_revision {
+                break observed;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "own setting message was not processed"
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        };
+        println!(
+            "OWN_SETTING_REFRESH_WHILE_HIDDEN: status={refreshed:?} bounds={:?} same_host={host_pid} authored_message=true",
+            shell.bounds()
+        );
+        if refreshed.state != HostDisplayState::Embedded {
+            dump_owned_visibility(host_pid);
+        }
+        assert_eq!(refreshed.state, HostDisplayState::Embedded);
+        assert!(refreshed.failure.is_none());
+        connection
+            .exchange(HostMessage::Snapshot {
+                view: Box::new(view.clone()),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            status(&mut connection).await.state,
+            HostDisplayState::Embedded
+        );
+    }
     shell
         .restore()
         .expect("restore original system preference before recovery assertions");
@@ -195,6 +267,139 @@ async fn main() {
     );
     println!(
         "NATIVE_TASKBAR_AUTOHIDE_OK: position={position:?} actual_hide_motion=true same_host={host_pid} hidden_refresh_embedded=true visible_reembedded=true actions_empty=true setting_restored=true original_geometry_restored=true computer_reboot=false"
+    );
+}
+
+#[cfg(windows)]
+fn dump_owned_visibility(host_pid: u32) {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM, RECT},
+        UI::WindowsAndMessaging::{
+            EnumChildWindows, FindWindowW, GWL_STYLE, GetClassNameW, GetParent, GetWindowLongPtrW,
+            GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, WS_VISIBLE,
+        },
+    };
+    struct Probe {
+        pid: u32,
+        windows: Vec<HWND>,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        if pid == probe.pid {
+            let mut class = [0u16; 128];
+            let length = unsafe { GetClassNameW(window, class.as_mut_ptr(), 128) };
+            if length > 0
+                && length < 127
+                && String::from_utf16_lossy(&class[..length as usize])
+                    .starts_with("TokenPulse.Taskbar.Readout.")
+            {
+                probe.windows.push(window);
+            }
+        }
+        1
+    }
+    let class: Vec<_> = "Shell_TrayWnd".encode_utf16().chain(Some(0)).collect();
+    let root = unsafe { FindWindowW(class.as_ptr(), std::ptr::null()) };
+    if root.is_null() {
+        println!("ACTUAL_AUTOHIDE_VISIBILITY: shell_missing=true");
+        return;
+    }
+    let mut probe = Probe {
+        pid: host_pid,
+        windows: Vec::new(),
+    };
+    unsafe {
+        EnumChildWindows(root, Some(collect), (&mut probe as *mut Probe) as LPARAM);
+    }
+    println!(
+        "ACTUAL_AUTOHIDE_VISIBILITY: root_visible={} root_style_visible={} owned_readouts={}",
+        unsafe { IsWindowVisible(root) },
+        unsafe { GetWindowLongPtrW(root, GWL_STYLE) } as u32 & WS_VISIBLE != 0,
+        probe.windows.len()
+    );
+    for window in probe.windows {
+        let mut bounds: RECT = unsafe { std::mem::zeroed() };
+        let rect_ok = unsafe { GetWindowRect(window, &mut bounds) } != 0;
+        println!(
+            "ACTUAL_AUTOHIDE_OWN_READOUT: visible={} style_visible={} parent_is_root={} rect_ok={rect_ok} bounds=({},{},{},{})",
+            unsafe { IsWindowVisible(window) },
+            unsafe { GetWindowLongPtrW(window, GWL_STYLE) } as u32 & WS_VISIBLE != 0,
+            unsafe { GetParent(window) } == root,
+            bounds.left,
+            bounds.top,
+            bounds.right,
+            bounds.bottom
+        );
+    }
+}
+
+#[cfg(windows)]
+fn own_setting_refresh(host_pid: u32) {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM},
+        UI::WindowsAndMessaging::{
+            EnumWindows, GetClassNameW, GetWindowThreadProcessId, SMTO_ABORTIFHUNG, SMTO_BLOCK,
+            SendMessageTimeoutW, WM_SETTINGCHANGE,
+        },
+    };
+    struct Probe {
+        pid: u32,
+        windows: Vec<HWND>,
+    }
+    unsafe extern "system" fn collect(window: HWND, parameter: LPARAM) -> i32 {
+        let probe = unsafe { &mut *(parameter as *mut Probe) };
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        if pid == probe.pid {
+            let mut class = [0u16; 128];
+            let length = unsafe { GetClassNameW(window, class.as_mut_ptr(), 128) };
+            if length > 0
+                && length < 127
+                && String::from_utf16_lossy(&class[..length as usize])
+                    .starts_with("TokenPulse.Taskbar.Control.")
+            {
+                probe.windows.push(window);
+            }
+        }
+        1
+    }
+    let mut probe = Probe {
+        pid: host_pid,
+        windows: Vec::new(),
+    };
+    assert_ne!(
+        unsafe { EnumWindows(Some(collect), (&mut probe as *mut Probe) as LPARAM) },
+        0
+    );
+    assert_eq!(probe.windows.len(), 1, "exactly one owned control window");
+    let control = probe.windows[0];
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(control, &mut pid);
+    }
+    assert_eq!(pid, host_pid);
+    // No broadcast, Explorer message, pointer payload or physical input.
+    let mut result = 0;
+    assert_ne!(
+        unsafe {
+            SendMessageTimeoutW(
+                control,
+                WM_SETTINGCHANGE,
+                0,
+                0,
+                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                2000,
+                &mut result,
+            )
+        },
+        0,
+        "bounded synchronous own setting message"
     );
 }
 

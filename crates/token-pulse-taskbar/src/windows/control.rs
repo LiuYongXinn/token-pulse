@@ -213,7 +213,17 @@ impl State {
         // an unavailable state without performing the required hide/renewal.
         let reservation_valid = self.reconcile_layout();
         let readout_visible = self.canvas.as_ref().is_some_and(|c| c.visible());
-        let embedded = reservation_valid && readout_visible;
+        // IsWindowVisible includes every ancestor. Explorer can temporarily clear its
+        // root WS_VISIBLE during real auto-hide while our own visible child remains attached.
+        // Accept only the validated reservation, own visible style and actual system hiding.
+        let system_hidden = reservation_valid
+            && !readout_visible
+            && self.canvas.as_ref().is_some_and(|c| c.own_visible_style())
+            && self
+                .layout
+                .as_ref()
+                .is_some_and(|l| l.fully_auto_hidden() == Ok(true));
+        let embedded = reservation_valid && (readout_visible || system_hidden);
         NativeReceipt {
             cached_view_present: self.view.is_some(),
             private_fields_present: self.view.as_ref().is_some_and(|v| {
@@ -238,8 +248,20 @@ impl State {
     }
     fn system_changed(&mut self) {
         self.system_revision = self.system_revision.saturating_add(1);
-        self.detach();
-        self.topology = inspect_primary_taskbar();
+        // A settings broadcast during complete auto-hide must not discard a proven lease
+        // and try to measure off-screen application buttons. All other changes still detach.
+        let keep_hidden = self
+            .layout
+            .as_ref()
+            .is_some_and(|layout| layout.valid() && layout.fully_auto_hidden() == Ok(true));
+        if keep_hidden {
+            if let Some(canvas) = self.canvas.as_mut() {
+                canvas.clear_interactions();
+            }
+        } else {
+            self.detach();
+            self.topology = inspect_primary_taskbar();
+        }
         if self.prepare().is_err() {
             self.native_failed = true;
         }

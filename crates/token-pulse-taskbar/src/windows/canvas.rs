@@ -530,6 +530,11 @@ impl NativeCanvas {
     pub(crate) fn visible(&self) -> bool {
         self.alive() && unsafe { IsWindowVisible(self.window) } != 0
     }
+    pub(crate) fn own_visible_style(&self) -> bool {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{GWL_STYLE, WS_VISIBLE};
+        self.alive()
+            && unsafe { GetWindowLongPtrW(self.window, GWL_STYLE) } as u32 & WS_VISIBLE != 0
+    }
     pub(crate) fn alive(&self) -> bool {
         // Explorer can invalidate a cross-process child without our cached NCDESTROY flag
         // having caught up. Verify the kernel owner and full generation class as well;
@@ -730,6 +735,56 @@ mod tests {
     use super::super::topology::{DpiGuard, rect};
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextW, WS_POPUP};
+    #[test]
+    fn own_visibility_distinguishes_a_hidden_ancestor_from_a_hidden_readout() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SW_HIDE, SW_SHOWNOACTIVATE, ShowWindow, WS_EX_NOACTIVATE,
+        };
+        let _dpi = DpiGuard::enter().unwrap();
+        let parent = unsafe {
+            CreateWindowExW(
+                WS_EX_NOACTIVATE,
+                wide("STATIC").as_ptr(),
+                wide("TokenPulse synthetic visibility test").as_ptr(),
+                WS_POPUP,
+                0,
+                0,
+                320,
+                80,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null(),
+            )
+        };
+        assert!(!parent.is_null());
+        let canvas = unsafe { NativeCanvas::create(parent, 96) }.unwrap();
+        assert!(!canvas.own_visible_style());
+        assert!(!canvas.visible());
+        unsafe {
+            ShowWindow(canvas.window, SW_SHOWNOACTIVATE);
+        }
+        assert!(canvas.own_visible_style());
+        assert!(
+            !canvas.visible(),
+            "hidden ancestor suppresses effective visibility"
+        );
+        unsafe {
+            ShowWindow(parent, SW_SHOWNOACTIVATE);
+        }
+        assert!(canvas.own_visible_style());
+        assert!(canvas.visible());
+        unsafe {
+            ShowWindow(canvas.window, SW_HIDE);
+        }
+        assert!(
+            !canvas.own_visible_style(),
+            "an explicitly hidden readout remains rejected"
+        );
+        assert!(!canvas.visible());
+        drop(canvas);
+        assert_ne!(unsafe { DestroyWindow(parent) }, 0);
+    }
     #[test]
     fn dialog_requests_only_active_commands_and_visible_detail_keys() {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_TAB;

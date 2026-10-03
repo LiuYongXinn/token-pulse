@@ -6,6 +6,24 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g11：系统自动隐藏与读数自身可见性的区分
+
+从 M13g10 提交 `49717c546fa9bf261488cf402f594b7903421af9` 完整构建并签名的中间候选 M16u 位于 `target/release/candidates/v0.1.1-notification-fcfc8cf4b4df4c73b50a6a6099d87bd9/`，本地资产位于同名 publish 目录。安装器 6,625,718 字节 / SHA-256 `b720799ebd0a48ef61b2c7dcd768b937c45c15d10afd76869ec8fdd75145e462`，实际 production release 验签退出 0；桌面摘要 `83c9049da2df5e9629224a0ba4b3cdfdb2a0e3c6faf68f8c65311679d067f1f1`、宿主摘要 `947c1139919a4e6cc6196e54b7dacd39862e8dea97da8af843b0eaebd4c3b04c`。构建证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-notification-release-0d51f88dd6d743c2ac067ec3b1509e48/`，使用原密钥、没有发布。**此包的自动隐藏验收存在失败，不作为最新验收完成的包，也没有安装升级。**
+
+真实 release 失败在 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-notification-release-native-cfdb4826d3da4f7cbba0f5ee54850c26/` 和 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-notification-release-followup-987973c1058244f6a94a163831c4209d/`记录保留；后者捕获应用右侧 Unavailable / UnexpectedStructure、system_revision=1 / last_restore=Restored。两位置各一次成功复测不抵消失败。新增仅显式例程的失败前状态、最多五次普通新 Snapshot 诊断、只读根 / 自有读数样式与几何，严格首次断言保持；`C:/Users/Amin/AppData/Local/Temp/tokenpulse-hidden-visibility-e5af7007d2704a2fa1ced393c6347bda/` 在同一中间候选宿主 95028 捕获实际根 visible=0 / WS_VISIBLE=false，而自有读数 visible=0 / WS_VISIBLE=true、父窗口仍为根、位置 `(984,1438,1585,1498)` 正确，返回 Unavailable / Os。五次后续新快照恢复 Embedded，但原场景仍退出 101，未被改记通过。Windows 的 IsWindowVisible 检查全部祖先样式，因此这不是读数窗口自身被隐藏的证据。[Microsoft IsWindowVisible](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-iswindowvisible)
+
+修复严格区分两个状态：只有系统自动隐藏已开启、整个底部任务栏移出对应显示器（最多两像素边缘）、同一已校验租约与自有读数 WS_VISIBLE 保持时，Embedded 可与 effective readout_visible=false 同时成立。实际 readout_visible 字段仍保留真实值；自身显式隐藏不接受。在同一严格系统隐藏证明下，拓扑 / safe_slot 枚举使用子控件自身可见样式，避免根隐藏使整个结构“消失”；普通可见根继续原可见性过滤，隐藏且未满足系统证明的根拒绝，未知类 / 重复结构 / owner / DPI / 几何门禁不变。隐藏期间的系统刷新仅在租约仍严格有效时保留，先清交互、重新准备主题与数据；其他系统变化仍脱离并重查。共用隐藏判定从 layout 移到 topology，已有独立坐标拒绝测试保留。
+
+新增实际 Win32 自有父 / 子窗口测试，分别验证初始隐藏、只显示子窗口而父隐藏、父子显示、再显式隐藏读数的可见性差异；完整 taskbar all-targets **69 项通过、1 个私有入口 ignored**，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-hidden-root-fix-d5ceee97b0cf43278387891815dc91fb/`。desktop / taskbar all-targets（含 custom-protocol）严格 Clippy 与 fmt 通过。
+
+显式自动隐藏例程增加 `--own-setting-refresh`：仍必须提供原开发 gate，仅唯一枚举同宿主 PID / Control UUID 类，再核对归属，用 2 秒 SendMessageTimeout 向**自有窗口**发送零载荷 WM_SETTINGCHANGE；不是广播、Explorer 消息、系统真实广播或物理输入。非法 / 重复选项拒绝，例程不进入安装器。最初 PostMessage 返回 0 的例程失败日志在上述 fix 目录保留，不记为生产宿主失败；该类系统消息受指针参数规则约束，现使用有期限同步调用。[Microsoft PostMessage](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-postmessagew)、[Microsoft SendMessageTimeout](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw)
+
+修复后的 release 宿主在真实 Win10 19045.6466 / 单屏 150% 两位置退出 0，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-hidden-root-message-fix-a5606bc0787d4bbfa5ac947452e7195a/`：通知区左侧同宿主 95416、应用右侧同宿主 89052，真实开关 0→1→0 / top 1380→1438 / bottom 1440→1498，新 Snapshot、隐藏期间自有设置刷新后 system_revision=2 / Embedded / failure=None、恢复显示 / 空动作 / 设置与原几何均通过。包含真实系统开关与自有消息两类证据，不能合并为物理菜单或真实系统广播全覆盖。
+
+`C:/Users/Amin/AppData/Local/Temp/tokenpulse-hidden-root-system-d0cfe4a2f4cb4ef19bc74ef95ef6a256/`：正式 release 宿主正常 RM Explorer 11180→92524 / 同宿主 83192，退出 0；新画布 / 修订 / 无旧动作 / 退出几何通过。完整应用混合验收使用当前 debug 桌面及同一优化 release 宿主（分别记录摘要），隔离 SQLite / 真实 WebView / 正式 actor / IPC，在真实正常 RM 92524→94268 / 同宿主 92392 恢复后完成隐私、禁用 / 再启用 82960 及最终新 Shell 几何，整个应用退出 0；不是已安装 release 桌面的端到端验收。同一混合完整 `-TaskbarActions` 回归退出 0，两位置 / 按钮变化 / 原生详情 / 菜单 / Tauri 主小窗 / 隐私 / 退出几何通过。SHORTCUT_CONFLICT、托盘移除提示及 WebView2 1412 如实保留。
+
+本次正式代码再次变化，需从新提交完整重建签名候选并核对同包宿主；M16u / M16t 保留为各自时点证据，不作为当前完整通过证明。电脑没有重启或关机，没有强杀 Explorer、推送 GitHub、修改原安装 0.1.0 / 数据或生成新密钥，没有性能测试；原用户未提交内容保持。标准托盘 / 物理键盘 / 鼠标触边、多屏 / 系统 DPI、实际休眠及外部账户 / Codex / 缺失 WebView2 / 完整在线升级继续独立待验。
+
 ## M13g10：通知区边界变化后的有条件预留释放
 
 取得 M13g9 失败时的完整差异，根因已确认：`C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-layout-difference-dec8cc6cea474973b195d84f945af28b/` 退出 1，真实 Shell 11144→16460 / 同宿主 86936。当前任务区精确等于本实例 expected `(2,0,1289,60)`，但 Explorer 加载通知图标后 ReBar 客户端宽度从 1722 变为 1578；根窗口、左边界、垂直几何与 144 DPI 保持。旧恢复拒绝父尺寸变化并移除记录，留下预留宽度，后续完整基线检查返回 UnsafeGeometry。此失败日志和 M13g9 早期失败均保留。
@@ -267,7 +285,7 @@ Windows 10 验收继续；已有正式数据、原未提交内容保持，未覆
 |6. 计价与重估|精确原子金额、覆盖 / 未计价、自定义规则、版本化别名、51 模型 / 172 档位事实；M09g2b3 已贯通持久缓存、独立服务、自动补建和正式进度 / 取消|日志缺少请求档位等条件时保持未计价；早期后台服务 / UI 未完成描述已收敛|
 |7. 小窗|280×220 / 360×380 DIP、主题、费用 / Token / 账户、置顶 / 透明度 / 穿透与恢复键、位置保存 / 缺屏回退；M11 原生及 UI 检查|物理多屏拖动、主屏切换、断屏和四档系统 DPI 尚未完成；合成几何不能替代这些检查|
 |8. 本地账户额度|用户选择程序 / Home 后复用已有登录，无新增登录；M12i 真实持续读取、M12j 冷启动、M13f1 三入口 / 后台刷新、M12m 普通选择 / 保存 / 连接通过|真实账户身份变化、通知、登录过期 / 实际重置仍需对应外部状态；已有合成领域 / 服务 / UI 检查，不主动切换或登出用户账户|
-|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；真实悬停 / 单双击 / 焦点及五项 UIA 动作通过；完整 Tauri 回归、M13g5–g8 修复与 M16t 同包 release 真实 Explorer 同宿主恢复、两位置实际自动隐藏 / 新 Snapshot 刷新 / 显示恢复 / 原设置与几何恢复通过|UIA 由探针消费，Tauri 回归使用自有消息，宿主展示为合成 DTO；不合并为安装版物理点击。M13g10 已确认通知区加载后的父宽变化并修复，完整应用匹配分支 / 隐私 / 禁用与再启用通过；需纳入新签名包并验证 release 宿主；鼠标触边、物理键盘 / Narrator、拥挤与其他任务栏方位仍未验。Win11 适配与验收取消|
+|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；真实悬停 / 单双击 / 焦点及五项 UIA 动作通过；完整 Tauri 回归、M13g5–g8 修复与 M16t 同包 release 真实 Explorer 同宿主恢复、两位置实际自动隐藏 / 新 Snapshot 刷新 / 显示恢复 / 原设置与几何恢复通过|UIA 由探针消费，Tauri 回归使用自有消息，宿主展示为合成 DTO；不合并为安装版物理点击。M13g10 已确认通知区加载后的父宽变化并修复，完整应用匹配分支 / 隐私 / 禁用与再启用通过；M13g11 另修复完全自动隐藏的祖先可见性误报并通过两位置 release / 完整应用检查，需纳入新签名包；鼠标触边、物理键盘 / Narrator、拥挤与其他任务栏方位仍未验。Win11 适配与验收取消|
 |10. Windows 10 / 多屏 / DPI|主窗口位置与外框尺寸适配、同 DPI 工作区检测已进入 M16n 候选；Win10 150% 三进程冷启动 / 合成小屏与缺屏通过，100 / 125 / 150 / 200% 独立几何预期通过|当前只有一个活动显示器；Win10 物理跨屏 / 主屏切换 / 断屏和各档系统 DPI 待实际条件，Win11 不作为门槛|
 |11. 系统集成|托盘、单实例、明确退出、主 / 小窗位置、休眠消息路由及恢复键已有实现；M15a8 notify 选择 / 预览 / 确认 / 撤销和原配置保持通过；M16p 标准安装版后台窗口命令 / 单实例 / 正常退出 / 冷启动与账本保持通过|标准已安装应用真实托盘菜单尚未通过；后台命令不替代物理点击。实际休眠 / 解锁、真实 Codex 回合 notify 分别待验。不开机启动，不新增额外快捷键|
 |12. 软件更新|固定发布源、状态 / 检查 / 下载 / 签名 / 安装门禁、NSIS 等正常退出；M16i 新项目密钥与默认公钥、M16j 正式包 / 签名验证、M16k 真实最小 NSIS 下载交接通过，M16t 的 0.1.1 签名候选与实际验签已准备|0.1.0 是已安装新公钥基线；0.1.1 完整应用自动升级仍未验。当前不推送 / 发布；完整线上升级依赖发布资产，与全部验证后才推送的顺序需要用户确认，未自行改变发布源或降低验证|
