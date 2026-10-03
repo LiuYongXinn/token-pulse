@@ -248,8 +248,9 @@ impl State {
                 }
             }
         }
-        if !self.enabled || self.view.is_none() || self.layout.as_ref().is_some_and(|l| !l.valid())
-        {
+        // Failed construction can race normal Shell animation. With no lease, each
+        // ordinary retry must probe current geometry rather than reuse that stale frame.
+        if !self.enabled || self.view.is_none() || self.layout.as_ref().is_none_or(|l| !l.valid()) {
             self.detach();
             self.topology = inspect_primary_taskbar();
         }

@@ -128,6 +128,53 @@ fn relative(screen: ScreenRect, parent: HWND) -> Result<ScreenRect, ProbeError> 
         bottom: screen.bottom - bounds.top,
     })
 }
+
+fn translated(rect: ScreenRect, dx: i32, dy: i32) -> Result<ScreenRect, ProbeError> {
+    let shift = |value: i32, delta| value.checked_add(delta).ok_or(ProbeError::UnsafeGeometry);
+    Ok(ScreenRect {
+        left: shift(rect.left, dx)?,
+        right: shift(rect.right, dx)?,
+        top: shift(rect.top, dy)?,
+        bottom: shift(rect.bottom, dy)?,
+    })
+}
+fn aligned_reference(
+    baseline: &TaskbarTopology,
+    actual: &TaskbarTopology,
+) -> Result<(TaskbarTopology, i32, i32), ProbeError> {
+    if !baseline.taskbar.valid()
+        || !actual.taskbar.valid()
+        || baseline.build != actual.build
+        || baseline.dpi != actual.dpi
+        || baseline.taskbar.width() != actual.taskbar.width()
+        || baseline.taskbar.height() != actual.taskbar.height()
+    {
+        return Err(ProbeError::UnsafeGeometry);
+    }
+    let dx = actual
+        .taskbar
+        .left
+        .checked_sub(baseline.taskbar.left)
+        .ok_or(ProbeError::UnsafeGeometry)?;
+    let dy = actual
+        .taskbar
+        .top
+        .checked_sub(baseline.taskbar.top)
+        .ok_or(ProbeError::UnsafeGeometry)?;
+    let mut reference = baseline.clone();
+    reference.taskbar = translated(reference.taskbar, dx, dy)?;
+    reference.rebar = translated(reference.rebar, dx, dy)?;
+    reference.task_switch = translated(reference.task_switch, dx, dy)?;
+    reference.task_list = translated(reference.task_list, dx, dy)?;
+    reference.notification = translated(reference.notification, dx, dy)?;
+    if actual.taskbar != reference.taskbar
+        || actual.rebar != reference.rebar
+        || actual.notification != reference.notification
+    {
+        return Err(ProbeError::UnsafeGeometry);
+    }
+    Ok((reference, dx, dy))
+}
 fn position(window: HWND, bounds: ScreenRect, flags: u32) -> Result<(), ProbeError> {
     if !bounds.valid()
         || unsafe {
@@ -300,21 +347,29 @@ impl LayoutLease {
             return Ok(false);
         }
         let coverage = buttons.inspect()?;
-        let split = self
-            .baseline
-            .application_split(&coverage, (320 * self.baseline.dpi / 96) as i32)?;
-        Ok(split == self.slot.left)
+        let (reference, dx, _) = aligned_reference(&self.baseline, &self.windows.topology()?)?;
+        let split = reference.application_split(&coverage, (320 * reference.dpi / 96) as i32)?;
+        Ok(Some(split) == self.slot.left.checked_add(dx))
     }
     fn verify_reserved(&self, plan: ReservationPlan) -> Result<(), ProbeError> {
+        // Construction remains strict: a concurrent root move during SetParent/position
+        // must fail before showing. Only an already attached child may follow translation.
+        self.verify_reserved_at(plan, &self.baseline)
+    }
+    fn verify_reserved_at(
+        &self,
+        plan: ReservationPlan,
+        reference: &TaskbarTopology,
+    ) -> Result<(), ProbeError> {
         if !self.owns() {
             return Err(ProbeError::UnexpectedStructure);
         }
         self.windows.safe_slot(plan.host, self.child.window)?;
         let actual = self.windows.topology()?;
-        if actual.taskbar != self.baseline.taskbar
-            || actual.rebar != self.baseline.rebar
-            || actual.notification != self.baseline.notification
-            || actual.dpi != self.baseline.dpi
+        if actual.taskbar != reference.taskbar
+            || actual.rebar != reference.rebar
+            || actual.notification != reference.notification
+            || actual.dpi != reference.dpi
             || actual.task_switch != plan.remaining_task_switch
             || actual.task_list.left < actual.task_switch.left
             || actual.task_list.top < actual.task_switch.top
@@ -329,17 +384,30 @@ impl LayoutLease {
         let Ok(_dpi) = DpiGuard::enter() else {
             return false;
         };
+        let Ok((reference, dx, dy)) = self
+            .windows
+            .topology()
+            .and_then(|actual| aligned_reference(&self.baseline, &actual))
+        else {
+            return false;
+        };
+        let Ok(slot) = translated(self.slot, dx, dy) else {
+            return false;
+        };
         self.child.valid()
             && unsafe { GetParent(self.child.window) } == self.windows.root
-            && rect(self.child.window).is_ok_and(|r| r == self.slot)
+            && rect(self.child.window).is_ok_and(|r| r == slot)
             && self
-                .verify_reserved(ReservationPlan {
-                    host: self.slot,
-                    remaining_task_switch: ScreenRect {
-                        right: self.slot.left,
-                        ..self.baseline.task_switch
+                .verify_reserved_at(
+                    ReservationPlan {
+                        host: slot,
+                        remaining_task_switch: ScreenRect {
+                            right: slot.left,
+                            ..reference.task_switch
+                        },
                     },
-                })
+                    &reference,
+                )
                 .is_ok()
     }
     pub(crate) fn release(&mut self) -> RestoreDisposition {
@@ -483,6 +551,94 @@ pub fn recover_terminated_host<H: AsRawHandle>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn translation_fixture() -> TaskbarTopology {
+        let area = |left, right| ScreenRect {
+            left,
+            right,
+            top: 1380,
+            bottom: 1440,
+        };
+        TaskbarTopology {
+            build: 19045,
+            dpi: 144,
+            taskbar: area(0, 2560),
+            rebar: area(150, 2000),
+            task_switch: area(152, 2000),
+            task_list: area(152, 2000),
+            notification: area(2000, 2560),
+        }
+    }
+    #[test]
+    fn attached_translation_keeps_relative_reservation_and_uses_current_button_origin() {
+        let baseline = translation_fixture();
+        let area = |left, right| ScreenRect {
+            left,
+            right,
+            top: 1438,
+            bottom: 1498,
+        };
+        let actual = TaskbarTopology {
+            taskbar: area(0, 2560),
+            rebar: area(150, 2000),
+            task_switch: area(152, 1800),
+            task_list: area(152, 1800),
+            notification: area(2000, 2560),
+            ..baseline.clone()
+        };
+        let (reference, dx, dy) = aligned_reference(&baseline, &actual).unwrap();
+        assert_eq!((dx, dy), (0, 58));
+        assert_eq!(reference.rebar, area(150, 2000));
+        assert_eq!(reference.task_list, area(152, 2000)); // Reference retains full baseline, not reserved width.
+        assert_eq!(
+            translated(baseline.plan(200, 480).unwrap().host, dx, dy).unwrap(),
+            area(1800, 2000)
+        );
+        let coverage = super::super::buttons::ButtonCoverage {
+            list: area(152, 1800),
+            occupied: vec![area(152, 300)],
+        };
+        assert_eq!(reference.application_split(&coverage, 480), Ok(632));
+        assert_eq!(
+            baseline.application_split(&coverage, 480),
+            Err(ProbeError::UnsafeGeometry)
+        );
+    }
+    #[test]
+    fn translation_rejects_resize_dpi_and_partial_parent_moves_and_checks_overflow() {
+        let baseline = translation_fixture();
+        for case in 0..6 {
+            let mut actual = baseline.clone();
+            match case {
+                0 => actual.dpi = 192,
+                1 => actual.taskbar.right -= 1,
+                2 => actual.rebar.top -= 1,
+                3 => actual.notification.left -= 1,
+                4 => actual.build = 19044,
+                _ => {
+                    actual.taskbar.top = i32::MIN;
+                    actual.taskbar.bottom = i32::MAX;
+                }
+            }
+            assert_eq!(
+                aligned_reference(&baseline, &actual),
+                Err(ProbeError::UnsafeGeometry)
+            );
+        }
+        assert_eq!(
+            translated(
+                ScreenRect {
+                    left: 0,
+                    right: i32::MAX,
+                    top: 0,
+                    bottom: 60
+                },
+                1,
+                0
+            ),
+            Err(ProbeError::UnsafeGeometry)
+        );
+    }
     #[test]
     fn recovery_refuses_a_live_kernel_process_handle_before_any_window_operation() {
         use std::os::windows::io::{FromRawHandle, OwnedHandle};
