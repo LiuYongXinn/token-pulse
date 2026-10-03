@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-04 开发源码准备 0.1.3，已接 schema v13 / 费用缓存 v3、四费率和明确来源重读，正式安装 / 发布仍 0.1.2。先按现有 `npm run tauri:build` 完整生成 NSIS / 同包独立宿主，再用既有 `scripts/sign-update-release.ps1` 与 `scripts/verify-release-artifact.ps1` 沿用现有密钥签名 / 验证。候选验签不等同正式安装、真实日志补读或线上更新，当前证据以[交付记录](delivery-status.md)为准。当前主窗已有精确请求输入与条件未确认原因；纯核心条件选择不能代替缺失的实际模式 / 地区证据。
+
 M09h2 的源码 / schema v12 / 四费率编辑器与费用缓存 v2 已通过 core + store 415 项（1 既有性能夹具 ignored）、Vitest 37 项、价格 / 重估 / 离线目录 Playwright 11 项和隔离 Win10 -PriceRevalue 原生检查。原生四项独立预期为普通 20×10 + 命中 60×5 + 写入 20×30 + 输出 10×20 = 1300 原子；真实表单将写入费率设 0 后后台补建为 700，历史费率保持、消费 / 检查点不变。可复核 `npm run build` 后 `pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceRevalue`；必须等待原生进程实际退出并检查成功标记，不能把 GUI 启动返回当完成。日志位于忽略目录 target/cache-write-rates-*.log。正式安装 0.1.2 未升级到这些源码改动，实际日志 / 历史拒绝记录补读与条件匹配继续。
 
 M09h1a 源码新增缓存写入必要数量，schema v11、rollup v2 和生成 DTO 同步；正式安装 0.1.2 仍为此前发布内容。`pwsh -NoProfile -File scripts/native-smoke.ps1 -SourceDialogs` 的隔离合成 Home 含写入 2 / 总量 17，经过真实目录选择 / 采集 / 暂停恢复 / 移除保留 / 精确明细 DTO / 总览 React 分项验证，退出 0。原生日志在忽略目录 `target/cache-write-native-source.log`，保留 SHORTCUT_CONFLICT（正式实例持有恢复键）与 WebView2 1412；不视为键盘、正式安装版或真实用户费用验收。定向 UI 截图 `test-results/cache-write-overview.png` / `cache-write-evidence-panel.png` 为合成桥接视觉检查。
