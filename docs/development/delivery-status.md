@@ -6,6 +6,22 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M07r1：隔离恢复补扫入口与电源前置检查
+
+上一轮 M13g10 / M13g11 与 M16v 已实际修复并验证任务栏，属于进展；当前正式候选及原用户未提交内容保持。本轮继续真实睡眠 / 恢复待验项，新增 debug-only 独占 `scripts/native-smoke.ps1 -PowerMessages` / `-PowerResume`。两个模式都使用新 UUID native-probe SQLite、合成只读 Home / JSONL、真实主窗口 HWND 与正式 power subclass / CollectorService；不读取原日志、认证或真实账户，不启动额度夹具 / 本轮任务栏宿主，也不进入安装器。
+
+watcher 禁用、活动 / 目录轮询为一小时。先扫描独立预期 3 Token、完整 EOF / 空队列；直接暂停自有夹具采集器并等待 suspended 后追加 7，再恢复只读属性，确认恢复前仍为 3。直接暂停是准备动作，不冒充收到系统 suspend；这样避开每秒 proof rebuild 等其他补扫触发。主 HWND 的实际电源 subclass 对本场景管理的原子计数器记录 suspend / automatic resume / user resume，再沿用正式非阻塞服务标记与 reconcile。恢复后要求总量 10 / 完整覆盖 / 空队列、字节与只读属性不变且主窗口仍隐藏；消息模式再重复两个恢复消息，仍为 10。
+
+`-PowerMessages` 仅向自有主窗口 SendMessageTimeout（2 秒）发送明确标记的电源消息，不广播、暂停电脑或发送物理输入。本机 Win10 19045.6466 / 150% 退出 0，NATIVE_POWER_MESSAGES_OK，suspend=1 / automatic_resume=2 / user_resume=1、3→10 和源保持通过。`-PowerResume` 是独立系统观察模式，不发送这些消息，也不调用睡眠；等待最多 150 秒内的新 suspend + resume，完成同样补扫断言。观察模式的消息计数无法单独鉴别发送者，必须配合外部真实系统驱动和独立 OS 电源证据，不能仅凭 OBSERVER_OK 宣称实际 S3 通过；此成功分支仍待真实验收。
+
+两项自动检查通过：精确模式 / 混合、未知、重复与缺 gate 拒绝，以及未知电源事件不推进三类计数、已知事件分别累计。严格 desktop all-targets Clippy（custom-protocol）、fmt、release 配置编译及 PowerShell AST 通过；混合 `-PowerMessages -TaskbarActions` 在编译 / 开窗前退出 1，未运行混合场景。首次 Clippy 指出 set_readonly(false) 的 Unix 风险，已改为恢复新建夹具的原权限，保留失败日志，不降低严格规则。SHORTCUT_CONFLICT（原安装同时运行）及 WebView2 1412 如实保留。
+
+新增 `scripts/inspect-power-resume.ps1` / `power-resume-probe.cs`，默认只读：System32 API 读取 Win10 x64 S3 能力、是否允许待机、当前电源来源 / 方案和对应唤醒策略。未知字段保持 null；未检查定时器时 Eligible / Timer 字段为 null。`-CheckWakeTimer` 只建立自有、无名、非继承、绝对 UTC 40 秒唤醒定时器，随即取消并关闭；没有睡眠 / 休眠 / 重启 API、权限调整或电源策略写入。采用绝对时间是因为 Windows 8+ 的相对定时器不计低功耗时间；定时器调用成功但返回 ERROR_NOT_SUPPORTED 仍判不可用。[Microsoft SYSTEM_POWER_CAPABILITIES](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-system_power_capabilities)、[Microsoft SetWaitableTimer](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-setwaitabletimer)
+
+本机原生预检：S3=true / StandbyAllowed=true、AC=1、平衡方案、WakePolicyIndex=1；S4 固件支持但没有休眠文件，与 powercfg /a 的“休眠未启用”区分。唤醒请求受支持、TimerArmed / Cancelled / Closed=true，前置条件满足，**不表示已经实际睡眠或验证硬件真实唤醒**。默认与显式两分支均完成；所有日志 / JSON 在 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-power-acceptance-30512a5f361b4678ab291b8b26f048bb/`。powercfg /waketimers 因非提升权限拒绝，不改为提升或冒充其已查询成功，受控自有定时器结果另记。
+
+下一步是建立并验证有期限的真实 S3 驱动与独立系统证据，区分暂停本机程序与电脑重启；真实系统操作会暂停整机程序，需要在准备完成后明确说明。当前没有执行睡眠、休眠、电脑重启 / 关机或性能测试，也没有推送 GitHub。M16v 正式运行逻辑没有变化，不因仅 debug 验收 / 独立预检重建签名包；真实睡眠、安装版物理托盘 / 键盘、多屏 / DPI 和其他外部待验项没有改记通过。
+
 ## M16v：纳入通知区与系统可见性修复的签名候选
 
 从提交 `6714bb4adafd7d12a71e36ca092970a715e9e54c` 完整执行 `npm run tauri:build`，退出 0：TS / Vite、334 项声明、正式 release 桌面 / 独立宿主、唯一 NSIS 安装器成功；构建期间没有修改生产源码，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-hidden-final-release-4be416448c804234a0c99d7da3c55e52/`。同次三文件及 source / hashes 收据在 `target/release/candidates/v0.1.1-hidden-a29a71055aba44faa365e53ea632fd39/`，包含 M13g10 / M13g11 及此前任务栏修复。M16u 的失败包、M16t 与更早候选及日志保留。

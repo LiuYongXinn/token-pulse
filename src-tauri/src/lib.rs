@@ -197,6 +197,8 @@ pub fn run() {
             }
             let data_directory = app.path().app_local_data_dir()?;
             #[cfg(all(debug_assertions, windows))]
+            let power_scene = power_resume_smoke::scene()?;
+            #[cfg(all(debug_assertions, windows))]
             let quota_startup_scene = quota_startup_smoke::scene()?;
             #[cfg(all(debug_assertions, windows))]
             let main_window_scene = main_window_smoke::scene()?;
@@ -235,7 +237,7 @@ pub fn run() {
             });
             let options=token_pulse_collector::service::CollectorOptions::default();
             #[cfg(debug_assertions)]
-            let options=if std::env::args().any(|arg|arg=="--native-smoke") && std::env::args().any(|arg|arg=="--native-notify-smoke") {
+            let options=if std::env::args().any(|arg|arg=="--native-smoke") && (std::env::args().any(|arg|arg=="--native-notify-smoke") || std::env::args().any(|arg|arg.starts_with("--native-power-"))) {
                 token_pulse_collector::service::CollectorOptions {watcher:false,active_poll:std::time::Duration::from_secs(3600),manifest_poll:std::time::Duration::from_secs(3600)}
             } else {options};
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),options).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
@@ -260,6 +262,9 @@ pub fn run() {
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
             if let Some(main) = app.get_webview_window("main") {quota_commands::update_visibility(&main);}
+            #[cfg(windows)]
+            #[cfg(debug_assertions)]
+            if power_scene.is_some() {app.manage(power_resume_smoke::PowerEvents::default());}
             #[cfg(windows)]
             power::install(app.handle()).map_err(std::io::Error::other)?;
             shortcuts::initialize(app.handle());
@@ -286,6 +291,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if let Some(scene) = power_scene {power_resume_smoke::start(app.handle().clone(),scene);return Ok(());}
                 #[cfg(windows)]
                 if let Some(scene) = main_window_scene {main_window_smoke::start(app.handle().clone(),scene.phase,main_window_before_restore);return Ok(());}
                 #[cfg(windows)]
@@ -436,6 +443,8 @@ mod opacity_smoke;
 mod passthrough_smoke;
 #[cfg(windows)]
 mod power;
+#[cfg(all(debug_assertions, windows))]
+mod power_resume_smoke;
 #[cfg(debug_assertions)]
 mod price_alias_smoke;
 mod price_commands;

@@ -58,6 +58,8 @@ unsafe extern "system" fn power_message(
     if message == WM_POWERBROADCAST {
         // The only writer of dwRefData is install above; no message payload is dereferenced.
         let app = unsafe { &*(data as *const tauri::AppHandle) };
+        #[cfg(debug_assertions)]
+        super::power_resume_smoke::record_event(app, wparam as u32);
         if let Some(state) = app.try_state::<super::RuntimeState>() {
             if let Some(taskbar) = super::taskbar_commands::service(app) {
                 match wparam as u32 {
