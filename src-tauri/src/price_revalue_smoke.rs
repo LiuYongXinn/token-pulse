@@ -40,7 +40,7 @@ pub fn seed(db: &Database) -> StoreResult<()> {
     use token_pulse_store::batch::*;
     let usage = UsageVector {
         input_total: Some(100),
-        cache_write_input: None,
+        cache_write_input: Some(20),
         cached_input: Some(60),
         output_total: Some(10),
         reasoning_output: Some(2),
@@ -122,6 +122,7 @@ pub fn seed(db: &Database) -> StoreResult<()> {
                 effective_to_ms: None,
                 priority: 0,
                 input_rate_atoms: DecimalInt::parse("10")?,
+                cache_write_rate_atoms: Some(DecimalInt::parse("30")?),
                 cached_rate_atoms: Some(DecimalInt::parse("5")?),
                 output_rate_atoms: DecimalInt::parse("20")?,
                 origin_reference: Some("explicit native synthetic fixture".into()),
@@ -138,7 +139,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_PRICE_REVALUE_OK: own-data startup cache, exact 900 atoms, pinned main IPC/CAS/idempotence, React start/basis/history, mini denied, shared privacy, unchanged consumption/checkpoint"
+                "NATIVE_PRICE_REVALUE_OK: own-data four-rate 1300 atoms, React write-rate zero replacement 700 atoms, old revision/history, startup/manual cache, pinned IPC/CAS/idempotence, mini denied, shared privacy, unchanged consumption/checkpoint"
             ),
             Err(error) => eprintln!("NATIVE_PRICE_REVALUE_FAILED: {error}"),
         }
@@ -211,10 +212,31 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       if(document.querySelector('.price-revalue select').value!=='event_time')throw new Error('REVALUE_OLD_DRAFT_RESTORED');
     "#,
     )?;
+    super::mini_smoke::evaluate(
+        app,
+        &main,
+        r#"
+      const panel=document.querySelector('.price-panel');
+      [...panel.querySelectorAll('.price-row-actions button')].find(n=>n.textContent==='编辑').click();
+      await wait(()=>panel.querySelector('.price-editor'));
+      const editor=panel.querySelector('.price-editor');
+      const write=[...editor.querySelectorAll('label')].find(n=>n.textContent.startsWith('缓存写入单价')).querySelector('input');
+      if(write.value!=='0.00000003')throw new Error('WRITE_RATE_EDIT_PRECISION');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(write,'0');write.dispatchEvent(new Event('input',{bubbles:true}));
+      await wait(()=>write.value==='0');
+      [...editor.querySelectorAll('button')].find(n=>n.textContent==='保存并发布版本').click();
+      await wait(()=>panel.textContent.includes('当前价格版本 2'));
+      const latest=await invoke('get_price_rules',{requestId:'write-current',revision:null});
+      const history=await invoke('get_price_rules',{requestId:'write-history',revision:'1'});
+      if(latest.data.rules[0].cache_write_rate_atoms!=='0'||history.data.rules[0].cache_write_rate_atoms!=='30')throw new Error('WRITE_RATE_HISTORY');
+      let ready=false;for(let i=0;i<300;i++){const current=await invoke('get_price_revalue_status',{requestId:'write-price-backfill'});if(current.data.latest_job?.price_revision==='2'&&current.data.latest_job.state==='succeeded'){ready=true;break;}await new Promise(r=>setTimeout(r,30));}if(!ready)throw new Error('WRITE_RATE_AUTOMATIC_CACHE');
+    "#,
+    )?;
     db.snapshot(|tx,r| {
         if (r.data,tx.query_row("SELECT committed_offset,checkpoint_revision FROM file_generations WHERE file_generation_id='synthetic-generation'",[],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?)))?)!=before {return Err(token_pulse_store::ErrorCode::DbCorrupt.into())}
-        let priced:i64=tx.query_row("SELECT COUNT(*) FROM event_valuations e JOIN valuation_sets v USING(valuation_set_id) WHERE v.state='ready' AND v.price_revision=1 AND e.cost_atoms='900' AND e.currency='USD'",[],|r|r.get(0))?;
-        if priced!=3 {return Err(token_pulse_store::ErrorCode::DbCorrupt.into())}Ok(())
+        let priced:i64=tx.query_row("SELECT COUNT(*) FROM event_valuations e JOIN valuation_sets v USING(valuation_set_id) WHERE v.state='ready' AND v.price_revision=1 AND e.cost_atoms='1300' AND e.currency='USD'",[],|r|r.get(0))?;
+        let changed:i64=tx.query_row("SELECT COUNT(*) FROM event_valuations e JOIN valuation_sets v USING(valuation_set_id) WHERE v.state='ready' AND v.price_revision=2 AND e.cost_atoms='700' AND e.currency='USD'",[],|r|r.get(0))?;
+        if priced!=3 || changed<1 {return Err(token_pulse_store::ErrorCode::DbCorrupt.into())}Ok(())
     }).map_err(|e|format!("cache precision / consumption check: {e}"))?;
     Ok(())
 }

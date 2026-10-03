@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M09h2 的源码 / schema v12 / 四费率编辑器与费用缓存 v2 已通过 core + store 415 项（1 既有性能夹具 ignored）、Vitest 37 项、价格 / 重估 / 离线目录 Playwright 11 项和隔离 Win10 -PriceRevalue 原生检查。原生四项独立预期为普通 20×10 + 命中 60×5 + 写入 20×30 + 输出 10×20 = 1300 原子；真实表单将写入费率设 0 后后台补建为 700，历史费率保持、消费 / 检查点不变。可复核 `npm run build` 后 `pwsh -NoProfile -File scripts/native-smoke.ps1 -PriceRevalue`；必须等待原生进程实际退出并检查成功标记，不能把 GUI 启动返回当完成。日志位于忽略目录 target/cache-write-rates-*.log。正式安装 0.1.2 未升级到这些源码改动，实际日志 / 历史拒绝记录补读与条件匹配继续。
+
 M09h1a 源码新增缓存写入必要数量，schema v11、rollup v2 和生成 DTO 同步；正式安装 0.1.2 仍为此前发布内容。`pwsh -NoProfile -File scripts/native-smoke.ps1 -SourceDialogs` 的隔离合成 Home 含写入 2 / 总量 17，经过真实目录选择 / 采集 / 暂停恢复 / 移除保留 / 精确明细 DTO / 总览 React 分项验证，退出 0。原生日志在忽略目录 `target/cache-write-native-source.log`，保留 SHORTCUT_CONFLICT（正式实例持有恢复键）与 WebView2 1412；不视为键盘、正式安装版或真实用户费用验收。定向 UI 截图 `test-results/cache-write-overview.png` / `cache-write-evidence-panel.png` 为合成桥接视觉检查。
 
 2026-10-03 计价核查见[设计专题](../design/price-accounting.md)与[交付澄清](delivery-status.md#模型计费状态澄清2026-10-03)。别名编辑、离线目录发布 / 界面、持久费用缓存及后台补建 / 手动重估 / 进度 / 取消均已接入；下方 M09 早期“尚未启动 / 接入”是历史记录。51 模型 / 172 价格事实不等于完整计价，37 条仅为 Standard 参考规则。生产不在线更新价格；独立缓存写入、每请求长度 / 实际模式及地区证据继续补齐，工具 / 多模态分列扩展。

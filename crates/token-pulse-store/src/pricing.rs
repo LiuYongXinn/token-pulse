@@ -10,7 +10,7 @@ use token_pulse_core::{
     },
 };
 
-const COLUMNS: &str = "rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms";
+const COLUMNS: &str = "rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms,cache_write_rate_atoms";
 mod offline;
 fn decimal(value: i64) -> StoreResult<DecimalInt> {
     DecimalInt::from_nonnegative(value.into()).map_err(|_| ErrorCode::DbCorrupt.into())
@@ -31,6 +31,10 @@ fn read_rule(row: &Row<'_>) -> StoreResult<PriceRule> {
             .transpose()?,
         priority: row.get(9)?,
         input_rate_atoms: DecimalInt::parse(&row.get::<_, String>(10)?)?,
+        cache_write_rate_atoms: row
+            .get::<_, Option<String>>(16)?
+            .map(|s| DecimalInt::parse(&s))
+            .transpose()?,
         cached_rate_atoms: row
             .get::<_, Option<String>>(11)?
             .map(|s| DecimalInt::parse(&s))
@@ -139,7 +143,7 @@ fn apply(
             Sha256::digest(serde_json::to_vec(&(next, &draft, at))?)
         );
         let rule = draft.into_rule(id, decimal(next)?, at);
-        tx.execute("INSERT INTO price_rules(rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms) VALUES(?1,?2,NULL,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'custom',?13,?14)",params![rule.rule_id,next,rule.provider,rule.model_exact,rule.source_id,rule.currency,rule.effective_from_ms.value(),rule.effective_to_ms.map(|t|t.value()),rule.priority,rule.input_rate_atoms.as_str(),rule.cached_rate_atoms.as_ref().map(|v|v.as_str()),rule.output_rate_atoms.as_str(),rule.origin_reference,rule.created_at_ms.value()])?;
+        tx.execute("INSERT INTO price_rules(rule_id,introduced_revision,retired_revision,provider,model_exact,source_id,currency,effective_from_ms,effective_to_ms,priority,input_rate_atoms,cached_rate_atoms,output_rate_atoms,origin,origin_reference,created_at_ms,cache_write_rate_atoms) VALUES(?1,?2,NULL,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'custom',?13,?14,?15)",params![rule.rule_id,next,rule.provider,rule.model_exact,rule.source_id,rule.currency,rule.effective_from_ms.value(),rule.effective_to_ms.map(|t|t.value()),rule.priority,rule.input_rate_atoms.as_str(),rule.cached_rate_atoms.as_ref().map(|v|v.as_str()),rule.output_rate_atoms.as_str(),rule.origin_reference,rule.created_at_ms.value(),rule.cache_write_rate_atoms.as_ref().map(|v|v.as_str())])?;
     }
     tx.execute(
         "UPDATE app_state SET price_revision=?1 WHERE singleton=1",

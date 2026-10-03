@@ -67,6 +67,7 @@ fn rule(id: &str) -> PriceRule {
         effective_to_ms: None,
         priority: 0,
         input_rate_atoms: rate_atoms("1.75").unwrap(),
+        cache_write_rate_atoms: None,
         cached_rate_atoms: Some(rate_atoms("0.175").unwrap()),
         output_rate_atoms: rate_atoms("14").unwrap(),
         origin: PriceOrigin::Custom,
@@ -86,7 +87,7 @@ fn usage() -> UsageVector {
 }
 
 #[test]
-fn known_cache_writes_remain_unpriced_until_a_separate_write_rate_is_supported() {
+fn known_cache_writes_require_a_separate_write_rate_in_the_selected_rule() {
     let prices = catalog(vec![rule("synthetic-three-rates")]);
     let basis = PriceBasis::EventTime {};
     let writes = UsageVector {
@@ -109,6 +110,157 @@ fn known_cache_writes_remain_unpriced_until_a_separate_write_rate_is_supported()
         "220500000000"
     );
     assert_eq!(writes.validated_total().unwrap(), Some(110));
+}
+
+#[test]
+fn four_input_categories_use_disjoint_quantities_and_never_charge_reasoning_twice() {
+    let mut four = rule("synthetic-four-rates");
+    four.input_rate_atoms = n(2);
+    four.cached_rate_atoms = Some(n(3));
+    four.cache_write_rate_atoms = Some(n(5));
+    four.output_rate_atoms = n(7);
+    let prices = catalog(vec![four]);
+    // Independent oracle enumerates ordinary/read/write categories, not total-minus-cache.
+    for ordinary in 0..9 {
+        for read in 0..9 {
+            for write in 0..9 {
+                let vector = UsageVector {
+                    input_total: Some(ordinary + read + write),
+                    cached_input: Some(read),
+                    cache_write_input: Some(write),
+                    output_total: Some(11),
+                    reasoning_output: Some(11),
+                    reported_total: Some(ordinary + read + write + 11),
+                };
+                let expected = ordinary * 2 + read * 3 + write * 5 + 11 * 7;
+                assert_eq!(
+                    atoms(prices.estimate(&event(vector), &PriceBasis::EventTime {})).1,
+                    expected.to_string()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn unknown_quantities_can_only_be_priced_when_the_split_cannot_change_the_result() {
+    let basis = PriceBasis::EventTime {};
+    let mut four = rule("synthetic-four-rates");
+    four.input_rate_atoms = n(10);
+    four.cached_rate_atoms = Some(n(5));
+    four.cache_write_rate_atoms = Some(n(30));
+    four.output_rate_atoms = n(20);
+    let prices = catalog(vec![four.clone()]);
+    let vector = UsageVector {
+        cache_write_input: Some(20),
+        ..usage()
+    };
+    assert_eq!(atoms(prices.estimate(&event(vector), &basis)).1, "1300");
+    assert_eq!(
+        reason(prices.estimate(&event(usage()), &basis)),
+        UnpricedCode::InsufficientUsage
+    );
+    assert_eq!(
+        reason(prices.estimate(
+            &event(UsageVector {
+                cached_input: None,
+                ..vector
+            }),
+            &basis
+        )),
+        UnpricedCode::InsufficientUsage
+    );
+    assert_eq!(
+        atoms(prices.estimate(
+            &event(UsageVector {
+                cache_write_input: Some(0),
+                ..usage()
+            }),
+            &basis
+        ))
+        .1,
+        "900"
+    );
+    // All input is already proven read/write; missing other quantity cannot add any.
+    assert_eq!(
+        atoms(prices.estimate(
+            &event(UsageVector {
+                cached_input: Some(100),
+                cache_write_input: None,
+                ..usage()
+            }),
+            &basis
+        ))
+        .1,
+        "700"
+    );
+    assert_eq!(
+        atoms(prices.estimate(
+            &event(UsageVector {
+                cached_input: None,
+                cache_write_input: Some(100),
+                ..usage()
+            }),
+            &basis
+        ))
+        .1,
+        "3200"
+    );
+    four.cache_write_rate_atoms = Some(n(10));
+    assert_eq!(
+        atoms(catalog(vec![four.clone()]).estimate(&event(usage()), &basis)).1,
+        "900"
+    );
+    four.cached_rate_atoms = Some(n(10));
+    assert_eq!(
+        atoms(catalog(vec![four.clone()]).estimate(
+            &event(UsageVector {
+                cached_input: None,
+                ..usage()
+            }),
+            &basis
+        ))
+        .1,
+        "1200"
+    );
+    four.cache_write_rate_atoms = Some(n(0));
+    assert_eq!(
+        atoms(catalog(vec![four.clone()]).estimate(&event(vector), &basis)).1,
+        "1000"
+    );
+    four.cache_write_rate_atoms = None;
+    assert_eq!(
+        reason(catalog(vec![four.clone()]).estimate(&event(vector), &basis)),
+        UnpricedCode::InsufficientUsage
+    );
+    assert_eq!(
+        atoms(catalog(vec![four]).estimate(&event(usage()), &basis)).1,
+        "1200"
+    );
+    assert_eq!(usage().cache_write_input, None); // No inference changes usage facts.
+}
+
+#[test]
+fn write_rates_enforce_bounds_and_four_rate_math_keeps_values_above_js_integer_precision() {
+    let mut four = rule("synthetic-large-exact");
+    four.input_rate_atoms = n(MAX_RATE_ATOMS);
+    four.cached_rate_atoms = Some(n(1));
+    four.cache_write_rate_atoms = Some(n(MAX_RATE_ATOMS));
+    four.output_rate_atoms = n(MAX_RATE_ATOMS);
+    let vector = UsageVector {
+        input_total: Some(9_007_199_254_740_993),
+        cached_input: Some(1),
+        cache_write_input: Some(9_007_199_254_740_991),
+        output_total: Some(1),
+        reasoning_output: Some(1),
+        reported_total: Some(9_007_199_254_740_994),
+    };
+    assert_eq!(
+        atoms(catalog(vec![four.clone()]).estimate(&event(vector), &PriceBasis::EventTime {})).1,
+        "9007199254740993000000000000001"
+    );
+    four.cache_write_rate_atoms = Some(n(MAX_RATE_ATOMS + 1));
+    assert_eq!(four.validate(), Err(ErrorCode::InvalidQuery));
 }
 fn event(usage: UsageVector) -> PricingEvent<'static> {
     PricingEvent {

@@ -37,6 +37,7 @@ fn install(db: &Database) {
                 effective_to_ms: None,
                 priority: 0,
                 input_rate_atoms: DecimalInt::from_nonnegative(1_000_000_000).unwrap(),
+                cache_write_rate_atoms: None,
                 cached_rate_atoms: Some(DecimalInt::from_nonnegative(1_000_000_000).unwrap()),
                 output_rate_atoms: DecimalInt::from_nonnegative(1_000_000_000).unwrap(),
                 origin_reference: Some("synthetic only".into()),

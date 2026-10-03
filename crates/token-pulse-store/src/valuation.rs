@@ -14,7 +14,7 @@ use token_pulse_core::{
 };
 
 /// Increment when the price algorithm or the fingerprint's interpretation changes.
-pub const CACHE_VERSION: i64 = 1;
+pub const CACHE_VERSION: i64 = 2;
 const BATCH_ROWS: usize = 500;
 
 pub(crate) fn fingerprint(event: &PricingEvent<'_>, accounting: &str) -> StoreResult<String> {

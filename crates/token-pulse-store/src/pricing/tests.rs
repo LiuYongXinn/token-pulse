@@ -9,6 +9,66 @@ use token_pulse_core::{
 fn n(value: i128) -> DecimalInt {
     DecimalInt::from_nonnegative(value).unwrap()
 }
+
+#[test]
+fn schema_eleven_upgrade_keeps_legacy_rules_unknown_and_rejects_invalid_write_rates() {
+    let (directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.mutate_price_rule(PriceRuleMutation::Create { draft: draft() }, 0, 1)
+        .unwrap();
+    db.write(|conn| {conn.execute_batch("ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; DELETE FROM schema_migrations WHERE version=12; UPDATE app_state SET schema_version=11; PRAGMA user_version=11;")?;Ok(())}).unwrap();
+    drop(db);
+    let db = Database::open(directory.path()).unwrap();
+    let original = db.price_rules().unwrap().rules.remove(0);
+    assert_eq!(original.cache_write_rate_atoms, None);
+    db.snapshot(|tx, r| {
+        assert_eq!((r.data, r.price), (1, 1));
+        assert_eq!(estimate(catalog_at(tx, r.price)?), "900");
+        Ok(())
+    })
+    .unwrap();
+    for invalid in [
+        "",
+        "01",
+        "-1",
+        "1.5",
+        "1e3",
+        "1000000000000001",
+        "10000000000000000",
+    ] {
+        let rate = invalid.to_owned();
+        assert!(
+            db.write(move |conn| {
+                conn.execute("UPDATE price_rules SET cache_write_rate_atoms=?1", [rate])?;
+                Ok(())
+            })
+            .is_err()
+        );
+    }
+    for valid in ["0", "1", "1000000000000000"] {
+        let rate = valid.to_owned();
+        db.write(move |conn| {
+            conn.execute("UPDATE price_rules SET cache_write_rate_atoms=?1", [rate])?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            db.price_rules().unwrap().rules[0]
+                .cache_write_rate_atoms
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            valid
+        );
+    }
+    assert_eq!(
+        db.usage_totals(&crate::query::tests::filter())
+            .unwrap()
+            .total_tokens
+            .as_str(),
+        "110"
+    );
+}
 pub(super) fn draft() -> PriceRuleDraft {
     // Synthetic atoms only. Production contains no seed from this fixture.
     PriceRuleDraft {
@@ -20,6 +80,7 @@ pub(super) fn draft() -> PriceRuleDraft {
         effective_to_ms: None,
         priority: 0,
         input_rate_atoms: n(10),
+        cache_write_rate_atoms: None,
         cached_rate_atoms: Some(n(5)),
         output_rate_atoms: n(20),
         origin_reference: Some("synthetic fixture".into()),
@@ -31,11 +92,12 @@ fn rate_limit_rejects_create_and_replace_without_retiring_or_advancing_revision(
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();
     let limit = token_pulse_core::pricing::MAX_RATE_ATOMS;
-    for field in 0..3 {
+    for field in 0..4 {
         let mut excessive = draft();
         match field {
             0 => excessive.input_rate_atoms = n(limit + 1),
             1 => excessive.cached_rate_atoms = Some(n(limit + 1)),
+            2 => excessive.cache_write_rate_atoms = Some(n(limit + 1)),
             _ => excessive.output_rate_atoms = n(limit + 1),
         }
         assert_eq!(

@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M09h2 增量 schema v12 为 price_rules 追加 nullable TEXT cache_write_rate_atoms，以规范非负十进制原子和上界 CHECK 约束；既有价格行保持 null，不改旧迁移文件。创建 / 替换仍共用价格修订 CAS / 单写事务，替换发布新行，旧读取快照和历史价格不变。费用缓存 CACHE_VERSION=2：集合身份 / 输入指纹 / 可用集合过滤均绑定新版本，旧 v1 缓存不作为新公式结果，查询即时补算、后台补建。schema v11 的写入数量列与 rollup v2 保持；费用重估不修改消费 / 基线 / 检查点。具体含义及验证见[计价专题](price-accounting.md#7-四费率估算m09h2)。
+
 M15f1 主窗口位置作为现有 settings payload 的独立 `main_window` 字段存储，内部 `MainWindowPreferences` 只含可空 placement（monitor / 工作区相对 DIP x、y），缺省 None 表示尚未保存，不伪装零坐标。与 mini_window 分离，无新数据表、迁移保护扩展或前端几何写入。读取走完整版本 / 字段验证；原生 Writer 更新先读最新 payload，仅改主窗位置，与 settings_revision 在同一事务提交，同值不推进修订；未知版本 / 坏字段 / 写入失败保留原记录。实际原生捕获 / 恢复由后续 M15f2 接入，不能以此存储检查宣称 Windows 位置恢复已完成。
 
 M10d2 不增加 schema：基础诊断只读现有 diagnostics、当前文件映射、活动账本 pending_usage 和 source_scan_state，同事务捕获 data_revision。未解决日志诊断只定位当前指针选定的 current 代次，NULL 代次没有文件位置；当前账本未确认 / 未归属观察按原代次精确偏移定位。退役 / 候选 / 无效 / 未选定代次及历史账本不会被误标到新位置，移动后使用同一代次的当前映射。缺失文件保留原保存位置及历史事实；目录错误仅使用启用且根仍匹配的当前扫描，未知偏移保持 null。按来源、位置、类别、码聚合一处最近代表项，固定排序并最多取 21 行（返回 20 行和 has_more），不将完整日志诊断历史 / metadata / 向量 / evidence 暴露给 UI。

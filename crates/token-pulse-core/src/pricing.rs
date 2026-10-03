@@ -41,6 +41,7 @@ pub struct PriceRule {
     pub priority: i32,
     pub input_rate_atoms: DecimalInt,
     pub cached_rate_atoms: Option<DecimalInt>,
+    pub cache_write_rate_atoms: Option<DecimalInt>,
     pub output_rate_atoms: DecimalInt,
     pub origin: PriceOrigin,
     pub origin_reference: Option<String>,
@@ -105,6 +106,7 @@ pub struct PriceRuleDraft {
     pub priority: i32,
     pub input_rate_atoms: DecimalInt,
     pub cached_rate_atoms: Option<DecimalInt>,
+    pub cache_write_rate_atoms: Option<DecimalInt>,
     pub output_rate_atoms: DecimalInt,
     pub origin_reference: Option<String>,
 }
@@ -123,6 +125,7 @@ impl PriceRuleDraft {
             priority: self.priority,
             input_rate_atoms: self.input_rate_atoms,
             cached_rate_atoms: self.cached_rate_atoms,
+            cache_write_rate_atoms: self.cache_write_rate_atoms,
             output_rate_atoms: self.output_rate_atoms,
             origin: PriceOrigin::Custom,
             origin_reference: self.origin_reference,
@@ -199,6 +202,7 @@ impl PriceRule {
             || [
                 Some(&self.input_rate_atoms),
                 self.cached_rate_atoms.as_ref(),
+                self.cache_write_rate_atoms.as_ref(),
                 Some(&self.output_rate_atoms),
             ]
             .into_iter()
@@ -463,11 +467,6 @@ impl PriceCatalog {
 }
 
 fn estimate_atoms(usage: UsageVector, rule: &PriceRule) -> Result<i128, UnpricedCode> {
-    // Preserve known writes in the fact ledger. Until an independent write rate
-    // is represented by this rule contract, never silently charge them as normal input.
-    if usage.cache_write_input.is_some_and(|writes| writes > 0) {
-        return Err(UnpricedCode::InsufficientUsage);
-    }
     usage
         .validated_total()
         .map_err(|e| {
@@ -486,25 +485,41 @@ fn estimate_atoms(usage: UsageVector, rule: &PriceRule) -> Result<i128, Unpriced
             .checked_mul(rate.value())
             .ok_or(UnpricedCode::Overflow)
     };
-    let input_cost = if input == 0 {
-        0
-    } else {
-        match usage.cached_input {
-            Some(0) => multiply(input, &rule.input_rate_atoms)?,
-            Some(cached) => multiply(input - cached, &rule.input_rate_atoms)?
-                .checked_add(multiply(
-                    cached,
-                    rule.cached_rate_atoms
-                        .as_ref()
-                        .ok_or(UnpricedCode::InsufficientUsage)?,
-                )?)
-                .ok_or(UnpricedCode::Overflow)?,
-            None if rule.cached_rate_atoms.as_ref() == Some(&rule.input_rate_atoms) => {
-                multiply(input, &rule.input_rate_atoms)?
+    // Known categories are disjoint parts of input, never additive surcharges.
+    let remaining = input
+        .checked_sub(usage.cached_input.unwrap_or(0))
+        .and_then(|v| v.checked_sub(usage.cache_write_input.unwrap_or(0)))
+        .filter(|v| *v >= 0)
+        .ok_or(UnpricedCode::InsufficientUsage)?;
+    let mut input_cost = multiply(remaining, &rule.input_rate_atoms)?;
+    for (quantity, rate, legacy_write_reference) in [
+        (usage.cached_input, rule.cached_rate_atoms.as_ref(), false),
+        (
+            usage.cache_write_input,
+            rule.cache_write_rate_atoms.as_ref(),
+            // Old three-rate rules keep their reference estimate for old usage.
+            // This does not prove a write quantity or a real processing mode.
+            rule.cache_write_rate_atoms.is_none(),
+        ),
+    ] {
+        match quantity {
+            Some(0) => {}
+            Some(tokens) => {
+                input_cost = input_cost
+                    .checked_add(multiply(
+                        tokens,
+                        rate.ok_or(UnpricedCode::InsufficientUsage)?,
+                    )?)
+                    .ok_or(UnpricedCode::Overflow)?;
             }
-            _ => return Err(UnpricedCode::InsufficientUsage),
+            // Unknown quantity is harmless only when no input is left to split,
+            // or its rate equals ordinary input. Never fill the fact with zero.
+            None if remaining == 0
+                || rate == Some(&rule.input_rate_atoms)
+                || legacy_write_reference => {}
+            None => return Err(UnpricedCode::InsufficientUsage),
         }
-    };
+    }
     input_cost
         .checked_add(multiply(output, &rule.output_rate_atoms)?)
         .ok_or(UnpricedCode::Overflow)

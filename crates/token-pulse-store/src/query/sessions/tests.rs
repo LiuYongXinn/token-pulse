@@ -68,6 +68,7 @@ pub(super) fn install(db: &Database, rate: i128) {
                 effective_to_ms: None,
                 priority: 0,
                 input_rate_atoms: DecimalInt::from_nonnegative(rate).unwrap(),
+                cache_write_rate_atoms: None,
                 cached_rate_atoms: Some(DecimalInt::from_nonnegative(rate).unwrap()),
                 output_rate_atoms: DecimalInt::from_nonnegative(rate).unwrap(),
                 origin_reference: Some("synthetic fixture".into()),

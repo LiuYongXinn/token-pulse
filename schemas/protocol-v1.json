@@ -8914,6 +8914,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "cache_write_rate_atoms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cached_rate_atoms": {
           "anyOf": [
             {
@@ -9006,6 +9016,7 @@
         "priority",
         "input_rate_atoms",
         "cached_rate_atoms",
+        "cache_write_rate_atoms",
         "output_rate_atoms",
         "origin",
         "origin_reference",
@@ -9030,6 +9041,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "cache_write_rate_atoms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cached_rate_atoms": {
           "anyOf": [
             {
@@ -9097,6 +9118,7 @@
         "priority",
         "input_rate_atoms",
         "cached_rate_atoms",
+        "cache_write_rate_atoms",
         "output_rate_atoms",
         "origin_reference"
       ],
@@ -9118,6 +9140,16 @@
         "PriceRuleDraft": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_rate_atoms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cached_rate_atoms": {
               "anyOf": [
                 {
@@ -9185,6 +9217,7 @@
             "priority",
             "input_rate_atoms",
             "cached_rate_atoms",
+            "cache_write_rate_atoms",
             "output_rate_atoms",
             "origin_reference"
           ],
@@ -9312,6 +9345,16 @@
         "PriceRule": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_rate_atoms": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cached_rate_atoms": {
               "anyOf": [
                 {
@@ -9404,6 +9447,7 @@
             "priority",
             "input_rate_atoms",
             "cached_rate_atoms",
+            "cache_write_rate_atoms",
             "output_rate_atoms",
             "origin",
             "origin_reference",

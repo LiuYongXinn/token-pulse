@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { blankPriceForm, priceAtoms, priceDraft, pricePerMillion, utcEpoch, utcInput } from './price-form';
+import { blankPriceForm, editPriceForm, priceAtoms, priceDraft, pricePerMillion, utcEpoch, utcInput } from './price-form';
 
 test('rates preserve every atom and distinguish unknown from a known zero', () => {
   expect(priceAtoms('999999.123456789')).toBe('999999123456789');
@@ -21,4 +21,14 @@ test('rule drafts require actual prices and keep optional unknown fields null', 
   expect(priceDraft(form)).toMatchObject({ cached_rate_atoms: null, source_id: null, effective_from_ms: 0, effective_to_ms: null, priority: 0, input_rate_atoms: '0', output_rate_atoms: '1', origin_reference: null });
   expect(priceDraft({ ...form, cached: '0', reference: 'Synthetic test fixture', priority: '10000' }).cached_rate_atoms).toBe('0');
   for (const change of [{ input: '' }, { model: '' }, { provider: 'x\n' }, { currency: 'usd' }, { priority: '10001' }, { priority: '1.1' }, { from: '2026-01-01T00:00', to: '2026-01-01T00:00' }]) expect(() => priceDraft({ ...form, ...change })).toThrow();
+});
+
+test('cache-write rates round trip exact prices, unknown and zero without changing usage', () => {
+  const base = { ...blankPriceForm(), provider: 'synthetic', model: 'fixture', input: '2', cached: '0.1', output: '10' };
+  for (const [write, atoms] of [['', null], ['0', '0'], ['999999.123456789', '999999123456789']] as const) {
+    const draft = priceDraft({ ...base, write });
+    expect(draft.cache_write_rate_atoms).toBe(atoms);
+    expect(editPriceForm({ ...draft, rule_id: 'fixture', introduced_revision: '1', retired_revision: null, origin: 'custom', created_at_ms: 0 }).write).toBe(write);
+  }
+  for (const write of ['-1', '1000000.000000001', '1.0000000001']) expect(() => priceDraft({ ...base, write })).toThrow();
 });

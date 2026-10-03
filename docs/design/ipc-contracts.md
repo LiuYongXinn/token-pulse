@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M09h2 PriceRule / PriceRuleDraft 新增 nullable cache_write_rate_atoms 精确原子字符串，沿用现有 main-only 价格查询 / 保存 / 历史命令和预期价格修订，不开放新的文件或通用权限。Rust → TS / schema 同步生成；空写入费率表示未知，字符串 "0" 是明确免费。用量 cache_write_input 继续单独保存覆盖，费率修改不填补事实中的 null。请求条件未知时不能以四项公式接入代替模式 / 分档证据，详见[计价专题](price-accounting.md#7-四费率估算m09h2)。
+
 M09h1a 追加 TokenTotals.cache_write_input: TokenMeasure 及 RawUsageVector.cache_write_input: nullable 精确有符号字符串；Rust 生成 TS / schema 同步。总量不重复相加，未知不补零，隐私保留 Token 的既有规则不变。PriceRule / Draft 仍只有三费率，正数写入保持 insufficient_usage，四费率与请求条件后续接入。下条关于已发布 0.1.2 的核查保留，当前增量见[计价专题](price-accounting.md#6-缓存写入数量链路m09h1a)。
 
 2026-10-03 计价状态澄清：规则 / 别名、离线目录和重估命令已注册并接正式 UI，Rust 生成契约为实际权威，后文早期“草案 / 未注册”按对应后续模块收敛。现有 PriceRule / PriceRuleDraft 仅含输入、命中、输出三费率，UsageVector / 公开用量尚未完整支持独立写入；请求长度、实际模式、端点地区未进入自动匹配契约。后续新增 nullable 写入分项、四费率与有出处的请求条件，连同价格缓存身份 / 历史版本同步演进；缺证据不回填假值。见[模型价格与计费条件](price-accounting.md)。

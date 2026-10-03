@@ -16,6 +16,7 @@ fn draft(input: i128) -> PriceRuleDraft {
         effective_to_ms: None,
         priority: 0,
         input_rate_atoms: DecimalInt::from_nonnegative(input).unwrap(),
+        cache_write_rate_atoms: None,
         cached_rate_atoms: Some(DecimalInt::parse("5").unwrap()),
         output_rate_atoms: DecimalInt::parse("20").unwrap(),
         origin_reference: Some("synthetic only".into()),
@@ -76,6 +77,134 @@ fn replace(db: &Database) {
         1,
         2,
     )
+    .unwrap();
+}
+
+#[test]
+fn write_price_publication_retains_old_read_snapshot_and_exact_reopened_fee_cache() {
+    use token_pulse_core::pricing::{PriceOutcome, UnpricedCode};
+    let (directory, db) = priced();
+    // Only this isolated synthetic fixture changes; production logs/DB are untouched.
+    db.write(|conn| {
+        conn.execute(
+            "UPDATE usage_events SET cache_write_input_tokens=20 WHERE event_id='event'",
+            [],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    let before = db
+        .snapshot(|tx, r| {
+            Ok((
+                r.data,
+                tx.query_row(
+                    "SELECT committed_offset,checkpoint_revision FROM file_generations",
+                    [],
+                    |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+                )?,
+            ))
+        })
+        .unwrap();
+    let unpriced = || PriceOutcome::Unpriced {
+        reason: UnpricedCode::InsufficientUsage,
+    };
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 2)
+        .unwrap();
+    let old_id = db.price_rules().unwrap().rules[0].rule_id.clone();
+    db.snapshot(|tx, r| {
+        assert_eq!(
+            serde_json::to_value(cached(tx, r.price, &PriceBasis::EventTime {})?.unwrap())?,
+            serde_json::to_value(unpriced())?
+        );
+        let mut replacement = draft(10);
+        replacement.cache_write_rate_atoms = Some(DecimalInt::parse("30")?);
+        db.mutate_price_rule(
+            PriceRuleMutation::Replace {
+                rule_id: old_id,
+                draft: replacement,
+            },
+            1,
+            3,
+        )?;
+        db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 4)?;
+        assert_eq!(
+            crate::pricing::rules_at(tx, 1)?.rules[0].cache_write_rate_atoms,
+            None
+        );
+        assert_eq!(
+            serde_json::to_value(cached(tx, 1, &PriceBasis::EventTime {})?.unwrap())?,
+            serde_json::to_value(unpriced())?
+        );
+        Ok(())
+    })
+    .unwrap();
+    db.snapshot(|tx, r| {
+        assert_eq!(r.price, 2);
+        assert_eq!(
+            cost(cached(tx, 2, &PriceBasis::EventTime {})?.unwrap()),
+            "1300"
+        );
+        assert_eq!(
+            crate::pricing::rules_at(tx, 2)?.rules[0]
+                .cache_write_rate_atoms
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "30"
+        );
+        assert_eq!(
+            (
+                r.data,
+                tx.query_row(
+                    "SELECT committed_offset,checkpoint_revision FROM file_generations",
+                    [],
+                    |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
+                )?
+            ),
+            before
+        );
+        Ok(())
+    })
+    .unwrap();
+    drop(db);
+    let db = Database::open(directory.path()).unwrap();
+    assert_eq!(summary_cost(&db), "0.000000000001300");
+    assert_eq!(
+        db.usage_totals(&filter()).unwrap().total_tokens.as_str(),
+        "110"
+    );
+    // Emulate a ready v1 cache under its real version-specific ID. It cannot
+    // satisfy v2 lookup or prevent the automatic builder from creating a v2 set.
+    db.write(|conn| {
+        let tx = conn.transaction()?;
+        let old_input = input(&tx, "ledger", 2, &PriceBasis::EventTime {})?;
+        let current = old_input.id()?;
+        let legacy = format!("valuation:{:x}", Sha256::digest(serde_json::to_vec(&(1_i64, &old_input))?));
+        tx.execute("INSERT INTO valuation_sets SELECT ?1,price_revision,mode,specified_at_ms,state,created_at_ms FROM valuation_sets WHERE valuation_set_id=?2", params![legacy,current])?;
+        tx.execute("INSERT INTO event_valuations SELECT ?1,event_id,rule_id,currency,'999999',status FROM event_valuations WHERE valuation_set_id=?2", params![legacy,current])?;
+        tx.execute("INSERT INTO valuation_cache_inputs SELECT ?1,event_id,input_sha256 FROM valuation_cache_inputs WHERE valuation_set_id=?2", params![legacy,current])?;
+        tx.execute("INSERT INTO valuation_cache_sets SELECT ?1,ledger_id,evidence_revision,1,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?2", params![legacy,current])?;
+        tx.execute("DELETE FROM event_valuations WHERE valuation_set_id=?1", [&current])?;
+        tx.execute("DELETE FROM valuation_sets WHERE valuation_set_id=?1", [current])?;
+        tx.commit()?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(summary_cost(&db), "0.000000000001300");
+    db.snapshot(|tx, _| {
+        assert!(cached(tx, 2, &PriceBasis::EventTime {})?.is_none());
+        Ok(())
+    })
+    .unwrap();
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 5)
+        .unwrap();
+    db.snapshot(|tx, _| {
+        assert_eq!(
+            cost(cached(tx, 2, &PriceBasis::EventTime {})?.unwrap()),
+            "1300"
+        );
+        Ok(())
+    })
     .unwrap();
 }
 

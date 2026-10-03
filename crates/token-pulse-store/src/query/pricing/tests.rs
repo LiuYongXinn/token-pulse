@@ -30,6 +30,7 @@ fn draft(
         effective_to_ms: None,
         priority: 0,
         input_rate_atoms: DecimalInt::from_nonnegative(input).unwrap(),
+        cache_write_rate_atoms: None,
         cached_rate_atoms: cache.map(|v| DecimalInt::from_nonnegative(v).unwrap()),
         output_rate_atoms: DecimalInt::from_nonnegative(output).unwrap(),
         origin_reference: Some("synthetic fixture only".into()),
