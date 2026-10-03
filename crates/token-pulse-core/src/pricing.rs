@@ -463,6 +463,11 @@ impl PriceCatalog {
 }
 
 fn estimate_atoms(usage: UsageVector, rule: &PriceRule) -> Result<i128, UnpricedCode> {
+    // Preserve known writes in the fact ledger. Until an independent write rate
+    // is represented by this rule contract, never silently charge them as normal input.
+    if usage.cache_write_input.is_some_and(|writes| writes > 0) {
+        return Err(UnpricedCode::InsufficientUsage);
+    }
     usage
         .validated_total()
         .map_err(|e| {

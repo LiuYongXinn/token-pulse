@@ -148,7 +148,11 @@ export type PriceBasis = { "mode": "event_time", } | { "mode": "specified_time",
 
 export type TokenMeasure = { value: DecimalInt | null, covered_total_tokens: DecimalInt, complete: boolean, };
 
-export type TokenTotals = { total_tokens: DecimalInt, input_total: TokenMeasure, cached_input: TokenMeasure, noncached_input: TokenMeasure, output_total: TokenMeasure, reasoning_output: TokenMeasure, session_count: DecimalInt, usage_event_count: DecimalInt, reliable_turn_count: DecimalInt | null, reliable_turns_complete: boolean, };
+export type TokenTotals = { total_tokens: DecimalInt, input_total: TokenMeasure, cached_input: TokenMeasure, noncached_input: TokenMeasure, output_total: TokenMeasure, reasoning_output: TokenMeasure,
+/**
+ * Included in input_total and noncached_input, never an extra total term.
+ */
+cache_write_input: TokenMeasure, session_count: DecimalInt, usage_event_count: DecimalInt, reliable_turn_count: DecimalInt | null, reliable_turns_complete: boolean, };
 
 export type GroupDimension = "models" | "projects";
 
@@ -232,7 +236,7 @@ export type ClassificationKind = "pending" | "inherited" | "duplicate" | "unattr
 
 export type RawTokenCount = string;
 
-export type RawUsageVector = { input_total: RawTokenCount | null, cached_input: RawTokenCount | null, output_total: RawTokenCount | null, reasoning_output: RawTokenCount | null, reported_total: RawTokenCount | null, };
+export type RawUsageVector = { input_total: RawTokenCount | null, cached_input: RawTokenCount | null, cache_write_input: RawTokenCount | null, output_total: RawTokenCount | null, reasoning_output: RawTokenCount | null, reported_total: RawTokenCount | null, };
 
 export type UsageEventSort = "time_desc" | "total_desc";
 

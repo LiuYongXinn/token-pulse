@@ -26,7 +26,7 @@ fn each_bucket_has_its_own_gaps_and_unknown_times_apply_to_every_bucket() {
         assert!(matches!(c[0].state, CoverageState::Unknown));
         assert!(matches!(c[1].state, CoverageState::Partial));
         assert!(matches!(c[2].state, CoverageState::Unknown));
-        assert!(c[0].breakdown_complete);
+        assert!(!c[0].breakdown_complete); // Legacy cache writes remain unknown.
         assert!(!c[1].breakdown_complete);
         Ok(())
     })

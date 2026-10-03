@@ -30,6 +30,7 @@ struct Step {
 fn vector(v: [Option<i64>; 5]) -> UsageVector {
     UsageVector {
         input_total: v[0],
+        cache_write_input: None,
         cached_input: v[1],
         output_total: v[2],
         reasoning_output: v[3],
@@ -270,7 +271,7 @@ proptest! {
         let mut state=AccountingState::new("session".into());
         let mut totals=[0i64;5]; let mut engine_sum=0i128; let mut oracle_sum=0i128;
         for (i,(input,cache,output,reasoning)) in calls.iter().enumerate() {
-            let last=UsageVector {input_total:Some(*input),cached_input:Some((*cache).min(*input)),output_total:Some(*output),reasoning_output:Some((*reasoning).min(*output)),reported_total:Some(*input+*output)};
+            let last=UsageVector {input_total:Some(*input),cache_write_input: None, cached_input:Some((*cache).min(*input)),output_total:Some(*output),reasoning_output:Some((*reasoning).min(*output)),reported_total:Some(*input+*output)};
             let components=[last.input_total,last.cached_input,last.output_total,last.reasoning_output,last.reported_total];
             for j in 0..5 {totals[j]+=components[j].unwrap();}
             let usage=UsageObservation {physical_position:PhysicalPosition{file_generation_id:"g".into(),byte_offset:i as u64,byte_end:i as u64+1},session_key:"session".into(),event_time_ms:Some(123),request_identity:None,stream_hint:Some("trusted".into()),last:Some(last),cumulative:Some(vector(totals.map(Some))),effective_metadata:EffectiveMetadata{model:Some(format!("model-{i}")),..Default::default()},explicit_episode_start:false,model_context_window:None};

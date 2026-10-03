@@ -2,6 +2,8 @@
 
 本专题以 2026-10-03 的已提交源码 `35bc703`（正式安装 0.1.2）为状态基准。工作区中尚未完成、未验证的缓存写入改动不计入已交付能力。实施顺序与验收见[实施计划](../development/implementation-plan.md#8-文本计价缺口与扩展计划2026-10-03)，历史证据及本次澄清见[交付记录](../development/delivery-status.md#模型计费状态澄清2026-10-03)。
 
+**当前源码增量 M09h1a**：下方矩阵保留正式 0.1.2 的核查时点；缓存写入的采集 / 核算 / 存储 / DTO / 主窗口分项已在后续源码贯通并完成必要检查，具体以[第 6 节](#6-缓存写入数量链路m09h1a)为准。独立写入费率、请求条件匹配仍未接通，不将数量链路完成改写成完整计费完成。
+
 ## 1. 四种状态分别记录
 
 |层次|实际状态|不能据此作出的结论|
@@ -69,3 +71,13 @@
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)：写入是输入类别的替代费率，不是完整附加费用。
 - [Fast mode](https://developers.openai.com/api/docs/guides/fast-mode)：响应的 `service_tier` 表示实际模式，Fast 请求可能降级为 `default`，仅看请求配置不够。
 - [Codex 官方缓存写入提交](https://github.com/openai/codex/commit/2edad72de3e4fb12a7519027d5eb3cbda45eea6c)：固定源码证据用于区分 API 与 rollout 字段位置，不说明本机已发布 TokenPulse 支持该扩展。
+
+## 6. 缓存写入数量链路（M09h1a）
+
+新增 nullable `UsageVector.cache_write_input`；适配器读取 rollout 的 `cache_write_input_tokens`，并明确定义用量对象内 `cache_write_tokens` 为本工具的兼容拼写，不冒充官方 rollout 字段。双字段值不同（含 null 与已知值冲突）拒绝，其他未知字段继续拒绝；字符串、布尔、小数和超 i64 范围不接受。缺失 / null 保持未知，真实 0 保持零。负数、命中 + 写入 > 输入及报告总量下界冲突由领域校验隔离。
+
+累计差值包含写入计数；字段覆盖改变或无证明的下降不推进基线，明确阶段重置按新阶段核算。镜像 / 分叉的完整必要签名包含已知写入值；未知写入省略序列化，旧必要 JSON / 签名字节不变，不触发旧格式全历史自动重解析。写入不另加到输入 + 输出总量中。
+
+schema v11 为 usage_events 增加 nullable 精确 INTEGER 字段与非负 / 包含关系约束；事件、必要观察、基线和检查点仍共用原事务，旧行保持 null。候选验证 / 切换及实际旧读取快照保留该分项。原始与核算 DTO 输出精确字符串，TokenTotals 独立返回值 / 覆盖 / 完整性；rollup cache version 升至 2，不读取旧五分项缓存。总览、会话详情和明细证据新增包含项；原 noncached_input 仍为输入 - 命中（包括写入），显示名改为“非缓存命中输入”，不能误称为四费率公式中的普通输入。
+
+本阶段没有第四种价格费率，已知正数写入返回 insufficient_usage，保留 Token；已知零兼容原三费率结果。M09h2 接四费率及正确扣除算法，M09h3 / h4 接可靠请求长度 / 实际模式后才能完成条件模型计价。数量接入不代表官方所有条件可采集。正式安装 / 发布的 0.1.2 尚不包含本增量；此前被旧适配器拒绝的历史记录不会自动重读，受控手动补读与实际日志兼容继续收尾，不恢复已取消的全历史自动重解析范围。

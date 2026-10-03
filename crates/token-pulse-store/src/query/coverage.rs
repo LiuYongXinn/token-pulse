@@ -188,6 +188,7 @@ pub fn coverage(
             &totals.noncached_input,
             &totals.output_total,
             &totals.reasoning_output,
+            &totals.cache_write_input,
         ]
         .iter()
         .all(|m| m.complete),
@@ -313,6 +314,7 @@ pub fn series_coverage(
                 &bucket.totals.noncached_input,
                 &bucket.totals.output_total,
                 &bucket.totals.reasoning_output,
+                &bucket.totals.cache_write_input,
             ]
             .iter()
             .all(|m| m.complete);

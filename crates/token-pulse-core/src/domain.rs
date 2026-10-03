@@ -14,6 +14,10 @@ pub fn can_upgrade_accounting_version(version: &str) -> bool {
 pub struct UsageVector {
     pub input_total: Option<i64>,
     pub cached_input: Option<i64>,
+    /// Cache writes are included in input. Omission is unknown, never zero.
+    /// Skip unknown when encoding retained evidence to preserve old signatures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write_input: Option<i64>,
     pub output_total: Option<i64>,
     pub reasoning_output: Option<i64>,
     pub reported_total: Option<i64>,
@@ -25,11 +29,15 @@ impl UsageVector {
         // child is a lower bound for its unknown parent, never an extra term
         // added beside that parent. These temporary zero bounds do not fill
         // any missing field or manufacture a calculated total.
-        let input_min = self.input_total.or(self.cached_input).unwrap_or(0);
+        let input_min = self.input_total.map(i128::from).unwrap_or_else(|| {
+            i128::from(self.cached_input.unwrap_or(0))
+                + i128::from(self.cache_write_input.unwrap_or(0))
+        });
         let output_min = self.output_total.or(self.reasoning_output).unwrap_or(0);
-        if self.reported_total.is_some_and(|reported| {
-            i128::from(input_min) + i128::from(output_min) > i128::from(reported)
-        }) {
+        if self
+            .reported_total
+            .is_some_and(|reported| input_min + i128::from(output_min) > i128::from(reported))
+        {
             return Err(ErrorCode::InvalidUsage);
         }
         Ok(total)
@@ -47,6 +55,7 @@ impl UsageVector {
         if [
             self.input_total,
             self.cached_input,
+            self.cache_write_input,
             self.output_total,
             self.reasoning_output,
             self.reported_total,
@@ -58,6 +67,8 @@ impl UsageVector {
             return Err(ErrorCode::InvalidUsage);
         }
         if matches!((self.cached_input, self.input_total), (Some(child), Some(parent)) if child > parent)
+            || matches!((self.cache_write_input, self.input_total), (Some(child), Some(parent)) if child > parent)
+            || matches!((self.cached_input, self.cache_write_input, self.input_total), (Some(read), Some(write), Some(input)) if i128::from(read) + i128::from(write) > i128::from(input))
             || matches!((self.reasoning_output, self.output_total), (Some(child), Some(parent)) if child > parent)
         {
             return Err(ErrorCode::InvalidUsage);

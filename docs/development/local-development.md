@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M09h1a 源码新增缓存写入必要数量，schema v11、rollup v2 和生成 DTO 同步；正式安装 0.1.2 仍为此前发布内容。`pwsh -NoProfile -File scripts/native-smoke.ps1 -SourceDialogs` 的隔离合成 Home 含写入 2 / 总量 17，经过真实目录选择 / 采集 / 暂停恢复 / 移除保留 / 精确明细 DTO / 总览 React 分项验证，退出 0。原生日志在忽略目录 `target/cache-write-native-source.log`，保留 SHORTCUT_CONFLICT（正式实例持有恢复键）与 WebView2 1412；不视为键盘、正式安装版或真实用户费用验收。定向 UI 截图 `test-results/cache-write-overview.png` / `cache-write-evidence-panel.png` 为合成桥接视觉检查。
+
 2026-10-03 计价核查见[设计专题](../design/price-accounting.md)与[交付澄清](delivery-status.md#模型计费状态澄清2026-10-03)。别名编辑、离线目录发布 / 界面、持久费用缓存及后台补建 / 手动重估 / 进度 / 取消均已接入；下方 M09 早期“尚未启动 / 接入”是历史记录。51 模型 / 172 价格事实不等于完整计价，37 条仅为 Standard 参考规则。生产不在线更新价格；独立缓存写入、每请求长度 / 实际模式及地区证据继续补齐，工具 / 多模态分列扩展。
 
 当前标准安装 / 公开发布版本为 0.1.2，已在本机 Windows 10 完成真正的 0.1.0→0.1.2 应用内固定 GitHub 渠道升级。正式 UI Automation InvokePattern / SelectionItemPattern 可在缺少物理输入桌面的条件下操作更新按钮，仍经过生产检查、完整下载、版本绑定验签和 NSIS，未使用 debug IPC / 自定义服务源。新应用自动启动、文件 / 宿主 / 注册版本及真实 SQLite 46 张非设置表摘要和 data / price revision 保持均核对，新版检查为最新；物理键鼠 / Narrator、非零消费、缺 WebView2 等边界单独记录。真实来源 cache_write_input_tokens 扩展当前被适配器拒绝，优先继续其语义与兼容修复。完整回执位于忽略目录 `target/release/review/v0.1.2-11ef9df/`，见[M16x](delivery-status.md#m16x修正版的正式-github-在线升级闭环)。

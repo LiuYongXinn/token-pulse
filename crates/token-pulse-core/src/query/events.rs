@@ -47,6 +47,7 @@ impl JsonSchema for RawTokenCount {
 pub struct RawUsageVector {
     pub input_total: Option<RawTokenCount>,
     pub cached_input: Option<RawTokenCount>,
+    pub cache_write_input: Option<RawTokenCount>,
     pub output_total: Option<RawTokenCount>,
     pub reasoning_output: Option<RawTokenCount>,
     pub reported_total: Option<RawTokenCount>,
@@ -56,6 +57,7 @@ impl From<UsageVector> for RawUsageVector {
         Self {
             input_total: value.input_total.map(RawTokenCount),
             cached_input: value.cached_input.map(RawTokenCount),
+            cache_write_input: value.cache_write_input.map(RawTokenCount),
             output_total: value.output_total.map(RawTokenCount),
             reasoning_output: value.reasoning_output.map(RawTokenCount),
             reported_total: value.reported_total.map(RawTokenCount),

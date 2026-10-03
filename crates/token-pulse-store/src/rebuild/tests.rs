@@ -72,6 +72,55 @@ fn candidate(m: &RebuildManifest) -> CandidateBatch {
         contexts: vec![],
     }
 }
+
+#[test]
+fn cache_write_rebuild_preserves_included_counts_across_candidate_validation_and_switch() {
+    let (_dir, db) = setup();
+    let mut original = fixture();
+    original.events[0].usage.cache_write_input = Some(20);
+    original.streams[0].baseline.cache_write_input = Some(20);
+    if let token_pulse_core::domain::NormalizedObservation::Usage(u) =
+        &mut original.observations[0].record
+    {
+        u.last.as_mut().unwrap().cache_write_input = Some(20);
+        u.cumulative.as_mut().unwrap().cache_write_input = Some(20);
+    }
+    db.commit(original).unwrap();
+    let manifest = planned(&db);
+    let mut rebuilt = candidate(&manifest);
+    rebuilt.events[0].usage.cache_write_input = Some(20);
+    rebuilt.streams[0].baseline.cache_write_input = Some(20);
+    db.stage_candidate_batch(rebuilt).unwrap();
+    change(&db, "rebuild", JobState::Running, JobState::Validating);
+    db.validate_candidate("rebuild").unwrap();
+    change(&db, "rebuild", JobState::Validating, JobState::Publishing);
+    db.snapshot(|tx, _| {
+        let filter = crate::query::tests::filter();
+        let old = crate::query::totals(tx, &filter)?;
+        assert_eq!(old.total_tokens.as_str(), "110");
+        assert_eq!(old.cache_write_input.value.unwrap().as_str(), "20");
+        db.publish_candidate("rebuild".into(), 3)?;
+        assert_eq!(
+            tx.query_row("SELECT active_ledger_id FROM sessions", [], |r| r
+                .get::<_, String>(0))?,
+            "ledger"
+        );
+        assert_eq!(
+            crate::query::totals(tx, &filter)?
+                .cache_write_input
+                .value
+                .unwrap()
+                .as_str(),
+            "20"
+        );
+        Ok(())
+    })
+    .unwrap();
+    let current = db.usage_totals(&crate::query::tests::filter()).unwrap();
+    assert_eq!(current.total_tokens.as_str(), "110");
+    assert_eq!(current.cache_write_input.value.unwrap().as_str(), "20");
+    assert_eq!(current.usage_event_count.as_str(), "1");
+}
 // Retained physical evidence deliberately carries a conflicting count. It must not
 // influence a rebuild unless its generation is explicitly selected by the file pointer.
 fn unselected_copy(db: &Database, generation: &str, state: &str, observation: &str) {

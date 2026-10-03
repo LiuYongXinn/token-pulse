@@ -29,7 +29,7 @@ const MODEL_KEY: &str =
     "usage_model_key(json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model)";
 const FROM: &str =
     "active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id";
-const VECTOR_SUM: &str = "sum_published_usage_vector(e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id))";
+const VECTOR_SUM: &str = "sum_published_usage_vector(e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.cache_write_input_tokens)";
 
 fn fact_from(filter: &UsageFilter, require_model: bool) -> &'static str {
     if require_model || !matches!(filter.models, DimensionSelection::All {}) {
@@ -131,6 +131,7 @@ fn empty_totals() -> TokenTotals {
         noncached_input: measure(),
         output_total: measure(),
         reasoning_output: measure(),
+        cache_write_input: measure(),
         session_count: zero(),
         usage_event_count: zero(),
         reliable_turn_count: None,
@@ -278,6 +279,7 @@ pub(crate) fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTota
         noncached_input,
         output_total,
         reasoning_output,
+        cache_write_input,
     ] = sums.measures;
     Ok(TokenTotals {
         total_tokens: sums.total,
@@ -286,6 +288,7 @@ pub(crate) fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTota
         noncached_input,
         output_total,
         reasoning_output,
+        cache_write_input,
         session_count: DecimalInt::from_nonnegative(sessions.into())?,
         usage_event_count: DecimalInt::from_nonnegative(events.into())?,
         reliable_turn_count: if turns == 0 {

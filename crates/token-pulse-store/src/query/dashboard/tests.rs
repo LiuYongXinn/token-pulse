@@ -74,7 +74,7 @@ fn summary_series_heatmap_and_recent_sessions_share_dimensions_but_independent_d
     assert!(s.pricing.currencies.is_empty());
     assert_eq!(b.pricing.unpriced_total_tokens.as_str(), "110");
     assert!(matches!(b.coverage.state, CoverageState::Unknown));
-    assert!(b.coverage.breakdown_complete);
+    assert!(!b.coverage.breakdown_complete); // Legacy cache writes remain unknown.
     assert_eq!(b.meta.data_revision.as_str(), "2");
     assert_eq!(b.meta.price_revision.as_str(), "0");
     assert_eq!(b.meta.display_timezone, "UTC");

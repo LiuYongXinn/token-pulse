@@ -2006,6 +2006,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -2051,6 +2055,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -3501,6 +3506,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -3546,6 +3555,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -3905,6 +3915,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -3950,6 +3964,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -6256,6 +6271,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -6301,6 +6320,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -6935,6 +6955,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -6980,6 +7004,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -9668,6 +9693,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -9713,6 +9742,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -10437,6 +10467,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "cache_write_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawTokenCount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cached_input": {
           "anyOf": [
             {
@@ -10491,6 +10531,7 @@
       "required": [
         "input_total",
         "cached_input",
+        "cache_write_input",
         "output_total",
         "reasoning_output",
         "reported_total"
@@ -10648,6 +10689,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -10693,6 +10738,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -11464,6 +11510,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -11509,6 +11559,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -12147,6 +12198,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -12192,6 +12247,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -12747,6 +12803,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -12792,6 +12852,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -14520,6 +14581,10 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "cache_write_input": {
+          "$ref": "#/$defs/TokenMeasure",
+          "description": "Included in input_total and noncached_input, never an extra total term."
+        },
         "cached_input": {
           "$ref": "#/$defs/TokenMeasure"
         },
@@ -14565,6 +14630,7 @@
         "noncached_input",
         "output_total",
         "reasoning_output",
+        "cache_write_input",
         "session_count",
         "usage_event_count",
         "reliable_turn_count",
@@ -14723,6 +14789,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -14768,6 +14838,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -15124,6 +15195,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -15169,6 +15244,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -15993,6 +16069,16 @@
         "RawUsageVector": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RawTokenCount"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cached_input": {
               "anyOf": [
                 {
@@ -16047,6 +16133,7 @@
           "required": [
             "input_total",
             "cached_input",
+            "cache_write_input",
             "output_total",
             "reasoning_output",
             "reported_total"
@@ -16465,6 +16552,16 @@
         "RawUsageVector": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RawTokenCount"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cached_input": {
               "anyOf": [
                 {
@@ -16519,6 +16616,7 @@
           "required": [
             "input_total",
             "cached_input",
+            "cache_write_input",
             "output_total",
             "reasoning_output",
             "reported_total"
@@ -16624,6 +16722,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -16669,6 +16771,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",
@@ -17471,6 +17574,10 @@
         "TokenTotals": {
           "additionalProperties": false,
           "properties": {
+            "cache_write_input": {
+              "$ref": "#/$defs/TokenMeasure",
+              "description": "Included in input_total and noncached_input, never an extra total term."
+            },
             "cached_input": {
               "$ref": "#/$defs/TokenMeasure"
             },
@@ -17516,6 +17623,7 @@
             "noncached_input",
             "output_total",
             "reasoning_output",
+            "cache_write_input",
             "session_count",
             "usage_event_count",
             "reliable_turn_count",

@@ -77,11 +77,38 @@ fn rule(id: &str) -> PriceRule {
 fn usage() -> UsageVector {
     UsageVector {
         input_total: Some(100),
+        cache_write_input: None,
         cached_input: Some(60),
         output_total: Some(10),
         reasoning_output: Some(2),
         reported_total: Some(110),
     }
+}
+
+#[test]
+fn known_cache_writes_remain_unpriced_until_a_separate_write_rate_is_supported() {
+    let prices = catalog(vec![rule("synthetic-three-rates")]);
+    let basis = PriceBasis::EventTime {};
+    let writes = UsageVector {
+        cache_write_input: Some(20),
+        ..usage()
+    };
+    assert!(matches!(
+        prices.estimate(&event(writes), &basis),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::InsufficientUsage
+        }
+    ));
+    // Known zero preserves the exact existing three-rate result, never an extra charge.
+    let zero = UsageVector {
+        cache_write_input: Some(0),
+        ..usage()
+    };
+    assert_eq!(
+        atoms(prices.estimate(&event(zero), &basis)).1,
+        "220500000000"
+    );
+    assert_eq!(writes.validated_total().unwrap(), Some(110));
 }
 fn event(usage: UsageVector) -> PricingEvent<'static> {
     PricingEvent {
@@ -193,6 +220,7 @@ fn inclusive_cache_and_reasoning_are_not_charged_twice_and_smallest_atom_is_pres
     let c = catalog(vec![tiny]);
     let u = UsageVector {
         input_total: Some(1),
+        cache_write_input: None,
         cached_input: Some(0),
         output_total: Some(0),
         reasoning_output: None,
@@ -401,6 +429,7 @@ fn large_amounts_invalid_usage_and_overflow_never_become_rounded_or_zero_estimat
     r.output_rate_atoms = n(0);
     let u = UsageVector {
         input_total: Some(9_007_199_254_740_993),
+        cache_write_input: None,
         cached_input: Some(0),
         output_total: Some(0),
         reasoning_output: None,
@@ -444,6 +473,7 @@ fn synthetic_complete_vectors_match_independent_integer_formula_for_all_inclusio
                 for reasoning in 0..=output {
                     let u = UsageVector {
                         input_total: Some(input),
+                        cache_write_input: None,
                         cached_input: Some(cache),
                         output_total: Some(output),
                         reasoning_output: Some(reasoning),

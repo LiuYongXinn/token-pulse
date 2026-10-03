@@ -474,6 +474,8 @@ fn commit_batch(
 }
 
 #[cfg(test)]
+mod cache_write_tests;
+#[cfg(test)]
 pub(crate) mod tests;
 
 pub(crate) struct DerivedRecords<'a> {
@@ -513,7 +515,7 @@ fn write_derived_with_hook(
         {
             return Err(ErrorCode::CheckpointConflict.into());
         }
-        tx.execute("INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,semantic_key,episode_id,model,project_id,turn_id,input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,'[\"confirmed\"]')",params![event.event_id,event.ledger_id,event.origin_observation_id,event.occurred_at_ms,event.semantic_key,event.episode_id,event.model,observed_project,event.turn_id,event.usage.input_total,event.usage.cached_input,event.usage.output_total,event.usage.reasoning_output,event.usage.reported_total,total,event.calculation_method])?;
+        tx.execute("INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,semantic_key,episode_id,model,project_id,turn_id,input_tokens_total,cached_input_tokens,output_tokens_total,reasoning_output_tokens,source_total_tokens,total_tokens,calculation_method,quality_json,cache_write_input_tokens) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,'[\"confirmed\"]',?17)",params![event.event_id,event.ledger_id,event.origin_observation_id,event.occurred_at_ms,event.semantic_key,event.episode_id,event.model,observed_project,event.turn_id,event.usage.input_total,event.usage.cached_input,event.usage.output_total,event.usage.reasoning_output,event.usage.reported_total,total,event.calculation_method,event.usage.cache_write_input])?;
         tx.execute(
             "INSERT INTO event_provenance VALUES(?1,?2,'origin')",
             params![event.event_id, event.origin_observation_id],

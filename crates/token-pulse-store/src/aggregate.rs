@@ -10,26 +10,27 @@ use token_pulse_core::{
 #[serde(deny_unknown_fields)]
 pub(crate) struct TokenSums {
     pub total: DecimalInt,
-    pub measures: [TokenMeasure; 5],
+    pub measures: [TokenMeasure; 6],
 }
 
 #[derive(Default)]
 pub(crate) struct VectorAccumulator {
     total: i128,
-    values: [Option<i128>; 5],
-    covered: [i128; 5],
-    known: [u64; 5],
+    values: [Option<i128>; 6],
+    covered: [i128; 6],
+    known: [u64; 6],
     events: u64,
 }
 struct VectorSum {
     versioned: bool,
+    cache_write: bool,
 }
 #[derive(Default)]
 pub(crate) struct ProjectionAccumulator {
     total: i128,
-    values: [Option<i128>; 5],
-    covered: [i128; 5],
-    incomplete: [bool; 5],
+    values: [Option<i128>; 6],
+    covered: [i128; 6],
+    incomplete: [bool; 6],
     events: i128,
 }
 impl ProjectionAccumulator {
@@ -77,8 +78,8 @@ impl ProjectionAccumulator {
         Ok(())
     }
     pub fn finish(&self) -> std::result::Result<TokenSums, ErrorCode> {
-        let mut measures = Vec::with_capacity(5);
-        for i in 0..5 {
+        let mut measures = Vec::with_capacity(6);
+        for i in 0..6 {
             measures.push(TokenMeasure {
                 value: self.values[i]
                     .map(DecimalInt::from_nonnegative)
@@ -121,6 +122,11 @@ impl Aggregate<VectorAccumulator, String> for VectorSum {
         let vector = UsageVector {
             input_total: ctx.get(0)?,
             cached_input: ctx.get(1)?,
+            cache_write_input: if self.cache_write {
+                ctx.get(if self.versioned { 6 } else { 5 })?
+            } else {
+                None
+            },
             output_total: ctx.get(2)?,
             reasoning_output: ctx.get(3)?,
             reported_total: Some(ctx.get(4)?),
@@ -180,6 +186,7 @@ impl VectorAccumulator {
             },
             vector.output_total,
             vector.reasoning_output,
+            vector.cache_write_input,
         ];
         for (i, value) in values.into_iter().enumerate() {
             if let Some(value) = value {
@@ -201,8 +208,8 @@ impl VectorAccumulator {
     }
     pub fn finish(&self) -> std::result::Result<TokenSums, ErrorCode> {
         let convert = DecimalInt::from_nonnegative;
-        let mut measures = Vec::with_capacity(5);
-        for i in 0..5 {
+        let mut measures = Vec::with_capacity(6);
+        for i in 0..6 {
             measures.push(TokenMeasure {
                 value: self.values[i].map(convert).transpose()?,
                 covered_total_tokens: convert(self.covered[i])?,
@@ -254,13 +261,37 @@ pub fn register(connection: &Connection) -> Result<()> {
         "sum_usage_vector",
         5,
         flags,
-        VectorSum { versioned: false },
+        VectorSum {
+            versioned: false,
+            cache_write: false,
+        },
     )?;
     connection.create_aggregate_function(
         "sum_published_usage_vector",
         6,
         flags,
-        VectorSum { versioned: true },
+        VectorSum {
+            versioned: true,
+            cache_write: false,
+        },
+    )?;
+    connection.create_aggregate_function(
+        "sum_usage_vector",
+        6,
+        flags,
+        VectorSum {
+            versioned: false,
+            cache_write: true,
+        },
+    )?;
+    connection.create_aggregate_function(
+        "sum_published_usage_vector",
+        7,
+        flags,
+        VectorSum {
+            versioned: true,
+            cache_write: true,
+        },
     )?;
     connection.create_aggregate_function("sum_usage_projection", 2, flags, ProjectionSum)?;
     connection.create_scalar_function("usage_model_key", 2, flags, |ctx| {

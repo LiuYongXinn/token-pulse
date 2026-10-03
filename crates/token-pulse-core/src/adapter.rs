@@ -271,6 +271,8 @@ fn usage(value: Option<&Value>) -> Result<Option<UsageVector>, ()> {
             let allowed = [
                 "input_tokens",
                 "cached_input_tokens",
+                "cache_write_input_tokens",
+                "cache_write_tokens",
                 "output_tokens",
                 "reasoning_output_tokens",
                 "total_tokens",
@@ -281,10 +283,27 @@ fn usage(value: Option<&Value>) -> Result<Option<UsageVector>, ()> {
             Ok(Some(UsageVector {
                 input_total: optional_integer(map.get("input_tokens"))?,
                 cached_input: optional_integer(map.get("cached_input_tokens"))?,
+                cache_write_input: cache_writes(map)?,
                 output_total: optional_integer(map.get("output_tokens"))?,
                 reasoning_output: optional_integer(map.get("reasoning_output_tokens"))?,
                 reported_total: optional_integer(map.get("total_tokens"))?,
             }))
         }
+    }
+}
+
+/// Rollout spelling and an explicitly supported compatibility spelling.
+/// Two different values are ambiguous, including known versus null.
+fn cache_writes(map: &Map<String, Value>) -> Result<Option<i64>, ()> {
+    let canonical = optional_integer(map.get("cache_write_input_tokens"))?;
+    let alias = optional_integer(map.get("cache_write_tokens"))?;
+    match (
+        map.contains_key("cache_write_input_tokens"),
+        map.contains_key("cache_write_tokens"),
+    ) {
+        (true, true) if canonical != alias => Err(()),
+        (true, _) => Ok(canonical),
+        (_, true) => Ok(alias),
+        _ => Ok(None),
     }
 }

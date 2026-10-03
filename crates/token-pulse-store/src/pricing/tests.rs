@@ -100,6 +100,7 @@ pub(super) fn estimate(catalog: PriceCatalog) -> String {
         occurred_at_ms: EpochMs::new(1000).unwrap(),
         usage: UsageVector {
             input_total: Some(100),
+            cache_write_input: None,
             cached_input: Some(60),
             output_total: Some(10),
             reasoning_output: Some(2),

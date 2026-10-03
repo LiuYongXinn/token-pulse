@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M09h1a 追加 TokenTotals.cache_write_input: TokenMeasure 及 RawUsageVector.cache_write_input: nullable 精确有符号字符串；Rust 生成 TS / schema 同步。总量不重复相加，未知不补零，隐私保留 Token 的既有规则不变。PriceRule / Draft 仍只有三费率，正数写入保持 insufficient_usage，四费率与请求条件后续接入。下条关于已发布 0.1.2 的核查保留，当前增量见[计价专题](price-accounting.md#6-缓存写入数量链路m09h1a)。
+
 2026-10-03 计价状态澄清：规则 / 别名、离线目录和重估命令已注册并接正式 UI，Rust 生成契约为实际权威，后文早期“草案 / 未注册”按对应后续模块收敛。现有 PriceRule / PriceRuleDraft 仅含输入、命中、输出三费率，UsageVector / 公开用量尚未完整支持独立写入；请求长度、实际模式、端点地区未进入自动匹配契约。后续新增 nullable 写入分项、四费率与有出处的请求条件，连同价格缓存身份 / 历史版本同步演进；缺证据不回填假值。见[模型价格与计费条件](price-accounting.md)。
 
 M06f4 不增加 DTO 或新命令。普通会话读取以已拥有活跃账本为发布边界；选择器排除未发布身份，直接详情 / 轮次 / 上下文及固定范围提交返回 INVALID_QUERY。父子工具内部键 / 名称与 child_count 仅包含已发布会话，已确认的 provider 父标识继续保留；真实空账本的上下文未知字段保持 null。选择器分页继续由原 SQLite 租约固定可见性，候选身份发布后只有新快照可见。

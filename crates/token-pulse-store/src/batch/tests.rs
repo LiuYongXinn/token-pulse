@@ -40,6 +40,7 @@ pub(crate) fn setup() -> (tempfile::TempDir, Database) {
 pub(crate) fn fixture() -> WriteBatch {
     let usage = UsageVector {
         input_total: Some(100),
+        cache_write_input: None,
         cached_input: Some(60),
         output_total: Some(10),
         reasoning_output: Some(2),
@@ -132,6 +133,7 @@ fn live_canonical_progress_and_consumption_rollback_with_the_physical_checkpoint
     b.observations[0].observation_id = "next-observation".into();
     let last = UsageVector {
         input_total: Some(20),
+        cache_write_input: None,
         cached_input: Some(5),
         output_total: Some(5),
         reasoning_output: Some(1),
@@ -139,6 +141,7 @@ fn live_canonical_progress_and_consumption_rollback_with_the_physical_checkpoint
     };
     let cumulative = UsageVector {
         input_total: Some(120),
+        cache_write_input: None,
         cached_input: Some(65),
         output_total: Some(15),
         reasoning_output: Some(3),
@@ -306,6 +309,7 @@ fn current_episode_is_explicit_even_when_batch_updates_arrive_in_reverse_order()
     batch.streams[0].episode_id = "z-old".into();
     let usage = UsageVector {
         input_total: Some(10),
+        cache_write_input: None,
         cached_input: Some(4),
         output_total: Some(1),
         reasoning_output: Some(0),

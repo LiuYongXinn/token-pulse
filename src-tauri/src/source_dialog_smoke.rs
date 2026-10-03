@@ -41,7 +41,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let folder = state.data_directory.join("synthetic-dialog-home");
     fs::create_dir_all(folder.join("sessions")).map_err(|e| e.to_string())?;
     let rollout = folder.join("sessions/synthetic.jsonl");
-    let bytes = b"{\"type\":\"session_meta\",\"payload\":{\"id\":\"source-dialog-fixture\"}}\n{\"timestamp\":\"2026-10-03T00:00:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"total_tokens\":17}}}}\n";
+    let bytes = b"{\"type\":\"session_meta\",\"payload\":{\"id\":\"source-dialog-fixture\"}}\n{\"timestamp\":\"2026-10-03T00:00:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"last_token_usage\":{\"total_tokens\":17,\"cache_write_input_tokens\":2}}}}\n";
     fs::write(&rollout, bytes).map_err(|e| e.to_string())?;
     let main = app.get_webview_window("main").ok_or("main missing")?;
     super::mini_smoke::evaluate(
@@ -122,7 +122,11 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       if(after.data.sources.length!==1||!after.data.sources[0].removed||after.data.sources[0].enabled)throw new Error('SOURCE_RETAIN_INVALID');
       const calendar=await invoke('resolve_calendar_selection',{requestId:'dialog-retained-range',request:{timezone:'UTC',selection:{kind:'custom',start_date:'2026-10-03',end_date_inclusive:'2026-10-03'}}});
       const retained=await invoke('get_dashboard_bundle',{requestId:'dialog-retained-statistics',request:{filter:{range:calendar.data.range,sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},grain:'day',heatmap_range:calendar.data.heatmap_range}});
-      if(retained.data.summary.total_tokens!=='17'||retained.data.summary.input_total.value!==null||retained.data.pricing.unpriced_total_tokens!=='17')throw new Error('SOURCE_RETAIN_QUERY_LOST_USAGE_OR_UNKNOWN');
+      if(retained.data.summary.total_tokens!=='17'||retained.data.summary.input_total.value!==null||retained.data.summary.cache_write_input.value!=='2'||!retained.data.summary.cache_write_input.complete||retained.data.pricing.unpriced_total_tokens!=='17')throw new Error('SOURCE_RETAIN_QUERY_LOST_USAGE_OR_UNKNOWN');
+      const events=await invoke('query_usage_events',{requestId:'dialog-write-evidence',request:{query:{filter:retained.data.filter??{range:calendar.data.range,sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null}});
+      if(events.data.events.length!==1||events.data.events[0].usage.cache_write_input!=='2'||events.data.events[0].raw_last.cache_write_input!=='2'||events.data.events[0].total_tokens!=='17')throw new Error('SOURCE_CACHE_WRITE_EVIDENCE');
+      [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='总览').click();
+      await wait(()=>[...document.querySelectorAll('.breakdown-measures .measure')].find(n=>n.querySelector('dt')?.textContent==='缓存写入（输入包含项）')?.querySelector('dd')?.textContent?.startsWith('2'));
     "#,
     )?;
     if total()? != "17" || fs::read(&rollout).map_err(|e| e.to_string())? != bytes {

@@ -36,7 +36,7 @@ fn absent_manifest_keeps_coverage_unknown_even_for_known_breakdown_and_empty_fil
     db.commit(fixture()).unwrap();
     let c = db.usage_coverage(&filter()).unwrap();
     assert!(matches!(c.state, CoverageState::Unknown));
-    assert!(c.breakdown_complete);
+    assert!(!c.breakdown_complete); // Legacy cache writes remain unknown.
     assert_eq!(c.pending_file_count.as_str(), "0");
     assert_eq!(c.pending_observation_count.as_str(), "0");
     assert!(c.unattributed_total_tokens.is_none());

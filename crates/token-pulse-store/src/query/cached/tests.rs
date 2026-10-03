@@ -547,6 +547,7 @@ fn cached_and_uncached_ledgers_count_sessions_and_equal_turn_ids_separately() {
     b.observations[0].session_key = Some("second".into());
     let usage = UsageVector {
         input_total: Some(6),
+        cache_write_input: None,
         cached_input: Some(0),
         output_total: Some(1),
         reasoning_output: Some(0),

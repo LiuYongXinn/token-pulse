@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_initial.sql")),
     (
@@ -38,6 +38,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("../migrations/0009_file_rebuild_ownership.sql"),
     ),
     (10, include_str!("../migrations/0010_rebuild_manifests.sql")),
+    (11, include_str!("../migrations/0011_cache_write_input.sql")),
 ];
 static BACKUP_SERIAL: AtomicU64 = AtomicU64::new(0);
 fn checksum(value: &str) -> String {

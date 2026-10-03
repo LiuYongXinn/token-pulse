@@ -50,9 +50,9 @@ test.beforeEach(async ({ page }) => {
     const sources = ['a', 'b'].map(id => ({ source_id: `synthetic-${id}`, root_path: `E:\\synthetic-qa-${id}\\.codex`, origin: 'custom', enabled: true, removed: false, readability: 'readable', capabilities: { physical_identity: 'available', byte_seek: 'available', watcher: 'available', polling_required: true }, last_scan_at_ms: 1000, last_success_at_ms: 1000, error: null }));
     const complete = (n: number, total: number) => ({ value: String(n), covered_total_tokens: String(total), complete: true });
     const unknown = { value: null, covered_total_tokens: '0', complete: false };
-    const tokens = (partial = false) => ({ total_tokens: partial ? '17' : '683067', input_total: partial ? unknown : complete(630630, 683067), cached_input: partial ? unknown : complete(429566, 683067), noncached_input: partial ? unknown : complete(201064, 683067), output_total: partial ? unknown : complete(52437, 683067), reasoning_output: partial ? unknown : complete(19926, 683067), session_count: '1', usage_event_count: partial ? '1' : '5', reliable_turn_count: null, reliable_turns_complete: false });
+    const tokens = (partial = false) => ({ total_tokens: partial ? '17' : '683067', input_total: partial ? unknown : complete(630630, 683067), cached_input: partial ? unknown : complete(429566, 683067), noncached_input: partial ? unknown : complete(201064, 683067), output_total: partial ? unknown : complete(52437, 683067), reasoning_output: partial ? unknown : complete(19926, 683067), cache_write_input: partial ? unknown : complete(12000, 683067), session_count: '1', usage_event_count: partial ? '1' : '5', reliable_turn_count: null, reliable_turns_complete: false });
     const coverage = { state: 'partial', pending_observation_count: '2', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '1', source_issues: [{ source_id: 'synthetic-a', code: 'scan_evidence_missing', last_success_ms: 1000 }], format_issues: [], breakdown_complete: true };
-    const empty = { total_tokens: '0', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
+    const empty = { total_tokens: '0', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, cache_write_input: { value: null, covered_total_tokens: '0', complete: false }, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
     const price = (partial: boolean, basis: { mode: string } = { mode: 'event_time' }) => ({ redacted: privacy, basis, currencies: partial ? [] : [{ currency: 'USD', estimated_cost: privacy ? null : basis.mode === 'specified_time' ? '2.321234567890123' : cost, priced_total_tokens: '650000' }], priced_total_tokens: partial ? '0' : '650000', unpriced_total_tokens: partial ? '17' : '33067', reasons: privacy ? [] : [{ code: 'missing_rule', total_tokens: partial ? '17' : '33067', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: (_event: string, id: number) => { const listener = listeners.get(id); if (listener) callbacks.delete(listener.handler); listeners.delete(id); } }, __TAURI_INTERNALS__: { transformCallback: (callback: (event: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; }, invoke: async (command: string, args: Record<string, unknown>) => {
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: policyRevision, privacy }, data });
@@ -320,4 +320,13 @@ test('retained navigation orders taskbar settings against late stats with exact 
   await page.evaluate(() => { const qa=(window as unknown as QA);qa.__taskbarNavigationQA.revision('9007199254740995');qa.__requestSyntheticMiniStats(false,'new-shared-stats'); });
   await expect(page.getByLabel('从小窗带入的精确范围')).toContainText('.123');
   await expect(page.getByRole('heading',{name:'总览',exact:true})).toBeVisible();
+});
+
+// Cache writes are an included component, not another stacked total.
+test('cache-write quantity is shown without changing the trusted total', async ({ page }) => {
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  const measure = page.locator('.breakdown-measures .measure').filter({ has: page.locator('dt', { hasText: '缓存写入（输入包含项）' }) });
+  await expect(measure.locator('dd')).toContainText('12,000');
+  await expect(page.getByText('非缓存命中输入', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/cache-write-overview.png', fullPage: true });
 });

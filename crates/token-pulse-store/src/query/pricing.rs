@@ -78,7 +78,7 @@ fn visit_where(
         " ORDER BY e.event_id COLLATE BINARY"
     };
     let sql = format!(
-        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id FROM {FROM} WHERE {}{order}",
+        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id,e.cache_write_input_tokens FROM {FROM} WHERE {}{order}",
         p.sql
     );
     let mut statement = tx.prepare(&sql)?;
@@ -91,6 +91,7 @@ fn visit_where(
         let usage = UsageVector {
             input_total: row.get(7)?,
             cached_input: row.get(8)?,
+            cache_write_input: row.get(15)?,
             output_total: row.get(9)?,
             reasoning_output: row.get(10)?,
             reported_total: Some(total),

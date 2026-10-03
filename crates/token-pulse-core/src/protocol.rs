@@ -145,6 +145,8 @@ pub struct TokenTotals {
     pub noncached_input: TokenMeasure,
     pub output_total: TokenMeasure,
     pub reasoning_output: TokenMeasure,
+    /// Included in input_total and noncached_input, never an extra total term.
+    pub cache_write_input: TokenMeasure,
     pub session_count: DecimalInt,
     pub usage_event_count: DecimalInt,
     pub reliable_turn_count: Option<DecimalInt>,

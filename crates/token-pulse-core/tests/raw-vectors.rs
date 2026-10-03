@@ -23,6 +23,7 @@ fn raw_counters_preserve_signed_i64_and_null_as_exact_strings_only() {
     }
     let dto = RawUsageVector::from(UsageVector {
         input_total: Some(-1),
+        cache_write_input: None,
         cached_input: None,
         output_total: Some(9007199254740993),
         reasoning_output: None,

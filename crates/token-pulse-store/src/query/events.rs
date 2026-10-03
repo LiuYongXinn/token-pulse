@@ -81,7 +81,7 @@ fn rows(
     // Extract only normalized token vectors. Never return normalized JSON,
     // prompts, cwd, authentication or arbitrary fields to the renderer.
     let sql = format!(
-        "SELECT e.event_id,e.session_key,COALESCE(session.provider_session_id,e.session_key),e.occurred_at_ms,e.model,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.project_id,COALESCE(project.user_alias,project.display_name),e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.source_total_tokens,e.total_tokens,e.calculation_method,e.quality_json,lg.parser_version,lg.accounting_version,{sources},json_extract(o.normalized_json,'$.last'),json_extract(o.normalized_json,'$.cumulative') FROM {FROM} JOIN sessions session ON session.session_key=e.session_key JOIN ledger_generations lg ON lg.ledger_id=e.ledger_id LEFT JOIN projects project ON project.project_id=e.project_id WHERE {}{continuation} ORDER BY {order_key} DESC,e.event_id COLLATE BINARY ASC LIMIT ?",
+        "SELECT e.event_id,e.session_key,COALESCE(session.provider_session_id,e.session_key),e.occurred_at_ms,e.model,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.project_id,COALESCE(project.user_alias,project.display_name),e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.source_total_tokens,e.total_tokens,e.calculation_method,e.quality_json,lg.parser_version,lg.accounting_version,{sources},json_extract(o.normalized_json,'$.last'),json_extract(o.normalized_json,'$.cumulative'),e.cache_write_input_tokens FROM {FROM} JOIN sessions session ON session.session_key=e.session_key JOIN ledger_generations lg ON lg.ledger_id=e.ledger_id LEFT JOIN projects project ON project.project_id=e.project_id WHERE {}{continuation} ORDER BY {order_key} DESC,e.event_id COLLATE BINARY ASC LIMIT ?",
         p.sql
     );
     let catalog = crate::pricing::catalog_at(tx, revision.price)?;
@@ -102,6 +102,7 @@ fn rows(
         let usage = UsageVector {
             input_total: row.get(9)?,
             cached_input: row.get(10)?,
+            cache_write_input: row.get(22)?,
             output_total: row.get(11)?,
             reasoning_output: row.get(12)?,
             reported_total: Some(total),

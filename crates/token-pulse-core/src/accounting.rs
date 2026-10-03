@@ -413,6 +413,7 @@ fn subtract(current: UsageVector, previous: UsageVector) -> Result<UsageVector, 
     let delta = UsageVector {
         input_total: difference(current.input_total, previous.input_total)?,
         cached_input: difference(current.cached_input, previous.cached_input)?,
+        cache_write_input: difference(current.cache_write_input, previous.cache_write_input)?,
         output_total: difference(current.output_total, previous.output_total)?,
         reasoning_output: difference(current.reasoning_output, previous.reasoning_output)?,
         reported_total: difference(current.reported_total, previous.reported_total)?,

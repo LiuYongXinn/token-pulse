@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
     let serial = 0, expired = false, deferSlow = false, releaseSlow: (() => void) | null = null;
     const leases = new Map<string, { query: unknown; meta: unknown }>();
     const measure = { value: null, covered_total_tokens: '0', complete: false };
-    const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
+    const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, cache_write_input: { value: null, covered_total_tokens: '0', complete: false }, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
     const coverage = { state: 'unknown', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     const pricing = { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false };
     Object.assign(window, { isTauri: true, __facetCalls: calls, __expireFacet: () => { expired = true; }, __deferFacet: () => { deferSlow = true; }, __releaseFacet: () => { releaseSlow?.(); }, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {

@@ -21,7 +21,7 @@ fn ready_cache_preserves_null_coverage_source_sets_and_exact_turn_membership() {
         let sums:crate::aggregate::TokenSums=serde_json::from_str(&sums)?;
         assert_eq!(sums.total.as_str(),"110");
         assert_eq!(sums.measures[2].value.as_ref().unwrap().as_str(),"40");
-        assert!(sums.measures.iter().all(|m|m.complete && m.covered_total_tokens.as_str()=="110"));
+        assert!(sums.measures[..5].iter().all(|m|m.complete && m.covered_total_tokens.as_str()=="110"));
         assert_eq!(tx.query_row("SELECT turn_id FROM utc_hour_rollup_turns WHERE set_id=?1",[&result.set_id],|r|r.get::<_,String>(0))?,"turn-one");
         assert_eq!(tx.query_row("SELECT state FROM usage_rollup_sets WHERE set_id=?1",[&result.set_id],|r|r.get::<_,String>(0))?,"ready");Ok(())
     }).unwrap();

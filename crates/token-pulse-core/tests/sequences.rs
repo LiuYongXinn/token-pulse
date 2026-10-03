@@ -44,6 +44,7 @@ struct LineageCase {
 fn vector(v: [i64; 5]) -> UsageVector {
     UsageVector {
         input_total: Some(v[0]),
+        cache_write_input: None,
         cached_input: Some(v[1]),
         output_total: Some(v[2]),
         reasoning_output: Some(v[3]),

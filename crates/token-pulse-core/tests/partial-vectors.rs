@@ -70,6 +70,7 @@ fn partial_lower_bounds_reject_contradictions_without_filling_missing_parents() 
     );
     let inclusive = UsageVector {
         input_total: Some(100),
+        cache_write_input: None,
         cached_input: Some(60),
         output_total: Some(10),
         reasoning_output: Some(2),
@@ -94,6 +95,7 @@ fn independent_completion_oracle_checks_all_small_nullable_vectors() {
                     for total in 0..=4 {
                         let usage = UsageVector {
                             input_total: input,
+                            cache_write_input: None,
                             cached_input: cache,
                             output_total: output,
                             reasoning_output: reason,
@@ -122,6 +124,7 @@ fn independent_completion_oracle_checks_all_small_nullable_vectors() {
 fn invalid_partial_last_or_cumulative_never_advances_accounting_state() {
     let usage = UsageVector {
         input_total: Some(10),
+        cache_write_input: None,
         cached_input: Some(0),
         output_total: Some(0),
         reasoning_output: Some(0),

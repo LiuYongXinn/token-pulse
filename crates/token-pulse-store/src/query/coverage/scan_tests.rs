@@ -37,7 +37,7 @@ fn full_proof_can_complete_without_confusing_breakdown_or_empty_source_selection
     let c = db.usage_coverage(&filter()).unwrap();
     assert!(matches!(c.state, CoverageState::Complete));
     assert!(c.source_issues.is_empty());
-    assert!(c.breakdown_complete);
+    assert!(!c.breakdown_complete); // Legacy cache writes remain unknown.
     assert!(c.unattributed_total_tokens.is_none());
     let mut f = filter();
     f.models = ids(&[], false);

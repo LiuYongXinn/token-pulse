@@ -13,7 +13,7 @@ use token_pulse_core::{
     numeric::{DecimalInt, EpochMs},
 };
 
-pub const CACHE_VERSION: i64 = 1;
+pub const CACHE_VERSION: i64 = 2;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_COHORTS: usize = 32768;
 const MAX_BATCH_BYTES: usize = 16 * 1024 * 1024;
@@ -154,7 +154,7 @@ fn prepare(tx: &Transaction<'_>, ledger: &str, stop: &AtomicBool) -> StoreResult
     let mut groups = BTreeMap::<(i64, String), Accumulator>::new();
     let mut bytes = 0usize;
     let mut count = 0i64;
-    let mut statement=tx.prepare("SELECT e.occurred_at_ms,e.model,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.project_id,e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY)) FROM usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id WHERE e.ledger_id=?1 ORDER BY e.occurred_at_ms,e.event_id")?;
+    let mut statement=tx.prepare("SELECT e.occurred_at_ms,e.model,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.project_id,e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY)),e.cache_write_input_tokens FROM usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id WHERE e.ledger_id=?1 ORDER BY e.occurred_at_ms,e.event_id")?;
     let mut records = statement.query([ledger])?;
     while let Some(row) = records.next()? {
         if count % 256 == 0 {
@@ -197,6 +197,7 @@ fn prepare(tx: &Transaction<'_>, ledger: &str, stop: &AtomicBool) -> StoreResult
         let usage = UsageVector {
             input_total: row.get(5)?,
             cached_input: row.get(6)?,
+            cache_write_input: row.get(11)?,
             output_total: row.get(7)?,
             reasoning_output: row.get(8)?,
             reported_total: Some(row.get(9)?),

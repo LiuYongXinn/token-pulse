@@ -2,6 +2,7 @@ use token_pulse_core::{canonical::*, domain::UsageVector, sequence::*};
 fn record(time: i64, last: i64, total: i64) -> UsageSignature {
     let vector = |n| UsageVector {
         input_total: Some(n),
+        cache_write_input: None,
         cached_input: Some(0),
         output_total: Some(0),
         reasoning_output: Some(0),

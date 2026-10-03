@@ -13,7 +13,7 @@ use token_pulse_core::{
 };
 fn totals() -> Value {
     let unknown = json!({"value":null,"covered_total_tokens":"0","complete":false});
-    json!({"total_tokens":"9007199254740994","input_total":unknown,"cached_input":unknown,"noncached_input":unknown,"output_total":unknown,"reasoning_output":unknown,"session_count":"1","usage_event_count":"2","reliable_turn_count":null,"reliable_turns_complete":false})
+    json!({"total_tokens":"9007199254740994","input_total":unknown,"cached_input":unknown,"noncached_input":unknown,"output_total":unknown,"reasoning_output":unknown,"cache_write_input":unknown,"session_count":"1","usage_event_count":"2","reliable_turn_count":null,"reliable_turns_complete":false})
 }
 fn pricing() -> Value {
     json!({"redacted":false,"basis":{"mode":"event_time"},"currencies":[{"currency":"USD","estimated_cost":"9.007199254740993","priced_total_tokens":"9007199254740993"}],"priced_total_tokens":"9007199254740993","unpriced_total_tokens":"1","reasons":[{"code":"missing_rule","total_tokens":"1","event_count":"1"}],"calculating":false})
@@ -214,7 +214,7 @@ fn aliases_are_shared_across_list_detail_children_and_events_and_unknowns_stay_n
         detail["children"][0]["display_name"],
         alias("会话", Some("child-key"))
     );
-    let vector = json!({"input_total":"-1","cached_input":null,"output_total":"9007199254740993","reasoning_output":null,"reported_total":"9007199254740993"});
+    let vector = json!({"input_total":"-1","cached_input":null,"cache_write_input":null,"output_total":"9007199254740993","reasoning_output":null,"reported_total":"9007199254740993"});
     let mut increment = vector.clone();
     increment["input_total"] = Value::Null;
     let mut events = base();

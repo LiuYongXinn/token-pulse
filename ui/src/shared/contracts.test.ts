@@ -61,7 +61,7 @@ test('price invalidation carries exact revision and a whole-model marker without
 
 test('raw vectors retain signed diagnostic counters and null while rejecting unsafe numeric transport', () => {
   const validate = ajv.compile(protocol.schemas.RawUsageVector);
-  const vector = { input_total: '-1', cached_input: null, output_total: '9007199254740993', reasoning_output: null, reported_total: null };
+  const vector = { input_total: '-1', cached_input: null, output_total: '9007199254740993', reasoning_output: null, cache_write_input: null, reported_total: null };
   expect(validate(vector)).toBe(true);
   expect(validate({ ...vector, output_total: 9007199254740992 })).toBe(false);
   expect(validate({ ...vector, input_total: '-0' })).toBe(false);
@@ -71,7 +71,7 @@ test('raw vectors retain signed diagnostic counters and null while rejecting uns
 
 test('dashboard contract requires one complete bundle with null metrics and real metadata', () => {
   const measure = { value: null, covered_total_tokens: '0', complete: false };
-  const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
+  const totals = { total_tokens: '0', input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, cache_write_input: { value: null, covered_total_tokens: '0', complete: false }, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
   const coverage = { state: 'unknown' as const, pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
   const fixture: DashboardBundle = { meta: { snapshot_id: 'synthetic-bundle', data_revision: '0', price_revision: '0', generated_at_ms: 0, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' }, summary: totals, pricing: { redacted: false, basis: { mode: 'event_time' }, currencies: [], priced_total_tokens: '0', unpriced_total_tokens: '0', reasons: [], calculating: false }, coverage, series: [{ start_ms: 0, end_ms: 1000, display_label: 'synthetic', utc_offset: '+00:00', totals, coverage }], heatmap: [], recent_sessions: [] };
   const validate = ajv.compile(protocol.schemas.DashboardBundle);
@@ -110,7 +110,7 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateTurns({ ...turnPage, unidentified_usage_event_count: undefined })).toBe(false);
   expect(validateTurns({ ...turnPage, turns: Array(201).fill(turn) })).toBe(false);
   expect(validateTurns({ ...turnPage, turns: [{ ...turn, messages: ['private'] }] })).toBe(false);
-  const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', reported_total: '110' };
+  const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', cache_write_input: null, reported_total: '110' };
   const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
   const eventPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, events: [event], next_cursor: null };
   const validateEvents = ajv.compile(protocol.schemas.UsageEventsPage);

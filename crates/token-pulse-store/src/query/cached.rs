@@ -145,7 +145,7 @@ fn plan(
     };
     let ctes=format!("WITH ready AS MATERIALIZED ({READY}),
       cached AS MATERIALIZED (SELECT h.*,s.session_key,{cache_key} AS partition_key,{cache_label} AS label FROM utc_hour_usage_rollups h JOIN ready rs ON rs.set_id=h.set_id JOIN sessions s ON s.active_ledger_id=rs.ledger_id{cache_join} WHERE {}),
-      raw AS MATERIALIZED (SELECT e.ledger_id,e.session_key,e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{raw_key} AS partition_key,{raw_label} AS label FROM {raw_from}{raw_join} WHERE {}),
+      raw AS MATERIALIZED (SELECT e.ledger_id,e.session_key,e.turn_id,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,e.cache_write_input_tokens,{raw_key} AS partition_key,{raw_label} AS label FROM {raw_from}{raw_join} WHERE {}),
       raw_summary AS (SELECT {raw_partition} AS partition_key,MIN(label) AS label,{VECTOR_SUM} AS sums,COUNT(*) AS events,COUNT(CASE WHEN e.turn_id IS NOT NULL AND e.turn_id<>'' THEN 1 END) AS known FROM raw e{group}),
       fragments AS (SELECT partition_key,label,token_sums_json AS sums,usage_event_count AS events,known_turn_event_count AS known FROM cached UNION ALL SELECT partition_key,label,sums,events,known FROM raw_summary),
       summary AS (SELECT {raw_partition} AS partition_key,MIN(label) AS label,sum_usage_projection(sums,events) AS sums,sum_token_decimal(events) AS events,sum_token_decimal(known) AS known FROM fragments{group}),
@@ -253,6 +253,7 @@ fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
         noncached_input,
         output_total,
         reasoning_output,
+        cache_write_input,
     ] = sums.measures;
     Ok(TokenTotals {
         total_tokens: sums.total,
@@ -261,6 +262,7 @@ fn read_totals(row: &Row<'_>, offset: usize) -> StoreResult<TokenTotals> {
         noncached_input,
         output_total,
         reasoning_output,
+        cache_write_input,
         session_count: token_pulse_core::numeric::DecimalInt::from_nonnegative(sessions.into())?,
         usage_event_count: events.clone(),
         reliable_turn_count: if turns == 0 {

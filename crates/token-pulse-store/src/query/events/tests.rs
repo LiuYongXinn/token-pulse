@@ -49,6 +49,58 @@ fn install(db: &Database) {
 }
 
 #[test]
+fn known_cache_write_pricing_and_persistent_fee_cache_do_not_charge_ordinary_input_twice() {
+    use token_pulse_core::{domain::NormalizedObservation, pricing::UnpricedCode};
+    for writes in [0, 20] {
+        let (_dir, db) = setup();
+        install(&db);
+        let mut b = fixture();
+        b.events[0].model = Some("M".into());
+        b.events[0].usage.cache_write_input = Some(writes);
+        b.streams[0].baseline.cache_write_input = Some(writes);
+        if let NormalizedObservation::Usage(u) = &mut b.observations[0].record {
+            u.effective_metadata.provider = Some("P".into());
+            u.effective_metadata.model = Some("M".into());
+            u.last.as_mut().unwrap().cache_write_input = Some(writes);
+            u.cumulative.as_mut().unwrap().cache_write_input = Some(writes);
+        }
+        db.commit(b).unwrap();
+        let req = request(UsageEventSort::TimeDesc, 50);
+        let before = fetch(&db, &req);
+        db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 2000)
+            .unwrap();
+        let cached = fetch(&db, &req);
+        for page in [before, cached] {
+            assert_eq!(page.summary.total_tokens.as_str(), "110");
+            assert_eq!(
+                page.summary
+                    .cache_write_input
+                    .value
+                    .as_ref()
+                    .unwrap()
+                    .as_str(),
+                writes.to_string()
+            );
+            if writes == 0 {
+                assert!(
+                    matches!(&page.events[0].price, PriceOutcome::Priced { cost_atoms, .. } if cost_atoms.as_str()=="110000000000")
+                );
+                assert_eq!(page.pricing.unpriced_total_tokens.as_str(), "0");
+            } else {
+                assert!(matches!(
+                    page.events[0].price,
+                    PriceOutcome::Unpriced {
+                        reason: UnpricedCode::InsufficientUsage
+                    }
+                ));
+                assert_eq!(page.pricing.unpriced_total_tokens.as_str(), "110");
+                assert!(page.pricing.currencies.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
 fn event_pages_preserve_exact_integer_order_and_source_vectors_without_private_json() {
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();

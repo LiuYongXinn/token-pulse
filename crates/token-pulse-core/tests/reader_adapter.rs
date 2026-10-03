@@ -258,7 +258,7 @@ fn damaged_unknown_or_invalid_fields_diagnose_without_mutating_context() {
         },
         ..Default::default()
     };
-    for bytes in [b"{bad".as_slice(), b"\xff", br#"{"type":"turn_context","payload":{"model":"new","cwd":2}}"#, br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1.5}}}}"#, br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"cache_write_tokens":1}}}}"#] {
+    for bytes in [b"{bad".as_slice(), b"\xff", br#"{"type":"turn_context","payload":{"model":"new","cwd":2}}"#, br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1.5}}}}"#, br#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"unknown_billing_tokens":1}}}}"#] {
         assert!(matches!(adapt(bytes,position(),&mut context),AdaptedRecord::Diagnostic(_)));
         assert_eq!(context.metadata.model.as_deref(),Some("previous"));
     }

@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
     const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
     const callbacks = new Map<number,(event: unknown) => void>(); const listeners = new Map<number,{ event: string; handler: number }>();
     const measure = { value: null, covered_total_tokens: '0', complete: false };
-    const tokens = (total: string, events = '53') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, session_count: events === '0' ? '0' : '1', usage_event_count: events, reliable_turn_count: null, reliable_turns_complete: false });
+    const tokens = (total: string, events = '53') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, cache_write_input: { value: null, covered_total_tokens: '0', complete: false }, session_count: events === '0' ? '0' : '1', usage_event_count: events, reliable_turn_count: null, reliable_turns_complete: false });
     const coverage = { state: 'unknown', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     const price = (total: string) => ({ redacted: false, basis: { mode: 'event_time' }, currencies: total === '0' ? [] : [{ currency: 'USD', estimated_cost: amount, priced_total_tokens: String(BigInt(total)-1n) }, { currency: 'EUR', estimated_cost: '0.000000000000000', priced_total_tokens: '0' }], priced_total_tokens: total === '0' ? '0' : String(BigInt(total)-1n), unpriced_total_tokens: total === '0' ? '0' : '1', reasons: total === '0' ? [] : [{ code: 'unknown_model', total_tokens: '1', event_count: '1' }], calculating: false });
     Object.assign(window, { isTauri: true,
@@ -36,8 +36,8 @@ test.beforeEach(async ({ page }) => {
           const snapshot = saved?.snapshot ?? `synthetic-events-${++serial}`; const offset = saved?.offset ?? 0;
           const events = Array.from({ length: 53 }, (_, index) => {
             const total = index === 0 ? '9007199254740993' : index === 1 ? '0' : '1';
-            const vector = { input_total: index === 2 ? null : total, cached_input: index === 2 ? null : '0', output_total: index === 2 ? null : '0', reasoning_output: null, reported_total: total };
-            return { event_id: `synthetic-event-${index}`, session_key: 'synthetic-session', session_display_name: 'Synthetic 会话', occurred_at_ms: query.filter.range.start_ms+(53-index)*1000, model: index === 2 ? null : index === 0 ? 'Synthetic Model' : index === 1 ? 'Synthetic EUR Model' : 'Synthetic Zero Rate Model', provider: index === 2 ? null : 'Synthetic Provider', project_id: index === 2 ? null : 'project', project_display_name: index === 2 ? null : 'Synthetic Project', source_ids: ['synthetic-source','synthetic-mirror'], turn_id: null, total_tokens: total, usage: vector, raw_last: index === 0 ? { ...vector, input_total: '-1' } : null, raw_cumulative: index === 0 ? { ...vector, input_total: '9007199254741093', reported_total: '9007199254741093' } : null, calculation_method: 'last_with_baseline', quality_flags: ['confirmed'], price: index === 2 ? { status: 'unpriced', reason: 'unknown_model' } : { status: 'priced', rule_id: index === 0 ? 'synthetic-rule' : index === 1 ? 'synthetic-eur-rule' : 'synthetic-zero-rate-rule', currency: index === 1 ? 'EUR' : 'USD', cost_atoms: index === 0 ? revision === '3' ? '9007199254740993' : '18014398509481986' : '0', estimated_cost: index === 0 ? amount : '0.000000000000000' }, parser_version: 'synthetic-parser', accounting_version: 'synthetic-accounting' };
+            const vector = { input_total: index === 2 ? null : total, cached_input: index === 2 ? null : '0', output_total: index === 2 ? null : '0', reasoning_output: null, cache_write_input: index === 2 ? null : index === 3 ? '1' : '0', reported_total: total };
+            return { event_id: `synthetic-event-${index}`, session_key: 'synthetic-session', session_display_name: 'Synthetic 会话', occurred_at_ms: query.filter.range.start_ms+(53-index)*1000, model: index === 2 ? null : index === 0 ? 'Synthetic Model' : index === 1 ? 'Synthetic EUR Model' : 'Synthetic Zero Rate Model', provider: index === 2 ? null : 'Synthetic Provider', project_id: index === 2 ? null : 'project', project_display_name: index === 2 ? null : 'Synthetic Project', source_ids: ['synthetic-source','synthetic-mirror'], turn_id: null, total_tokens: total, usage: vector, raw_last: index === 0 ? { ...vector, input_total: '-1' } : null, raw_cumulative: index === 0 ? { ...vector, input_total: '9007199254741093', reported_total: '9007199254741093' } : null, calculation_method: 'last_with_baseline', quality_flags: ['confirmed'], price: index === 3 ? { status: 'unpriced', reason: 'insufficient_usage' } : index === 2 ? { status: 'unpriced', reason: 'unknown_model' } : { status: 'priced', rule_id: index === 0 ? 'synthetic-rule' : index === 1 ? 'synthetic-eur-rule' : 'synthetic-zero-rate-rule', currency: index === 1 ? 'EUR' : 'USD', cost_atoms: index === 0 ? revision === '3' ? '9007199254740993' : '18014398509481986' : '0', estimated_cost: index === 0 ? amount : '0.000000000000000' }, parser_version: 'synthetic-parser', accounting_version: 'synthetic-accounting' };
           });
           const next = offset+query.page_size < events.length ? String(++serial).padStart(151,'a') : null;
           if (next) cursors.set(next, { query: JSON.stringify(query), offset: offset+query.page_size, snapshot });
@@ -116,4 +116,16 @@ test('display-only redacted price hides values, rules and tooltip amounts while 
   await expect(page.locator('.event-evidence')).not.toContainText('synthetic-rule');
   await expect(page.locator('.event-evidence')).not.toContainText('9.007199254740993');
   expect(await page.locator('[title*="9.007199254740993"]').count()).toBe(0);
+});
+
+test('cache-write evidence distinguishes unknown, zero, and positive included counts', async ({ page }) => {
+  await page.getByRole('button', { name: '明细', exact: true }).click();
+  for (const [index, expected] of [[1, '0'], [2, '—'], [3, '1']] as const) {
+    await page.getByRole('button', { name: `查看 synthetic-event-${index} 核算依据`, exact: true }).click();
+    const row = page.getByLabel(`synthetic-event-${index} 核算依据`, { exact: true }).getByRole('row').filter({ hasText: '缓存写入（输入包含项）' });
+    await expect(row.getByRole('cell').first()).toHaveText(expected);
+  }
+  await expect(page.getByLabel('synthetic-event-3 核算依据', { exact: true })).toContainText('未计价');
+  await page.getByLabel('synthetic-event-3 核算依据', { exact: true }).screenshot({ path: 'test-results/cache-write-evidence-panel.png' });
+  await page.screenshot({ path: 'test-results/cache-write-evidence.png' });
 });

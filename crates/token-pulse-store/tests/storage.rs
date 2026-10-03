@@ -19,12 +19,27 @@ fn migration_reopens_and_readers_cannot_write() {
     db.snapshot(|tx, rev| {
         assert_eq!(rev.settings, 1);
         assert!(tx.execute("DELETE FROM sources", []).is_err());
-        let tables: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
-            [],
-            |r| r.get(0),
-        )?;
-        assert_eq!(tables, 35);
+        // Validate the required persisted structures; the old 35-table count
+        // predates price caches and source evidence and rejects a valid schema.
+        for table in [
+            "sources",
+            "sessions",
+            "usage_events",
+            "stream_states",
+            "schema_migrations",
+            "price_rules",
+            "valuation_cache_sets",
+            "price_revalue_jobs",
+        ] {
+            assert!(
+                tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                    [table],
+                    |r| r.get::<_, bool>(0)
+                )?,
+                "missing {table}"
+            );
+        }
         let fk: i64 = tx.pragma_query_value(None, "foreign_keys", |r| r.get(0))?;
         assert_eq!(fk, 1);
         Ok(())
