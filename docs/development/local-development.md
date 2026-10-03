@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+真实电源验收：`pwsh -NoProfile -File scripts/verify-power-resume.ps1` 默认只预检，不启动观察应用或睡眠；输出新临时证据目录。显式追加 `-ActualStandby` 会暂停整机程序，要求已有 debug 桌面二进制与前端产物、当前没有其他 debug 实例、电源 / 唤醒 / 本进程已有权限 / 系统事件全部满足。匹配自有 READY 与内核进程身份后请求 S3，设定 UTC 40 秒唤醒期限，保留唤醒事件；不重启、关机、休眠、提权或更改电源策略。恢复后要求独立 System S3 睡眠 / 恢复记录与正式采集补扫断言，权限和 native 资源完整清理。本机一次实际退出 0，请求到返回约 66 秒，具体唤醒来源未证明；此测试使用隔离 debug SQLite，不能替代正式包 / 任务栏宿主整体验收。证据与限制见[M07r2](delivery-status.md#m07r2真实-s3-睡眠与恢复补扫)。
+
 电源恢复验收入口：`pwsh -NoProfile -File scripts/native-smoke.ps1 -PowerMessages`，必须独占选择，需要已有前端产物。场景使用 UUID 隔离数据库与合成只读 Home，watcher 关闭 / 一小时轮询，准备阶段直接暂停采集并追加待处理记录；向自有主 HWND 发送标记电源消息后验证正式恢复补扫 3→10、重复消息不重复计数、源保持与隐藏主窗，当前实际通过。`-PowerResume` 只观察系统消息并等待最多 150 秒，不会触发睡眠，也不发送模拟消息；必须结合真实电源驱动与 OS 证据，观察入口存在不等于实际 S3 已验。
 
 `pwsh -NoProfile -File scripts/inspect-power-resume.ps1` 默认只读电源 / 方案 / 唤醒策略，未检查 Timer 时字段和 Eligible 为 null；追加 `-CheckWakeTimer` 仅建立自有绝对 UTC 唤醒请求后立即取消 / 关闭，不调用睡眠、休眠或重启，不改变电源策略。本机 AC / S3 / 唤醒策略及定时器预检通过，硬件真实唤醒仍未验。正式 M16v 包不受这组 debug 验收与独立检查影响；证据和限制见[M07r1](delivery-status.md#m07r1隔离恢复补扫入口与电源前置检查)。
