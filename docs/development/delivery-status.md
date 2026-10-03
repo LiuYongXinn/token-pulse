@@ -6,6 +6,21 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M16s：纳入 Explorer 修复的签名候选与 release 原生恢复
+
+完整 `npm run tauri:build` 退出 0，包含 M13g5 / 源码提交 a72da26 的空裁剪修复及 HWND / Shell 代次检查。TypeScript / Vite、334 项第三方声明、正式 release 宿主 / 桌面和唯一 NSIS 渠道均完成。构建证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-shell-release-e84cd34c2993480a9f8b7666d6d194ba/`；旧 M16n 产物已在其发布候选目录保留，不覆盖旧签名，不改已安装 0.1.0。
+
+将同次桌面、宿主及安装器复制到新自有候选目录 `target/release/candidates/v0.1.1-shell-7e36b18664984d51a9dcf27cb4dbeaa8/`，记录源码提交 / 构建证据。使用此前同一已确认项目密钥签名新目录的安装器；`release:prepare` 通过实际 production release 验证器核对版本 / 签名 / 字节，并生成新本地目录 `target/release/publish/v0.1.1-shell-7e36b18664984d51a9dcf27cb4dbeaa8/`。公钥摘要仍为 `f1143c37e0960c8e80ddbff531c59290d33739133c3d0894bfe937815dd3a0e1`，未生成第二套密钥、未读取账户认证。清单仍使用固定 GitHub v0.1.1 资产 URL，候选时间不是发布证据。
+
+- 安装器：6,623,455 字节，SHA-256 `c5dda4ecc954660ae85f8c45fc7bf08b3f6d87c4edd8517d3494347a1c983937`。
+- 签名 SHA-256：`1dc1beac9096a1da4d74fdc05296226b83efc691cd05bb65322a243af36f2ac5`。
+- 桌面：25,533,952 字节，SHA-256 `fb56225a243048034d3845da7f2510794136558168c6ec70fcd377d754197671`。
+- 宿主：2,351,616 字节，SHA-256 `b6e61583b85db8800f1bf0e22393027c3f95f7bc3b629d5225e14bd885231e74`。
+
+进一步构建 release 版 Explorer 验收探针，放入上述候选目录的 examples 后运行，以其默认同目录寻址实际使用候选 release 宿主（运行前核对上述 SHA），而非 debug 宿主。真实正常 RM 关闭 / 恢复再次退出 0：Shell 96104 → 92648，RmShutdown / RmRestart 均 0，同宿主 PID 94612 保持，画布换代、修订推进、旧动作清除、禁用 / 再启用 / 退出恢复新 Shell 几何通过。证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-release-7c244d46d8674c548a889164e2fe139c/`；没有电脑重启 / 关机或强杀，探针不进入安装包。
+
+M16s 是最新本地候选，替代 M16n 的“最新”含义。尚未安装 / 发布新候选，不能据此宣称 0.1.0 → 0.1.1 完整自动升级通过；真实系统矩阵与其余待验项保持。本轮结束 Explorer 92648 和原已安装应用 92688 保留，临时宿主已退出。未推送代码 / 创建 release / 上传资产，无性能测试。
+
 ## M13g5：真实 Explorer 重启恢复与空裁剪区域修复
 
 本机 Windows 10 19045 / 150% DPI 完成实际 Explorer 进程正常关闭 / 重启验收。新显式开发入口 `check_taskbar_explorer_restart` 启动同目录正式原生宿主，仅发送合成展示 DTO；在同一宿主持续心跳期间，由独立脚本通过 Windows Restart Manager 关闭、恢复唯一登记的 Explorer。没有伪造 TaskbarCreated，没有以重启宿主替代恢复，没有强杀 Shell，也没有重启 / 关闭电脑。
@@ -154,7 +169,7 @@ Windows 10 验收继续；已有正式数据、原未提交内容保持，未覆
 
 ## 当前范围核对（2026-10-03，M16n）
 
-本节按当前目标的 13 项保留功能核对实际实现与最新证据，作为当前待办入口；下方历史段落仅保留当时检查结果。[已确认范围](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)及后续用户更正优先：Windows 11 已取消，Windows 10 多屏 / DPI 仍保留；基本安装 / 卸载已授权在本机复用本地状态实测，不再要求独立虚拟机。最新本地签名候选为 M16n 的 0.1.1，已安装基线仍为 M16j 的 0.1.0，完整交付尚未达成。
+本节按当前目标的 13 项保留功能核对实际实现与最新证据，作为当前待办入口；下方历史段落仅保留当时检查结果。[已确认范围](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)及后续用户更正优先：Windows 11 已取消，Windows 10 多屏 / DPI 仍保留；基本安装 / 卸载已授权在本机复用本地状态实测，不再要求独立虚拟机。最新签名候选为 M16s 的 0.1.1，已纳入 M13g5 并通过 release 宿主真实 Explorer 恢复；已安装基线仍为 M16j 的 0.1.0，完整交付尚未达成。
 
 |保留功能|已有实现与证据|剩余工作或实际验收边界|
 |---|---|---|
