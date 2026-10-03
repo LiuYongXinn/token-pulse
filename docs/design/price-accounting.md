@@ -113,3 +113,5 @@ M09h1a 阶段没有第四种价格费率，已知正数写入返回 insufficient
 - [官方响应记录测试](https://github.com/openai/codex/blob/b741e480e203f037ca726bc2a76d99a8e8668e66/codex-rs/core/tests/suite/token_usage_rollout.rs)：多次响应、回合 / 线程累积和缺 usage 的行为来源。
 
 M09h3a2 兼容收尾：有辅助响应记录的原文件与没有该记录的旧镜像 / 分叉副本，仍采用原必要核算签名；response_id 仅保存在计价辅助证据中。独立镜像与继承前缀检查确认两种记录可继续对齐，原可信消费不因辅助证据的稀疏覆盖而失效。稀疏来源本身不能补造缺失计价条件，后续费用绑定使用规范消费的必要观察证据。
+
+M09h3a3 兼容收尾：已识别的 token_usage_record 如果缺字段、身份不匹配或用量不合法，忽略该可选证据，不产生会破坏独立会话头证明的通用适配诊断；后续合法 token_count 仍按原规则核算，request_usage 保持未知。真正无效的 token_count、无法解析的 JSON 和原有核算隔离规则不变。真实临时文件 / SQLite 的三个独立场景确认有效 110 Token 各入账一次、没有 pending 或虚构请求证据、源字节保持；重复核对不重复计数。

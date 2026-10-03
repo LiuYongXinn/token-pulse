@@ -33,6 +33,62 @@ fn count(db: &Database, table: &str) -> i64 {
 }
 
 #[test]
+fn invalid_optional_request_evidence_keeps_valid_independent_consumption() {
+    use serde_json::json;
+    use token_pulse_core::domain::NormalizedObservation;
+    for case in 0..3 {
+        let data = tempfile::tempdir().unwrap();
+        let logs = tempfile::tempdir().unwrap();
+        let db = Database::open(data.path()).unwrap();
+        source(&db, "local", logs.path(), true);
+        let path = logs.path().join("sessions/invalid-auxiliary.jsonl");
+        let usage = json!({"input_tokens":100,"cached_input_tokens":60,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":110});
+        let mut auxiliary = json!({"type":"token_usage_record","payload":{"thread_id":"thread","turn_id":"turn","root_turn_id":"root","session_id":"runtime-session","response_id":"response","usage":usage,"turn_token_usage":usage,"thread_token_usage":usage}});
+        match case {
+            0 => auxiliary["payload"]["thread_id"] = "different-owner".into(),
+            1 => auxiliary["payload"]["usage"]["unknown_usage"] = 1.into(),
+            _ => auxiliary["payload"]["usage"]["input_tokens"] = serde_json::Value::Null,
+        }
+        let records = [
+            json!({"type":"session_meta","payload":{"id":"thread","model_provider":"synthetic"}}),
+            json!({"type":"turn_context","payload":{"turn_id":"turn","model":"synthetic-model"}}),
+            auxiliary,
+            json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":usage,"total_token_usage":usage}}}),
+        ];
+        let original: Vec<u8> = records
+            .into_iter()
+            .flat_map(|mut record| {
+                record["timestamp"] = "2026-10-03T00:00:00Z".into();
+                let mut line = serde_json::to_vec(&record).unwrap();
+                line.push(b'\n');
+                line
+            })
+            .collect();
+        fs::write(&path, &original).unwrap();
+        collect_file(&db, "local", &path, 5000).unwrap();
+        assert_eq!(total(&db), "110", "case {case}");
+        assert_eq!(count(&db, "usage_events"), 1);
+        assert_eq!(count(&db, "pending_usage"), 0);
+        db.snapshot(|tx, _| {
+            let mut statement = tx.prepare("SELECT normalized_json FROM observations")?;
+            let mut found = false;
+            for row in statement.query_map([], |row| row.get::<_, String>(0))? {
+                if let NormalizedObservation::Usage(observed) = serde_json::from_str(&row?)? {
+                    assert!(observed.request_usage.is_none());
+                    found = true;
+                }
+            }
+            assert!(found);
+            Ok(())
+        })
+        .unwrap();
+        collect_file(&db, "local", &path, 5001).unwrap();
+        assert_eq!(total(&db), "110");
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+}
+
+#[test]
 fn request_usage_checkpoint_across_batches_and_restart_retains_one_read_only_consumption() {
     use serde_json::json;
     use token_pulse_core::domain::NormalizedObservation;

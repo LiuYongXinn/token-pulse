@@ -142,11 +142,9 @@ pub fn adapt(
                     // It is auxiliary proof, never a second consumption event.
                     AdaptedRecord::Ignored
                 }
-                Err(()) => diagnostic(
-                    position,
-                    ErrorCode::UnsupportedFormat,
-                    "invalid_request_usage_record",
-                ),
+                // An unusable auxiliary record does not invalidate independent
+                // legacy consumption evidence or its session-head proof.
+                Err(()) => AdaptedRecord::Ignored,
             }
         }
         "event_msg" => {

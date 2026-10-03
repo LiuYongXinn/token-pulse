@@ -136,10 +136,7 @@ fn invalid_auxiliary_records_do_not_invent_evidence_and_legacy_serialization_is_
             6 => value["payload"]["thread_token_usage"] = Value::Null,
             _ => value["payload"]["session_id"] = "bad\nidentity".into(),
         }
-        assert!(matches!(
-            feed(&value, 0, &mut c),
-            AdaptedRecord::Diagnostic(_)
-        ));
+        assert!(matches!(feed(&value, 0, &mut c), AdaptedRecord::Ignored));
         let observed = usage(feed(&count(272001), 1, &mut c));
         assert!(observed.request_usage.is_none());
         assert!(
