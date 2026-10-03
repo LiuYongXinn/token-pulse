@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+发布顺序以用户最新授权为准：仓库已公开并允许候选先发布，再做真实线上升级。首次 0.1.1 在线升级的应用内检查 / 下载 / 验签通过，实际 NSIS 的已退出父进程分支失败；修复同调用 `?e` 捕获错误后，`pwsh -NoProfile -File scripts/verify-update-hook.ps1` 实际覆盖父进程存活、已退出握句柄、已退出释放句柄三时序。此夹具不安装产品；仍须从正式安装版通过 UI 确认新签名 0.1.2，核对正常退出 / 文件 / 注册版本 / 新应用与数据库。见[本轮记录](delivery-status.md#m16w公开发布与已退出父进程的安装竞态)。
+
 任务栏右侧电源验收：`pwsh -NoProfile -File scripts/native-smoke.ps1 -PowerTaskbarMessages -ApplicationRight` 仅运行隔离自有消息场景；`pwsh -NoProfile -File scripts/verify-power-resume.ps1 -Taskbar -ApplicationRight` 默认仅预检，追加 `-ActualStandby` 才实际让整机 S3 睡眠 / 唤醒，不重启。右侧标志不能与普通采集电源或其他场景混用。睡眠前后正式 settings IPC 核对位置与启用 / 回退，驱动要求该位置的成功标记。Win10 19045 / 150% 的同 M16v release 宿主与 debug 桌面右侧消息及真实 S3 均退出 0，3→10、新快照 / 详情、窗口和导航保持、宿主正常退休及完整几何 Exact；前一模块左侧的真实 S3 保持独立证据，详见[M13g13](delivery-status.md#m13g13应用图标右侧的真实-s3-恢复链)。混合验收不代替正式安装版物理输入或全包验收。
 
 ## 关键页面截图评审产物

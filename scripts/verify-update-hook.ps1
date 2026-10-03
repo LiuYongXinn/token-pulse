@@ -56,7 +56,20 @@ exit 0
     [IO.File]::WriteAllText((Join-Path $probeRoot 'release'), 'release')
     if (-not $ownedParent.WaitForExit(10000) -or $ownedParent.ExitCode -ne 0) { throw 'Owned parent did not exit normally.' }
     if (-not $ownedInstaller.WaitForExit(10000) -or $ownedInstaller.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $probeRoot 'finished'))) { throw 'Hook did not continue after normal parent exit.' }
-    Write-Output 'NATIVE_UPDATE_HOOK_OK: real NSIS waited for owned live parent, continued after exit; no product install, registry, data or taskbar changes'
+    # The production installer can reach the hook after ordinary application exit.
+    # Keep the old parent handle first (OpenProcess must return a signalled object),
+    # then release it (OpenProcess must report ERROR_INVALID_PARAMETER). Both races
+    # have independent finished markers, so the live-parent check cannot mask them.
+    $exitedParentId = $ownedParent.Id
+    foreach ($retainedHandle in @($true, $false)) {
+        if (-not $retainedHandle) { $ownedParent.Dispose(); $ownedParent = $null }
+        Remove-Item -LiteralPath (Join-Path $probeRoot 'entered'), (Join-Path $probeRoot 'finished')
+        $ownedInstaller.Dispose()
+        $ownedInstaller = Start-Process -FilePath (Join-Path $probeRoot 'hook-fixture.exe') -ArgumentList @('/S', ("/TOKENPULSE_PARENT=" + $exitedParentId)) -WindowStyle Hidden -PassThru
+        $null = $ownedInstaller.Handle
+        if (-not $ownedInstaller.WaitForExit(10000) -or $ownedInstaller.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $probeRoot 'finished'))) { throw ('Hook did not accept already-exited parent; retained handle=' + $retainedHandle) }
+    }
+    Write-Output 'NATIVE_UPDATE_HOOK_OK: real NSIS waited for live parent, accepted already-exited parent with/without retained handle; no product install, registry, data or taskbar changes'
 } finally {
     foreach ($process in @($ownedInstaller, $ownedParent)) { if ($null -ne $process) { if (-not $process.HasExited) { Stop-Process -InputObject $process -Force }; $process.Dispose() } }
     # The resolved UUID directory was checked above against the explicit temporary root.
