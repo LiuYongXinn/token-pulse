@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+最新签名候选为 M16t：[0.1.1 安装器](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/TokenPulse_0.1.1_x64-setup.exe)、[本地候选清单](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/latest.json)、[实际验签报告](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/release-verification.json)。安装器 6,630,563 字节，SHA-256 `0de21c00e573b1df7826ad18b3c66587aac0d524e7b5937b05646e1262cd3878`，包含 M13g5–g8 的 Explorer / 空裁剪 / 自动隐藏 / 回执修复。候选同目录 release 宿主已通过两位置真实自动隐藏期间刷新与恢复、正常 Explorer 重启恢复三项原生复测。未重启电脑，未安装升级 / 发布，原 0.1.0 保留。下方旧候选按历史保留，默认 bundle 旁旧 `.sig` 不能用于新字节；详见[最新完整证据](delivery-status.md#m16t包含全部任务栏修复的签名候选与三项-release-原生复测)。
+
 M13g8 已用 release 原生宿主实际通过两位置自动隐藏刷新；此前 05bede333b5a4d5ba71fb1f2ad2d53fd 完整候选在 release 验收失败，不作为最新可用包。修复后的完整包需重新构建 / 签名；已安装 0.1.0 保留。见[一次协调结果与实际 release 验收](delivery-status.md#m13g8release-回执的一次布局校验结果)。
 
 M13g7 自动隐藏入口增加 `--application-right`：在原显式开发标志后追加此参数，使用正式应用按钮测量选择右侧位置；不追加时使用通知区左侧。两种位置均检查真正隐藏后再发送新 Snapshot 仍保持嵌入，并恢复设置 / 几何，本机实际均通过。此证据不替代真实鼠标触边、物理键盘 / Narrator 或多屏。见[两位置刷新记录](delivery-status.md#m13g7两位置自动隐藏后的实际数据刷新)。
