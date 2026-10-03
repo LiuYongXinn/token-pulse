@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+正式托盘受限验收：`pwsh -NoProfile -File scripts/verify-installed-tray.ps1 -BaselineExecutable <与已安装版本对应的release.exe>` 默认只读；追加 `-PhysicalInput` 才操作已验证的通知区展开按钮 / 本应用图标。当前已安装 0.1.0 使用 `target/release/baselines/v0.1.0-3f05cdf904034d139dd9fe8fe8c03207/desktop.exe`，不能使用新的 0.1.1 release 代替。只读 / 错基线 / 锁屏拒绝已通过检查，物理成功分支尚未验。需解锁并保留可交互桌面，脚本在每次输入前重新检查；已有展开面板、遮挡、按键按下、非 S_OK 图标矩形均拒绝，不改变用户显示偏好。见[当前入口与限制](delivery-status.md#m16o正式安装托盘的受限物理输入验收入口)。
+
 M16n：0.1.1 本地升级候选已完整构建、使用同一项目密钥签名并实际验签，固定源清单已准备且未上传；已安装 0.1.0 保留。更新页原生检查已随编译版本验证，实际 main / mini WebView 场景退出 0。完整自动升级仍未验，发布顺序答复前不推送 / 发布。见[候选与验证记录](delivery-status.md#m16n011-本地签名升级候选与升版后的原生更新页)。
 
 0.1.1 候选安装包：[TokenPulse_0.1.1_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.1_x64-setup.exe)，SHA-256 `6f50baa9cb7806382ab7b3628d7563729aab0278c8bb074e771ce86c33c3e13a`；[候选清单](../../target/release/publish/v0.1.1-20261003-ff6162077a1c4c4a844c94a87b65621a/latest.json)与[实际验签报告](../../target/release/publish/v0.1.1-20261003-ff6162077a1c4c4a844c94a87b65621a/release-verification.json)。它是未安装 / 未发布的本地候选，原 0.1.0 基线保留供完整升级验收；当前 release 验证程序绑定 0.1.1，不能将它用于生成旧版本的成功报告。
