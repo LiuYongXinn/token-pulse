@@ -528,11 +528,31 @@ impl NativeCanvas {
         })
     }
     pub(crate) fn visible(&self) -> bool {
-        self.state.alive.get() && unsafe { IsWindowVisible(self.window) } != 0
+        self.alive() && unsafe { IsWindowVisible(self.window) } != 0
     }
     pub(crate) fn alive(&self) -> bool {
-        // NCDESTROY belongs to this generation; a reused numeric HWND is not this canvas.
-        self.state.alive.get()
+        // Explorer can invalidate a cross-process child without our cached NCDESTROY flag
+        // having caught up. Verify the kernel owner and full generation class as well;
+        // a reused numeric HWND must never be cleared or destroyed by this canvas owner.
+        if !self.state.alive.get() {
+            return false;
+        }
+        use windows_sys::Win32::{
+            System::Threading::{GetCurrentProcessId, GetCurrentThreadId},
+            UI::WindowsAndMessaging::{GetClassNameW, GetWindowThreadProcessId},
+        };
+        let mut pid = 0;
+        let thread = unsafe { GetWindowThreadProcessId(self.window, &mut pid) };
+        let mut class = [0u16; 128];
+        let length = unsafe { GetClassNameW(self.window, class.as_mut_ptr(), 128) };
+        let valid = thread == unsafe { GetCurrentThreadId() }
+            && pid == unsafe { GetCurrentProcessId() }
+            && length > 0
+            && class[..length as usize] == self.class[..self.class.len() - 1];
+        if !valid {
+            self.state.alive.set(false);
+        }
+        valid
     }
     pub(crate) fn plan(&self) -> Option<&MeasuredPlan> {
         unsafe { &*self.state.get() }.plan.as_ref()
@@ -561,7 +581,15 @@ impl NativeCanvas {
         self.clear_render()
     }
     pub(crate) fn clear_interactions(&mut self) {
-        clear_intentions(self.window, &self.state);
+        if self.alive() {
+            clear_intentions(self.window, &self.state);
+        } else {
+            let state = unsafe { &mut *self.state.get() };
+            state.clicks.clear();
+            state.interaction_epoch = state.interaction_epoch.saturating_add(1);
+            state.plan = None;
+            self.state.details.clear().ok();
+        }
     }
     pub(crate) fn take_actions(&mut self) -> Vec<HostAction> {
         unsafe { (*self.state.get()).clicks.take(GetTickCount64()) }
@@ -570,19 +598,22 @@ impl NativeCanvas {
         unsafe {
             (*self.state.get()).plan = None;
         }
-        if !self.state.alive.get() {
+        if !self.alive() {
             return Err(WireError::Closed);
         }
         if unsafe { SetWindowTextW(self.window, wide("TokenPulse").as_ptr()) } == 0 {
+            acceptance_trace("clear_render_set_text");
             return Err(WireError::InvalidState);
         }
         let mut rect: RECT = unsafe { mem::zeroed() };
         if unsafe { GetClientRect(self.window, &mut rect) } == 0 {
+            acceptance_trace("clear_render_client_rect");
             return Err(WireError::InvalidState);
         }
         if rect.right > 0 && rect.bottom > 0 {
             let dc = unsafe { GetDC(self.window) };
             if dc.is_null() {
+                acceptance_trace("clear_render_dc");
                 return Err(WireError::InvalidState);
             }
             let result = {
@@ -597,8 +628,12 @@ impl NativeCanvas {
             unsafe {
                 ReleaseDC(self.window, dc);
             }
+            if result.is_err() {
+                acceptance_trace("clear_render_font_paint");
+            }
             result?;
             if !flushed {
+                acceptance_trace("clear_render_gdi_flush");
                 return Err(WireError::InvalidState);
             }
         }
@@ -661,13 +696,27 @@ impl NativeCanvas {
         Ok(())
     }
 }
+fn acceptance_trace(stage: &str) {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        eprintln!("NATIVE_CANVAS_FAILED: {stage} last_error={}", unsafe {
+            windows_sys::Win32::Foundation::GetLastError()
+        });
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = stage;
+}
 impl Drop for NativeCanvas {
     fn drop(&mut self) {
         // WM_NCDESTROY marks this generation dead; never destroy a subsequently reused HWND.
-        if self.state.alive.get() {
+        if self.alive() {
             self.clear().ok();
-            unsafe {
-                DestroyWindow(self.window);
+            if self.alive() {
+                unsafe {
+                    DestroyWindow(self.window);
+                }
             }
         }
         unsafe {

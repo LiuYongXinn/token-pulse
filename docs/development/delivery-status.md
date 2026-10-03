@@ -6,6 +6,22 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g5：真实 Explorer 重启恢复与空裁剪区域修复
+
+本机 Windows 10 19045 / 150% DPI 完成实际 Explorer 进程正常关闭 / 重启验收。新显式开发入口 `check_taskbar_explorer_restart` 启动同目录正式原生宿主，仅发送合成展示 DTO；在同一宿主持续心跳期间，由独立脚本通过 Windows Restart Manager 关闭、恢复唯一登记的 Explorer。没有伪造 TaskbarCreated，没有以重启宿主替代恢复，没有强杀 Shell，也没有重启 / 关闭电脑。
+
+此前 M16r 的两个 ApplicationFrameWindow，经只读 DWM / 子窗口结构检查确认是 Shell-cloaked 且仅含同 Explorer 的标题 / 输入框架。资格检查只额外允许这一严格结构：DWM_CLOAKED_SHELL=2、有界非空后代、所有后代属于同 PID 且类名仅为 ApplicationFrameTitleBarWindow / ApplicationFrameInputSinkWindow；枚举后再核对归属 / cloak。文件窗口（含隐藏）、有应用内容的框架、未知可见类与不完整枚举仍拒绝。默认入口只读；显式 `-RestartShell` 再核对 PID / 创建时间 / 同会话、唯一 RM 进程、Restartable / RmExplorer / 零 reboot reasons，仅使用 RmShutdown 的 OnlyRegistered 标志 0x10，不使用 ForceShutdown。RmRestart 始终在 finally 执行；旧内核进程已结束但任务栏仍缺失时，才从系统路径隐藏启动 Explorer。共享 C# 位于 `scripts/explorer-restart-probe.cs`，默认只读脚本不调用变更方法。
+
+早期七次实际恢复使宿主状态管道关闭，失败证据保留，不记通过；最后一份为 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-native-8cf1e45937ab4beba1fbafbdea1d5f2c/run.log`。增加仅 debug、opt-in 的有限错误输出后，用既有隐藏窗口测试独立复现：FillRect=0、GetLastError=0、GetClipBox=NULLREGION。实际原因是隐藏 / 脱离窗口没有可绘制区域，原代码将合法空区域误报为绘制失败；仅更换窗口资源不能修复这一错误。
+
+正式读数及详情现在区分有效空区域与无效 DC：空区域跳过绘制，缓存帧 / 标题 / 动作仍按隐私屏障清除，可见时使用最新帧；无效 DC / 裁剪 API 失败仍报错。加强 HWND 当前进程 / UI 线程 / 完整 UUID 类名校验；TaskbarCreated 保留原通知类型到重入队列并重建窗口代次；独立 Explorer PID / 内核创建时间 / 根 HWND 变化也触发重建。旧租约只按原归属释放，不将旧几何应用到新 Shell。
+
+实际正向证据：`C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-native-d1e8b0e8f4454191a0fc6cc868a37e65/run.log`，退出 0。旧 Shell PID 23564 → 新 Shell PID 96104，RmShutdown / RmRestart 均为 0；旧内核句柄确认结束，正常 RM 路径下退出码为 1（如实保留，不当作强杀判据）。同宿主 PID 84612 恢复 Embedded，新读数 UUID 类名、system_revision 增加、settings_revision 保持、旧动作为空；禁用恢复新租约，再启用 / 正常 shutdown 与独立记录的新 Shell 原几何相等。输出 NATIVE_EXPLORER_RESTART_OK，ForceShutdown=false / ComputerRestart=false。
+
+自动 taskbar all-targets 62 项通过，1 项私有子入口 ignored；新增独立位图预期验证空区域不改变像素 / 调用方裁剪、恢复可见后重绘及无效 DC 仍失败。既有隐藏画布 / 详情清屏、Tab / 失焦检查通过，严格 Clippy all-targets / fmt、PowerShell AST / 默认只读 RM 查询及差异检查通过。完整 Tauri 回归 `-TaskbarActions` 也退出 0：详情、丢失画布重建、实际按钮位置、菜单、统计 / 小窗 / 设置 / 隐私 / 禁用与最后几何恢复通过；证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-taskbar-shell-regression-bfdd2460e1bd42eca1a58aa194d05e8e/run.log`。自有窗口消息不替代物理点击；SHORTCUT_CONFLICT 与 WebView2 注销 1412 保留。
+
+本轮只完成本机 Win10 / 单屏 / 150% 的 Shell 生命周期。物理键盘 / Narrator、自动隐藏 / 拥挤、多屏 / 其他系统 DPI、实际休眠及标准安装托盘仍独立待验。已安装 0.1.0 与原未提交内容保留；M16n 的旧 0.1.1 签名候选尚未包含本轮源码修复，未推送 GitHub，无性能测试。原生规则依据 [GetClipBox](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getclipbox)、[IntersectClipRect](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-intersectcliprect)、[RM_SHUTDOWN_TYPE](https://learn.microsoft.com/en-us/windows/win32/api/restartmanager/ne-restartmanager-rm_shutdown_type)。下方 M16r 保留当时事实，以本轮证据更新当前状态。
+
 ## M16r：Explorer 正常重启资格的只读检查
 
 继续为真实 Explorer 生命周期准备受控验收方法，新增 `scripts/inspect-explorer-restart.ps1`。此入口只有只读检查，不声明 / 调用 RmShutdown、RmRestart、系统重启、进程结束或窗口消息。限定 Win10 19045 x64；核对唯一主任务栏、系统 explorer.exe 路径、同一会话及内核创建时间，在检查结束再次验证 Shell PID / HWND 未改变。不读取窗口标题、用户名、域或认证。
@@ -150,7 +166,7 @@ Windows 10 验收继续；已有正式数据、原未提交内容保持，未覆
 |6. 计价与重估|精确原子金额、覆盖 / 未计价、自定义规则、版本化别名、51 模型 / 172 档位事实；M09g2b3 已贯通持久缓存、独立服务、自动补建和正式进度 / 取消|日志缺少请求档位等条件时保持未计价；早期后台服务 / UI 未完成描述已收敛|
 |7. 小窗|280×220 / 360×380 DIP、主题、费用 / Token / 账户、置顶 / 透明度 / 穿透与恢复键、位置保存 / 缺屏回退；M11 原生及 UI 检查|物理多屏拖动、主屏切换、断屏和四档系统 DPI 尚未完成；合成几何不能替代这些检查|
 |8. 本地账户额度|用户选择程序 / Home 后复用已有登录，无新增登录；M12i 真实持续读取、M12j 冷启动、M13f1 三入口 / 后台刷新、M12m 普通选择 / 保存 / 连接通过|真实账户身份变化、通知、登录过期 / 实际重置仍需对应外部状态；已有合成领域 / 服务 / UI 检查，不主动切换或登出用户账户|
-|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；M13g4 真实悬停 / 单双击 / 焦点及五项 UIA Invoke 到宿主管道通过；M16q 自有消息经完整管道到 Tauri 小窗 / 统计 / 设置 / 隐私 / 禁用退出 0|M13g4 的五项 UIA 动作由探针消费，M16q 独立验证消息到应用页面；两种证据不合并表述为正式安装版物理点击。物理键盘 / Narrator、实际拥挤 / 自动隐藏及完整 Explorer 重启未验。Win11 适配与验收取消|
+|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；M13g4 真实悬停 / 单双击 / 焦点及五项 UIA Invoke 到宿主管道通过；M16q / M13g5 完整管道到 Tauri 小窗 / 统计 / 设置 / 隐私 / 禁用通过；M13g5 真实 Explorer 正常重启后同宿主恢复与新 Shell 几何恢复通过|UIA 动作由探针消费，Tauri 回归使用自有消息，重启展示 DTO 为合成夹具；不合并表述为正式安装版物理点击。物理键盘 / Narrator、实际拥挤 / 自动隐藏仍未验。Win11 适配与验收取消|
 |10. Windows 10 / 多屏 / DPI|主窗口位置与外框尺寸适配、同 DPI 工作区检测已进入 M16n 候选；Win10 150% 三进程冷启动 / 合成小屏与缺屏通过，100 / 125 / 150 / 200% 独立几何预期通过|当前只有一个活动显示器；Win10 物理跨屏 / 主屏切换 / 断屏和各档系统 DPI 待实际条件，Win11 不作为门槛|
 |11. 系统集成|托盘、单实例、明确退出、主 / 小窗位置、休眠消息路由及恢复键已有实现；M15a8 notify 选择 / 预览 / 确认 / 撤销和原配置保持通过；M16p 标准安装版后台窗口命令 / 单实例 / 正常退出 / 冷启动与账本保持通过|标准已安装应用真实托盘菜单尚未通过；后台命令不替代物理点击。实际休眠 / 解锁、真实 Codex 回合 notify 分别待验。不开机启动，不新增额外快捷键|
 |12. 软件更新|固定发布源、状态 / 检查 / 下载 / 签名 / 安装门禁、NSIS 等正常退出；M16i 新项目密钥与默认公钥、M16j 正式包 / 签名验证、M16k 真实最小 NSIS 下载交接通过，M16n 的 0.1.1 签名候选已准备|0.1.0 是已安装新公钥基线；0.1.1 完整应用自动升级仍未验。当前不推送 / 发布；完整线上升级依赖发布资产，与全部验证后才推送的顺序需要用户确认，未自行改变发布源或降低验证|

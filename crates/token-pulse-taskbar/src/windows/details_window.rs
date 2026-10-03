@@ -1,6 +1,6 @@
 //! Thread-owned, nonactivating read-only details. All content comes from the host projection.
 use super::{
-    render::{NativeFont, Palette, rgb},
+    render::{NativeFont, Palette, has_visible_clip, rgb},
     topology::{ScreenRect, wide},
 };
 use crate::{
@@ -317,6 +317,9 @@ impl Frame {
         height: i32,
         scroll: i32,
     ) -> Result<(), WireError> {
+        if !unsafe { has_visible_clip(dc) }? {
+            return Ok(());
+        }
         let mut plan = self.layout.plan.clone();
         for span in &mut plan.spans {
             span.y -= scroll;
@@ -581,11 +584,18 @@ unsafe extern "system" fn procedure(
                     wparam as _
                 };
                 let mut client: RECT = unsafe { mem::zeroed() };
-                let result = if dc.is_null() || unsafe { GetClientRect(window, &mut client) } == 0 {
-                    Err(WireError::InvalidState)
-                } else if let Some(frame) = frame {
-                    unsafe { frame.paint(dc, client.right, client.bottom, state.scroll.get()) }
-                } else {
+                let result = (|| {
+                    if dc.is_null() || unsafe { GetClientRect(window, &mut client) } == 0 {
+                        return Err(WireError::InvalidState);
+                    }
+                    if !unsafe { has_visible_clip(dc) }? {
+                        return Ok(());
+                    }
+                    if let Some(frame) = frame {
+                        return unsafe {
+                            frame.paint(dc, client.right, client.bottom, state.scroll.get())
+                        };
+                    }
                     let brush = unsafe { CreateSolidBrush(rgb(22, 25, 31)) };
                     let ok = !brush.is_null() && unsafe { FillRect(dc, &client, brush) } != 0;
                     if !brush.is_null() {
@@ -598,7 +608,7 @@ unsafe extern "system" fn procedure(
                     } else {
                         Err(WireError::InvalidState)
                     }
-                };
+                })();
                 if result.is_err() {
                     state.failed.set(true);
                 }

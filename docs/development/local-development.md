@@ -1,6 +1,6 @@
 # 本地开发与运行
 
-Explorer 重启资格只读检查：`pwsh -NoProfile -File scripts/inspect-explorer-restart.ps1`。不关闭窗口、结束进程、重启 Explorer 或电脑；精确 PID / 创建时间登记 Restart Manager，核对可重启状态及同进程的未知可见窗口。M16r 的当前结果为 Restartable=true / RebootReasons=0，但两个用途未确认的可见 ApplicationFrameWindow 使 Eligible=false，实际重启未执行。用户要求不要重启电脑，后续验收不主动触发 Windows 重启 / 关机。见[资格检查与限制](delivery-status.md#m16rexplorer-正常重启资格的只读检查)。
+Explorer 重启资格只读检查：`pwsh -NoProfile -File scripts/inspect-explorer-restart.ps1`，默认不关闭窗口或结束进程。M13g5 已细化严格的 Shell-cloaked 空框架判断，并实际完成正常 Explorer 进程重启后的同宿主恢复。显式开发入口：先 `cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host --example check_taskbar_explorer_restart`，再运行 `target/debug/examples/check_taskbar_explorer_restart.exe --native-taskbar-explorer-restart-development-check`；会正常关闭 / 恢复资格核对后的 Explorer，不重启电脑、不强杀，也不属于普通 cargo test。PowerShell 路径可由 TOKENPULSE_ACCEPTANCE_PWSH 指定；TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS=1 仅在 debug 打开有限错误枚举 / GDI 状态输出，release 不接受此诊断开关。M16n 的旧 0.1.1 候选尚未包含本轮修复，正式安装 0.1.0 保留。见[实际恢复与修复](delivery-status.md#m13g5真实-explorer-重启恢复与空裁剪区域修复)。
 
 锁屏下可运行受控原生功能检查：`pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions`、`-RecoveryRoutes`、`-Notify` 分别验证任务栏完整消息通路、小窗交互恢复 / 透明度及 notify 配置 / headless / 采集。M16q 三项本机实际退出 0，使用真实 WebView / 原生实现及隔离开发数据库，不发送物理键鼠、不修改正式设置。实际输入 / Narrator、多屏 / DPI、真实休眠和账户变化、正式源完整升级分别保留独立验收边界，不能统称为锁屏无法测试。见[本轮方法与证据](delivery-status.md#m16q无需桌面输入的三项原生功能复测)。
 

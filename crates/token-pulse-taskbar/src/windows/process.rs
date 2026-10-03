@@ -71,7 +71,7 @@ impl HostProcess {
             .args(startup.arguments())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(acceptance_error_stream())
             .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW)
             .spawn()
             .map_err(|_| TransportError::Spawn)?;
@@ -183,6 +183,15 @@ impl HostProcess {
         self.cleanup = Some(result);
         result
     }
+}
+fn acceptance_error_stream() -> Stdio {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        return Stdio::inherit();
+    }
+    Stdio::null()
 }
 impl Drop for HostProcess {
     fn drop(&mut self) {

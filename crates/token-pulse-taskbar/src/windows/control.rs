@@ -6,7 +6,9 @@ use super::{
     canvas::NativeCanvas,
     layout::{LayoutLease, RestoreDisposition, background},
     render::Palette,
-    topology::{ProbeError, TaskbarTopology, inspect_primary_taskbar, wide},
+    topology::{
+        ProbeError, TaskbarTopology, discover_primary_taskbar, inspect_primary_taskbar, wide,
+    },
     transport::IO_TIMEOUT,
 };
 use crate::{
@@ -143,6 +145,7 @@ struct State {
     receiver: Receiver<Request>,
     view: Option<Box<TaskbarView>>,
     topology: Result<TaskbarTopology, ProbeError>,
+    shell_generation: Option<(u32, [u32; 2], usize)>,
     system_revision: u64,
     canvas: Option<NativeCanvas>,
     native_failed: bool,
@@ -157,7 +160,8 @@ struct State {
 }
 impl State {
     fn canvas_lost(&self) -> bool {
-        self.canvas.as_ref().is_none_or(|canvas| !canvas.alive())
+        self.shell_generation != shell_generation()
+            || self.canvas.as_ref().is_none_or(|canvas| !canvas.alive())
     }
     fn recreate_canvas(&mut self) -> Result<(), TransportError> {
         if !self.canvas_lost() {
@@ -169,6 +173,7 @@ impl State {
         let previous = self.canvas.take();
         drop(previous);
         self.topology = inspect_primary_taskbar();
+        self.shell_generation = shell_generation();
         let dpi = self
             .topology
             .as_ref()
@@ -212,6 +217,15 @@ impl State {
         if self.prepare().is_err() {
             self.native_failed = true;
         }
+    }
+    fn shell_recreated(&mut self) {
+        // TaskbarCreated begins a new shell lifecycle even if our cross-process child
+        // has not delivered NCDESTROY yet. Drop the old layout, drawing and interaction
+        // generation before attaching to the newly inspected shell.
+        self.detach();
+        let previous = self.canvas.take();
+        drop(previous);
+        self.system_changed();
     }
     fn detach(&mut self) {
         if let Some(mut layout) = self.layout.take() {
@@ -273,7 +287,10 @@ impl State {
             None
         };
         if let Some(canvas) = self.canvas.as_mut() {
-            canvas.clear_render().map_err(|_| TransportError::Native)?;
+            canvas.clear_render().map_err(|error| {
+                acceptance_trace(&format!("clear_render={error:?}"));
+                TransportError::Native
+            })?;
             if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
                 let available = self
                     .layout
@@ -308,7 +325,10 @@ impl State {
                         topology.rebar.height(),
                         now,
                     )
-                    .map_err(|_| TransportError::Native)?;
+                    .map_err(|error| {
+                        acceptance_trace(&format!("canvas_prepare={error:?}"));
+                        TransportError::Native
+                    })?;
                 if self.enabled && self.layout.is_none() && self.embedding_failure.is_none() {
                     if let Some(plan) = canvas.plan() {
                         match LayoutLease::attach_at(
@@ -333,11 +353,33 @@ impl State {
             }
         }
         if self.native_failed || self.canvas.as_ref().is_none_or(|c| c.paint_failed()) {
+            acceptance_trace(&format!(
+                "prepare_failed native_failed={} canvas_alive={} paint_failed={} topology_error={:?}",
+                self.native_failed,
+                self.canvas.as_ref().is_some_and(|c| c.alive()),
+                self.canvas.as_ref().is_none_or(|c| c.paint_failed()),
+                self.topology.as_ref().err()
+            ));
             Err(TransportError::Native)
         } else {
             Ok(())
         }
     }
+}
+fn shell_generation() -> Option<(u32, [u32; 2], usize)> {
+    discover_primary_taskbar()
+        .ok()
+        .map(|shell| (shell.pid, shell.birth, shell.root as usize))
+}
+fn acceptance_trace(message: &str) {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        eprintln!("NATIVE_CONTROLLER_FAILED: {message}");
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = message;
 }
 unsafe extern "system" fn procedure(
     window: HWND,
@@ -359,7 +401,7 @@ unsafe extern "system" fn procedure(
         if slot.busy.get() {
             if message == slot.taskbar_created {
                 unsafe {
-                    PostMessageW(window, REFRESH, 0, 0);
+                    PostMessageW(window, slot.taskbar_created, 0, 0);
                 }
             }
             match message {
@@ -502,7 +544,7 @@ unsafe extern "system" fn procedure(
             },
             REFRESH | WM_DISPLAYCHANGE | WM_DPICHANGED | WM_SETTINGCHANGE | WM_THEMECHANGED
             | WM_POWERBROADCAST => state.system_changed(),
-            _ if message == taskbar_created => state.system_changed(),
+            _ if message == taskbar_created => state.shell_recreated(),
             _ => {}
         }
     }
@@ -640,6 +682,7 @@ unsafe fn native_thread(
             receiver,
             view: None,
             topology: inspect_primary_taskbar(),
+            shell_generation: shell_generation(),
             system_revision: 0,
             canvas: None,
             native_failed: false,
@@ -903,6 +946,14 @@ mod tests {
     async fn actual_controller_routes_system_and_taskbar_created_notifications_without_showing() {
         let controller = NativeController::start().unwrap();
         let initial = controller.inspect().await.unwrap();
+        let readout_class = || {
+            let child = unsafe { GetWindow(controller.window as HWND, GW_CHILD) };
+            let mut class = [0u16; 128];
+            let length = unsafe { GetClassNameW(child, class.as_mut_ptr(), 128) };
+            assert!(length > 0);
+            String::from_utf16_lossy(&class[..length as usize])
+        };
+        let old_class = readout_class();
         for message in [
             WM_DISPLAYCHANGE,
             WM_DPICHANGED,
@@ -941,6 +992,11 @@ mod tests {
             );
         }
         let after = controller.inspect().await.unwrap();
+        assert_ne!(
+            readout_class(),
+            old_class,
+            "TaskbarCreated replaces the owned drawing generation"
+        );
         assert!(after.system_revision >= initial.system_revision + 6);
         assert!(!after.control_visible && !after.cached_view_present);
         // These are messages sent only to our controller, not actual Explorer/DPI changes.

@@ -29,10 +29,15 @@ fn main() {
             .enable_all()
             .build()
             .expect("native host runtime");
-        if runtime
-            .block_on(token_pulse_taskbar::windows::run_host(startup))
-            .is_err()
-        {
+        if let Err(error) = runtime.block_on(token_pulse_taskbar::windows::run_host(startup)) {
+            #[cfg(debug_assertions)]
+            if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!("NATIVE_HOST_FAILED: {error:?}");
+            }
+            #[cfg(not(debug_assertions))]
+            let _ = error;
             std::process::exit(1);
         }
     }

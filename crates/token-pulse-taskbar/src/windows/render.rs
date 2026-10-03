@@ -9,9 +9,9 @@ use windows_sys::Win32::{
     Graphics::Gdi::{
         BI_RGB, BITMAPINFO, BITMAPINFOHEADER, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateCompatibleDC,
         CreateDIBSection, CreateFontIndirectW, CreateSolidBrush, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, FillRect, GdiFlush, GetSysColor, GetTextExtentPoint32W, GetTextMetricsW, HDC,
-        HFONT, HGDIOBJ, IntersectClipRect, RestoreDC, SaveDC, SelectObject, SetBkMode,
-        SetTextColor, TEXTMETRICW, TRANSPARENT, TextOutW,
+        DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor, GetTextExtentPoint32W,
+        GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION, RestoreDC, SaveDC,
+        SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT, TextOutW,
     },
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -226,14 +226,23 @@ impl NativeFont {
     ) -> Result<(), WireError> {
         let saved = unsafe { SaveDC(dc) };
         if saved == 0 {
+            acceptance_trace("save_dc", dc);
             return Err(WireError::InvalidState);
         }
         let result = (|| {
-            unsafe {
-                IntersectClipRect(dc, 0, 0, width, height);
+            if unsafe { IntersectClipRect(dc, 0, 0, width, height) } == 0 {
+                return Err(WireError::InvalidState);
+            }
+            // A hidden/detached child has a valid DC but no visible pixels. FillRect can
+            // return zero in that state. Clear the cached plan/caption at the canvas layer,
+            // then repaint the latest plan when attached; never classify an empty region
+            // as device failure or discard actual DC errors.
+            if !unsafe { has_visible_clip(dc) }? {
+                return Ok(());
             }
             let brush = unsafe { CreateSolidBrush(palette.background) };
             if brush.is_null() {
+                acceptance_trace("create_brush", dc);
                 return Err(WireError::InvalidState);
             }
             let brush = Object(brush);
@@ -244,6 +253,7 @@ impl NativeFont {
                 bottom: height,
             };
             if unsafe { FillRect(dc, &rect, brush.0) } == 0 {
+                acceptance_trace("fill_background", dc);
                 return Err(WireError::InvalidState);
             }
             if let Some(plan) = plan {
@@ -380,10 +390,86 @@ impl NativeFont {
         Ok(output)
     }
 }
+/// The DC is borrowed on its owning paint thread. Empty visibility is a valid no-op;
+/// an invalid DC remains an error. Used by both the readout and its hidden details.
+pub(crate) unsafe fn has_visible_clip(dc: HDC) -> Result<bool, WireError> {
+    let mut clip: RECT = unsafe { mem::zeroed() };
+    match unsafe { GetClipBox(dc, &mut clip) } {
+        0 => Err(WireError::InvalidState),
+        NULLREGION => Ok(false),
+        _ => Ok(true),
+    }
+}
+fn acceptance_trace(stage: &str, dc: HDC) {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        let error = unsafe { windows_sys::Win32::Foundation::GetLastError() };
+        let mut clip: RECT = unsafe { mem::zeroed() };
+        let kind = unsafe { windows_sys::Win32::Graphics::Gdi::GetClipBox(dc, &mut clip) };
+        eprintln!(
+            "NATIVE_GDI_FAILED: {stage} last_error={error} clip_type={kind} clip={},{},{},{}",
+            clip.left, clip.top, clip.right, clip.bottom
+        );
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = (stage, dc);
+}
 impl Drop for NativeFont {
     fn drop(&mut self) {
         unsafe {
             SelectObject(self.dc.0, self.previous);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, SelectClipRgn};
+
+    #[test]
+    fn empty_clip_preserves_pixels_and_dc_state_then_visible_repaint_succeeds() {
+        let font = NativeFont::new(96).unwrap();
+        let original = Palette::for_background(rgb(13, 29, 47));
+        let next = Palette::for_background(rgb(71, 89, 107));
+        let no_op = font
+            .bitmap_with(32, 16, |dc| {
+                unsafe { font.paint(dc, None, 32, 16, original) }?;
+                let outer = unsafe { SaveDC(dc) };
+                assert!(outer > 0);
+                let empty = Object(unsafe { CreateRectRgn(0, 0, 0, 0) });
+                assert!(!empty.0.is_null());
+                assert_eq!(unsafe { SelectClipRgn(dc, empty.0) }, NULLREGION);
+                assert_eq!(unsafe { has_visible_clip(dc) }, Ok(false));
+                unsafe { font.paint(dc, None, 32, 16, next) }?;
+                // paint restores the caller's empty region rather than erasing its clip.
+                assert_eq!(unsafe { has_visible_clip(dc) }, Ok(false));
+                assert_ne!(unsafe { RestoreDC(dc, outer) }, 0);
+                assert_eq!(unsafe { has_visible_clip(dc) }, Ok(true));
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            no_op[54..]
+                .chunks_exact(4)
+                .all(|pixel| pixel[..3] == [47, 29, 13])
+        );
+        let visible = font.bitmap(None, 32, 16, next).unwrap();
+        assert!(
+            visible[54..]
+                .chunks_exact(4)
+                .all(|pixel| pixel[..3] == [107, 89, 71])
+        );
+        // A null/invalid DC must still fail; the no-op rule only accepts valid empty clips.
+        assert_eq!(
+            unsafe { has_visible_clip(ptr::null_mut()) },
+            Err(WireError::InvalidState)
+        );
+        assert_eq!(
+            unsafe { font.paint(ptr::null_mut(), None, 32, 16, next) },
+            Err(WireError::InvalidState)
+        );
     }
 }
