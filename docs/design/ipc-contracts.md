@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-03 计价状态澄清：规则 / 别名、离线目录和重估命令已注册并接正式 UI，Rust 生成契约为实际权威，后文早期“草案 / 未注册”按对应后续模块收敛。现有 PriceRule / PriceRuleDraft 仅含输入、命中、输出三费率，UsageVector / 公开用量尚未完整支持独立写入；请求长度、实际模式、端点地区未进入自动匹配契约。后续新增 nullable 写入分项、四费率与有出处的请求条件，连同价格缓存身份 / 历史版本同步演进；缺证据不回填假值。见[模型价格与计费条件](price-accounting.md)。
+
 M06f4 不增加 DTO 或新命令。普通会话读取以已拥有活跃账本为发布边界；选择器排除未发布身份，直接详情 / 轮次 / 上下文及固定范围提交返回 INVALID_QUERY。父子工具内部键 / 名称与 child_count 仅包含已发布会话，已确认的 provider 父标识继续保留；真实空账本的上下文未知字段保持 null。选择器分页继续由原 SQLite 租约固定可见性，候选身份发布后只有新快照可见。
 
 M06e2 沿用现有 Coverage DTO，不新增扫描历史接口。Complete 现在可由真实目录枚举与当前文件读取证明产生；无选中来源或缺失证明保持 Unknown，已知文件 / 格式 / 待归属缺口保持 Partial。source_issues 新增受控原因 `source_scanning`、`source_scan_interrupted`、`source_scan_changed`、`source_scan_incomplete`、`source_scan_pending`；查询在自己的 SQLite 快照验证证据，不能用最近成功时间或 ready 缓存标志替代。每个时间桶保留自身核算缺口，来源级缺口适用于所有桶，Token 分项完整性继续独立表达。DTO / TypeScript / schema 字段未变化。
