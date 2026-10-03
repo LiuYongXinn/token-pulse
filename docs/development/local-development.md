@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g7 自动隐藏入口增加 `--application-right`：在原显式开发标志后追加此参数，使用正式应用按钮测量选择右侧位置；不追加时使用通知区左侧。两种位置均检查真正隐藏后再发送新 Snapshot 仍保持嵌入，并恢复设置 / 几何，本机实际均通过。此证据不替代真实鼠标触边、物理键盘 / Narrator 或多屏。见[两位置刷新记录](delivery-status.md#m13g7两位置自动隐藏后的实际数据刷新)。
+
 实际任务栏自动隐藏验收：`cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host --example check_taskbar_autohide` 后运行 `target/debug/examples/check_taskbar_autohide.exe --native-taskbar-autohide-development-check`。显式开关才执行；要求初始未自动隐藏的已验证 Win10 主任务栏，期间正常启用自动隐藏并按 Shell 归属恢复，读取真实状态及物理窗口位移。普通 cargo test 不运行此 main、不更改设置。M13g6 实际通知区左侧隐藏保持嵌入 / 恢复通过，不代表鼠标触边 / 应用右侧物理场景。M16s 尚未包含本次平移修复；见[当前修复与证据](delivery-status.md#m13g6真实系统自动隐藏与布局平移恢复)。
 
 最新签名候选为 M16s：[0.1.1 安装器](../../target/release/publish/v0.1.1-shell-7e36b18664984d51a9dcf27cb4dbeaa8/TokenPulse_0.1.1_x64-setup.exe)、[候选清单](../../target/release/publish/v0.1.1-shell-7e36b18664984d51a9dcf27cb4dbeaa8/latest.json)、[实际验签报告](../../target/release/publish/v0.1.1-shell-7e36b18664984d51a9dcf27cb4dbeaa8/release-verification.json)。安装器 SHA-256 `c5dda4ecc954660ae85f8c45fc7bf08b3f6d87c4edd8517d3494347a1c983937`，包含空裁剪 / Explorer 代次修复，候选 release 宿主真实恢复通过。旧 M16n 路径和哈希为历史候选；默认 bundle 路径旁的旧 `.sig` 不能与新字节配对，使用本次新目录内的一致安装器 / 签名 / 报告。未安装 / 发布，原安装 0.1.0 保留；不将实际验签或宿主恢复当成完整在线自动升级通过。见[本轮构建与验收](delivery-status.md#m16s纳入-explorer-修复的签名候选与-release-原生恢复)。

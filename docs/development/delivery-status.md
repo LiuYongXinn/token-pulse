@@ -6,6 +6,16 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g7：两位置自动隐藏后的实际数据刷新
+
+扩展显式自动隐藏探针的 `--application-right` 选项，并新增隐藏后再发送正式 Snapshot / GetStatus 的强断言。先前 M13g6 只检查首次隐藏状态与恢复；本轮更严格检查发现应用图标右侧在隐藏刷新后失去预留。多份失败证据保留，最后精确窗口诊断为 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-autohide-application-7004947f690b4befbfeeea4277e1e04c/`：读数仍在正确的移出屏幕位置，Explorer 重绘却将 MSTaskSwWClass / MSTaskListWClass 恢复为本实例登记的完整原始宽度。失败不计通过，所有场景均按 guard 恢复系统开关；临时全拓扑调试输出已移除。
+
+正式修复分两层：仅当真实自动隐藏状态开启、完整底部任务栏在对应显示器外（最多保留两物理像素边缘）、租约仍通过验证时，暂缓 UIA 的应用按钮测量，因为此时系统正确返回按钮 off-screen；可见后恢复普通严格测量，不忽略普通隐藏 / 溢出按钮。若 Explorer 将预留恢复成完整原始宽度，只允许同一内核 Shell、同一根 / 读数类、同尺寸 / DPI、所有权属性仍匹配、当前任务区精确等于登记 original、读数位置及其他控件全部匹配时重新预留 expected。非原始几何、外部归属、显示状态、DPI / 尺寸 / 版本或未知系统状态均拒绝。原生准备、状态检查和生成回执前协调租约，失效但无法安全重预留时立即隐藏 / 脱离，不发布残留读数。
+
+真实 Win10 19045 / 150%、合成展示 DTO：应用右侧证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-autohide-application-7d0b8f393c64444f8f26977e72457bc1/` 退出 0，同宿主 89844；通知区左侧最终复测 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-autohide-refresh-2cedc130b13b4c2eb7b4cc4b97c3e4e7/` 退出 0，同宿主 92604。两项均真实开关 0→1→0、观察 top 1380→1438 / bottom 1440→1498、隐藏及新快照刷新后仍 Embedded / failure=None；恢复显示、空动作、禁用 / shutdown、系统设置及完整原几何恢复通过。没有键鼠输入、Explorer 终止或电脑重启。
+
+taskbar all-targets 65 项通过、1 私有入口 ignored；新增纯坐标预期拒绝可见 / 局部离屏 / 非完整宽度，只接受真实完全隐藏形态。严格 Clippy all-targets / fmt 通过；未知系统状态补强后 Clippy 及左侧实际场景再次通过。完整 `-TaskbarActions` 退出 0，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-autohide-final-regression-65f9432a30b743f89e9212201856af70/`，两位置 / 按钮增减 / 菜单 / 详情 / 画布重建 / Tauri 页面 / 隐私 / 退出原几何回归通过；SHORTCUT_CONFLICT / 1412 如实保留。底部两位置的系统自动隐藏与刷新已验，但鼠标触边唤出、其他任务栏方位、物理键盘 / Narrator、拥挤、多屏 / 各档系统 DPI、休眠和剩余外部场景仍独立。旧签名候选尚未包含本次修复，接下来从已提交源码重新打包；不推送 GitHub，无性能测试。
+
 ## M13g6：真实系统自动隐藏与布局平移恢复
 
 使用新显式开发入口 `check_taskbar_autohide`，本机 Win10 19045 / 150% DPI 实际设置任务栏自动隐藏，读取真实状态并观察 Explorer 窗口移动；不发送键鼠、不向宿主伪造系统通知、不终止 Explorer 或重启电脑。仅接受初始非自动隐藏的受支持主任务栏；持有旧 Shell 内核进程句柄、核对 PID / 完整类名、固定物理 DPI 上下文。变更前记录 ABM_GETSTATE，恢复 guard 在正常返回 / 断言 unwind 时按同一代次与已知当前状态恢复。ABM_SETSTATE 总返回 TRUE，因此不以返回值作为成功证据。探针是开发验收入口，不进入安装器或普通测试。

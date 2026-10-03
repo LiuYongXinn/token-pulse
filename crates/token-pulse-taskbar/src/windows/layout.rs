@@ -9,11 +9,15 @@ use super::topology::{
 };
 use std::{marker::PhantomData, os::windows::io::AsRawHandle, ptr, rc::Rc};
 use token_pulse_core::taskbar::TaskbarPosition;
+use windows::Win32::UI::Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, GetLastError, HANDLE, HWND, SetLastError, WAIT_ABANDONED, WAIT_OBJECT_0,
     },
-    Graphics::Gdi::{DCX_CACHE, DCX_WINDOW, GetDCEx, GetPixel, ReleaseDC},
+    Graphics::Gdi::{
+        DCX_CACHE, DCX_WINDOW, GetDCEx, GetMonitorInfoW, GetPixel, MONITOR_DEFAULTTONEAREST,
+        MONITORINFO, MonitorFromWindow, ReleaseDC,
+    },
     System::Threading::{CreateMutexW, GetProcessId, ReleaseMutex, WaitForSingleObject},
     UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GetParent, GetWindowLongPtrW, HWND_TOP, SW_HIDE, SWP_NOACTIVATE, SWP_NOZORDER,
@@ -174,6 +178,14 @@ fn aligned_reference(
         return Err(ProbeError::UnsafeGeometry);
     }
     Ok((reference, dx, dy))
+}
+fn hidden_at_bottom(taskbar: ScreenRect, monitor: ScreenRect) -> bool {
+    taskbar.valid()
+        && monitor.valid()
+        && taskbar.left == monitor.left
+        && taskbar.right == monitor.right
+        && taskbar.top >= monitor.bottom.saturating_sub(2)
+        && taskbar.bottom > monitor.bottom
 }
 fn position(window: HWND, bounds: ScreenRect, flags: u32) -> Result<(), ProbeError> {
     if !bounds.valid()
@@ -346,10 +358,84 @@ impl LayoutLease {
         if !self.valid() {
             return Ok(false);
         }
+        // UIA correctly marks every application button off-screen during auto-hide.
+        // Keep an already verified reservation only while the complete bottom taskbar
+        // is outside its monitor (apart from its two-pixel edge) and the real system
+        // preference confirms auto-hide. The next visible update must measure again;
+        // arbitrary off-screen/hidden buttons still invalidate ordinary coverage.
+        if self.fully_auto_hidden()? {
+            return Ok(true);
+        }
         let coverage = buttons.inspect()?;
         let (reference, dx, _) = aligned_reference(&self.baseline, &self.windows.topology()?)?;
         let split = reference.application_split(&coverage, (320 * reference.dpi / 96) as i32)?;
         Ok(Some(split) == self.slot.left.checked_add(dx))
+    }
+    fn fully_auto_hidden(&self) -> Result<bool, ProbeError> {
+        let _dpi = DpiGuard::enter()?;
+        let topology = self.windows.topology()?;
+        let monitor = unsafe { MonitorFromWindow(self.windows.root, MONITOR_DEFAULTTONEAREST) };
+        let mut info: MONITORINFO = unsafe { std::mem::zeroed() };
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if monitor.is_null() || unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+            return Err(ProbeError::Os);
+        }
+        let bounds = info.rcMonitor;
+        if !hidden_at_bottom(
+            topology.taskbar,
+            ScreenRect {
+                left: bounds.left,
+                top: bounds.top,
+                right: bounds.right,
+                bottom: bounds.bottom,
+            },
+        ) {
+            return Ok(false);
+        }
+        let mut data = APPBARDATA {
+            cbSize: std::mem::size_of::<APPBARDATA>() as u32,
+            ..Default::default()
+        };
+        let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &mut data) };
+        self.windows.verify()?;
+        if state & !3usize != 0 {
+            return Err(ProbeError::UnexpectedStructure);
+        }
+        Ok(state & ABS_AUTOHIDE as usize != 0)
+    }
+    pub(crate) fn renew_hidden_reservation(&mut self) -> Result<bool, ProbeError> {
+        let _dpi = DpiGuard::enter()?;
+        if !self.active || !self.owns() || !self.fully_auto_hidden()? {
+            return Ok(false);
+        }
+        let actual = self.windows.topology()?;
+        let (reference, dx, dy) = aligned_reference(&self.baseline, &actual)?;
+        let slot = translated(self.slot, dx, dy)?;
+        // Explorer restores the full original task list during auto-hide repaint.
+        // Only our still-owned, exactly original geometry may be reserved again.
+        // A resize, foreign owner, DPI change, different child or visible taskbar refuses.
+        if actual.task_switch != reference.task_switch
+            || !self.child.valid()
+            || unsafe { GetParent(self.child.window) } != self.windows.root
+            || rect(self.child.window)? != slot
+            || relative(actual.task_switch, self.windows.rebar)? != self.ownership.record.original
+        {
+            return Ok(false);
+        }
+        self.windows.safe_slot(slot, self.child.window)?;
+        if !self.owns() {
+            return Ok(false);
+        }
+        position(self.windows.switch, self.ownership.record.expected, 0)?;
+        let plan = ReservationPlan {
+            host: slot,
+            remaining_task_switch: ScreenRect {
+                right: slot.left,
+                ..reference.task_switch
+            },
+        };
+        self.verify_reserved_at(plan, &reference)?;
+        Ok(true)
     }
     fn verify_reserved(&self, plan: ReservationPlan) -> Result<(), ProbeError> {
         // Construction remains strict: a concurrent root move during SetParent/position
@@ -638,6 +724,47 @@ mod tests {
             ),
             Err(ProbeError::UnsafeGeometry)
         );
+    }
+    #[test]
+    fn only_entire_bottom_taskbar_outside_monitor_may_defer_button_measurement() {
+        let monitor = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 2560,
+            bottom: 1440,
+        };
+        let hidden = ScreenRect {
+            left: 0,
+            top: 1438,
+            right: 2560,
+            bottom: 1498,
+        };
+        assert!(hidden_at_bottom(hidden, monitor));
+        for other in [
+            ScreenRect {
+                top: 1437,
+                ..hidden
+            },
+            ScreenRect { left: 1, ..hidden },
+            ScreenRect {
+                right: 2559,
+                ..hidden
+            },
+            ScreenRect {
+                top: 1380,
+                bottom: 1440,
+                ..hidden
+            },
+        ] {
+            assert!(!hidden_at_bottom(other, monitor));
+        }
+        assert!(!hidden_at_bottom(
+            hidden,
+            ScreenRect {
+                bottom: 1441,
+                ..monitor
+            }
+        ));
     }
     #[test]
     fn recovery_refuses_a_live_kernel_process_handle_before_any_window_operation() {

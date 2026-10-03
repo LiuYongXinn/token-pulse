@@ -10,11 +10,21 @@ async fn main() {
     use token_pulse_taskbar::{
         HostConfiguration, HostDisplayState, HostMessage, HostReply, TaskbarView,
     };
-    if std::env::args().skip(1).collect::<Vec<_>>()
-        != ["--native-taskbar-autohide-development-check"]
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments != ["--native-taskbar-autohide-development-check"]
+        && arguments
+            != [
+                "--native-taskbar-autohide-development-check",
+                "--application-right",
+            ]
     {
         std::process::exit(2);
     }
+    let position = if arguments.len() == 2 {
+        token_pulse_core::taskbar::TaskbarPosition::ApplicationRight
+    } else {
+        token_pulse_core::taskbar::TaskbarPosition::NotificationLeft
+    };
     println!(
         "DEVELOPMENT ONLY: actual auto-hide preference with restoration, synthetic view; no input, Explorer termination or computer restart"
     );
@@ -42,7 +52,7 @@ async fn main() {
     let mut configuration = HostConfiguration {
         settings_revision: view.settings_revision.clone(),
         enabled: true,
-        position: Default::default(),
+        position,
         display: Default::default(),
     };
     connection
@@ -64,10 +74,20 @@ async fn main() {
         })
         .await
         .unwrap();
-    assert_eq!(
-        status(&mut connection).await.state,
-        HostDisplayState::Embedded
-    );
+    let initial_deadline = Instant::now() + Duration::from_secs(5);
+    while status(&mut connection).await.state != HostDisplayState::Embedded {
+        assert!(
+            Instant::now() < initial_deadline,
+            "initial measured embedding failed before any system mutation"
+        );
+        connection
+            .exchange(HostMessage::Snapshot {
+                view: Box::new(view.clone()),
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     shell
         .enable()
@@ -116,6 +136,13 @@ async fn main() {
         })
         .await
         .expect("hidden valid DC does not close host pipe");
+    let hidden_refresh = status(&mut connection).await;
+    println!("ACTUAL_AUTOHIDE_REFRESH: {hidden_refresh:?}");
+    assert_eq!(
+        hidden_refresh.state,
+        HostDisplayState::Embedded,
+        "a fresh hidden snapshot retains valid embedding"
+    );
     shell
         .restore()
         .expect("restore original system preference before recovery assertions");
@@ -167,7 +194,7 @@ async fn main() {
         "system setting and Explorer geometry both restored"
     );
     println!(
-        "NATIVE_TASKBAR_AUTOHIDE_OK: actual_hide_motion=true same_host={host_pid} visible_reembedded=true actions_empty=true setting_restored=true original_geometry_restored=true computer_reboot=false"
+        "NATIVE_TASKBAR_AUTOHIDE_OK: position={position:?} actual_hide_motion=true same_host={host_pid} hidden_refresh_embedded=true visible_reembedded=true actions_empty=true setting_restored=true original_geometry_restored=true computer_reboot=false"
     );
 }
 

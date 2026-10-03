@@ -186,7 +186,23 @@ impl State {
         self.system_revision = self.system_revision.saturating_add(1);
         Ok(())
     }
-    fn receipt(&self, window: HWND) -> NativeReceipt {
+    fn reconcile_layout(&mut self) {
+        if self.layout.as_ref().is_some_and(|layout| !layout.valid()) {
+            let renewed = self.enabled
+                && self.view.is_some()
+                && self
+                    .layout
+                    .as_mut()
+                    .is_some_and(|layout| layout.renew_hidden_reservation() == Ok(true));
+            if !renewed {
+                self.detach();
+                self.topology = inspect_primary_taskbar();
+                self.embedding_failure = Some(ProbeError::UnsafeGeometry);
+            }
+        }
+    }
+    fn receipt(&mut self, window: HWND) -> NativeReceipt {
+        self.reconcile_layout();
         NativeReceipt {
             cached_view_present: self.view.is_some(),
             private_fields_present: self.view.as_ref().is_some_and(|v| {
@@ -237,6 +253,7 @@ impl State {
     }
     fn prepare(&mut self) -> Result<(), TransportError> {
         self.recreate_canvas()?;
+        self.reconcile_layout();
         if self.enabled && self.position == TaskbarPosition::ApplicationRight {
             if self.buttons.as_ref().is_none_or(|probe| probe.finished()) {
                 self.buttons = Some(ButtonProbe::start().map_err(|_| TransportError::Native)?);
@@ -483,11 +500,7 @@ unsafe extern "system" fn procedure(
                             if state.canvas_lost() {
                                 state.prepare()
                             } else {
-                                if state.layout.as_ref().is_some_and(|l| !l.valid()) {
-                                    state.detach();
-                                    state.topology = inspect_primary_taskbar();
-                                    state.embedding_failure = Some(ProbeError::UnsafeGeometry);
-                                }
+                                state.reconcile_layout();
                                 Ok(())
                             }
                         }
