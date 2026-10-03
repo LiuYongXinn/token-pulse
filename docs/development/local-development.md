@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+当前签名候选为 M16v：[0.1.1 安装器](../../target/release/publish/v0.1.1-hidden-a29a71055aba44faa365e53ea632fd39/TokenPulse_0.1.1_x64-setup.exe)、[本地清单](../../target/release/publish/v0.1.1-hidden-a29a71055aba44faa365e53ea632fd39/latest.json)、[实际验签报告](../../target/release/publish/v0.1.1-hidden-a29a71055aba44faa365e53ea632fd39/release-verification.json)。安装器 6,626,972 字节 / SHA-256 `e147e78311c46804324f8355b5e7bf3b2da0bd5eb0e2e2c63401b495678fc84a`，已包含 M13g10 通知区宽度与 M13g11 系统可见性修复；候选同目录宿主的两位置实际自动隐藏 / 数据及自有设置刷新 / 恢复、正常 Explorer 同宿主恢复均退出 0。未重启电脑、未安装升级 / 发布，原 0.1.0 保留；下方旧“需重建”已由此完成，“最新”按历史保留，标准托盘物理菜单和其他外部项不混记通过。详见[完整产物证据](delivery-status.md#m16v纳入通知区与系统可见性修复的签名候选)。
+
 M13g11 新增失败现场只读样式 / 几何及有限普通重试诊断，原严格断言不变。显式自动隐藏例程可追加 `--own-setting-refresh`（可与 `--application-right` 合用），向唯一匹配自有宿主 Control 窗口发送有期限同步零载荷设置消息；不会广播或发送物理输入。两位置的真实自动隐藏 / 新 Snapshot / 自有设置刷新 / 恢复与退出几何已通过，69 项检查与严格 Clippy 通过，完整应用与 release 宿主跨正常 Explorer 恢复通过。中间 M16u 包遇到根 WS_VISIBLE 清除时误报的失败已保留，当前修复需重新完整打包；下方旧“最新候选”仅是历史，未安装升级 / 发布。详见[根因和证据](delivery-status.md#m13g11系统自动隐藏与读数自身可见性的区分)。
 
 M13g10 已确认并修复下方 M13g9 的通知区宽度竞态：只有正常存活租约持有完整原拓扑且当前精确为自有预留时，允许通知区共用边界变化后的有条件释放；终止 guardian 规则不变。debug 场景可显式设置 `TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS=1` 取得有限恢复差异 / 成功日志，正式 release 不输出。68 项自动检查、严格 Clippy / fmt、完整 Tauri 动作回归和真实完整应用匹配失败形态后成功恢复均通过；参见[实际证据](delivery-status.md#m13g10通知区边界变化后的有条件预留释放)。M16t 旧签名包不含此生产修复，需从新提交重建并签名；历史“未收敛”描述不代表当前根因仍未知，不重启电脑或提前推送。
