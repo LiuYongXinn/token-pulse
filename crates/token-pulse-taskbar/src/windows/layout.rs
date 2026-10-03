@@ -112,6 +112,92 @@ impl Geometry {
         }
     }
 }
+/// A live lease can return its own space after Explorer finishes loading notification icons.
+/// The root, DPI, vertical geometry and left origin must stay unchanged; only the shared
+/// ReBar/tray boundary may move. The task region must still be exactly our reserved value.
+/// This proof is unavailable to a guardian holding only persisted termination metadata.
+fn notification_resize_restoration(
+    record: LayoutRecord,
+    reference: &TaskbarTopology,
+    current: ScreenRect,
+    parent: ScreenRect,
+    actual: &TaskbarTopology,
+) -> Option<ScreenRect> {
+    if reference.validate().is_err()
+        || !actual.rebar.valid()
+        || !actual.notification.valid()
+        || !actual.task_switch.valid()
+        || !actual.task_list.valid()
+        || !parent.valid()
+        || !record.original.valid()
+        || !record.expected.valid()
+        || actual.build != reference.build
+        || reference.build != 19045
+        || actual.dpi != record.dpi
+        || reference.dpi != record.dpi
+        || current != record.expected
+        || actual.taskbar != reference.taskbar
+        || actual.rebar.left != reference.rebar.left
+        || actual.rebar.top != reference.rebar.top
+        || actual.rebar.bottom != reference.rebar.bottom
+        || actual.notification.top != reference.notification.top
+        || actual.notification.bottom != reference.notification.bottom
+        || actual.notification.right != reference.notification.right
+        || reference.notification.left != reference.rebar.right
+        || actual.notification.left != actual.rebar.right
+        || parent.left != 0
+        || parent.top != 0
+        || parent.width() != actual.rebar.width()
+        || parent.height() != actual.rebar.height()
+        || record.parent_size != (reference.rebar.width(), reference.rebar.height())
+        || parent.height() != record.parent_size.1
+        || parent.width() == record.parent_size.0
+    {
+        return None;
+    }
+    let relative_to = |screen: ScreenRect, origin: ScreenRect| {
+        Some(ScreenRect {
+            left: screen.left.checked_sub(origin.left)?,
+            top: screen.top.checked_sub(origin.top)?,
+            right: screen.right.checked_sub(origin.left)?,
+            bottom: screen.bottom.checked_sub(origin.top)?,
+        })
+    };
+    if relative_to(reference.task_switch, reference.rebar)? != record.original
+        || relative_to(actual.task_switch, actual.rebar)? != current
+        || record.original.right != record.parent_size.0
+        || record.original.top != 0
+        || record.original.bottom != record.parent_size.1
+        || record.expected.left != record.original.left
+        || record.expected.top != record.original.top
+        || record.expected.bottom != record.original.bottom
+        || record.expected.right >= record.original.right
+        || actual.task_list.left < actual.task_switch.left
+        || actual.task_list.top < actual.task_switch.top
+        || actual.task_list.right > actual.task_switch.right
+        || actual.task_list.bottom > actual.task_switch.bottom
+    {
+        return None;
+    }
+    let target = ScreenRect {
+        right: parent.right,
+        ..record.original
+    };
+    if !target.valid() || target.width() < (320 * record.dpi / 96) as i32 {
+        return None;
+    }
+    // Validate a full-width candidate, without treating the currently reserved region
+    // as a full baseline or moving the actual tray/ReBar to their old positions.
+    let full = TaskbarTopology {
+        task_switch: ScreenRect {
+            right: actual.rebar.right,
+            ..actual.task_switch
+        },
+        ..actual.clone()
+    };
+    full.validate().ok()?;
+    Some(target)
+}
 fn relative(screen: ScreenRect, parent: HWND) -> Result<ScreenRect, ProbeError> {
     // This adapter accepts only borderless, non-mirrored taskbar containers. All coordinates are
     // physical under DpiGuard; reject a nontrivial client origin rather than guessing its offset.
@@ -516,7 +602,7 @@ impl LayoutLease {
                 }
             }
         }
-        restore_owned(&self.windows, &self.ownership, false)
+        restore_owned(&self.windows, &self.ownership, false, Some(&self.baseline))
     }
 }
 impl Drop for LayoutLease {
@@ -529,6 +615,7 @@ fn restore_owned(
     windows: &TaskbarWindows,
     ownership: &Ownership,
     terminated: bool,
+    live_reference: Option<&TaskbarTopology>,
 ) -> RestoreDisposition {
     if windows.verify().is_err()
         || !ownership.owns(windows.switch)
@@ -554,6 +641,29 @@ fn restore_owned(
     ) {
         (Ok(current), Ok(parent), Ok(topology)) => {
             let disposition = geometry.restoration(current, parent, topology.dpi);
+            let adjusted = (disposition == RestoreDisposition::ExternalChange
+                && !terminated
+                && ownership.phase == Phase::Reserved)
+                .then(|| {
+                    notification_resize_restoration(
+                        record,
+                        live_reference?,
+                        current,
+                        parent,
+                        &topology,
+                    )
+                })
+                .flatten();
+            #[cfg(debug_assertions)]
+            if disposition == RestoreDisposition::ExternalChange
+                && std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+                    == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "NATIVE_TASKBAR_RESTORE_DIFFERENCE: phase={:?} record={record:?} current={current:?} parent={parent:?} actual={topology:?} adjusted_target={adjusted:?}",
+                    ownership.phase
+                );
+            }
             if terminated
                 && ownership.phase == Phase::Prepared
                 && disposition == RestoreDisposition::AlreadyRestored
@@ -561,25 +671,62 @@ fn restore_owned(
                 // The host died before confirming its synchronous SetWindowPos. Do not release
                 // ownership while a pending shrink could still be applied by Explorer.
                 RestoreDisposition::Uncertain
-            } else if disposition == RestoreDisposition::Restored {
+            } else if disposition == RestoreDisposition::Restored || adjusted.is_some() {
+                let target = adjusted.unwrap_or(record.original);
                 let original_screen = ScreenRect {
-                    left: record.original.left + topology.rebar.left,
-                    top: record.original.top + topology.rebar.top,
-                    right: record.original.right + topology.rebar.left,
-                    bottom: record.original.bottom + topology.rebar.top,
+                    left: target.left + topology.rebar.left,
+                    top: target.top + topology.rebar.top,
+                    right: target.right + topology.rebar.left,
+                    bottom: target.bottom + topology.rebar.top,
                 };
-                if windows.safe_slot(original_screen, ptr::null_mut()).is_err() {
+                if let Err(error) = windows.safe_slot(original_screen, ptr::null_mut()) {
+                    #[cfg(debug_assertions)]
+                    if std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+                        == Some(std::ffi::OsStr::new("1"))
+                    {
+                        eprintln!(
+                            "NATIVE_TASKBAR_RESTORE_SLOT_REJECTED: error={error:?} candidate={original_screen:?} actual={topology:?}"
+                        );
+                    }
+                    #[cfg(not(debug_assertions))]
+                    let _ = error;
                     RestoreDisposition::ExternalChange
                 } else if !ownership.owns(windows.switch) || windows.verify().is_err() {
                     RestoreDisposition::IdentityLost
-                } else if position(windows.switch, record.original, 0).is_err()
+                } else if adjusted.is_some()
+                    && (windows.topology().ok().as_ref() != Some(&topology)
+                        || client_rect(windows.rebar).ok() != Some(parent))
+                {
+                    // Another notification boundary change invalidates this exact frame.
+                    // Retain ownership for conditional cleanup; do not write a stale target.
+                    RestoreDisposition::Uncertain
+                } else if position(windows.switch, target, 0).is_err()
                     || rect(windows.switch)
                         .and_then(|r| relative(r, windows.rebar))
                         .ok()
-                        != Some(record.original)
+                        != Some(target)
+                    || (adjusted.is_some()
+                        && (client_rect(windows.rebar).ok() != Some(parent)
+                            || !windows.topology().is_ok_and(|now| {
+                                now.taskbar == topology.taskbar
+                                    && now.rebar == topology.rebar
+                                    && now.notification == topology.notification
+                                    && now.dpi == topology.dpi
+                                    && now.task_switch.right == now.rebar.right
+                            })))
                 {
                     RestoreDisposition::Failed
                 } else {
+                    #[cfg(debug_assertions)]
+                    if adjusted.is_some()
+                        && std::env::var_os("TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS").as_deref()
+                            == Some(std::ffi::OsStr::new("1"))
+                    {
+                        eprintln!(
+                            "NATIVE_TASKBAR_NOTIFICATION_RESIZE_RESTORED: old_parent={:?} current_parent={parent:?} restored={target:?}",
+                            record.parent_size
+                        );
+                    }
                     RestoreDisposition::Restored
                 }
             } else {
@@ -631,12 +778,159 @@ pub fn recover_terminated_host<H: AsRawHandle>(
     if ownership.record.host != identity {
         return Err(ProbeError::UnexpectedStructure);
     }
-    Ok(restore_owned(&windows, &ownership, true))
+    Ok(restore_owned(&windows, &ownership, true, None))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn notification_resize_fixture() -> (LayoutRecord, TaskbarTopology, TaskbarTopology, ScreenRect)
+    {
+        let area = |left, right| ScreenRect {
+            left,
+            top: 1380,
+            right,
+            bottom: 1440,
+        };
+        // Independent literal fixture from the captured normal Explorer transition.
+        let reference = TaskbarTopology {
+            build: 19045,
+            dpi: 144,
+            taskbar: area(0, 2560),
+            rebar: area(502, 2224),
+            task_switch: area(504, 2224),
+            task_list: area(504, 2224),
+            notification: area(2224, 2560),
+        };
+        let actual = TaskbarTopology {
+            rebar: area(502, 2080),
+            task_switch: area(504, 1791),
+            task_list: area(504, 1791),
+            notification: area(2080, 2560),
+            ..reference.clone()
+        };
+        let record = LayoutRecord {
+            original: ScreenRect {
+                left: 2,
+                top: 0,
+                right: 1722,
+                bottom: 60,
+            },
+            expected: ScreenRect {
+                left: 2,
+                top: 0,
+                right: 1289,
+                bottom: 60,
+            },
+            parent_size: (1722, 60),
+            dpi: 144,
+            host: ProcessIdentity {
+                pid: 1001,
+                birth: [1, 2],
+            },
+            shell: ProcessIdentity {
+                pid: 1002,
+                birth: [3, 4],
+            },
+        };
+        let parent = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 1578,
+            bottom: 60,
+        };
+        (record, reference, actual, parent)
+    }
+
+    #[test]
+    fn live_notification_shrink_returns_only_the_current_full_task_region() {
+        let (record, reference, actual, parent) = notification_resize_fixture();
+        let expected = ScreenRect {
+            left: 2,
+            top: 0,
+            right: 1578,
+            bottom: 60,
+        };
+        assert_eq!(
+            notification_resize_restoration(record, &reference, record.expected, parent, &actual),
+            Some(expected)
+        );
+        // Generic/terminated metadata retains the strict parent-size rejection.
+        assert_eq!(
+            Geometry {
+                original: record.original,
+                expected: record.expected,
+                parent_size: record.parent_size,
+                dpi: record.dpi
+            }
+            .restoration(record.expected, parent, 144),
+            RestoreDisposition::ExternalChange
+        );
+        assert_eq!(actual.notification.left, 2080);
+        assert_eq!(reference.notification.left, 2224);
+    }
+
+    #[test]
+    fn live_notification_grow_returns_new_width_without_moving_the_tray() {
+        let (record, reference, mut actual, mut parent) = notification_resize_fixture();
+        actual.rebar.right = 2311;
+        actual.notification.left = 2311;
+        parent.right = 1809;
+        assert_eq!(
+            notification_resize_restoration(record, &reference, record.expected, parent, &actual),
+            Some(ScreenRect {
+                left: 2,
+                top: 0,
+                right: 1809,
+                bottom: 60
+            })
+        );
+        assert_eq!(actual.notification.left, 2311);
+    }
+
+    #[test]
+    fn notification_resize_refuses_foreign_region_dpi_move_and_unverified_shapes() {
+        for case in 0..19 {
+            let (mut record, mut reference, mut actual, mut parent) = notification_resize_fixture();
+            let mut current = record.expected;
+            match case {
+                0 => current.right += 1,
+                1 => actual.dpi = 192,
+                2 => actual.taskbar.top -= 1,
+                3 => actual.rebar.left += 1,
+                4 => actual.rebar.bottom -= 1,
+                5 => actual.notification.right -= 1,
+                6 => actual.notification.top -= 1,
+                7 => actual.notification.left += 1,
+                8 => parent.left = 1,
+                9 => parent.bottom -= 1,
+                10 => record.original.left += 1,
+                11 => record.expected.left += 1,
+                12 => reference.rebar.right -= 1,
+                13 => actual.task_list.right += 1,
+                14 => actual.build = 22631,
+                15 => actual.rebar.right = i32::MAX,
+                16 => parent.right = i32::MAX,
+                17 => {
+                    parent.right = 450;
+                    actual.rebar.right = 952;
+                    actual.notification.left = 952;
+                }
+                18 => {
+                    parent.right = 1722;
+                    actual.rebar.right = 2224;
+                    actual.notification.left = 2224;
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                notification_resize_restoration(record, &reference, current, parent, &actual),
+                None,
+                "case {case}"
+            );
+        }
+    }
 
     fn translation_fixture() -> TaskbarTopology {
         let area = |left, right| ScreenRect {

@@ -66,6 +66,8 @@ Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTe
 
 普通数据 / 隐私更新使用原预留区域，SWP_NOMOVE / SWP_NOSIZE 防止画布重回父窗口原点；无需每次重新挂接。禁用、清空、失效或正常析构先隐藏并脱离自有画布，仅当 owner、Explorer 代际、当前缩小矩形、父容器尺寸和 DPI 仍匹配时恢复原客户端矩形。如果系统 / 其他程序已修改布局，返回 ExternalChange 并保留新布局；失去归属返回 IdentityLost。恢复失败明确报告 Failed，不宣称已恢复。
 
+M13g10 对**正常存活租约**增加一个可证明的例外：原完整拓扑有效、Reserved 阶段、当前任务区精确为 expected，所有内核代次 / HWND 类 / 父子关系 / owner 仍通过验证；根矩形、ReBar 左侧 / 高度与通知区外侧 / 高度及 DPI 完全相同，唯一变化是 ReBar 与通知区共用边界。此时只把自有预留释放到当前 ReBar 客户端完整宽度，不恢复旧通知区或 ReBar。目标必须通过完整候选拓扑、最小任务区与 safe_slot；写入前再次核对当前完整帧，变化返回 Uncertain；写入后核对目标 / 父尺寸 / 根 / ReBar / 通知区 / DPI 与完整任务区右边界，失败返回 Failed 并保留记录。其他尺寸或外部变化沿用拒绝规则。终止 guardian 只持有 17 字元数据，没有原拓扑证明，仍严格要求登记父尺寸，不采用此例外。独立夹具与匹配实际 Windows 分支证据见[M13g10 记录](../development/delivery-status.md#m13g10通知区边界变化后的有条件预留释放)。
+
 背景像素用 GetDCEx 的显式 clipping 选项读取验证过的 ReBar 小区域，并在同线程 ReleaseDC；不读取窗口标题或其他应用画面。[Microsoft GetDCEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdcex) 最初 GetDC 受容器裁剪而取色失败，改用此有界方法后本机挂接通过。
 
 该模块完成正常路径的实际预留 / 显示 / 更新 / 脱离。M13c3a 已补充已结束宿主的跨进程记录与父端条件恢复，见下一节；仍须完成父端自身异常退出、原生清理有界执行与正式配置状态，因此生产管道尚不启用挂接。不能将正常 Drop 证明当作全部生命周期、Explorer 重启、Win11 或物理多屏 / 四档 DPI 验收，也没有运行性能测试。

@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g10 已确认并修复下方 M13g9 的通知区宽度竞态：只有正常存活租约持有完整原拓扑且当前精确为自有预留时，允许通知区共用边界变化后的有条件释放；终止 guardian 规则不变。debug 场景可显式设置 `TOKENPULSE_ACCEPTANCE_HOST_DIAGNOSTICS=1` 取得有限恢复差异 / 成功日志，正式 release 不输出。68 项自动检查、严格 Clippy / fmt、完整 Tauri 动作回归和真实完整应用匹配失败形态后成功恢复均通过；参见[实际证据](delivery-status.md#m13g10通知区边界变化后的有条件预留释放)。M16t 旧签名包不含此生产修复，需从新提交重建并签名；历史“未收敛”描述不代表当前根因仍未知，不重启电脑或提前推送。
+
 完整桌面应用的 Explorer 验收入口：`pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarExplorerRestart`，需要已有 `npm run build` 前端产物；此开关必须独占，使用 UUID 隔离空数据库、真实 WebView / 生产后台 actor / 独立宿主。会通过既有资格校验后正常关闭 / 恢复 Explorer；不重启电脑、不强杀、不发送输入，也不属于普通 cargo test / 默认 smoke。`TOKENPULSE_ACCEPTANCE_PWSH` 可指定 PowerShell 路径。最终检查持有的同一宿主内核对象、新窗口代次、重启后新快照、主 WebView 状态 / 隐私屏障、禁用进程退出和新 Shell 的独立稳定几何。三轮完整成功与一次未收敛 ExternalChange 竞态分别保留；不能把本入口存在或成功轮次当成整个任务栏验收结束。详见[完整应用检查与剩余问题](delivery-status.md#m13g9完整-tauri-应用的真实-explorer-恢复入口与未收敛竞态)。
 
 最新签名候选为 M16t：[0.1.1 安装器](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/TokenPulse_0.1.1_x64-setup.exe)、[本地候选清单](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/latest.json)、[实际验签报告](../../target/release/publish/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/release-verification.json)。安装器 6,630,563 字节，SHA-256 `0de21c00e573b1df7826ad18b3c66587aac0d524e7b5937b05646e1262cd3878`，包含 M13g5–g8 的 Explorer / 空裁剪 / 自动隐藏 / 回执修复。候选同目录 release 宿主已通过两位置真实自动隐藏期间刷新与恢复、正常 Explorer 重启恢复三项原生复测。未重启电脑，未安装升级 / 发布，原 0.1.0 保留。下方旧候选按历史保留，默认 bundle 旁旧 `.sig` 不能用于新字节；详见[最新完整证据](delivery-status.md#m16t包含全部任务栏修复的签名候选与三项-release-原生复测)。
