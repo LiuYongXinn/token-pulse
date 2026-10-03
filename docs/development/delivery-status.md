@@ -6,6 +6,22 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g9：完整 Tauri 应用的真实 Explorer 恢复入口与未收敛竞态
+
+M16t 已验证同包 release 独立宿主，但原完整 Tauri 场景仅关闭自有读数窗口，没有真实重启 Explorer。本轮新增 debug-only `taskbar_explorer_smoke` 与 `scripts/native-smoke.ps1 -TaskbarExplorerRestart`：只能独占选择此场景；普通测试 / 正式程序不会执行，入口不进入安装器。复用既有只读资格检查及正常 Restart Manager 驱动，没有制造 TaskbarCreated、重启宿主来替代恢复、发送物理输入或重启电脑。
+
+实际应用使用新的 UUID native-probe 空数据库、真实主 / 小窗 WebView、生产偏好 IPC / SQLite / TaskbarService / 管道 / 同目录原生宿主。先通过主 WebView 启用任务栏、打开自有详情，再正常重启唯一登记的 Explorer；持有原宿主的内核进程句柄，确认旧进程对象仍存活及管理器 PID 保持，防止 PID 复用伪装为同宿主。恢复必须同时观察新读数 / 详情 UUID 类、后台 Embedded / 精确偏好修订、驱动返回后真正发布的新快照；不能仅用旧缓存状态通过。主 WebView 读回正式状态，恢复后通过正式隐私 IPC 清屏、验证详情没有费用 / 账户私有字段；主 / 小窗不得收到意外动作。最后正常禁用等待原宿主内核进程退出、重新启用并关闭服务，对比独立采样的新 Shell 几何。
+
+早期失败分别记录，没有删除或改记通过：`C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-whole-app-fc67a70a877a4202b7886057c5a4cea6/` 在旧缓存 Embedded / 新窗口尚未就绪时立即枚举失败；`.../tokenpulse-explorer-whole-app-0c4aeb22eb5448469a60558d3ad233d8/` 实际恢复期限后仍为 UnsafeGeometry，退出后只读几何发现任务区 right=1827 而 ReBar right=2080，随后用正常 RM 恢复 Shell 基线，没有猜测写入宽度。`.../tokenpulse-explorer-whole-app-diagnostic-ba33e31139f44d409acfa0a6d1f8e52a/` 在资格阶段因未知可见 Explorer 窗口拒绝；之后只读复核资格恢复，没有绕过白名单或关闭该窗口。
+
+验收本身补强了两个观察边界：正常原生清理已移除记录时，guardian 可以返回 NoRecord；仅在 Disabled、原宿主已退出且独立检查为完整有效任务栏几何时接受此结果，不把 NoRecord 叫作 Restored。MSTaskListWClass 的异步布局必须取得同一 Shell 下连续 750 ms 稳定的独立基线及退出结果，再作完整几何比较；10 / 15 秒均为功能期限，没有运行性能测试。旧“必须 guardian=Restored”和立即比较子列表的失败分别在 d53d333fa3dd422e844776e60e225bdf / 2198380e4a4240d894678568ac78b4db 记录保留。
+
+完整正向场景在 Win10 19045.6466 / 单屏 150% 三轮退出 0：带有限诊断的 d54028efdedb4e05bee08ee81281b1e5 / da9601fc753c44faa51dc816cb112f6e，及移除临时几何诊断、增加内核句柄校验后的最终证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-whole-app-final-e2f9e93039b64c3fb4c6365feb1ac541/`。最终 Shell 86296→34408，同宿主 94560 跨 Shell 恢复；禁用确认原宿主退出，重新启用宿主 54648；NATIVE_TASKBAR_EXPLORER_APP_OK / 整个应用退出 0，新快照、WebView 状态、恢复后隐私、没有意外动作和新 Shell 稳定几何比较均通过。恢复主体没有宿主重启，禁用 / 再启用按生产设计正常创建新宿主。
+
+**仍有未收敛的真实布局竞态**：`C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-whole-app-diagnostic-ecd22ace07a243569d6137313de71cf4/` 在恢复后的隐私变更期间返回 ExternalChange，随后 UnsafeGeometry / 退出 1；该次失败不能由上述三轮成功抵消。有限诊断的成功场景还观察到新 Shell 通知区边界从 2311 变化为 2080、ReBar 宽度 1809→1578，证明启动后布局仍会继续变化，但尚未取得该 ExternalChange 时完整记录差异，因此不将这个观察当作已确认根因。临时 controller / layout 几何输出已移除，生产布局保护和正式代码未改；下一步需要定位并安全处理这个竞态，不能强制恢复旧几何或提前宣称整体验收结束。
+
+严格 desktop all-targets Clippy / fmt、PowerShell AST / diff 通过；混合 `-TaskbarExplorerRestart -TaskbarActions` 在编译 / 输入 / 变更前拒绝，退出 1，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-explorer-scene-guard-9e8bad223eed4068b0e7ea9dfb30b8a0/`。SHORTCUT_CONFLICT（原正式应用同时运行）、托盘移除提示及 WebView2 1412 如实保留，本场景不证明标准托盘或物理快捷键。结束时只读任务区 / 列表 / ReBar 的 right 均为 2080，任务栏有效；仅 Explorer 34408 与原已安装应用 92688 保留，自有宿主已退出。原未提交内容、已安装 0.1.0、M16t 候选与密钥保持，不重打包仅有 debug 验收变化的生产程序；未推送 GitHub / 发布资产，无电脑重启或性能测试。
+
 ## M16t：包含全部任务栏修复的签名候选与三项 release 原生复测
 
 从已提交源码 `a523c50f4ef5ec915bd6df5236a4f4efabfc5357` 完整执行 `npm run tauri:build`，退出 0：TypeScript / Vite、334 项第三方声明、正式 release 桌面 / 独立宿主及唯一 NSIS 安装器均成功。构建期间没有修改生产源码；证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-receipt-final-release-6649d039faa942b283a88e01af97f12f/`。同次安装器 / 桌面 / 宿主复制到新的 `target/release/candidates/v0.1.1-receipt-9ce477bd01ed46b4af621bfb828e0387/`，源码和文件摘要写入 build-receipt.json。旧候选与失败日志保留，默认 bundle 路径旁的旧签名没有混入新包。
@@ -237,7 +253,7 @@ Windows 10 验收继续；已有正式数据、原未提交内容保持，未覆
 |6. 计价与重估|精确原子金额、覆盖 / 未计价、自定义规则、版本化别名、51 模型 / 172 档位事实；M09g2b3 已贯通持久缓存、独立服务、自动补建和正式进度 / 取消|日志缺少请求档位等条件时保持未计价；早期后台服务 / UI 未完成描述已收敛|
 |7. 小窗|280×220 / 360×380 DIP、主题、费用 / Token / 账户、置顶 / 透明度 / 穿透与恢复键、位置保存 / 缺屏回退；M11 原生及 UI 检查|物理多屏拖动、主屏切换、断屏和四档系统 DPI 尚未完成；合成几何不能替代这些检查|
 |8. 本地账户额度|用户选择程序 / Home 后复用已有登录，无新增登录；M12i 真实持续读取、M12j 冷启动、M13f1 三入口 / 后台刷新、M12m 普通选择 / 保存 / 连接通过|真实账户身份变化、通知、登录过期 / 实际重置仍需对应外部状态；已有合成领域 / 服务 / UI 检查，不主动切换或登出用户账户|
-|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；真实悬停 / 单双击 / 焦点及五项 UIA 动作通过；完整 Tauri 回归、M13g5–g8 修复与 M16t 同包 release 真实 Explorer 同宿主恢复、两位置实际自动隐藏 / 新 Snapshot 刷新 / 显示恢复 / 原设置与几何恢复通过|UIA 由探针消费，Tauri 回归使用自有消息，宿主展示为合成 DTO；不合并为安装版物理点击。鼠标触边、物理键盘 / Narrator、拥挤与其他任务栏方位仍未验。Win11 适配与验收取消|
+|9. 原生任务栏|独立宿主、Win10 两位置 / 实际按钮重排、详情 / 菜单 / 白名单动作、隐私、清理与回退已贯通；真实悬停 / 单双击 / 焦点及五项 UIA 动作通过；完整 Tauri 回归、M13g5–g8 修复与 M16t 同包 release 真实 Explorer 同宿主恢复、两位置实际自动隐藏 / 新 Snapshot 刷新 / 显示恢复 / 原设置与几何恢复通过|UIA 由探针消费，Tauri 回归使用自有消息，宿主展示为合成 DTO；不合并为安装版物理点击。M13g9 完整应用三轮恢复成功，但恢复后隐私变更的 ExternalChange 竞态仍需定位；鼠标触边、物理键盘 / Narrator、拥挤与其他任务栏方位仍未验。Win11 适配与验收取消|
 |10. Windows 10 / 多屏 / DPI|主窗口位置与外框尺寸适配、同 DPI 工作区检测已进入 M16n 候选；Win10 150% 三进程冷启动 / 合成小屏与缺屏通过，100 / 125 / 150 / 200% 独立几何预期通过|当前只有一个活动显示器；Win10 物理跨屏 / 主屏切换 / 断屏和各档系统 DPI 待实际条件，Win11 不作为门槛|
 |11. 系统集成|托盘、单实例、明确退出、主 / 小窗位置、休眠消息路由及恢复键已有实现；M15a8 notify 选择 / 预览 / 确认 / 撤销和原配置保持通过；M16p 标准安装版后台窗口命令 / 单实例 / 正常退出 / 冷启动与账本保持通过|标准已安装应用真实托盘菜单尚未通过；后台命令不替代物理点击。实际休眠 / 解锁、真实 Codex 回合 notify 分别待验。不开机启动，不新增额外快捷键|
 |12. 软件更新|固定发布源、状态 / 检查 / 下载 / 签名 / 安装门禁、NSIS 等正常退出；M16i 新项目密钥与默认公钥、M16j 正式包 / 签名验证、M16k 真实最小 NSIS 下载交接通过，M16t 的 0.1.1 签名候选与实际验签已准备|0.1.0 是已安装新公钥基线；0.1.1 完整应用自动升级仍未验。当前不推送 / 发布；完整线上升级依赖发布资产，与全部验证后才推送的顺序需要用户确认，未自行改变发布源或降低验证|
@@ -245,7 +261,7 @@ Windows 10 验收继续；已有正式数据、原未提交内容保持，未覆
 
 M16m 时点的只读复核：标准安装仍为 0.1.0，运行程序与 release 输出仅有预期 NSIS bundle marker 差异，正式应用 1 个 / 自有验收宿主 0 个。SQLite schema v10、quick_check=ok，sources / sessions / usage_events 均为 0；不读取源日志或认证。实际签名验证进程重新退出 0，安装包 / 签名 / 项目公钥摘要与 M16j 一致。WTS 当前会话头为 SessionId=1、ConnectionState=0、SessionFlags=0，即该时点锁定，未发送输入。
 
-下一步仍是标准通知区域托盘、物理输入 / 鼠标触边 / 拥挤 / 多屏 / DPI、真实系统休眠与账户外部状态、真实 Codex 回合、WebView2 缺失和高版本完整升级；正常 Explorer 恢复与底部两位置自动隐藏 / 刷新已由 M16t 实际通过。缺少对应条件的检查保持未验；不重做已完成模块，不重复生成密钥或构建无生产变化的包，不恢复取消功能或自动运行性能测试。
+下一步仍是标准通知区域托盘、物理输入 / 鼠标触边 / 拥挤 / 多屏 / DPI、真实系统休眠与账户外部状态、真实 Codex 回合、WebView2 缺失和高版本完整升级；正常 Explorer 独立宿主恢复与底部两位置自动隐藏 / 刷新已由 M16t 实际通过，M13g9 补充完整应用恢复证据并保留恢复后隐私变更竞态待修。缺少对应条件的检查保持未验；不重做已完成模块，不重复生成密钥或构建无生产变化的包，不恢复取消功能或自动运行性能测试。
 
 ## M16h：包含同 DPI 工作区切换检测的安装包
 

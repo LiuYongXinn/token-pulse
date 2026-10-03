@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+M13g9：新增显式独占 `-TaskbarExplorerRestart` 场景，完整 Tauri / 生产 actor / WebView IPC / SQLite / 独立宿主跨真实正常 Explorer 重启恢复已取得三轮成功。最终增加原宿主内核对象、新快照和独立稳定几何检查，严格 Clippy / fmt / 脚本 AST 通过。但恢复后隐私变更仍有一次 ExternalChange→UnsafeGeometry 的未收敛失败，不能以成功轮次抵消；继续定位并安全处理，不改几何保护、不重启电脑、不推送 GitHub。详见[完整应用证据与待修竞态](delivery-status.md#m13g9完整-tauri-应用的真实-explorer-恢复入口与未收敛竞态)。
+
 M16t：从提交 a523c50 完整构建并用同一密钥签名包含 M13g5–g8 的 0.1.1 候选，production release 实际验签 / 本地资产准备通过。同包宿主在 Win10 / 150% 的两位置真实自动隐藏、新 Snapshot 刷新与恢复，以及正常 Explorer 重启后的同宿主恢复，三项均退出 0。没有重启电脑或强杀 Explorer，原安装 0.1.0 保留；标准托盘物理入口仍在输入前拒绝，其他外部条件和完整在线升级保持未验。不推送 GitHub。详见[最新候选与三项实际证据](delivery-status.md#m16t包含全部任务栏修复的签名候选与三项-release-原生复测)。
 
 M13g8：release 实测发现回执重复读取布局会混入 Explorer 重绘的另一帧；已改为使用一次协调结果，失败先脱离再返回可见性。release 两位置的真实自动隐藏 / 新 Snapshot / 恢复与原几何退出 0，lib 27 项 / 严格 Clippy 通过。旧完整候选保留为失败证据，需从本提交重新打包。见[release 修复证据](delivery-status.md#m13g8release-回执的一次布局校验结果)。

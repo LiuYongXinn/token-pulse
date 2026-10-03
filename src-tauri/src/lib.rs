@@ -312,6 +312,11 @@ pub fn run() {
                     return Ok(());
                 }
                 #[cfg(windows)]
+                if std::env::args().any(|arg| arg == "--native-taskbar-explorer-restart-smoke") {
+                    taskbar_explorer_smoke::start(app.handle().clone());
+                    return Ok(());
+                }
+                #[cfg(windows)]
                 if std::env::args().any(|arg| arg == "--native-taskbar-actions-smoke") {
                     taskbar_smoke::start_actions(app.handle().clone());
                     return Ok(());
@@ -459,6 +464,8 @@ mod source_commands;
 #[cfg(all(debug_assertions, windows))]
 mod source_dialog_smoke;
 mod taskbar_commands;
+#[cfg(all(debug_assertions, windows))]
+mod taskbar_explorer_smoke;
 mod taskbar_service;
 #[cfg(all(debug_assertions, windows))]
 mod taskbar_smoke;
