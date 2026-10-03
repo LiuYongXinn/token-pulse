@@ -8298,6 +8298,7 @@
             "missing_rule",
             "ambiguous_rule",
             "insufficient_usage",
+            "incomplete_pricing_conditions",
             "overflow"
           ],
           "type": "string"
@@ -15792,6 +15793,7 @@
         "missing_rule",
         "ambiguous_rule",
         "insufficient_usage",
+        "incomplete_pricing_conditions",
         "overflow"
       ],
       "title": "UnpricedCode",
@@ -16254,6 +16256,7 @@
             "missing_rule",
             "ambiguous_rule",
             "insufficient_usage",
+            "incomplete_pricing_conditions",
             "overflow"
           ],
           "type": "string"
@@ -16927,6 +16930,7 @@
             "missing_rule",
             "ambiguous_rule",
             "insufficient_usage",
+            "incomplete_pricing_conditions",
             "overflow"
           ],
           "type": "string"

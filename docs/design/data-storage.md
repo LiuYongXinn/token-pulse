@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M09h3b2b1 schema v13 扩展 event_valuations 状态白名单，允许 incomplete_pricing_conditions；唯一依赖表 valuation_cache_inputs 先在同一迁移事务暂存、重建后恢复，行 / 输入 SHA / 外键保持，消费及修订不变。新 CACHE_VERSION=3 使旧 v2 集合 / 原因不被读为当前结果，原后台补建 / 手动重估沿用。查询在同一快照价格修订装配规则和已验证离线目录，条件目录只补足未计价解释，不猜模式或构造默认费用。旧估价行留存但新旧版本按各自身份读取；v12 旧白名单真实迁移、旧分页 / 新自定义价、重开及 Token / 检查点保持已测，正式安装仍未升级。详见[计价专题第 12 节](price-accounting.md#12-条件未完整确认的正式未计价状态m09h3b2b1)。
+
 M09h3b1 无新 DDL / 价格版本 / 费用缓存变更。明细查询只从规范消费观察中投影已有 request_usage、物理位置、有效回合、last / cumulative 的必要字段；不反序列化或输出整份观察 JSON。独立验证身份、前后位置、向量 / 覆盖与线程包含关系后，再与事件 source_total_tokens 及六项用量核对完整消费，不能用已推导 total_tokens 补原报告缺失。无效可选证据返回 null，不破坏已验证 Token；旧分页读取事务继续保留其证据，下一快照才看到更新。条件费用 / 缓存匹配后续另接，见[计价专题第 10 节](price-accounting.md#10-公开请求输入与完整消费关联m09h3b1)。
 
 M09h1c 手动来源重读复用现有表，无新 DDL：JobCheckpoint 的内部 reread_sources 缺省 false 并省略旧 JSON，明确请求与 queued 作业同事务保存，重试不能混用普通重建的 request_key，进行中不能改意图。file_rebuild_candidates 在候选 reading 起建立所有权，EOF 认领时更新该读检查点修订；注册和冻结输入仍只接受完整 claimed。调度及活动提交检查所有权，终态收尾覆盖 reading / ready / claimed，正式切换复用候选 / 物理 / 账本验证，旧读取快照与结果保持。未读文件正文入库，历史原始源仍只读；公开操作下一阶段接入。

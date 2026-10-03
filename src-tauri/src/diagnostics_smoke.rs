@@ -218,12 +218,16 @@ fn verify_request_input(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<super::RuntimeState>();
     let db = state.database.as_ref().map_err(|e| e.to_string())?;
     let root = state.data_directory.join("synthetic-request-input-source");
+    let reference = token_pulse_core::pricing::offline::OfflinePriceCatalog::bundled()
+        .map_err(|e| e.to_string())?;
+    db.install_offline_price_catalog(reference.clone(), reference.verified_at_ms.value())
+        .map_err(|e| e.to_string())?;
     fs::create_dir_all(root.join("sessions")).map_err(|e| e.to_string())?;
     let path = root.join("sessions/input.jsonl");
     let usage = json!({"input_tokens":272001,"cached_input_tokens":100,"cache_write_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":2,"total_tokens":272011});
     let records = [
-        json!({"type":"session_meta","payload":{"id":"request-input-fixture","timestamp":"2026-10-03T00:00:00Z","model_provider":"synthetic"}}),
-        json!({"type":"turn_context","payload":{"model":"synthetic-model","turn_id":"request-input-turn"}}),
+        json!({"type":"session_meta","payload":{"id":"request-input-fixture","timestamp":"2026-10-03T00:00:00Z","model_provider":"openai"}}),
+        json!({"type":"turn_context","payload":{"model":"gpt-6.1-sol","turn_id":"request-input-turn"}}),
         json!({"type":"token_usage_record","payload":{"thread_id":"request-input-fixture","turn_id":"request-input-turn","root_turn_id":"synthetic-root","session_id":"synthetic-runtime","response_id":"private-response-fixture","usage":usage,"turn_token_usage":usage,"thread_token_usage":usage}}),
         json!({"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":usage,"total_token_usage":usage,"model_context_window":1000000}}}),
     ];
@@ -262,14 +266,18 @@ fn verify_request_input(app: &tauri::AppHandle) -> Result<(), String> {
       const filter={range,sources:{kind:'ids',ids:['native-request-input'],include_unknown:false},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}};
       const result=await invoke('query_usage_events',{requestId:'native-request-input-projection',request:{query:{filter,price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null}});
       const event=result.data.events[0];
-      if(result.data.events.length!==1 || event.request_input?.input_tokens!=='272001' || event.request_input.binding!=='full_request' || event.total_tokens!=='272011' || event.price.status!=='unpriced')throw Error('NATIVE_REQUEST_INPUT_PROJECTION');
+      if(result.data.events.length!==1 || event.request_input?.input_tokens!=='272001' || event.request_input.binding!=='full_request' || event.total_tokens!=='272011' || event.price.status!=='unpriced' || event.price.reason!=='incomplete_pricing_conditions')throw Error('NATIVE_REQUEST_INPUT_PROJECTION');
       if(JSON.stringify(result.data).includes('private-response-fixture'))throw Error('NATIVE_REQUEST_INPUT_ID_LEAK');
       [...document.querySelectorAll('.sidebar nav button')].find(b=>b.textContent==='明细').click();
-      await wait(()=>document.querySelector('.event-table')?.textContent.includes('synthetic-model'));
+      [...document.querySelectorAll('button')].find(b=>b.textContent==='改用主窗口日期')?.click();
+      await wait(()=>document.querySelector('select[aria-label="日期范围"]'));
+      const date=document.querySelector('select[aria-label="日期范围"]');
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(date,'last30');date.dispatchEvent(new Event('change',{bubbles:true}));
+      await wait(()=>document.querySelector('.event-table')?.textContent.includes('gpt-6.1-sol'));
       [...document.querySelectorAll('.event-table button')].find(b=>b.textContent==='查看依据').click();
       await wait(()=>document.querySelector('.event-evidence')?.textContent.includes('272,001 Token'));
       const evidence=document.querySelector('.event-evidence');
-      if(!evidence.textContent.includes('对应完整请求用量') || !evidence.textContent.includes('尚未采集，不能据此确认完整计费'))throw Error('NATIVE_REQUEST_INPUT_UI');
+      if(!evidence.textContent.includes('对应完整请求用量') || !evidence.textContent.includes('尚未采集，不能据此确认完整计费') || !evidence.textContent.includes('计费条件尚未完整确认'))throw Error('NATIVE_REQUEST_INPUT_UI');
     "#,
         Duration::from_secs(15),
     )?;

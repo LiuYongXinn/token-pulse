@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+M09h3b2b1 扩展 UnpricedCode / PriceOutcome 的合法原因 incomplete_pricing_conditions，区别“目录没有报价”与“目录有条件价格但必要条件 / 计价链路尚未完整确认”；主窗口共享 reasonNames 显示“计费条件尚未完整确认”。缺模式 / 地区时不返回 guessed Standard、金额零或虚构匹配规则。原明细 / 汇总 / 重估命令及隐私保持，Rust → TS / schema 同步；持久原因 / 固定历史与缓存 v3 见[计价专题第 12 节](price-accounting.md#12-条件未完整确认的正式未计价状态m09h3b2b1)。
+
 M09h3b1 在 UsageEventRow 追加必需但可 null 的 request_input；已知值仅含 input_tokens（非负精确十进制字符串）及 binding（full_request / different_consumption）。unknown 返回 null，真实零返回字符串 "0"，不公开响应 ID、请求内部位置或任意 JSON。full_request 表示已保存响应向量与该事件原始可信消费完整一致，包括可空分项 / 原始报告总量；different_consumption 保留可靠请求输入，但不允许据此为部分消费选档。公开 DTO 不含实际模式 / 地区；full_request 也不表示完整条件计价。Rust / TS / schema 同步，复用原明细租约与权限，详见[计价专题第 10 节](price-accounting.md#10-公开请求输入与完整消费关联m09h3b1)。
 
 M09h1d 增加正式 main-only `start_source_reread`，接收原 JobRequest（kind 必须 rebuild，scope 为 all / sources，request_key 幂等），返回沿用最新隐私策略的 Job；sessions 范围返回 INVALID_QUERY，其他 kind 返回 UNSUPPORTED_API。意图内部持久保存，不暴露任意文件路径 / SQL / 原生句柄。主窗能力白名单与命令注册同步，mini 没有权限。原 start_job 的保存观察重建保持；状态 / 进度 / 取消继续 get_rebuild_status / cancel_job，新增受控阶段 reading_source_files 转为“正在重读已启用来源”。实际 Win10 隔离 React / IPC 验证与源码同提交，不视为正式安装包已更新。

@@ -86,7 +86,13 @@ pub fn rules_at(tx: &Transaction<'_>, revision: i64) -> StoreResult<PriceRulesSn
 }
 pub fn catalog_at(tx: &Transaction<'_>, revision: i64) -> StoreResult<PriceCatalog> {
     let rules = rules_at(tx, revision)?;
-    PriceCatalog::new(rules.rules, rules.aliases, rules.price_revision).map_err(Into::into)
+    let mut result = PriceCatalog::new(rules.rules, rules.aliases, rules.price_revision)?;
+    if let Some(reference) = offline::snapshot_at(tx, revision)?.catalog {
+        result = result
+            .with_offline_reference(&reference)
+            .map_err(|_| ErrorCode::DbCorrupt)?;
+    }
+    Ok(result)
 }
 
 fn apply(

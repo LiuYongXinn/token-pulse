@@ -91,7 +91,7 @@ fn install_reopen_and_same_content_are_idempotent_without_changing_consumption()
         assert!(matches!(
             quote(catalog_at(tx, 1)?, "gpt-6.1-sol", at, None),
             PriceOutcome::Unpriced {
-                reason: UnpricedCode::MissingRule
+                reason: UnpricedCode::IncompletePricingConditions
             }
         ));
         Ok(())

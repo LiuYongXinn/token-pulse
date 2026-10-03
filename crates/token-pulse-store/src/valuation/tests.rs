@@ -67,6 +67,148 @@ fn summary_cost(db: &Database) -> String {
         .as_str()
         .into()
 }
+
+#[test]
+fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without_token_changes() {
+    use token_pulse_core::pricing::{UnpricedCode, offline::OfflinePriceCatalog};
+    let (directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    let reference = OfflinePriceCatalog::bundled().unwrap();
+    let at = reference.verified_at_ms.value();
+    db.install_offline_price_catalog(reference, at).unwrap();
+    db.write(move |conn| {
+        conn.execute("UPDATE observations SET normalized_json=json_set(normalized_json,'$.effective_metadata.provider','openai') WHERE observation_id='observation'",[])?;
+        conn.execute("UPDATE usage_events SET model='gpt-6.1-sol',occurred_at_ms=?1 WHERE event_id='event'",[at])?; Ok(())
+    }).unwrap();
+    extra(
+        &db,
+        "newer",
+        at + 1,
+        1,
+        (Some("gpt-6.1-sol"), Some("openai")),
+        None,
+        None,
+    );
+    let mut range = filter();
+    range.range.end_ms = EpochMs::new(at + 5000).unwrap();
+    let query = UsageEventsRequest {
+        query: UsageEventsQuery {
+            filter: range.clone(),
+            price_basis: PriceBasis::EventTime {},
+            sort: UsageEventSort::TimeDesc,
+            page_size: 1,
+        },
+        cursor: None,
+    };
+    let before=db.snapshot(|tx,r| Ok((r.data,tx.query_row("SELECT committed_offset,checkpoint_revision FROM file_generations WHERE file_generation_id='generation'",[],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,i64>(1)?)))?))).unwrap();
+    let first = db
+        .query_usage_events("main", &query, EpochMs::new(at + 2).unwrap())
+        .unwrap();
+    assert_eq!(first.pricing.unpriced_total_tokens.as_str(), "111");
+    assert_eq!(
+        first.pricing.reasons[0].code,
+        "incomplete_pricing_conditions"
+    );
+    assert!(first.pricing.currencies.is_empty());
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, at + 3)
+        .unwrap();
+    db.snapshot(|tx, _| {
+        assert!(matches!(
+            cached(tx, 1, &PriceBasis::EventTime {})?,
+            Some(PriceOutcome::Unpriced {
+                reason: UnpricedCode::IncompletePricingConditions
+            })
+        ));
+        Ok(())
+    })
+    .unwrap();
+    let mut custom = draft(10);
+    custom.provider = "openai".into();
+    custom.model_exact = "gpt-6.1-sol".into();
+    db.mutate_price_rule(PriceRuleMutation::Create { draft: custom }, 1, at + 4)
+        .unwrap();
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, at + 5)
+        .unwrap();
+    let second = db
+        .query_usage_events(
+            "main",
+            &UsageEventsRequest {
+                cursor: first.next_cursor.clone(),
+                ..query.clone()
+            },
+            EpochMs::new(at + 6).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(second.meta.price_revision, first.meta.price_revision);
+    assert_eq!(second.events[0].event_id, "event");
+    assert!(matches!(
+        second.events[0].price,
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    let fresh = db
+        .query_usage_events(
+            "main",
+            &UsageEventsRequest {
+                query: UsageEventsQuery {
+                    page_size: 50,
+                    ..query.query.clone()
+                },
+                cursor: None,
+            },
+            EpochMs::new(at + 7).unwrap(),
+        )
+        .unwrap();
+    let event = fresh.events.iter().find(|e| e.event_id == "event").unwrap();
+    assert_eq!(cost(event.price.clone()), "900");
+    assert_eq!(fresh.summary.total_tokens.as_str(), "111");
+    db.snapshot(|tx,r| { assert!(matches!(cached(tx,1,&PriceBasis::EventTime {})?,Some(PriceOutcome::Unpriced { reason:UnpricedCode::IncompletePricingConditions }))); assert_eq!(cost(cached(tx,2,&PriceBasis::EventTime {})?.unwrap()),"900");
+        assert_eq!((r.data,tx.query_row("SELECT committed_offset,checkpoint_revision FROM file_generations WHERE file_generation_id='generation'",[],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,i64>(1)?)))?),before); Ok(()) }).unwrap();
+    drop(db);
+    let db = Database::open(directory.path()).unwrap();
+    assert_eq!(
+        db.usage_totals(&range).unwrap().total_tokens.as_str(),
+        "111"
+    );
+    db.snapshot(|tx, _| {
+        assert!(matches!(
+            cached(tx, 1, &PriceBasis::EventTime {})?,
+            Some(PriceOutcome::Unpriced {
+                reason: UnpricedCode::IncompletePricingConditions
+            })
+        ));
+        assert_eq!(
+            cost(cached(tx, 2, &PriceBasis::EventTime {})?.unwrap()),
+            "900"
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn conditional_reason_migration_preserves_legacy_valuation_rows_and_foreign_key_inputs() {
+    let (directory, db) = priced();
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 2)
+        .unwrap();
+    let before=db.snapshot(|tx,r| Ok((r.data,r.price,
+        tx.query_row("SELECT valuation_set_id,event_id,rule_id,currency,cost_atoms,status FROM event_valuations",[],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?,row.get::<_,String>(4)?,row.get::<_,String>(5)?)))?,
+        tx.query_row("SELECT valuation_set_id,event_id,input_sha256 FROM valuation_cache_inputs",[],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?))).unwrap();
+    // Own schema-12 layout: restore its actual status CHECK, keeping the two FK-linked tables.
+    db.write(|conn| { conn.execute_batch("CREATE TEMP TABLE saved_inputs AS SELECT * FROM valuation_cache_inputs; DROP TABLE valuation_cache_inputs;
+        CREATE TABLE old_valuations(valuation_set_id TEXT NOT NULL REFERENCES valuation_sets(valuation_set_id),event_id TEXT NOT NULL REFERENCES usage_events(event_id) ON DELETE CASCADE,rule_id TEXT REFERENCES price_rules(rule_id),currency TEXT,cost_atoms TEXT,status TEXT NOT NULL CHECK(status IN ('priced','unknown_model','missing_rule','ambiguous_rule','insufficient_usage','overflow')),PRIMARY KEY(valuation_set_id,event_id),CHECK((status='priced' AND cost_atoms IS NOT NULL AND currency IS NOT NULL) OR (status!='priced' AND cost_atoms IS NULL)));
+        INSERT INTO old_valuations SELECT * FROM event_valuations; DROP TABLE event_valuations; ALTER TABLE old_valuations RENAME TO event_valuations;
+        CREATE TABLE valuation_cache_inputs(valuation_set_id TEXT NOT NULL,event_id TEXT NOT NULL,input_sha256 TEXT NOT NULL CHECK(length(input_sha256)=64),PRIMARY KEY(valuation_set_id,event_id),FOREIGN KEY(valuation_set_id,event_id) REFERENCES event_valuations(valuation_set_id,event_id) ON DELETE CASCADE); INSERT INTO valuation_cache_inputs SELECT * FROM saved_inputs; DROP TABLE saved_inputs; CREATE INDEX valuation_cache_input_lookup ON valuation_cache_inputs(event_id,input_sha256,valuation_set_id);
+        DELETE FROM schema_migrations WHERE version=13; UPDATE app_state SET schema_version=12; PRAGMA user_version=12;")?; Ok(()) }).unwrap();
+    drop(db);
+    let db = Database::open(directory.path()).unwrap();
+    db.snapshot(|tx,r| { assert_eq!((r.data,r.price,
+        tx.query_row("SELECT valuation_set_id,event_id,rule_id,currency,cost_atoms,status FROM event_valuations",[],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?,row.get::<_,String>(4)?,row.get::<_,String>(5)?)))?,
+        tx.query_row("SELECT valuation_set_id,event_id,input_sha256 FROM valuation_cache_inputs",[],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?),before);
+        assert!(!tx.prepare("PRAGMA foreign_key_check")?.exists([])?);
+        assert_eq!(cost(cached(tx,r.price,&PriceBasis::EventTime {})?.unwrap()),"900"); Ok(()) }).unwrap();
+}
 fn replace(db: &Database) {
     let id = db.price_rules().unwrap().rules[0].rule_id.clone();
     db.mutate_price_rule(
@@ -173,17 +315,17 @@ fn write_price_publication_retains_old_read_snapshot_and_exact_reopened_fee_cach
         db.usage_totals(&filter()).unwrap().total_tokens.as_str(),
         "110"
     );
-    // Emulate a ready v1 cache under its real version-specific ID. It cannot
-    // satisfy v2 lookup or prevent the automatic builder from creating a v2 set.
+    // Emulate a ready v2 cache under its real version-specific ID. It cannot
+    // satisfy v3 lookup or prevent the automatic builder from creating a v3 set.
     db.write(|conn| {
         let tx = conn.transaction()?;
         let old_input = input(&tx, "ledger", 2, &PriceBasis::EventTime {})?;
         let current = old_input.id()?;
-        let legacy = format!("valuation:{:x}", Sha256::digest(serde_json::to_vec(&(1_i64, &old_input))?));
+        let legacy = format!("valuation:{:x}", Sha256::digest(serde_json::to_vec(&(2_i64, &old_input))?));
         tx.execute("INSERT INTO valuation_sets SELECT ?1,price_revision,mode,specified_at_ms,state,created_at_ms FROM valuation_sets WHERE valuation_set_id=?2", params![legacy,current])?;
         tx.execute("INSERT INTO event_valuations SELECT ?1,event_id,rule_id,currency,'999999',status FROM event_valuations WHERE valuation_set_id=?2", params![legacy,current])?;
         tx.execute("INSERT INTO valuation_cache_inputs SELECT ?1,event_id,input_sha256 FROM valuation_cache_inputs WHERE valuation_set_id=?2", params![legacy,current])?;
-        tx.execute("INSERT INTO valuation_cache_sets SELECT ?1,ledger_id,evidence_revision,1,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?2", params![legacy,current])?;
+        tx.execute("INSERT INTO valuation_cache_sets SELECT ?1,ledger_id,evidence_revision,2,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?2", params![legacy,current])?;
         tx.execute("DELETE FROM event_valuations WHERE valuation_set_id=?1", [&current])?;
         tx.execute("DELETE FROM valuation_sets WHERE valuation_set_id=?1", [current])?;
         tx.commit()?;

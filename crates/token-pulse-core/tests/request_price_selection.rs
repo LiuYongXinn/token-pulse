@@ -392,3 +392,88 @@ fn conditional_reference_still_requires_write_quantities_and_preserves_flat_comp
         37
     );
 }
+
+#[test]
+fn catalog_facts_explain_unpriced_conditions_without_overriding_custom_rules_or_aliases() {
+    let reference = catalog();
+    let o = observation(272001, Some(100), Some(25));
+    let event = event(o.last.unwrap());
+    let alias = ModelAlias {
+        alias_id: "alias".into(),
+        provider: "openai".into(),
+        alias: "synthetic-alias".into(),
+        canonical_model: "synthetic-conditional".into(),
+        introduced_revision: n(4),
+        retired_revision: None,
+    };
+    let prices = PriceCatalog::new(vec![], vec![alias.clone()], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    for model in ["synthetic-conditional", "synthetic-alias"] {
+        let known = PricingEvent {
+            model: Some(model),
+            ..event
+        };
+        assert!(matches!(
+            prices.estimate(&known, &PriceBasis::EventTime {}),
+            PriceOutcome::Unpriced {
+                reason: UnpricedCode::IncompletePricingConditions
+            }
+        ));
+    }
+    let earlier = PricingEvent {
+        occurred_at_ms: time(999),
+        ..event
+    };
+    assert!(matches!(
+        prices.estimate(&earlier, &PriceBasis::EventTime {}),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
+    assert!(matches!(
+        prices.estimate(
+            &earlier,
+            &PriceBasis::SpecifiedTime {
+                specified_at_ms: time(1000)
+            }
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    let absent = PricingEvent {
+        model: Some("synthetic-absent"),
+        ..event
+    };
+    assert!(matches!(
+        prices.estimate(&absent, &PriceBasis::EventTime {}),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
+    let mut custom = reference
+        .select_request_reference(
+            &event,
+            Some(evidence(&o, Some(OfflinePriceTier::Standard))),
+            n(4),
+            time(2000),
+        )
+        .unwrap()
+        .rule;
+    custom.rule_id = "custom-reference-estimate".into();
+    custom.origin = PriceOrigin::Custom;
+    let prices = PriceCatalog::new(vec![custom], vec![alias], n(4))
+        .unwrap()
+        .with_offline_reference(&reference)
+        .unwrap();
+    let aliased = PricingEvent {
+        model: Some("synthetic-alias"),
+        ..event
+    };
+    assert!(matches!(
+        prices.estimate(&aliased, &PriceBasis::EventTime {}),
+        PriceOutcome::Priced { .. }
+    ));
+}

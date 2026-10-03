@@ -16,7 +16,7 @@ fn schema_eleven_upgrade_keeps_legacy_rules_unknown_and_rejects_invalid_write_ra
     db.commit(fixture()).unwrap();
     db.mutate_price_rule(PriceRuleMutation::Create { draft: draft() }, 0, 1)
         .unwrap();
-    db.write(|conn| {conn.execute_batch("ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; DELETE FROM schema_migrations WHERE version=12; UPDATE app_state SET schema_version=11; PRAGMA user_version=11;")?;Ok(())}).unwrap();
+    db.write(|conn| {conn.execute_batch("ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; DELETE FROM schema_migrations WHERE version>=12; UPDATE app_state SET schema_version=11; PRAGMA user_version=11;")?;Ok(())}).unwrap();
     drop(db);
     let db = Database::open(directory.path()).unwrap();
     let original = db.price_rules().unwrap().rules.remove(0);

@@ -289,6 +289,7 @@ pub enum UnpricedCode {
     MissingRule,
     AmbiguousRule,
     InsufficientUsage,
+    IncompletePricingConditions,
     Overflow,
 }
 impl UnpricedCode {
@@ -298,6 +299,7 @@ impl UnpricedCode {
             Self::MissingRule => "missing_rule",
             Self::AmbiguousRule => "ambiguous_rule",
             Self::InsufficientUsage => "insufficient_usage",
+            Self::IncompletePricingConditions => "incomplete_pricing_conditions",
             Self::Overflow => "overflow",
         }
     }
@@ -336,6 +338,7 @@ pub struct PriceCatalog {
     rules: Vec<PriceRule>,
     index: Models<Vec<usize>>,
     aliases: Models<BTreeSet<String>>,
+    conditional_references: Models<EpochMs>,
     pub revision: DecimalInt,
 }
 impl PriceCatalog {
@@ -353,6 +356,7 @@ impl PriceCatalog {
             rules: Vec::new(),
             index: BTreeMap::new(),
             aliases: BTreeMap::new(),
+            conditional_references: BTreeMap::new(),
             revision,
         };
         for rule in rules {
@@ -395,6 +399,32 @@ impl PriceCatalog {
             }
         }
         Ok(result)
+    }
+    /// Catalog facts explain absent conditional pricing; they never create a flat rule.
+    pub fn with_offline_reference(
+        mut self,
+        catalog: &offline::OfflinePriceCatalog,
+    ) -> Result<Self, ErrorCode> {
+        catalog.validate()?;
+        let flat: BTreeSet<&str> = catalog
+            .entries
+            .iter()
+            .filter(|entry| {
+                entry.tier == offline::OfflinePriceTier::Standard
+                    && entry.context == offline::OfflineContextBand::All
+                    && entry.cache_write_per_million.is_none()
+            })
+            .map(|entry| entry.model_exact.as_str())
+            .collect();
+        for entry in &catalog.entries {
+            if !flat.contains(entry.model_exact.as_str()) {
+                self.conditional_references
+                    .entry(catalog.provider.clone())
+                    .or_default()
+                    .insert(entry.model_exact.clone(), catalog.verified_at_ms);
+            }
+        }
+        Ok(self)
     }
     pub fn estimate(&self, event: &PricingEvent<'_>, basis: &PriceBasis) -> PriceOutcome {
         let (Some(provider), Some(model)) = (event.provider, event.model) else {
@@ -447,6 +477,14 @@ impl PriceCatalog {
             return unpriced(UnpricedCode::AmbiguousRule);
         }
         let Some(rule) = winner else {
+            if self
+                .conditional_references
+                .get(provider)
+                .and_then(|m| m.get(canonical))
+                .is_some_and(|verified| time >= *verified)
+            {
+                return unpriced(UnpricedCode::IncompletePricingConditions);
+            }
             return unpriced(UnpricedCode::MissingRule);
         };
         match estimate_atoms(event.usage, rule) {
