@@ -1,5 +1,17 @@
 # 本地开发与运行
 
+2026-10-03 最新范围更正：继续进行 Windows 10 验收，Windows 11 适配 / 验收取消；后续历史 Win11 待办不再是交付门槛。用户已选择新项目更新签名密钥，公钥默认内嵌源码；M16h 及更早包没有此公钥，新签名包另作记录。
+
+## 项目更新签名密钥与本机签名
+
+用户明确选择新建后，在 `C:/Users/Amin/.tokenpulse/release-signing/459776be74444bae8b6037bcc8899b5b/` 生成加密 `tokenpulse-update.key` 和公钥副本，随机密码由当前 Windows 用户的 DPAPI 加密到 `password.dpapi`，本机选择记录在上层 `active.json`。根目录禁用权限继承，仅当前用户与 SYSTEM 可访问；没有打印私钥 / 密码，也没有放入 Git、应用资源或数据库。此目录用于后续版本签名，请保留。应用只内嵌跟踪的 `src-tauri/resources/updater-public-key.txt`，公钥正文去除尾换行后的 SHA-256 为 `f1143c37e0960c8e80ddbff531c59290d33739133c3d0894bfe937815dd3a0e1`。
+
+正常构建默认使用该项目公钥，不再要求手工设置环境。`TOKENPULSE_UPDATER_PUBLIC_KEY` 保留为显式构建覆盖，用于隔离签名夹具或受控发布；空 / 非法覆盖仍使更新不可用。正常应用和 release 验证入口共用同一个编译公钥函数。项目密钥使用本机已安装 Tauri CLI 生成，签名 / 公钥职责参见[官方更新说明](https://v2.tauri.app/plugin/updater/#signing-updates)。DPAPI 密码需要本机当前 Windows 用户上下文，应用运行无需读取这些本地签名文件。
+
+本机签名：先 `npm run tauri:build`，再 `npm run release:sign`；后者默认签同版本 `target/release/bundle/nsis/TokenPulse_<版本>_x64-setup.exe`，输出旁边 `.exe.sig`。也可 `npm run release:sign -- -Installer <同版本同目标安装包>`。脚本核对目录权限、当前用户、有限登记 / 路径、公钥摘要与仓库公钥一致，拒绝 reparse point、超限文件、错误版本名或已有签名；CLI 输出捕获不打印，密码只进入签名子进程环境。签名绑定当前项目版本，安装包字节变化时拒绝发布。脚本不自动生成 / 覆盖密钥，不上传资产、不执行安装器。
+
+签完后使用下方 `release:prepare` 的实际 release 程序复核签名、文件和版本，生成新的本地资产目录；正式公开发布与实际完整升级分别验收。若同名 `.sig` 已存在，签名脚本拒绝覆盖，需要明确使用新的发布产物目录；不要混用旧包 / 新公钥。下方旧“未配置公钥”记录表示当时包状态。
+
 当前最新完整安装包为 M16h：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,629 字节，SHA-256 `ed28d76646d0d3b14f03e26d7d3851c590a9bf324c7c08cda22bd9399a06d212`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置 / 工作区尺寸适配、同 DPI 显示器工作区切换检测及任务栏 Tab 修复。下面旧包及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新、Win11 原生任务栏适配和物理多屏验收仍需外部条件。详见[最新构建记录](delivery-status.md#m16h包含同-dpi-工作区切换检测的安装包)。
 
 ## 主窗口位置冷启动验收
@@ -46,13 +58,13 @@ Win10 19045 / 150% 已完整通过：NATIVE_SOURCE_DIALOGS_OK / 退出 0，17 To
 
 `npm run release:prepare -- --desktop <同次构建的桌面exe> --installer <NSIS安装包> --signature <安装包.sig> --output <尚不存在的输出目录> --published-at <UTC时间> [--notes <UTF-8说明文件>]` 只生成本地资产，不上传 GitHub、不生成密钥、不读取认证或正式数据。UTC 时间采用 `2026-10-03T00:00:00.000Z` 形式；版本必须在 Cargo workspace、package.json、tauri.conf.json 一致，安装器名称必须为 `TokenPulse_<版本>_x64-setup.exe` 或对应 arm64。生成清单固定使用本仓库 `releases/download/v<版本>/`，无任意发布 URL 参数。
 
-发布者先选择版本并同步上述三处，设置 `TOKENPULSE_UPDATER_PUBLIC_KEY` 为 Tauri base64 公钥的单行正文，再执行 `npm run tauri:build`；公钥文件读取时去掉首尾换行。必须使用这次构建的桌面 exe 与 NSIS 安装包，不混用旧产物。通过本机 Tauri CLI `signer sign --private-key-path <仓库外私钥路径> --app-version <同一版本> <安装包路径>` 签名，密码由交互提示输入；私钥与密码不提交、不发送到聊天。准备工具不处理私钥。仅临时修改构建环境，完成后移除公钥环境覆盖，正式发布公钥的持久配置仍需发布者确认。
+发布者先选择版本并同步上述三处，再执行 `npm run tauri:build`，默认使用已经确认的新项目公钥；本机 `npm run release:sign` 解密 DPAPI 密码并签同版本包，无需把私钥 / 密码填入命令或聊天。必须使用这次构建的桌面 exe 与 NSIS 安装包，不混用旧产物。如确实使用另一套受控密钥，才显式设置 `TOKENPULSE_UPDATER_PUBLIC_KEY` 覆盖并由发布者提供相应签名；处理后恢复构建环境。准备工具不处理私钥。
 
 桌面 exe 的维护入口 `--verify-update-release <安装包> <签名> <新报告路径>` 使用实际编译公钥、编译版本与 target。release 构建才能执行，debug 返回 13；参数错误 12，验证 / 文件失败 14，成功 0。签名全局验证成功后才读取可信 version 字段；缺失、重复或与当前版本不符拒绝。没有初始化 Tauri / 单实例 / 数据库 / 来源 / 账户或运行安装器，报告 create_new，不覆盖旧文件。该入口不是 renderer IPC，也不授予主窗 / 小窗文件或任意验证权限。
 
 准备流程核对安装器 / 签名 SHA-256、精确字节、target、版本和公钥摘要，说明受相同 DTO 的 UTF-8 字节 / 控制字符限制，检查过程中改变桌面 exe 则失败。输出含安装包、原签名、latest.json 及验证记录；先放本次自有临时目录，再发布到新目录。已有目标或并发创建目标均拒绝，失败只清理已校验的自有临时目录。验证记录只能证明这些字节的签名、公钥和版本，不能独立证明任意安装包内含哪个应用；同次正式打包是发布操作的前提，实际安装 / 更新仍须另验收。
 
-必要自动检查：`node --test scripts/prepare-update-release.test.mjs`；`cargo test -p token-pulse-desktop --lib release_verifier`；显式运行真实临时签名夹具 `cargo test -p token-pulse-desktop --lib release_verifier::tests::actual_signature_version_and_key_binding -- --ignored --exact`。后者调用已安装 Tauri CLI，临时私钥生成 / 签名输出被捕获且不打印，合成文件从不执行，临时目录自动清理；不生成正式项目密钥。当前缺正式公钥 / 发布资产，准备就绪不代表已经完成实际升级，不运行性能测试。
+必要自动检查：`node --test scripts/prepare-update-release.test.mjs`；`cargo test -p token-pulse-desktop --lib release_verifier`；显式运行真实临时签名夹具 `cargo test -p token-pulse-desktop --lib release_verifier::tests::actual_signature_version_and_key_binding -- --ignored --exact`。后者调用已安装 Tauri CLI，临时私钥生成 / 签名输出被捕获且不打印，合成文件从不执行，临时目录自动清理；不生成正式项目密钥。项目公钥现已配置，发布资产准备就绪仍不代表已经公开发布或完成实际升级，不运行性能测试。
 
 本步骤完整打包通过，最新 0.1.0 NSIS 为 6,605,578 字节，SHA-256 b44ca1fd19aa5c0d782ff905335b15240092d311e9a00a536a75fafdc7de1c62；仍无正式公钥 / 发布签名。Win10 实际新 release exe 缺配置返回 14 / 不创建报告，准备脚本返回 1 / 无发布或暂存文件，通过两项 NATIVE_RELEASE_*_REJECT_OK；未运行安装器或触碰现有正式数据。以下各步骤旧包大小 / 哈希仅为当时产物记录。
 
@@ -72,7 +84,7 @@ verify-installer 检查已安装声明与准备资源的哈希相同，普通卸
 
 `npx playwright test tests/ui/updates.spec.ts` 使用测试文件内显式合成桥，检查阶段 / null / 精确修订与字节、签名失败无安装权、绑定确认、迟到 / 隐私 / 离页和重开。正式 UI 仅调用原生命令，无开发数据默认入口。开发截图位于忽略的 test-results/updates-*-review.png；深浅 / 960 宽已查看。
 
-先 `npm run build`，再 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Updates`，会通过真实 React 设置按钮检查未配置公钥时的更新页、刷新、共享隐私公开版本及权限 / null 回归；需 NATIVE_UPDATES_IPC_OK / 退出 0。本机 Win10 19045 已通过，WebView2 注销 1412 保留。真实发布 / 安装仍需正式签名公钥和发布资产，不用合成页替代。
+先 `npm run build`，再 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Updates`，会通过真实 React 设置按钮检查当前编译公钥下的更新页、刷新、共享隐私公开版本及权限 / null 回归；合法公钥对应 idle / 尚未检查，未配置或非法显式覆盖对应 unavailable。合法公钥时不调用检查联网，未经候选的下载拒绝；mini 与直接 plugin 命令继续拒绝。需 NATIVE_UPDATES_IPC_OK / 退出 0。此前 Win10 19045 的未配置场景通过属于历史证据；新公钥场景另记，WebView2 注销 1412 保留。真实发布 / 安装仍需正式发布资产，不用隔离页检查替代。
 
 ## 更新安装生命周期验证
 

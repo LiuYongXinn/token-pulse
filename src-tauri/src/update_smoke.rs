@@ -1,4 +1,4 @@
-//! Explicit actual WebView permission checks with isolated empty data and no publication key.
+//! Explicit actual WebView permission checks with isolated empty data, no network or install.
 use tauri::{Listener, Manager};
 pub fn start(app: tauri::AppHandle) {
     std::thread::spawn(move || {
@@ -6,7 +6,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_UPDATES_IPC_OK: actual main/mini WebViews, unavailable/null state, strict requests, main-only custom commands, direct plugin denied, shared privacy; no download or installation"
+                "NATIVE_UPDATES_IPC_OK: actual main/mini WebViews, configured idle or unavailable/null state, strict requests, main-only commands, direct plugin denied, shared privacy; no network, download or installation"
             ),
             Err(error) => eprintln!("NATIVE_UPDATES_IPC_FAILED: {error}"),
         }
@@ -22,6 +22,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     {
         return Err("update smoke requires isolated database".into());
     }
+    let initial_phase = runtime
+        .updates
+        .snapshot()
+        .map_err(|_| "update state")?
+        .phase;
+    if option_env!("TOKENPULSE_UPDATER_PUBLIC_KEY").is_none()
+        && initial_phase != token_pulse_core::updates::UpdatePhase::Idle
+    {
+        return Err("default project public key did not enable the update owner".into());
+    }
+    println!("NATIVE_UPDATES_INITIAL_STATE: {initial_phase:?}");
     let main = app.get_webview_window("main").ok_or("main missing")?;
     super::mini_window::show(app)?;
     let mini = app.get_webview_window("mini").ok_or("mini missing")?;
@@ -36,14 +47,18 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       const before=await invoke('get_price_rules',{requestId:'updates-prices-before',revision:null});
       const read=()=>invoke('get_update_status',{requestId:'updates-status'});
       const initial=await read();
-      if(initial.data.phase!=='unavailable'||initial.data.issue!=='publication_not_configured'||initial.data.update_revision!=='0'||initial.data.release!==null||initial.data.last_checked_at_ms!==null||initial.data.downloaded_bytes!==null||initial.data.total_bytes!==null||initial.data.current_version!=='0.1.0')throw new Error('UPDATES_UNKNOWN_STATE');
-      for(const [command,args,code] of [
-        ['check_for_updates',{requestId:'updates-check'},'UPDATE_UNAVAILABLE'],
-        ['download_update',{requestId:'updates-download',request:{expected_update_revision:'0'}},'UPDATE_UNAVAILABLE'],
+      const configured=initial.data.phase==='idle'&&initial.data.issue===null;
+      const unavailable=initial.data.phase==='unavailable'&&initial.data.issue==='publication_not_configured';
+      if((!configured&&!unavailable)||initial.data.update_revision!=='0'||initial.data.release!==null||initial.data.last_checked_at_ms!==null||initial.data.downloaded_bytes!==null||initial.data.total_bytes!==null||initial.data.current_version!=='0.1.0')throw new Error('UPDATES_UNKNOWN_STATE');
+      window.__tokenPulseUpdatesConfigured=configured;
+      const checks=[
+        ['download_update',{requestId:'updates-download',request:{expected_update_revision:'0'}},configured?'INVALID_QUERY':'UPDATE_UNAVAILABLE'],
         ['install_update',{requestId:'updates-install',request:{expected_update_revision:'0'}},'UPDATE_UNAVAILABLE'],
         ['download_update',{requestId:'updates-stale',request:{expected_update_revision:'1'}},'REVISION_CONFLICT'],
         ['get_update_status',{requestId:''},'INVALID_QUERY']
-      ]){let denied=false;try{await invoke(command,args);}catch(e){denied=e.code===code;}if(!denied)throw new Error('UPDATES_CODE:'+command+':'+code);}
+      ];
+      if(unavailable)checks.push(['check_for_updates',{requestId:'updates-check'},'UPDATE_UNAVAILABLE']);
+      for(const [command,args,code] of checks){let denied=false;try{await invoke(command,args);}catch(e){denied=e.code===code;}if(!denied)throw new Error('UPDATES_CODE:'+command+':'+code);}
       for(const field of ['url','pubkey','verified','installer_path']){
         let denied=false;try{await invoke('download_update',{requestId:'updates-injected',request:{expected_update_revision:'0',[field]:'injected'}});}catch{denied=true;}if(!denied)throw new Error('UPDATES_REQUEST_INJECTION');
       }
@@ -65,16 +80,18 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='设置').click();
       await wait(()=>[...document.querySelectorAll('[role=tab]')].some(n=>n.textContent==='软件更新'));
       [...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='软件更新').click();
-      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      const configured=window.__tokenPulseUpdatesConfigured;
+      const expectedPhase=configured?'尚未检查更新':'更新不可用';
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
       const panel=document.querySelector('.update-panel');
       const button=(name)=>[...panel.querySelectorAll('button')].find(n=>n.textContent===name);
-      if(!button('检查更新')?.disabled||button('安装更新')||!panel.textContent.includes('未配置有效的更新签名公钥')||panel.textContent.includes('当前已是最新版本')||panel.querySelector('progress'))throw new Error('UPDATES_UI_UNAVAILABLE');
+      if(!button('检查更新')||button('检查更新').disabled===configured||button('安装更新')||panel.textContent.includes('未配置有效的更新签名公钥')===configured||panel.textContent.includes('当前已是最新版本')||panel.querySelector('progress'))throw new Error('UPDATES_UI_AVAILABILITY');
       if(!panel.textContent.includes('0.1.0')||!panel.textContent.includes('尚未提供'))throw new Error('UPDATES_UI_NULL');
       button('刷新更新状态').click();
-      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
       const settings=await invoke('get_display_settings',{requestId:'updates-ui-privacy'});
       await invoke('set_display_privacy',{requestId:'updates-ui-hide',request:{privacy:true,expected_settings_revision:settings.data.settings_revision}});
-      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent==='更新不可用');
+      await wait(()=>document.querySelector('.update-panel [role=status]')?.textContent===expectedPhase);
       if(!document.querySelector('.update-panel').textContent.includes('0.1.0'))throw new Error('UPDATES_UI_PRIVATE_PUBLIC_VERSION');
       const hidden=await invoke('get_display_settings',{requestId:'updates-ui-hidden'});
       await invoke('set_display_privacy',{requestId:'updates-ui-show',request:{privacy:false,expected_settings_revision:hidden.data.settings_revision}});

@@ -2,6 +2,20 @@
 
 任务依据：[实施计划](implementation-plan.md)。本文件区分已经实现、自动检查、真实 Windows 运行时检查及待验收项，不将原型效果或代码存在视为完整交付。
 
+## M16i：Windows 10 范围更正与新项目更新公钥
+
+2026-10-03 用户更正“验证 Win10，不管 Win11”，并明确选择生成新密钥。继续 Windows 10 功能及物理兼容验收，Windows 11 实现 / 验收取消，不再作为发布门槛；原多屏 / 主屏切换 / 断屏 / 四档 DPI、原生输入和 Explorer 生命周期仍保留。下方 M16h 范围表及更早 Win11 待办表示当时范围，以本条和[实施计划第 7 节](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)的新确认优先。
+
+已在仓库外生成一套新的加密 Tauri 签名密钥，目录仅当前用户 / SYSTEM，随机密码用 Windows 当前用户 DPAPI 加密保存；没有输出私钥 / 密码，没有复制到仓库或安装包。跟踪公钥文件为 `src-tauri/resources/updater-public-key.txt`，去除尾换行后的公钥 SHA-256 `f1143c37e0960c8e80ddbff531c59290d33739133c3d0894bfe937815dd3a0e1`。正常应用与 release 本地验签共用默认项目公钥，保留显式编译环境覆盖；构建不需要私钥，运行不读取签名目录。
+
+新增 `npm run release:sign`，本机登记 / 权限与公钥匹配后，通过受控子进程解密 DPAPI 密码并用官方 CLI 签同版本 NSIS；拒绝已有签名 / 错误文件名 / 超限 / reparse，签后检查安装包没有改变，原始 CLI 输出丢弃。不上传、安装、生成第二套密钥或更改用户数据。新公钥下 native -Updates 同时检查 configured idle 和旧 unavailable 分支，合法公钥时不联网，保持下载 / 安装及 mini 权限门禁；新包 / 签名资产与实际检查另列，M16h 不作为已内嵌公钥的包。
+
+验证：普通 release verifier / transport 检查 3 项通过，显式真实临时签名的版本 / 错密钥 / 篡改及本地下载验签两项通过，发布准备 Node 6 项通过；desktop all-targets strict Clippy / fmt、签名脚本 PowerShell AST 和 diff 通过。Win10 19045 / 150% 的正式主 / 小窗检查输出 NATIVE_UPDATES_INITIAL_STATE: Idle 与 NATIVE_UPDATES_IPC_OK、退出 0，默认项目公钥确实初始化生产更新 owner；检查按钮可用，未产生联网 / 下载 / 安装，未经候选仍拒绝下载，安装 / mini / 直接 plugin 权限仍受限，1412 提示保留。
+
+本机实际 `release:sign` 通过加密私钥 / DPAPI 密码签新包，随后 production release verifier 在准备工具内验证项目公钥与版本成功；重复签名拒绝且原 `.sig` SHA 未变，实际新 release verifier 对不相关、明确不可执行的合成字节返回 14 / 不建报告。最初合并负向测试与递归临时目录清理的命令被自动审核拒绝，未执行且无具体原因；改用分离的只读签名保护检查和只在新 Temp 目录写入合成文本的检查，无递归清理 / 安装包修改。临时签名夹具的篡改检查与新项目签名正 / 负证据分别记录，不把未执行命令计作通过。
+
+同轮再次运行已构建的真实 wire，仍在自有前台夹具被全屏 CoreWindow 覆盖时、发送输入 / 启动宿主之前拒绝，退出 101。Windows 10 原生输入、完整 Explorer 生命周期、物理多屏 / 四档系统 DPI 保留，Windows 11 已取消。未读取认证 / 用户日志、未改现有正式数据，未运行性能测试。
+
 ## 当前范围核对（2026-10-03，M16h）
 
 本节按当前目标的 13 项保留功能核对实际实现与最新证据。它取代下方历史段落作为“当前待办”的含义，但不改变历史检查结果；[已确认范围](implementation-plan.md#7-已确认的剩余功能范围2026-10-02)仍是范围依据。最新可安装产物为 M16h，整体完整交付尚未达成。

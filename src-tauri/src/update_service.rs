@@ -38,8 +38,7 @@ impl UpdateService {
         })
     }
     pub fn production(current_version: String, notify: Arc<dyn Fn() + Send + Sync>) -> Arc<Self> {
-        let publication =
-            Publication::production(option_env!("TOKENPULSE_UPDATER_PUBLIC_KEY").unwrap_or(""));
+        let publication = Publication::production(super::update_signing::public_key());
         let unavailable = publication.as_ref().err().copied();
         Arc::new(Self {
             publication: publication.ok(),

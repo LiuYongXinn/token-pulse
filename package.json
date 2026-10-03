@@ -17,6 +17,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "notices": "node scripts/generate-third-party-notices.mjs --target x86_64-pc-windows-msvc",
     "release:prepare": "node scripts/prepare-update-release.mjs",
+    "release:sign": "pwsh -NoProfile -File scripts/sign-update-release.ps1",
     "contracts": "cargo run -p token-pulse-core --example export_contracts",
     "contracts:check": "cargo run -p token-pulse-core --example export_contracts -- --check"
   },

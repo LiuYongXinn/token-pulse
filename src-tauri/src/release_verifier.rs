@@ -91,7 +91,7 @@ pub fn run_if_requested() -> Option<i32> {
     if remaining.len() != 3 {
         return Some(12);
     }
-    let key = option_env!("TOKENPULSE_UPDATER_PUBLIC_KEY").unwrap_or("");
+    let key = super::update_signing::public_key();
     Some(
         if write_report(
             Path::new(&remaining[0]),

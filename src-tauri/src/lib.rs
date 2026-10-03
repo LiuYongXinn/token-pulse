@@ -465,6 +465,7 @@ mod taskbar_smoke;
 mod update_commands;
 mod update_installer;
 mod update_service;
+mod update_signing;
 #[cfg(debug_assertions)]
 mod update_smoke;
 mod update_transport;
