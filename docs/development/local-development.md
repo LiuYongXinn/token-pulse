@@ -12,7 +12,9 @@
 
 签完后使用下方 `release:prepare` 的实际 release 程序复核签名、文件和版本，生成新的本地资产目录；正式公开发布与实际完整升级分别验收。若同名 `.sig` 已存在，签名脚本拒绝覆盖，需要明确使用新的发布产物目录；不要混用旧包 / 新公钥。下方旧“未配置公钥”记录表示当时包状态。
 
-当前最新完整安装包为 M16h：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,629 字节，SHA-256 `ed28d76646d0d3b14f03e26d7d3851c590a9bf324c7c08cda22bd9399a06d212`。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 完整重建通过，已包含主窗口位置 / 工作区尺寸适配、同 DPI 显示器工作区切换检测及任务栏 Tab 修复。下面旧包及“模块提交时包未更新”是历史时点说明，新产物以此为准。本轮没有覆盖已有正式数据安装，正式签名更新、Win11 原生任务栏适配和物理多屏验收仍需外部条件。详见[最新构建记录](delivery-status.md#m16h包含同-dpi-工作区切换检测的安装包)。
+当前最新完整安装包为 M16j：[TokenPulse_0.1.0_x64-setup.exe](../../target/release/bundle/nsis/TokenPulse_0.1.0_x64-setup.exe)，6,624,606 字节，SHA-256 `9e3c22780697dee8c8d38b1699a592aa833469dfdce9809294a92e275133f250`。旁边 `.exe.sig` 是已验证的 Tauri 更新签名，应用自动更新时用它验签；用户安装和更新均无需手动输入密钥。正式前端 / release 宿主 / 桌面 / 第三方声明 / NSIS 全部通过，内嵌新项目公钥并保留位置 / 尺寸 / 同 DPI 工作区适配及 Tab 修复。下方旧包状态按历史保留；Windows 11 已取消，Windows 10 物理兼容与新包安装 / 完整升级仍继续。详见[最新构建记录](delivery-status.md#m16j新项目公钥下的安装包与本地签名发布资产)。
+
+已验证本地发布候选：[latest.json](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/latest.json)及[签名验证记录](../../target/release/publish/v0.1.0-20261003-4a487957145b49a5ac0f1e748eec7e1b/release-verification.json)。同目录包含可上传的安装包与签名。当前未上传，公开固定清单的未认证 HEAD 请求返回 HTTP 404，不能当作实际联网更新完成；这套 0.1.0 包是新公钥初始基线，完整自动升级还需要后续更高版本与独立安装环境。
 
 ## 主窗口位置冷启动验收
 
