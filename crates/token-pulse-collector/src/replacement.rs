@@ -70,6 +70,24 @@ pub fn read_replacement_file(
     path: &Path,
     at: i64,
 ) -> StoreResult<ReplacementReceipt> {
+    read_candidate(db, source, path, at, None)
+}
+pub(crate) fn read_manual_source_file(
+    db: &Database,
+    source: &str,
+    path: &Path,
+    at: i64,
+    job_id: &str,
+) -> StoreResult<ReplacementReceipt> {
+    read_candidate(db, source, path, at, Some(job_id))
+}
+fn read_candidate(
+    db: &Database,
+    source: &str,
+    path: &Path,
+    at: i64,
+    job_id: Option<&str>,
+) -> StoreResult<ReplacementReceipt> {
     EpochMs::new(at)?;
     let root = db
         .enabled_source_root(source)?
@@ -79,6 +97,13 @@ pub fn read_replacement_file(
         .file_checkpoint(source, path.to_str().ok_or(ErrorCode::InvalidQuery)?, None)?
         .ok_or(ErrorCode::InvalidQuery)?;
     let candidate = if let Some(c) = db.active_file_read_candidate(&old.file_id)? {
+        if db
+            .file_read_candidate_owner(&c.checkpoint.file_generation_id)?
+            .as_deref()
+            != job_id
+        {
+            return Err(ErrorCode::RevisionConflict.into());
+        }
         if let Err(error) = db.validate_file_read_candidate(&c.checkpoint.file_generation_id) {
             if matches!(c.state.as_str(), "reading" | "ready") {
                 db.fail_file_read_candidate(c.checkpoint.file_generation_id, error.code, at)?;
@@ -88,18 +113,20 @@ pub fn read_replacement_file(
         c
     } else {
         // A Writer CAS conflict alone does not establish a new physical generation.
-        match reader::read_batch(
-            path,
-            &old.file_generation_id,
-            &checkpoint(&old),
-            &ReaderLimits {
-                records: 1,
-                ..Default::default()
-            },
-        ) {
-            Err(ReadError::InvalidGeneration) => {}
-            Err(error) => return Err(error.code().into()),
-            Ok(_) => return Err(ErrorCode::InvalidQuery.into()),
+        if job_id.is_none() {
+            match reader::read_batch(
+                path,
+                &old.file_generation_id,
+                &checkpoint(&old),
+                &ReaderLimits {
+                    records: 1,
+                    ..Default::default()
+                },
+            ) {
+                Err(ReadError::InvalidGeneration) => {}
+                Err(error) => return Err(error.code().into()),
+                Ok(_) => return Err(ErrorCode::InvalidQuery.into()),
+            }
         }
         let probe = reader::read_batch(
             path,
@@ -114,7 +141,7 @@ pub fn read_replacement_file(
         let mut nonce = [0u8; 32];
         getrandom::fill(&mut nonce).map_err(|_| ErrorCode::DbWriteFailed)?;
         let generation = id("replacement", &format!("{:x?}", nonce));
-        db.begin_file_read_candidate(BeginFileCandidate {
+        let request = BeginFileCandidate {
             generation_id: generation,
             file_id: old.file_id,
             expected_generation_id: old.file_generation_id,
@@ -122,7 +149,12 @@ pub fn read_replacement_file(
             identity: probe.file_identity,
             observed_size: probe.observed_size as i64,
             at_ms: at,
-        })?
+        };
+        if let Some(owner) = job_id {
+            db.begin_manual_file_read_candidate(request, owner.into())?
+        } else {
+            db.begin_file_read_candidate(request)?
+        }
     };
     if candidate.state == "claimed" {
         return Err(ErrorCode::RevisionConflict.into());

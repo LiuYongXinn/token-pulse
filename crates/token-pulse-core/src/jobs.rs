@@ -138,6 +138,8 @@ pub struct JobCheckpoint {
     pub accounting_version: String,
     pub batch_position: DecimalInt,
     pub candidate_ledger_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reread_sources: bool,
 }
 impl Default for JobCheckpoint {
     fn default() -> Self {
@@ -147,6 +149,7 @@ impl Default for JobCheckpoint {
             accounting_version: crate::domain::ACCOUNTING_VERSION.into(),
             batch_position: DecimalInt::parse("0").unwrap(),
             candidate_ledger_ids: vec![],
+            reread_sources: false,
         }
     }
 }

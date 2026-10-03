@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+M09h1c 手动来源重读复用现有表，无新 DDL：JobCheckpoint 的内部 reread_sources 缺省 false 并省略旧 JSON，明确请求与 queued 作业同事务保存，重试不能混用普通重建的 request_key，进行中不能改意图。file_rebuild_candidates 在候选 reading 起建立所有权，EOF 认领时更新该读检查点修订；注册和冻结输入仍只接受完整 claimed。调度及活动提交检查所有权，终态收尾覆盖 reading / ready / claimed，正式切换复用候选 / 物理 / 账本验证，旧读取快照与结果保持。未读文件正文入库，历史原始源仍只读；公开操作下一阶段接入。
+
 M09h3a 无新 DDL / 价格修订：nullable pending_request_usage 保存在既有 ReaderContext JSON，消费观察中 request_usage 保存必要响应证据，均由原单写批次事务提交。未知字段省略，旧保存字节 / 解析兼容保持；跨批次、实际 SQLite 重新打开、只读文件字节保持与唯一消费已验证。未新增认证 / 正文 / 任意 metadata 存储，也未接公开请求输入 DTO 或条件费用缓存，见[计价专题第 8 节](price-accounting.md#8-单响应输入证据的采集m09h3a)。
 
 M09h2 增量 schema v12 为 price_rules 追加 nullable TEXT cache_write_rate_atoms，以规范非负十进制原子和上界 CHECK 约束；既有价格行保持 null，不改旧迁移文件。创建 / 替换仍共用价格修订 CAS / 单写事务，替换发布新行，旧读取快照和历史价格不变。费用缓存 CACHE_VERSION=2：集合身份 / 输入指纹 / 可用集合过滤均绑定新版本，旧 v1 缓存不作为新公式结果，查询即时补算、后台补建。schema v11 的写入数量列与 rollup v2 保持；费用重估不修改消费 / 基线 / 检查点。具体含义及验证见[计价专题](price-accounting.md#7-四费率估算m09h2)。

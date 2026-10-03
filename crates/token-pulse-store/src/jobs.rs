@@ -80,6 +80,26 @@ pub(crate) fn load(conn: &Connection, id: &str) -> StoreResult<StoredJob> {
     })
 }
 impl Database {
+    /// Explicit manual source read. The intent and queued job commit together.
+    pub fn create_source_reread_job(
+        &self,
+        id: String,
+        mut request: JobRequest,
+        at_ms: i64,
+    ) -> StoreResult<Job> {
+        validate_request_id(&id)?;
+        request.validate()?;
+        EpochMs::new(at_ms)?;
+        if request.kind != JobKind::Rebuild || matches!(request.scope, JobScope::Sessions { .. }) {
+            return Err(ErrorCode::InvalidQuery.into());
+        }
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let job = create_with_read_mode(&tx, &id, &request, at_ms, true)?;
+            tx.commit()?;
+            Ok(job)
+        })
+    }
     pub fn create_job(&self, id: String, mut request: JobRequest, at_ms: i64) -> StoreResult<Job> {
         validate_request_id(&id)?;
         request.validate()?;
@@ -154,7 +174,7 @@ impl Database {
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;let old=load(&tx,&id)?;
             if old.job.state!=expected {return Err(if old.job.state==JobState::Cancelling {ErrorCode::JobCancelled} else {ErrorCode::RevisionConflict}.into());}
             let previous:JobProgress=decoded(&tx.query_row("SELECT progress_json FROM jobs WHERE job_id=?1",[&id],|r|r.get::<_,String>(0))?)?;progress.validate_after(&previous)?;
-            if checkpoint.batch_position.value()<old.checkpoint.batch_position.value() {return Err(ErrorCode::RevisionConflict.into());}
+            if checkpoint.batch_position.value()<old.checkpoint.batch_position.value() || checkpoint.reread_sources != old.checkpoint.reread_sources {return Err(ErrorCode::RevisionConflict.into());}
             if next==JobState::Succeeded && crate::file_candidate::rebuild::has_owned(&tx,&id)? {return Err(ErrorCode::InvalidQuery.into());}
             let error=error.or(if next==JobState::Cancelled {Some(ErrorCode::JobCancelled)} else {None});
             tx.execute("UPDATE jobs SET state=?1,progress_json=?2,resume_json=?3,error_code=?4,updated_at_ms=?5 WHERE job_id=?6",params![text(&next)?,serde_json::to_string(&progress)?,serde_json::to_string(&checkpoint)?,error.map(|e|text(&e)).transpose()?,at_ms,id])?;
@@ -194,7 +214,9 @@ impl Database {
                 |r| r.get::<_, String>(0),
             )?)?;
             progress.validate_after(&previous)?;
-            if checkpoint.batch_position.value() < old.checkpoint.batch_position.value() {
+            if checkpoint.batch_position.value() < old.checkpoint.batch_position.value()
+                || checkpoint.reread_sources != old.checkpoint.reread_sources
+            {
                 return Err(ErrorCode::RevisionConflict.into());
             }
             tx.execute(
@@ -228,6 +250,15 @@ pub(crate) fn create_in_tx(
     request: &JobRequest,
     at_ms: i64,
 ) -> StoreResult<Job> {
+    create_with_read_mode(tx, id, request, at_ms, false)
+}
+fn create_with_read_mode(
+    tx: &rusqlite::Transaction<'_>,
+    id: &str,
+    request: &JobRequest,
+    at_ms: i64,
+    reread_sources: bool,
+) -> StoreResult<Job> {
     let existing: Option<String> = tx
         .query_row(
             "SELECT job_id FROM jobs WHERE request_key=?1",
@@ -237,7 +268,7 @@ pub(crate) fn create_in_tx(
         .optional()?;
     if let Some(existing) = existing {
         let old = load(tx, &existing)?;
-        if old.request != *request {
+        if old.request != *request || old.checkpoint.reread_sources != reread_sources {
             return Err(ErrorCode::RequestKeyConflict.into());
         }
         return Ok(old.job);
@@ -246,6 +277,10 @@ pub(crate) fn create_in_tx(
     if pending >= 32 {
         return Err(ErrorCode::InvalidQuery.into());
     }
-    tx.execute("INSERT INTO jobs(job_id,kind,state,request_key,scope_json,progress_json,resume_json,created_at_ms,updated_at_ms) VALUES(?1,?2,'queued',?3,?4,?5,?6,?7,?7)",params![id,text(&request.kind)?,request.request_key,serde_json::to_string(&request.scope)?,serde_json::to_string(&JobProgress::default())?,serde_json::to_string(&JobCheckpoint::default())?,at_ms])?;
+    let checkpoint = JobCheckpoint {
+        reread_sources,
+        ..Default::default()
+    };
+    tx.execute("INSERT INTO jobs(job_id,kind,state,request_key,scope_json,progress_json,resume_json,created_at_ms,updated_at_ms) VALUES(?1,?2,'queued',?3,?4,?5,?6,?7,?7)",params![id,text(&request.kind)?,request.request_key,serde_json::to_string(&request.scope)?,serde_json::to_string(&JobProgress::default())?,serde_json::to_string(&checkpoint)?,at_ms])?;
     Ok(load(tx, id)?.job)
 }

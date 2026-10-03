@@ -1,5 +1,6 @@
 //! Replacement reads are isolated from active observations, baselines and checkpoints.
 pub mod location;
+mod manual;
 pub mod rebuild;
 use crate::{
     Database, ErrorCode, StoreResult,
@@ -127,6 +128,22 @@ impl Database {
         &self,
         request: BeginFileCandidate,
     ) -> StoreResult<FileReadCandidate> {
+        self.begin_file_read_candidate_owned(request, None)
+    }
+    /// Ownership starts before the first read batch, so cancellation and scheduling see it.
+    pub fn begin_manual_file_read_candidate(
+        &self,
+        request: BeginFileCandidate,
+        job_id: String,
+    ) -> StoreResult<FileReadCandidate> {
+        validate_request_id(&job_id)?;
+        self.begin_file_read_candidate_owned(request, Some(job_id))
+    }
+    fn begin_file_read_candidate_owned(
+        &self,
+        request: BeginFileCandidate,
+        job_id: Option<String>,
+    ) -> StoreResult<FileReadCandidate> {
         validate_request_id(&request.generation_id)?;
         validate_request_id(&request.file_id)?;
         validate_request_id(&request.expected_generation_id)?;
@@ -142,6 +159,10 @@ impl Database {
         }
         self.write(move|conn| {let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let base=frozen(&tx,&request.file_id)?;
+            if let Some(owner) = &job_id {
+                let job = crate::jobs::load(&tx, owner)?;
+                if !job.checkpoint.reread_sources || job.job.state != token_pulse_core::protocol::JobState::Running || !rebuild::permitted(&job, &base.source_id) || !job.checkpoint.candidate_ledger_ids.is_empty() || crate::rebuild::has_manifest(&tx, owner)? { return Err(ErrorCode::RevisionConflict.into()); }
+            }
             if !base.enabled {return Err(ErrorCode::PermissionDenied.into());}
             if base.generation_id!=request.expected_generation_id||base.checkpoint_revision!=request.expected_checkpoint_revision||base.generation_state!="current" {return Err(ErrorCode::CheckpointConflict.into());}
             if base.parser_version!=PARSER_VERSION {return Err(ErrorCode::UnsupportedFormat.into());}
@@ -149,11 +170,16 @@ impl Database {
             if let Some((file,size))=existing {
                 let candidate=load(&tx,&request.generation_id)?;fresh(&tx,&candidate)?;
                 if file!=request.file_id||size!=request.observed_size||candidate.checkpoint.file_identity.as_deref()!=Some(&request.identity)||!matches!(candidate.state.as_str(),"reading"|"ready") {return Err(ErrorCode::RevisionConflict.into());}
+                let owner: Option<String> = tx.query_row("SELECT job_id FROM file_rebuild_candidates WHERE generation_id=?1",[&request.generation_id],|r|r.get(0)).optional()?;
+                if owner != job_id { return Err(ErrorCode::RevisionConflict.into()); }
                 tx.commit()?;return Ok(candidate);
             }
             if tx.query_row("SELECT EXISTS(SELECT 1 FROM file_read_candidates WHERE file_id=?1 AND state IN ('reading','ready','claimed'))",[&request.file_id],|r|r.get::<_,bool>(0))? {return Err(ErrorCode::RevisionConflict.into());}
             tx.execute("INSERT INTO file_generations(file_generation_id,file_id,state,identity_json,observed_size,anchor_json,reader_context_json,parser_version,created_at_ms) VALUES(?1,?2,'candidate',?3,?4,'[]',?5,?6,?7)",params![request.generation_id,request.file_id,serde_json::to_string(&Some(&request.identity))?,request.observed_size,serde_json::to_string(&ReaderContext::default())?,PARSER_VERSION,request.at_ms])?;
             tx.execute("INSERT INTO file_read_candidates(generation_id,file_id,base_json,initial_size,state,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,'reading',?5,?5)",params![request.generation_id,request.file_id,serde_json::to_string(&base)?,request.observed_size,request.at_ms])?;
+            if let Some(owner) = job_id {
+                tx.execute("INSERT INTO file_rebuild_candidates(generation_id,job_id,checkpoint_revision,created_at_ms,updated_at_ms) VALUES(?1,?2,0,?3,?3)",params![request.generation_id,owner,request.at_ms])?;
+            }
             tx.execute("UPDATE source_files SET status='correction_pending' WHERE file_id=?1",[&request.file_id])?;
             tx.execute("UPDATE source_scan_files SET file_generation_id=NULL,checkpoint_revision=NULL,checked_at_ms=NULL WHERE source_id=?1 AND canonical_path=?2",params![base.source_id,base.path])?;
             tx.execute("UPDATE source_scan_state SET state='incomplete',completed_at_ms=NULL WHERE source_id=?1",[&base.source_id])?;
@@ -162,6 +188,17 @@ impl Database {
     }
     pub fn file_read_candidate(&self, generation: &str) -> StoreResult<FileReadCandidate> {
         self.snapshot(|tx, _| load(tx, generation))
+    }
+    pub fn file_read_candidate_owner(&self, generation: &str) -> StoreResult<Option<String>> {
+        self.snapshot(|tx, _| {
+            Ok(tx
+                .query_row(
+                    "SELECT job_id FROM file_rebuild_candidates WHERE generation_id=?1",
+                    [generation],
+                    |r| r.get(0),
+                )
+                .optional()?)
+        })
     }
     pub fn active_file_read_candidate(&self, file: &str) -> StoreResult<Option<FileReadCandidate>> {
         self.snapshot(|tx,_| {

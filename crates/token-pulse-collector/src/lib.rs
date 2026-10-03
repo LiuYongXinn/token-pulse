@@ -59,6 +59,16 @@ fn collect_file_with_hook(
     validate_source_file(Path::new(&root), path)?;
     let path_text = path.to_str().ok_or(ErrorCode::InvalidQuery)?.to_owned();
     let mut saved = database.file_checkpoint(source_id, &path_text, None)?;
+    if let Some(file) = &saved {
+        if let Some(candidate) = database.active_file_read_candidate(&file.file_id)? {
+            if database
+                .file_read_candidate_owner(&candidate.checkpoint.file_generation_id)?
+                .is_some()
+            {
+                return Err(ErrorCode::CheckpointConflict.into());
+            }
+        }
+    }
     let mut checkpoint = ReaderCheckpoint::default();
     if let Some(saved) = &saved {
         checkpoint = ReaderCheckpoint {

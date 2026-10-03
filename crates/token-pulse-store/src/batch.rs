@@ -332,6 +332,10 @@ fn commit_batch(
         return Err(ErrorCode::InvalidQuery.into());
     }
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let frozen: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM file_read_candidates c JOIN file_rebuild_candidates r ON r.generation_id=c.generation_id JOIN jobs j ON j.job_id=r.job_id WHERE json_extract(c.base_json,'$.generation_id')=?1 AND c.state IN ('reading','ready','claimed') AND j.state IN ('running','validating','publishing','cancelling'))",[&batch.file_generation_id],|r|r.get(0))?;
+    if frozen {
+        return Err(ErrorCode::CheckpointConflict.into());
+    }
     let checkpoint:Option<(i64,i64)>=tx.query_row("SELECT g.committed_offset,g.checkpoint_revision FROM file_generations g JOIN source_files f ON f.current_generation_id=g.file_generation_id WHERE g.file_generation_id=?1 AND g.state='current'", [&batch.file_generation_id], |r|Ok((r.get(0)?,r.get(1)?))).optional()?;
     if checkpoint != Some((batch.expected_offset, batch.expected_checkpoint_revision)) {
         return Err(ErrorCode::CheckpointConflict.into());

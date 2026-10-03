@@ -95,7 +95,7 @@ pub(crate) fn frozen_inputs(
 fn registration(tx: &Transaction<'_>, generation: &str) -> StoreResult<FileCandidateRegistration> {
     tx.query_row("SELECT generation_id,job_id,checkpoint_revision,after_offset,materialized FROM file_rebuild_candidates WHERE generation_id=?1",[generation],|r|Ok(FileCandidateRegistration{generation_id:r.get(0)?,job_id:r.get(1)?,checkpoint_revision:r.get(2)?,after_offset:r.get(3)?,materialized:r.get(4)?})).optional()?.ok_or(ErrorCode::InvalidQuery.into())
 }
-fn permitted(job: &jobs::StoredJob, source: &str) -> bool {
+pub(super) fn permitted(job: &jobs::StoredJob, source: &str) -> bool {
     job.job.kind == JobKind::Rebuild
         && match &job.request.scope {
             JobScope::All {} => true,
@@ -200,7 +200,7 @@ pub(crate) fn fail_owned(
     code: ErrorCode,
     at: i64,
 ) -> StoreResult<()> {
-    let mut q=tx.prepare("SELECT c.generation_id FROM file_read_candidates c JOIN file_rebuild_candidates r ON r.generation_id=c.generation_id JOIN jobs j ON j.job_id=r.job_id WHERE c.state='claimed' AND ((?1 IS NOT NULL AND r.job_id=?1) OR (?1 IS NULL AND j.state IN ('cancelled','failed','interrupted')))")?;
+    let mut q=tx.prepare("SELECT c.generation_id FROM file_read_candidates c JOIN file_rebuild_candidates r ON r.generation_id=c.generation_id JOIN jobs j ON j.job_id=r.job_id WHERE c.state IN ('reading','ready','claimed') AND ((?1 IS NOT NULL AND r.job_id=?1) OR (?1 IS NULL AND j.state IN ('cancelled','failed','interrupted')))")?;
     let ids = q
         .query_map([job], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -212,7 +212,7 @@ pub(crate) fn fail_owned(
     Ok(())
 }
 pub(crate) fn has_owned(tx: &Transaction<'_>, job: &str) -> StoreResult<bool> {
-    Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM file_rebuild_candidates r JOIN file_read_candidates c ON c.generation_id=r.generation_id WHERE r.job_id=?1 AND c.state='claimed')",[job],|r|r.get(0))?)
+    Ok(tx.query_row("SELECT EXISTS(SELECT 1 FROM file_rebuild_candidates r JOIN file_read_candidates c ON c.generation_id=r.generation_id WHERE r.job_id=?1 AND c.state IN ('reading','ready','claimed'))",[job],|r|r.get(0))?)
 }
 fn claim_in_tx(
     tx: &Transaction<'_>,
@@ -247,7 +247,26 @@ fn claim_in_tx(
     if c.state != "ready" {
         return Err(ErrorCode::RevisionConflict.into());
     }
-    tx.execute("INSERT INTO file_rebuild_candidates(generation_id,job_id,checkpoint_revision,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?4)",params![generation,job_id,expected_revision,at_ms])?;
+    let existing: Option<String> = tx
+        .query_row(
+            "SELECT job_id FROM file_rebuild_candidates WHERE generation_id=?1",
+            [generation],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(owner) = existing {
+        let r = registration(tx, generation)?;
+        if owner != job_id
+            || !job.checkpoint.reread_sources
+            || r.materialized
+            || r.after_offset != -1
+        {
+            return Err(ErrorCode::RevisionConflict.into());
+        }
+        tx.execute("UPDATE file_rebuild_candidates SET checkpoint_revision=?1,updated_at_ms=?2 WHERE generation_id=?3",params![expected_revision,at_ms,generation])?;
+    } else {
+        tx.execute("INSERT INTO file_rebuild_candidates(generation_id,job_id,checkpoint_revision,created_at_ms,updated_at_ms) VALUES(?1,?2,?3,?4,?4)",params![generation,job_id,expected_revision,at_ms])?;
+    }
     tx.execute(
         "UPDATE file_read_candidates SET state='claimed',updated_at_ms=?1 WHERE generation_id=?2",
         params![at_ms, generation],

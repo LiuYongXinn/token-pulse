@@ -104,6 +104,63 @@ fn stopped(db: &Database, id: &str, stop: &impl Fn() -> Option<ErrorCode>) -> St
         Ok(())
     }
 }
+fn read_manual_sources(
+    db: &Database,
+    job_id: &str,
+    stop: &impl Fn() -> Option<ErrorCode>,
+    now: &impl Fn() -> i64,
+) -> StoreResult<()> {
+    let files = db.manual_source_read_files(job_id)?;
+    let mut progress = progress_of(db, job_id)?;
+    progress.phase = "reading_source_files".into();
+    progress.discovered_files = decimal(files.len());
+    progress.discovery_complete = true;
+    for (file_id, source) in files {
+        loop {
+            stopped(db, job_id, stop)?;
+            let before = db
+                .active_file_read_candidate(&file_id)?
+                .map_or(0, |c| c.checkpoint.committed_offset);
+            let receipt = crate::replacement::read_manual_source_file(
+                db,
+                &source.source_id,
+                Path::new(&source.path),
+                now(),
+                job_id,
+            )?;
+            let candidate = db.file_read_candidate(&receipt.generation_id)?;
+            progress.processed_bytes = DecimalInt::from_nonnegative(
+                progress
+                    .processed_bytes
+                    .value()
+                    .checked_add(i128::from(candidate.checkpoint.committed_offset - before))
+                    .ok_or(ErrorCode::NumericOverflow)?,
+            )?;
+            stopped(db, job_id, stop)?;
+            db.checkpoint_job(
+                job_id.into(),
+                JobState::Running,
+                progress.clone(),
+                db.get_job(job_id)?.checkpoint,
+                now(),
+            )?;
+            if receipt.read_complete {
+                db.claim_file_candidate_for_rebuild(
+                    receipt.generation_id,
+                    job_id.into(),
+                    receipt.checkpoint_revision,
+                    now(),
+                )?;
+                break;
+            }
+            // Do not wait forever on a live partial line; keep the previous published result.
+            if !receipt.has_more {
+                return Err(ErrorCode::CheckpointConflict.into());
+            }
+        }
+    }
+    Ok(())
+}
 fn sequences(canonical: &mut CanonicalReplayPlan) -> StoreResult<ReplaySequences> {
     let mut result = BTreeMap::new();
     let mut origins = BTreeMap::new();
@@ -357,6 +414,9 @@ fn run(
         "planning",
         now(),
     )?;
+    if db.get_job(job_id)?.checkpoint.reread_sources {
+        read_manual_sources(db, job_id, stop, now)?;
+    }
     let replacements = db.rebuild_file_candidates(job_id)?;
     for input in &replacements {
         let mut after = input.after_offset;
@@ -423,7 +483,7 @@ fn run(
         phase: "replaying_observations".into(),
         discovered_files: decimal(m.files.len()),
         discovery_complete: true,
-        ..Default::default()
+        ..progress_of(db, job_id)?
     };
     let mut checkpoint = db.get_job(job_id)?.checkpoint;
     db.checkpoint_job(

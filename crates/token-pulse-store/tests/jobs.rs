@@ -12,6 +12,73 @@ fn request(key: &str) -> JobRequest {
         request_key: key.into(),
     }
 }
+#[test]
+fn explicit_source_read_intent_is_atomic_durable_and_cannot_change_during_work() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = Database::open(directory.path()).unwrap();
+    assert!(
+        !serde_json::to_string(&JobCheckpoint::default())
+            .unwrap()
+            .contains("reread_sources")
+    );
+    db.create_source_reread_job("read".into(), request("key"), 1)
+        .unwrap();
+    assert_eq!(
+        db.create_source_reread_job("retry".into(), request("key"), 2)
+            .unwrap()
+            .job_id,
+        "read"
+    );
+    assert_eq!(
+        db.create_job("ordinary".into(), request("key"), 2)
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::RequestKeyConflict
+    );
+    drop(db);
+    let db = Database::open(directory.path()).unwrap();
+    assert!(db.get_job("read").unwrap().checkpoint.reread_sources);
+    let checkpoint = db.get_job("read").unwrap().checkpoint;
+    db.advance_job(
+        "read".into(),
+        token_pulse_store::jobs::JobAdvance {
+            expected: JobState::Queued,
+            next: JobState::Running,
+            progress: JobProgress::default(),
+            checkpoint: checkpoint.clone(),
+            error: None,
+            at_ms: 3,
+        },
+    )
+    .unwrap();
+    let mut changed = checkpoint;
+    changed.reread_sources = false;
+    assert_eq!(
+        db.checkpoint_job(
+            "read".into(),
+            JobState::Running,
+            JobProgress::default(),
+            changed,
+            4
+        )
+        .err()
+        .unwrap()
+        .code,
+        ErrorCode::RevisionConflict
+    );
+    let mut invalid = request("sessions");
+    invalid.scope = JobScope::Sessions {
+        session_keys: vec!["one".into()],
+    };
+    assert_eq!(
+        db.create_source_reread_job("invalid".into(), invalid, 4)
+            .err()
+            .unwrap()
+            .code,
+        ErrorCode::InvalidQuery
+    );
+}
 fn advance(db: &Database, id: &str, from: JobState, to: JobState) -> Result<(), ErrorCode> {
     db.advance_job(
         id.into(),
