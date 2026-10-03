@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+锁屏下可运行受控原生功能检查：`pwsh -NoProfile -File scripts/native-smoke.ps1 -TaskbarActions`、`-RecoveryRoutes`、`-Notify` 分别验证任务栏完整消息通路、小窗交互恢复 / 透明度及 notify 配置 / headless / 采集。M16q 三项本机实际退出 0，使用真实 WebView / 原生实现及隔离开发数据库，不发送物理键鼠、不修改正式设置。实际输入 / Narrator、多屏 / DPI、真实休眠和账户变化、正式源完整升级分别保留独立验收边界，不能统称为锁屏无法测试。见[本轮方法与证据](delivery-status.md#m16q无需桌面输入的三项原生功能复测)。
+
 M16p：用户要求直接测试后，标准安装 0.1.0 的后台窗口命令 / 单实例 / 正常退出 / 冷启动序列实际退出 0；46 张非设置表及数据 / 价格修订前后完全一致。统计 / 小窗恢复原隐藏状态，正式应用保留运行。此检查用本应用受限窗口消息，不发送物理输入，托盘弹出菜单仍未验；不需要锁屏解锁即可执行上述后台序列。证据和临时程序见[本轮实际验收记录](delivery-status.md#m16p正式安装版的后台窗口控制与冷启动复测)。
 
 正式托盘受限验收：`pwsh -NoProfile -File scripts/verify-installed-tray.ps1 -BaselineExecutable <与已安装版本对应的release.exe>` 默认只读；追加 `-PhysicalInput` 才操作已验证的通知区展开按钮 / 本应用图标。当前已安装 0.1.0 使用 `target/release/baselines/v0.1.0-3f05cdf904034d139dd9fe8fe8c03207/desktop.exe`，不能使用新的 0.1.1 release 代替。只读 / 错基线 / 锁屏拒绝已通过检查，物理成功分支尚未验。需解锁并保留可交互桌面，脚本在每次输入前重新检查；已有展开面板、遮挡、按键按下、非 S_OK 图标矩形均拒绝，不改变用户显示偏好。见[当前入口与限制](delivery-status.md#m16o正式安装托盘的受限物理输入验收入口)。
