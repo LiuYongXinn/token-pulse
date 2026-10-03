@@ -4,7 +4,23 @@
 
 2026-10-03 用户明确要求全部验证完成后再推送到 GitHub：本地候选保持未发布，当前不推送代码、创建远端 release 或上传资产。环境受限验收不记为通过；后续按此顺序推进，不再等待之前的公开发布选择问题。
 
-后续环境复核：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备，需要用户提供独立 Windows 10 测试环境的访问方式。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录；本次自有应用 / 宿主 / wire / UIA 进程均已退出。未覆盖安装、清除现有数据或修改显示器 / DPI；没有推送到 GitHub。完整安装 / 升级和物理系统矩阵仍按实际环境继续，不用更多窄夹具替代这些最终验收。
+此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
+
+## M16l：用户授权的本机真实安装、启动与普通卸载
+
+2026-10-03 用户明确要求“直接在本机安装测试”，授权复用已有本地数据；不再将独立虚拟机作为基本安装 / 卸载的前置条件。初检没有卸载注册、正式安装目录或快捷方式，仅有旧保留的安装路径键与 SQLite 数据。原数据 schema v10，来源 / 会话 / 消费事件均为 0；没有清空、迁移回旧库或添加演示来源。
+
+`verify-installer.ps1` 新增显式 `-UseExistingLocalState`：允许保留的数据和不含应用 exe 的旧安装路径记录；已有注册安装、快捷方式或正在运行的应用 / 宿主仍拒绝，默认入口仍拒绝旧数据。只向受校验的 UUID Temp 测试目录复制既有 db / WAL / SHM 并逐文件核对 SHA，同时留存旧产品注册键；不复制 WebView 缓存、认证或源日志，不自动覆盖恢复数据库。正式 release 维护入口核对实际 NSIS / `.sig` / 项目公钥 / 版本后才安装。窗口检查提取到 `installer-window-probe.ps1`，验收和失败后的受限收尾共用原有自有 HWND / PID / 菜单校验。
+
+首次实际安装通过文件 / 注册核对、真实 UIA 总览、SQLite、关闭隐藏、第二调用重开、实际程序化托盘菜单、小窗及首次正常退出。第二个完整应用进程冷启动时托盘菜单未打开，脚本退出 1；因此该次默认序列未记为完整通过。核对同一自有安装路径 / 注册 / PID 后，使用已存在的显式自有托盘命令入口正常退出 0，普通 NSIS 卸载 0，程序 / 宿主 / 声明 / 卸载注册移除，卸载前后数据库 SHA 相同。该分步收尾记录在 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-install-cba0c080e7f043b584dc406a6147d938/recovery-verification.json`；首次数据副本和真实签名报告在同目录。
+
+随后完整运行 `pwsh -NoProfile -File scripts/verify-installer.ps1 -UseExistingLocalState -OwnTrayCommands`，退出 0，INSTALLER_EXISTING_STATE_OK / FILES_OK / RUNTIME_OK / TRAY_COMMAND_ONLY / UNINSTALL_OK / SEQUENCE_OK 全部出现。实际普通安装和卸载、全部四项安装文件 / 当前用户注册、嵌入前端、单实例、小窗、两次正常退出及卸载保留数据库通过。TRAY_COMMAND_ONLY 明确表示自有窗口消息检查，不替代物理鼠标 / 键盘或真实弹出菜单。第二次证据目录为 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-install-8f15285724084d68a1717b36a8b26c13/`，包含数据副本 / 签名报告；没有脚本递归清除数据。
+
+最后将同一 M16j 签名包安装到标准用户目录 `C:/Users/Amin/AppData/Local/TokenPulse/`，NSIS 退出 0，0.1.0 注册路径、实际程序（只允许 NSIS 固定 bundle marker 的差异）、独立宿主和声明字节全部匹配正式构建。实际已安装应用的 UIA 总览通过，INSTALLER_STANDARD_USER_OK；本次保留安装并运行供用户使用，报告在上述第二次证据目录的 `standard-install-verification.json`。既有数据库只读 quick_check 为 ok，schema 仍 v10，来源 / 会话 / 消费事件仍为 0；运行正常保存窗口 / 设置，不能把启动前后整个数据库字节变化误记为数据丢失。
+
+脚本 PowerShell AST / diff 通过；当前真实安装存在时，默认入口和 `-UseExistingLocalState` 均在动作前拒绝，不打扰已安装进程，INSTALLER_EXISTING_INSTALL_GUARD_OK。标准安装后的实际菜单观察也在期限内未打开；窗口辅助入口现以 finally 仅取消本应用菜单，真实失败路径检查输出 INSTALLER_MENU_LIMIT_CONFIRMED / 退出 0，无残留可观察弹出菜单，已安装进程仍在。不能把被捕获的菜单超时记成菜单通过，也未据此判定产品故障的原因。没有生产代码变更或重建 / 重签包，安装包仍为 M16j 的 6,624,606 字节 / SHA `9e3c22780697dee8c8d38b1699a592aa833469dfdce9809294a92e275133f250`。未读取 auth.json、启动 Codex 回合或运行性能测试，原未提交内容保持。
+
+本机基本安装 / 独立运行 / 普通卸载已收敛；该安装仍为 0.1.0 初始公钥基线，不能称为更高版本完整自动升级。真实更新检查 / 高版本下载安装、缺 WebView2 实际条件、完整原生菜单 / 物理输入 / Explorer 生命周期以及物理多屏 / 四档 DPI 分别继续。Win11 取消，GitHub 按“全部验证后再推送”保持未推送 / 未发布。
 
 ## M16k：真实签名 NSIS 的原生启动交接
 
