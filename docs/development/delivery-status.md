@@ -6,6 +6,14 @@
 
 此前环境复核（本机安装限制已由下方 M16l 的新授权与实际验收更新）：当前 Windows 为 10.0.19045，一个活动显示器，正式数据目录仍存在。未发现可调用的 Get-VM / vmrun / VBoxManage、vmms 服务、Docker 命令或 WindowsSandbox.exe；这不证明没有其他可用设备。真实 wire 再次在自有窗口被全屏 Windows.UI.Core.CoreWindow 覆盖时、发送输入及启动宿主之前拒绝，未新增交互通过记录。物理系统矩阵仍按实际环境继续，不用窄夹具替代最终验收。
 
+## M13g8：release 回执的一次布局校验结果
+
+M13g7 后的完整包已编译 / 签名为未发布本地候选，但 release 宿主实测首次隐藏刷新返回 Unavailable / Os，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-final-release-native-3ab8a3ae9a264d18aa501ea29998306b/notification-left.log`，退出 101，后续右侧 / Explorer 场景未执行，不能将此包视为验收完成。失败后系统自动隐藏按 guard 恢复，原安装保留。
+
+原因是回执协调租约后又调用一次 valid：Explorer 重绘可在两次采样之间恢复任务区，产生新的失败状态却跳过隐藏 / 重预留。现在协调函数返回本次已校验 / 已安全重预留的结果；回执直接使用该结果，不在填字段时重新读取另一帧。校验不能成立时先脱离，再读取读数可见性，避免返回 unavailable 却遗留可见读数。不是忽略失败，校验与条件恢复规则不放宽；下一次请求继续重新检查实际布局。
+
+正式 release 构建的原生宿主及同 profile 探针实际两位置均通过，证据 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-release-receipt-d56c4777268d46d09adbfaa7d117022c/`：左侧同宿主 91284、右侧 83580，真实隐藏位移 / 新 Snapshot / 状态 Embedded、显示恢复 / 空动作 / 设置及原几何恢复均退出 0。M13g7 全套 65 项为此前检查，本轮受影响的 lib 27 项重新通过、严格 Clippy all-targets / fmt 通过。完整安装器需要从此新提交重建并签名，旧 05bede333b5a4d5ba71fb1f2ad2d53fd 候选保留为失败时点证据，不能推荐为最新验收包。未发布、未安装升级、没有电脑重启或性能测试。
+
 ## M13g7：两位置自动隐藏后的实际数据刷新
 
 扩展显式自动隐藏探针的 `--application-right` 选项，并新增隐藏后再发送正式 Snapshot / GetStatus 的强断言。先前 M13g6 只检查首次隐藏状态与恢复；本轮更严格检查发现应用图标右侧在隐藏刷新后失去预留。多份失败证据保留，最后精确窗口诊断为 `C:/Users/Amin/AppData/Local/Temp/tokenpulse-autohide-application-7004947f690b4befbfeeea4277e1e04c/`：读数仍在正确的移出屏幕位置，Explorer 重绘却将 MSTaskSwWClass / MSTaskListWClass 恢复为本实例登记的完整原始宽度。失败不计通过，所有场景均按 guard 恢复系统开关；临时全拓扑调试输出已移除。

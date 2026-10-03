@@ -186,8 +186,11 @@ impl State {
         self.system_revision = self.system_revision.saturating_add(1);
         Ok(())
     }
-    fn reconcile_layout(&mut self) {
-        if self.layout.as_ref().is_some_and(|layout| !layout.valid()) {
+    fn reconcile_layout(&mut self) -> bool {
+        if self.layout.as_ref().is_some_and(|layout| layout.valid()) {
+            return true;
+        }
+        if self.layout.is_some() {
             let renewed = self.enabled
                 && self.view.is_some()
                 && self
@@ -198,11 +201,19 @@ impl State {
                 self.detach();
                 self.topology = inspect_primary_taskbar();
                 self.embedding_failure = Some(ProbeError::UnsafeGeometry);
+                return false;
             }
+            return true;
         }
+        false
     }
     fn receipt(&mut self, window: HWND) -> NativeReceipt {
-        self.reconcile_layout();
+        // Capture one validated reservation frame. Revalidating again while building
+        // fields can mix a pre-repaint success with a later Explorer reset, publishing
+        // an unavailable state without performing the required hide/renewal.
+        let reservation_valid = self.reconcile_layout();
+        let readout_visible = self.canvas.as_ref().is_some_and(|c| c.visible());
+        let embedded = reservation_valid && readout_visible;
         NativeReceipt {
             cached_view_present: self.view.is_some(),
             private_fields_present: self.view.as_ref().is_some_and(|v| {
@@ -211,7 +222,7 @@ impl State {
             control_visible: unsafe { IsWindowVisible(window) != 0 },
             system_revision: self.system_revision,
             topology: self.topology.clone(),
-            readout_visible: self.canvas.as_ref().is_some_and(|c| c.visible()),
+            readout_visible,
             measured_width: self.canvas.as_ref().and_then(|c| c.plan().map(|p| p.width)),
             measured_density: self
                 .canvas
@@ -219,8 +230,7 @@ impl State {
                 .and_then(|c| c.plan().map(|p| p.density)),
             paint_failed: self.native_failed
                 || self.canvas.as_ref().is_some_and(|c| c.paint_failed()),
-            embedded: self.layout.as_ref().is_some_and(|l| l.valid())
-                && self.canvas.as_ref().is_some_and(|c| c.visible()),
+            embedded,
             embedding_failure: self.embedding_failure,
             last_restore: self.last_restore,
             actions: Vec::new(),

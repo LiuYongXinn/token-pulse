@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g8 已用 release 原生宿主实际通过两位置自动隐藏刷新；此前 05bede333b5a4d5ba71fb1f2ad2d53fd 完整候选在 release 验收失败，不作为最新可用包。修复后的完整包需重新构建 / 签名；已安装 0.1.0 保留。见[一次协调结果与实际 release 验收](delivery-status.md#m13g8release-回执的一次布局校验结果)。
+
 M13g7 自动隐藏入口增加 `--application-right`：在原显式开发标志后追加此参数，使用正式应用按钮测量选择右侧位置；不追加时使用通知区左侧。两种位置均检查真正隐藏后再发送新 Snapshot 仍保持嵌入，并恢复设置 / 几何，本机实际均通过。此证据不替代真实鼠标触边、物理键盘 / Narrator 或多屏。见[两位置刷新记录](delivery-status.md#m13g7两位置自动隐藏后的实际数据刷新)。
 
 实际任务栏自动隐藏验收：`cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host --example check_taskbar_autohide` 后运行 `target/debug/examples/check_taskbar_autohide.exe --native-taskbar-autohide-development-check`。显式开关才执行；要求初始未自动隐藏的已验证 Win10 主任务栏，期间正常启用自动隐藏并按 Shell 归属恢复，读取真实状态及物理窗口位移。普通 cargo test 不运行此 main、不更改设置。M13g6 实际通知区左侧隐藏保持嵌入 / 恢复通过，不代表鼠标触边 / 应用右侧物理场景。M16s 尚未包含本次平移修复；见[当前修复与证据](delivery-status.md#m13g6真实系统自动隐藏与布局平移恢复)。
