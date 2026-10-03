@@ -70,6 +70,28 @@ pub struct OfflinePriceCatalogSnapshot {
     pub catalog: Option<OfflinePriceCatalog>,
 }
 
+/// Internal publication facts, not a renderer override or a new public price DTO.
+#[derive(Debug, Clone)]
+pub struct OfflineReferencePublication {
+    pub catalog: OfflinePriceCatalog,
+    pub introduced_revision: DecimalInt,
+    pub installed_at_ms: EpochMs,
+}
+
+/// Keep the existing persisted flat-history identity byte-for-byte stable.
+pub fn historical_flat_rule_id(revision: i64, original_id: &str) -> Result<String, ErrorCode> {
+    use sha2::{Digest, Sha256};
+    if revision < 0 || !key(original_id) {
+        return Err(ErrorCode::InvalidQuery);
+    }
+    Ok(format!(
+        "offline-history/{:x}",
+        Sha256::digest(
+            serde_json::to_vec(&(revision, original_id)).map_err(|_| ErrorCode::InvalidQuery)?
+        )
+    ))
+}
+
 fn official_reference(value: &str) -> bool {
     value == "https://developers.openai.com/api/docs/pricing"
         || value

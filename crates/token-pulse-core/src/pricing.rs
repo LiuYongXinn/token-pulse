@@ -13,6 +13,7 @@ use ts_rs::TS;
 /// Confirmed storage contract: at most 1,000,000 currency units per million.
 pub const MAX_RATE_ATOMS: i128 = 1_000_000_000_000_000;
 
+mod history;
 mod summary;
 pub use summary::PricingAccumulator;
 pub mod offline;
@@ -338,8 +339,7 @@ pub struct PriceCatalog {
     rules: Vec<PriceRule>,
     index: Models<Vec<usize>>,
     aliases: Models<BTreeSet<String>>,
-    conditional_references: Models<EpochMs>,
-    offline_reference: Option<offline::OfflinePriceCatalog>,
+    offline_references: history::OfflineReferences,
     pub revision: DecimalInt,
 }
 impl PriceCatalog {
@@ -357,8 +357,7 @@ impl PriceCatalog {
             rules: Vec::new(),
             index: BTreeMap::new(),
             aliases: BTreeMap::new(),
-            conditional_references: BTreeMap::new(),
-            offline_reference: None,
+            offline_references: history::OfflineReferences::default(),
             revision,
         };
         for rule in rules {
@@ -404,30 +403,22 @@ impl PriceCatalog {
     }
     /// Keep a validated snapshot for conditional quotes; never flatten its request conditions.
     pub fn with_offline_reference(
-        mut self,
+        self,
         catalog: &offline::OfflinePriceCatalog,
     ) -> Result<Self, ErrorCode> {
-        catalog.validate()?;
-        self.conditional_references.clear();
-        let flat: BTreeSet<&str> = catalog
-            .entries
-            .iter()
-            .filter(|entry| {
-                entry.tier == offline::OfflinePriceTier::Standard
-                    && entry.context == offline::OfflineContextBand::All
-                    && entry.cache_write_per_million.is_none()
-            })
-            .map(|entry| entry.model_exact.as_str())
-            .collect();
-        for entry in &catalog.entries {
-            if !flat.contains(entry.model_exact.as_str()) {
-                self.conditional_references
-                    .entry(catalog.provider.clone())
-                    .or_default()
-                    .insert(entry.model_exact.clone(), catalog.verified_at_ms);
-            }
-        }
-        self.offline_reference = Some(catalog.clone());
+        let publication = offline::OfflineReferencePublication {
+            catalog: catalog.clone(),
+            introduced_revision: self.revision.clone(),
+            installed_at_ms: catalog.verified_at_ms,
+        };
+        self.with_offline_history(vec![publication])
+    }
+    /// The caller supplies publications from one fixed price revision, in publication order.
+    pub fn with_offline_history(
+        mut self,
+        publications: Vec<offline::OfflineReferencePublication>,
+    ) -> Result<Self, ErrorCode> {
+        self.offline_references = history::OfflineReferences::new(publications, &self.revision)?;
         Ok(self)
     }
     pub fn estimate(&self, event: &PricingEvent<'_>, basis: &PriceBasis) -> PriceOutcome {
@@ -492,18 +483,10 @@ impl PriceCatalog {
         }
         // Explicit custom/source rules and unrelated offline references retain their rank.
         // A confirmed actual tier may replace only this snapshot's flat reference rule.
-        let reference = self.offline_reference.as_ref().filter(|catalog| {
-            catalog.provider == provider
-                && time >= catalog.verified_at_ms
-                && catalog
-                    .entries
-                    .iter()
-                    .any(|entry| entry.model_exact == canonical)
-                && winner.is_none_or(|rule| {
-                    rule.origin == PriceOrigin::Offline
-                        && rule.priority == 0
-                        && rule.rule_id == format!("offline/{}/{canonical}", catalog.catalog_id)
-                })
+        let at_time = self.offline_references.at(provider, time);
+        let reference = at_time.filter(|reference| {
+            reference.has_model(canonical)
+                && winner.is_none_or(|rule| reference.owns_flat_rule(rule, canonical))
         });
         if let Some(reference) = reference.filter(|_| {
             evidence
@@ -517,23 +500,19 @@ impl PriceCatalog {
                 occurred_at_ms: event.occurred_at_ms,
                 usage: event.usage,
             };
-            return match reference.select_request_reference_validated(
+            let publication = &reference.publication;
+            return match publication.catalog.select_request_reference_validated(
                 &canonical_event,
                 evidence,
-                self.revision.clone(),
-                reference.verified_at_ms,
+                publication.introduced_revision.clone(),
+                publication.installed_at_ms,
             ) {
                 Ok(selected) => outcome_for_rule(event.usage, &selected.rule),
                 Err(_) => unpriced(UnpricedCode::IncompletePricingConditions),
             };
         }
         let Some(rule) = winner else {
-            if self
-                .conditional_references
-                .get(provider)
-                .and_then(|m| m.get(canonical))
-                .is_some_and(|verified| time >= *verified)
-            {
+            if at_time.is_some_and(|reference| reference.has_conditional_model(canonical)) {
                 return unpriced(UnpricedCode::IncompletePricingConditions);
             }
             return unpriced(UnpricedCode::MissingRule);

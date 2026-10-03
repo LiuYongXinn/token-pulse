@@ -1,5 +1,8 @@
 use super::*;
-use token_pulse_core::pricing::offline::{OfflinePriceCatalog, OfflinePriceCatalogSnapshot};
+use token_pulse_core::pricing::offline::{
+    OfflinePriceCatalog, OfflinePriceCatalogSnapshot, OfflineReferencePublication,
+    historical_flat_rule_id,
+};
 mod conditional;
 
 fn insert_rule(tx: &Transaction<'_>, rule: &PriceRule, conditional: bool) -> StoreResult<()> {
@@ -33,6 +36,36 @@ pub(super) fn snapshot_at(
         catalog,
     })
 }
+pub(super) fn history_at(
+    tx: &Transaction<'_>,
+    revision: i64,
+) -> StoreResult<Vec<OfflineReferencePublication>> {
+    let mut statement = tx.prepare("SELECT catalog_id,catalog_json,content_sha256,verified_at_ms,introduced_revision,installed_at_ms FROM offline_price_catalogs WHERE introduced_revision<=?1 ORDER BY introduced_revision")?;
+    let mut rows = statement.query([revision])?;
+    let mut history = Vec::new();
+    while let Some(row) = rows.next()? {
+        let json: String = row.get(1)?;
+        let catalog: OfflinePriceCatalog =
+            serde_json::from_str(&json).map_err(|_| ErrorCode::DbCorrupt)?;
+        catalog.validate().map_err(|_| ErrorCode::DbCorrupt)?;
+        let introduced: i64 = row.get(4)?;
+        let installed = EpochMs::new(row.get(5)?).map_err(|_| ErrorCode::DbCorrupt)?;
+        if catalog.catalog_id != row.get::<_, String>(0)?
+            || catalog.verified_at_ms.value() != row.get::<_, i64>(3)?
+            || format!("{:x}", Sha256::digest(json.as_bytes())) != row.get::<_, String>(2)?
+            || introduced <= 0
+            || installed < catalog.verified_at_ms
+        {
+            return Err(ErrorCode::DbCorrupt.into());
+        }
+        history.push(OfflineReferencePublication {
+            catalog,
+            introduced_revision: decimal(introduced)?,
+            installed_at_ms: installed,
+        });
+    }
+    Ok(history)
+}
 impl Database {
     /// Boot-time publication through the same price writer as user edits. Idempotent by content.
     pub fn install_offline_price_catalog(
@@ -58,6 +91,7 @@ impl Database {
                 // Deterministic quote metadata may be absent in pre-v14 installations.
                 // Its identity derives from the original publication, not this boot time.
                 conditional::materialize_all(&tx)?;
+                catalog_at(&tx,current)?;
                 tx.commit()?;
                 return Ok(current);
             }
@@ -72,7 +106,7 @@ impl Database {
                 tx.execute("UPDATE price_rules SET retired_revision=?1 WHERE rule_id=?2 AND retired_revision IS NULL",params![next,old.rule_id])?;
                 if old.effective_from_ms < catalog.verified_at_ms {
                     let mut history = old.clone();
-                    history.rule_id = format!("offline-history/{:x}",Sha256::digest(serde_json::to_vec(&(next,&old.rule_id))?));
+                    history.rule_id = historical_flat_rule_id(next,&old.rule_id)?;
                     history.introduced_revision = decimal(next)?;
                     history.retired_revision = None;
                     history.effective_to_ms = Some(catalog.verified_at_ms);
@@ -84,8 +118,7 @@ impl Database {
             tx.execute("INSERT INTO offline_price_catalogs(catalog_id,content_sha256,catalog_json,introduced_revision,verified_at_ms,installed_at_ms) VALUES(?1,?2,?3,?4,?5,?6)",params![catalog.catalog_id,digest,json,next,catalog.verified_at_ms.value(),at.value()])?;
             conditional::materialize_all(&tx)?;
             // Validate the complete candidate before making its revision visible.
-            let candidate = rules_at(&tx,next)?;
-            PriceCatalog::new(candidate.rules,candidate.aliases,candidate.price_revision)?;
+            catalog_at(&tx,next)?;
             tx.execute("UPDATE app_state SET price_revision=?1 WHERE singleton=1",[next])?;
             tx.commit()?;
             Ok(next)
@@ -105,5 +138,7 @@ impl Database {
     }
 }
 
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod tests;

@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-04 M09h3b2b2c 内部目录发布历史不是可由前端写入的 DTO；没有新增 IPC / 生成契约字段。事件时价 / 指定时价及价格修订仍用原契约，公开目录仍返回所请求价格修订的最新事实，估价引擎在同一读取事务内部装配完整可见历史。历史缺条件继续现有 incomplete_pricing_conditions 原因，保留 Token；实际模式 / 地区未知及生产条件金额 / 公开匹配依据待接，见[专题第 15 节](price-accounting.md#15-固定目录历史与条件估价时点m09h3b2b2c)。
+
 2026-10-04 M09h3b2b2a / b 不新增公开 DTO 或 IPC：内部核心条件报价入口与 schema v14 的条件索引不允许渲染端填入实际模式。PriceRulesSnapshot 继续只返回普通参考 / 用户规则及别名，172 条证据门控报价身份不混入普通规则编辑器；原目录 DTO 仍可浏览全部事实。生产查询 / 缓存条件金额与公开匹配依据后续，实际模式 / 地区未知保持原表达，详见[计价专题第 13 / 14 节](price-accounting.md#13-配置计价入口的条件金额选择m09h3b2b2a)。
 
 M09h3b2b1 扩展 UnpricedCode / PriceOutcome 的合法原因 incomplete_pricing_conditions，区别“目录没有报价”与“目录有条件价格但必要条件 / 计价链路尚未完整确认”；主窗口共享 reasonNames 显示“计费条件尚未完整确认”。缺模式 / 地区时不返回 guessed Standard、金额零或虚构匹配规则。原明细 / 汇总 / 重估命令及隐私保持，Rust → TS / schema 同步；持久原因 / 固定历史与缓存 v3 见[计价专题第 12 节](price-accounting.md#12-条件未完整确认的正式未计价状态m09h3b2b1)。

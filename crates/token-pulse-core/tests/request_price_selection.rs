@@ -340,8 +340,7 @@ fn configured_engine_requires_conditions_and_respects_historical_basis() {
     assert_eq!(original.usage.validated_total().unwrap(), Some(272018));
 }
 
-#[test]
-fn confirmed_modes_replace_only_attached_flat_references_and_never_fall_back() {
+fn flat_catalog() -> OfflinePriceCatalog {
     let mut reference = catalog();
     reference.entries = [(OfflinePriceTier::Standard, 1), (OfflinePriceTier::Fast, 4)]
         .into_iter()
@@ -356,6 +355,11 @@ fn confirmed_modes_replace_only_attached_flat_references_and_never_fall_back() {
             reference: "https://developers.openai.com/api/docs/pricing".into(),
         })
         .collect();
+    reference
+}
+#[test]
+fn confirmed_modes_replace_only_attached_flat_references_and_never_fall_back() {
+    let reference = flat_catalog();
     let rules = reference.flat_standard_rules(n(4), time(1000)).unwrap();
     let engine = PriceCatalog::new(rules.clone(), vec![], n(4))
         .unwrap()
@@ -424,6 +428,283 @@ fn confirmed_modes_replace_only_attached_flat_references_and_never_fall_back() {
         )),
         1_270_000_000_000
     );
+}
+
+fn publication(
+    catalog: OfflinePriceCatalog,
+    revision: i128,
+    installed: i64,
+) -> OfflineReferencePublication {
+    OfflineReferencePublication {
+        catalog,
+        introduced_revision: n(revision),
+        installed_at_ms: time(installed),
+    }
+}
+fn next_catalog(original: &OfflinePriceCatalog) -> OfflinePriceCatalog {
+    let mut next = original.clone();
+    next.catalog_id = "openai-text-next-synthetic".into();
+    next.verified_at_ms = time(3000);
+    for entry in &mut next.entries {
+        entry.input_per_million =
+            (entry.input_per_million.parse::<i128>().unwrap() * 10).to_string();
+        entry.cached_per_million = entry
+            .cached_per_million
+            .as_ref()
+            .map(|rate| (rate.parse::<i128>().unwrap() * 10).to_string());
+        entry.cache_write_per_million = entry
+            .cache_write_per_million
+            .as_ref()
+            .map(|rate| (rate.parse::<i128>().unwrap() * 10).to_string());
+        entry.output_per_million =
+            (entry.output_per_million.parse::<i128>().unwrap() * 10).to_string();
+    }
+    next
+}
+
+#[test]
+fn conditional_catalog_history_uses_estimation_time_and_keeps_captured_revisions() {
+    let old = catalog();
+    let next = next_catalog(&old);
+    let history = vec![
+        publication(old.clone(), 1, 1001),
+        publication(next.clone(), 3, 3001),
+    ];
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_history(history)
+        .unwrap();
+    let o = observation(200000, Some(100), Some(25));
+    let original = event(o.last.unwrap());
+    for (occurred, specified, expected, id) in [
+        (
+            2000,
+            None,
+            400_470_000_000_000,
+            "offline/openai-text-synthetic/synthetic-conditional/fast/short",
+        ),
+        (
+            3000,
+            None,
+            4_004_700_000_000_000,
+            "offline/openai-text-next-synthetic/synthetic-conditional/fast/short",
+        ),
+        (
+            2000,
+            Some(3000),
+            4_004_700_000_000_000,
+            "offline/openai-text-next-synthetic/synthetic-conditional/fast/short",
+        ),
+        (
+            3000,
+            Some(2999),
+            400_470_000_000_000,
+            "offline/openai-text-synthetic/synthetic-conditional/fast/short",
+        ),
+    ] {
+        let event = PricingEvent {
+            occurred_at_ms: time(occurred),
+            ..original
+        };
+        let basis = specified
+            .map(|at| PriceBasis::SpecifiedTime {
+                specified_at_ms: time(at),
+            })
+            .unwrap_or(PriceBasis::EventTime {});
+        let outcome = engine.estimate_with_request(
+            &event,
+            &basis,
+            Some(evidence(&o, Some(OfflinePriceTier::Fast))),
+        );
+        assert_eq!(atoms(&outcome), expected);
+        assert!(matches!(outcome,PriceOutcome::Priced {rule_id,..} if rule_id==id));
+    }
+    assert!(matches!(
+        engine.estimate(&original, &PriceBasis::EventTime {}),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    assert!(matches!(
+        engine.estimate_with_request(
+            &original,
+            &PriceBasis::SpecifiedTime {
+                specified_at_ms: time(999)
+            },
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
+    let captured = PriceCatalog::new(vec![], vec![], n(2))
+        .unwrap()
+        .with_offline_history(vec![publication(old, 1, 1001)])
+        .unwrap();
+    let later = PricingEvent {
+        occurred_at_ms: time(4000),
+        ..original
+    };
+    assert_eq!(
+        atoms(&captured.estimate_with_request(
+            &later,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        400_470_000_000_000
+    );
+    let mut removed = next_catalog(&catalog());
+    for entry in &mut removed.entries {
+        entry.model_exact = "synthetic-other-model".into();
+    }
+    let no_fallback = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_history(vec![
+            publication(catalog(), 1, 1001),
+            publication(removed, 3, 3001),
+        ])
+        .unwrap();
+    assert!(matches!(
+        no_fallback.estimate_with_request(
+            &later,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
+}
+
+#[test]
+fn historical_flat_reference_does_not_mask_a_confirmed_mode_or_restore_removed_quotes() {
+    let old = flat_catalog();
+    let mut next = next_catalog(&old);
+    next.entries
+        .retain(|entry| entry.tier != OfflinePriceTier::Fast);
+    let mut closed = old.flat_standard_rules(n(1), time(1001)).unwrap().remove(0);
+    // Golden digest of the old persisted JSON tuple [3, original rule ID].
+    closed.rule_id =
+        "offline-history/a74c3452edcae61e22ed72eb864cf78c5a18de5d636725f8184aea2458b84672".into();
+    closed.introduced_revision = n(3);
+    closed.effective_to_ms = Some(time(3000));
+    closed.created_at_ms = time(3001);
+    let mut rules = next.flat_standard_rules(n(3), time(3001)).unwrap();
+    rules.push(closed);
+    let engine = PriceCatalog::new(rules, vec![], n(4))
+        .unwrap()
+        .with_offline_history(vec![publication(old, 1, 1001), publication(next, 3, 3001)])
+        .unwrap();
+    let o = observation(1000, Some(100), Some(0));
+    let event = PricingEvent {
+        model: Some("synthetic-flat"),
+        ..event(o.last.unwrap())
+    };
+    assert_eq!(
+        atoms(&engine.estimate(&event, &PriceBasis::EventTime {})),
+        1_185_000_000_000
+    );
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        4_740_000_000_000
+    );
+    let later = PricingEvent {
+        occurred_at_ms: time(3000),
+        ..event
+    };
+    assert_eq!(
+        atoms(&engine.estimate(&later, &PriceBasis::EventTime {})),
+        11_850_000_000_000
+    );
+    assert!(matches!(
+        engine.estimate_with_request(
+            &later,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &later,
+            &PriceBasis::SpecifiedTime {
+                specified_at_ms: time(2000)
+            },
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        4_740_000_000_000
+    );
+    let mut invalid = o.clone();
+    invalid.effective_metadata.turn_id = None;
+    assert!(matches!(
+        engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&invalid, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
+}
+
+#[test]
+fn publication_history_rejects_invalid_order_and_uses_the_latest_equal_instant() {
+    let old = catalog();
+    let next = next_catalog(&old);
+    for change in 0..7 {
+        let mut history = vec![
+            publication(old.clone(), 1, 1001),
+            publication(next.clone(), 3, 3001),
+        ];
+        match change {
+            0 => history.reverse(),
+            1 => history[1].catalog.catalog_id = old.catalog_id.clone(),
+            2 => history[1].introduced_revision = n(5),
+            3 => history[1].catalog.verified_at_ms = time(999),
+            4 => history[0].installed_at_ms = time(999),
+            5 => history[1].introduced_revision = n(1),
+            _ => history[1].catalog.format_version = 2,
+        }
+        assert!(
+            PriceCatalog::new(vec![], vec![], n(4))
+                .unwrap()
+                .with_offline_history(history)
+                .is_err()
+        );
+    }
+    let mut equal = next;
+    equal.verified_at_ms = old.verified_at_ms;
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_history(vec![publication(old, 1, 1001), publication(equal, 3, 1002)])
+        .unwrap();
+    let o = observation(200000, Some(100), Some(25));
+    let event = event(o.last.unwrap());
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &event,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        )),
+        4_004_700_000_000_000
+    );
+    assert!(matches!(
+        PriceCatalog::new(vec![], vec![], n(4))
+            .unwrap()
+            .with_offline_history(vec![])
+            .unwrap()
+            .estimate(&event, &PriceBasis::EventTime {}),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::MissingRule
+        }
+    ));
 }
 #[test]
 fn each_request_selects_all_four_rates_and_whole_output_with_exact_input_boundaries() {
