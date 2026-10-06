@@ -24,6 +24,7 @@ export function DateFilter({ selection, calendar, timezone, disabled, onChange }
   const appliedKey = JSON.stringify([selection, timezone]);
   useEffect(() => { setDraft(null); setError(null); }, [appliedKey]);
   return <div className="date-filter" ref={root}>
+    <div className="date-presets" role="group" aria-label="快捷日期">{([['today', '今天'], ['last7', '近 7 天'], ['last30', '近 30 天']] as const).map(([kind, label]) => <button key={kind} type="button" aria-pressed={selection.kind === kind} disabled={disabled} onClick={() => { setDraft(null); setError(null); onChange({ kind }); }}>{label}</button>)}</div>
     <select aria-label="日期范围" ref={select} value={draft ? 'custom' : selection.kind} disabled={disabled} onChange={event => { const value = event.target.value; if (value === 'custom') open(); else { setDraft(null); setError(null); onChange({ kind: value as 'today' | 'last7' | 'last30' }); } }}>
       <option value="today">今日</option><option value="last7">近 7 日</option><option value="last30">近 30 日</option><option value="custom" disabled={!calendar && selection.kind !== 'custom'}>自定义日期</option>
     </select>
