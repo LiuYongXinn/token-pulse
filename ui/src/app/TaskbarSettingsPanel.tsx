@@ -4,6 +4,7 @@ import { getTaskbarPreferences, onSettingsChanged, retryTaskbarEmbed, runtimeErr
 import { useTaskbarRuntime } from './useTaskbarRuntime';
 import { TaskbarRuntimeDetails } from './TaskbarRuntimeDetails';
 import './taskbar-settings.css';
+import { Icon } from '../shared/Icon';
 
 export function TaskbarSettingsPanel({ timezone }: { timezone: string | null }) {
   const [snapshot, setSnapshot] = useState<TaskbarPreferencesSnapshot | null>(null);
@@ -53,7 +54,7 @@ export function TaskbarSettingsPanel({ timezone }: { timezone: string | null }) 
       <div className="display-setting-actions"><button className="primary" disabled={!draft || !valid || busy} onClick={() => void save()}>{busy ? '正在处理…' : '保存任务栏设置'}</button><button disabled={!draft || busy} onClick={() => { setDraft(null); setError(null); }}>重置任务栏草稿</button></div>
       <p className="chart-caption">{snapshot ? `已保存修订 ${snapshot.settings_revision}。保存成功不代表嵌入成功。` : '正在读取任务栏偏好…'}{draft ? ` 编辑基于修订 ${draft.revision}；刷新保留草稿。` : ''}</p>
       {error && <p className="notice" role="alert">{error}{draft ? ' 草稿已保留，重置草稿后可基于最新配置编辑。' : ''}</p>}
-    </div><div className="taskbar-state-panel"><h3>实际运行状态</h3><TaskbarRuntimeDetails snapshot={runtime.snapshot} error={runtime.error} timezone={timezone} />
+    </div><div className="taskbar-state-panel"><section className="taskbar-layout-preview" aria-label="任务栏布局预览"><h3>布局预览</h3><div className="taskbar-preview-rail"><span className="taskbar-preview-app"><Icon name="pulse" size={22} /></span><div className="taskbar-preview-readings" data-layout={preferences?.display.layout ?? 'two_rows'}>{([['show_tokens', 'Token'], ['show_costs', '估算'], ['show_quota', '剩余'], ['show_weekly_reset', '周重置']] as const).filter(([key]) => preferences?.display[key]).map(([key, label]) => <div key={key}><span>{label}</span><b>—</b></div>)}</div></div><p className="chart-caption">布局示意，横线是占位符。真实任务栏沿用系统外观，数值来自小窗范围与独立账户额度。</p></section><h3>实际运行状态</h3><TaskbarRuntimeDetails snapshot={runtime.snapshot} error={runtime.error} timezone={timezone} />
       <div className="display-setting-actions"><button disabled={busy || !snapshot?.preferences.enabled || runtime.snapshot?.state !== 'unavailable'} onClick={() => void action(retryTaskbarEmbed)}>重试任务栏嵌入</button><button disabled={busy} onClick={() => void action(() => windowAction('show_mini'))}>显示悬浮窗</button></div>
       <p className="chart-caption">在悬浮窗中调整统计范围。主窗口筛选不改变任务栏范围。</p>
     </div></div>
