@@ -1,5 +1,7 @@
 # Windows 任务栏显示模式
 
+2026-10-06 M13g14 背景取色修正：正式 0.1.4 的白底已实际复现，旧 ReBar (0,1) 落在 Windows `DynamicContent1` 天气组件而非空白任务栏。源码改为读取已验证任务列表中、所有 UIA 直接控件之后的空白像素；列表身份 / 完整几何前后校验，空间不足或取色失败保持明确失败。真实自动隐藏仅在存活有效租约和已确认 palette 下保留颜色，重新显示再采样；不以默认深色伪造成功。两位置共用只读控件几何探针；新的 2 项独立预期及 taskbar 71 项自动检查 / strict Clippy 通过，正式安装尚未含本修正。“不截图时消失”仍单独复测，不能从白底原因推断已修复。背景像素的坐标及无效返回按 Microsoft [GetDCEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdcex) / [GetPixel](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getpixel) 文档核实（2026-10-06），实际证据见[交付记录](../development/delivery-status.md)。
+
 M13g13 补齐 application_right 的真实 S3 验收，与 notification_left 独立运行。主 / 小窗隐藏、固定同一合成会话及 3→10 正式补扫，恢复后新原生快照 / 详情与设置位置保持，原 Explorer 和退出完整任务区 Exact 已在 Win10 19045 / 150% 通过。仅 debug 验收入口增加显式位置参数与位置证明，生产电源路由、布局规则和当前签名宿主保持原实现。证据使用同包 release 宿主 + debug 桌面，不代替正式安装版物理输入 / 全包验收，见[范围与实际证据](../development/delivery-status.md#m13g13应用图标右侧的真实-s3-恢复链)。
 
 M13g12 补充电源生命周期验收：主 HWND 的正式电源路由使 actor 暂停动作与发布，观察到暂停后正常关闭宿主；恢复后重新读取配置 / 真实本地 DTO，可建立新宿主代次，丢弃旧详情与动作意图，不误开主 / 小窗。M16v 同包 release 宿主 + debug 桌面的真实 S3 链及恢复后的 3→10 原生读数、详情关闭、正常退出完整任务区通过。睡眠后系统通知区边界可以变化，验收必须核对同一 Explorer 与完整当前几何；不能将旧通知区坐标当成恢复写入目标。新边界验收仅允许严格共用边界变化，实际最终命中 Exact，捕获的边界变化与失败历史分别记录。正式写入规则没有在这组 debug 验收中改变，见[证据与范围](../development/delivery-status.md#m13g12任务栏宿主的真实-s3-恢复链)。

@@ -459,6 +459,7 @@ pub(crate) struct NativeCanvas {
     // Strong procedure references keep resources alive through nested native menu dispatch.
     state: Rc<CanvasState>,
     attached: bool,
+    palette_confirmed: bool,
 }
 impl NativeCanvas {
     /// Caller owns the parent on this UI thread, before any child windows are created.
@@ -525,6 +526,7 @@ impl NativeCanvas {
             class,
             state,
             attached: false,
+            palette_confirmed: false,
         })
     }
     pub(crate) fn visible(&self) -> bool {
@@ -576,9 +578,13 @@ impl NativeCanvas {
         }
     }
     pub(crate) fn set_palette(&mut self, palette: Palette) {
+        self.palette_confirmed = true;
         unsafe {
             (*self.state.get()).palette = palette;
         }
+    }
+    pub(crate) fn palette_confirmed(&self) -> bool {
+        self.palette_confirmed
     }
     pub(crate) fn clear(&mut self) -> Result<(), WireError> {
         self.clear_interactions();

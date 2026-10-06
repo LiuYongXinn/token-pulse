@@ -534,7 +534,7 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
     let mut usage: MiniUsageSnapshot = serde_json::from_value(serde_json::json!({
         "meta":{"snapshot_id":"synthetic","data_revision":"9007199254740993","price_revision":"3","generated_at_ms":1000,"parser_versions":[],"accounting_versions":[],"display_timezone":"UTC"},
         "settings_revision":"2","mini_scope":{"kind":"today_all_sources"},"scope_display_name":"SYNTHETIC PRIVATE SCOPE","range":{"start_ms":0,"end_ms":1001,"timezone":"UTC"},
-        "usage":{"total_tokens":"0","input_total":unknown,"noncached_input":unknown,"cached_input":unknown,"output_total":unknown,"reasoning_output":unknown,"session_count":"0","usage_event_count":"0","reliable_turn_count":null,"reliable_turns_complete":false},
+        "usage":{"total_tokens":"0","input_total":unknown,"noncached_input":unknown,"cached_input":unknown,"cache_write_input":unknown,"output_total":unknown,"reasoning_output":unknown,"session_count":"0","usage_event_count":"0","reliable_turn_count":null,"reliable_turns_complete":false},
         "pricing":{"redacted":false,"basis":{"mode":"event_time"},"currencies":[{"currency":"USD","estimated_cost":"0.000000000000001","priced_total_tokens":"0"}],"priced_total_tokens":"0","unpriced_total_tokens":"0","reasons":[],"calculating":false},
         "coverage":{"state":"unknown","pending_observation_count":"0","unattributed_observation_count":"0","unattributed_total_tokens":null,"pending_file_count":"1","source_issues":[],"format_issues":[],"breakdown_complete":false}
     })).unwrap();

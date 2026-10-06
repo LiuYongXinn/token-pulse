@@ -4,7 +4,7 @@ use super::{
     TransportError,
     buttons::ButtonProbe,
     canvas::NativeCanvas,
-    layout::{LayoutLease, RestoreDisposition, background},
+    layout::{BackgroundSample, LayoutLease, RestoreDisposition, background},
     render::Palette,
     topology::{
         ProbeError, TaskbarTopology, discover_primary_taskbar, inspect_primary_taskbar, wide,
@@ -286,15 +286,16 @@ impl State {
     fn prepare(&mut self) -> Result<(), TransportError> {
         self.recreate_canvas()?;
         self.reconcile_layout();
-        if self.enabled && self.position == TaskbarPosition::ApplicationRight {
+        if self.enabled {
             if self.buttons.as_ref().is_none_or(|probe| probe.finished()) {
                 self.buttons = Some(ButtonProbe::start().map_err(|_| TransportError::Native)?);
             }
-            if let Some(layout) = &self.layout {
-                if layout.application_stable(self.buttons.as_ref().unwrap()) != Ok(true) {
-                    self.detach();
-                    self.topology = inspect_primary_taskbar();
-                }
+            if self.position == TaskbarPosition::ApplicationRight
+                && let Some(layout) = &self.layout
+                && layout.application_stable(self.buttons.as_ref().unwrap()) != Ok(true)
+            {
+                self.detach();
+                self.topology = inspect_primary_taskbar();
             }
         }
         // Failed construction can race normal Shell animation. With no lease, each
@@ -352,10 +353,21 @@ impl State {
                         )
                     });
                 if self.enabled {
-                    match background() {
-                        Ok(color) => canvas.set_palette(
+                    match self
+                        .buttons
+                        .as_ref()
+                        .ok_or(ProbeError::BackgroundUnavailable)
+                        .and_then(background)
+                    {
+                        Ok(BackgroundSample::Color(color)) => canvas.set_palette(
                             Palette::system(color).map_err(|_| TransportError::Native)?,
                         ),
+                        Ok(BackgroundSample::AutoHidden)
+                            if canvas.palette_confirmed()
+                                && self.layout.as_ref().is_some_and(|layout| layout.valid()) => {}
+                        Ok(BackgroundSample::AutoHidden) => {
+                            self.embedding_failure = Some(ProbeError::BackgroundUnavailable)
+                        }
                         Err(error) => self.embedding_failure = Some(error),
                     }
                 }

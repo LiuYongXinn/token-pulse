@@ -1,7 +1,7 @@
 //! A thread-owned, conditional Explorer reservation. Only the verified Win10 adapter mutates
 //! Explorer. A destroyed/replaced window, lost owner property or changed parent geometry prevents
 //! restoration. The child remains hidden until all postconditions hold.
-use super::buttons::ButtonProbe;
+use super::buttons::{ButtonCoverage, ButtonProbe};
 use super::ownership::{LayoutRecord, Ownership, Phase, ProcessIdentity};
 #[cfg(test)]
 use super::topology::hidden_at_bottom;
@@ -23,26 +23,52 @@ use windows_sys::Win32::{
     },
 };
 
-pub(crate) fn background() -> Result<u32, ProbeError> {
+pub(crate) enum BackgroundSample {
+    Color(u32),
+    AutoHidden,
+}
+fn background_point(list: ScreenRect, coverage: &ButtonCoverage) -> Result<(i32, i32), ProbeError> {
+    coverage.validate()?;
+    if coverage.list != list {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    // UIA includes every direct control, including overflow. Sample only the blank
+    // task-list area after those controls, never ReBar's weather/search widgets.
+    let left = coverage.rightmost();
+    if list.right - left < 3 || list.height() < 3 {
+        return Err(ProbeError::BackgroundUnavailable);
+    }
+    Ok((left + (list.right - left) / 2, list.top + list.height() / 2))
+}
+pub(crate) fn background(buttons: &ButtonProbe) -> Result<BackgroundSample, ProbeError> {
     let _dpi = DpiGuard::enter()?;
     let windows = discover_primary_taskbar()?;
     let bounds = windows.topology()?;
-    if bounds.task_switch.left <= bounds.rebar.left {
-        return Err(ProbeError::UnsafeGeometry);
+    bounds.validate()?;
+    if root_auto_hidden(windows.root)? {
+        return Ok(BackgroundSample::AutoHidden);
     }
-    let dc = unsafe { GetDCEx(windows.rebar, ptr::null_mut(), DCX_CACHE | DCX_WINDOW) };
+    let coverage = buttons.inspect()?;
+    let (x, y) = background_point(bounds.task_list, &coverage)?;
+    if windows.topology()? != bounds {
+        return Err(ProbeError::UnexpectedStructure);
+    }
+    let dc = unsafe { GetDCEx(windows.list, ptr::null_mut(), DCX_CACHE | DCX_WINDOW) };
     if dc.is_null() {
         return Err(ProbeError::BackgroundUnavailable);
     }
-    // One pixel of the verified taskbar container, never a desktop/app screenshot.
-    let color = unsafe { GetPixel(dc, 0, 1) };
+    // One pixel of the verified empty task-list surface; no desktop/app screenshot.
+    let color = unsafe { GetPixel(dc, x - bounds.task_list.left, y - bounds.task_list.top) };
     unsafe {
-        ReleaseDC(windows.rebar, dc);
+        ReleaseDC(windows.list, dc);
+    }
+    if windows.topology()? != bounds {
+        return Err(ProbeError::UnexpectedStructure);
     }
     if color == u32::MAX {
         Err(ProbeError::BackgroundUnavailable)
     } else {
-        Ok(color)
+        Ok(BackgroundSample::Color(color))
     }
 }
 struct LayoutMutex(HANDLE, PhantomData<Rc<()>>);
@@ -748,6 +774,82 @@ pub fn recover_terminated_host<H: AsRawHandle>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_sample_uses_empty_task_list_instead_of_weather_widget() {
+        // Independent synthetic list geometry beside the observed ReBar weather
+        // widget at x=502. Only the task list's blank tail is color evidence.
+        let list = ScreenRect {
+            left: 560,
+            top: 1380,
+            right: 1628,
+            bottom: 1440,
+        };
+        let coverage = ButtonCoverage {
+            list,
+            occupied: vec![ScreenRect {
+                left: 560,
+                top: 1380,
+                right: 916,
+                bottom: 1440,
+            }],
+        };
+        assert_eq!(background_point(list, &coverage), Ok((1272, 1410)));
+        let negative = ScreenRect {
+            left: -2000,
+            top: -80,
+            right: -1200,
+            bottom: -20,
+        };
+        assert_eq!(
+            background_point(
+                negative,
+                &ButtonCoverage {
+                    list: negative,
+                    occupied: vec![]
+                }
+            ),
+            Ok((-1600, -50))
+        );
+    }
+
+    #[test]
+    fn background_sample_rejects_incomplete_or_fully_occupied_geometry() {
+        let list = ScreenRect {
+            left: 560,
+            top: 1380,
+            right: 1628,
+            bottom: 1440,
+        };
+        let mut coverage = ButtonCoverage {
+            list,
+            occupied: vec![list],
+        };
+        assert_eq!(
+            background_point(list, &coverage),
+            Err(ProbeError::BackgroundUnavailable)
+        );
+        coverage.occupied[0].right = 1626;
+        assert_eq!(
+            background_point(list, &coverage),
+            Err(ProbeError::BackgroundUnavailable)
+        );
+        coverage.occupied[0].right = 1625;
+        assert_eq!(background_point(list, &coverage), Ok((1626, 1410)));
+        let other = ScreenRect {
+            right: 1627,
+            ..list
+        };
+        assert_eq!(
+            background_point(other, &coverage),
+            Err(ProbeError::UnexpectedStructure)
+        );
+        coverage.occupied[0].left = 559;
+        assert_eq!(
+            background_point(list, &coverage),
+            Err(ProbeError::UnsafeGeometry)
+        );
+    }
 
     fn notification_resize_fixture() -> (LayoutRecord, TaskbarTopology, TaskbarTopology, ScreenRect)
     {
