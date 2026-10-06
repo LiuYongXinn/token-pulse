@@ -1,5 +1,7 @@
 # TokenPulse 详细开发设计
 
+2026-10-07 M15f10 固定客户区尺寸：不同 DPI 的显示器之间拖动时，Windows 建议矩形可能按旧外框缩放，导致无装饰小窗的客户区少掉边框。小窗统一监听 Moved / Resized / ScaleFactorChanged；几何稳定后按当前实际 DPI 校对紧凑 280×220、展开 360×380 DIP 的客户区，尺寸不符先调整客户区，由真实 Resized 再进入完整外框夹紧与位置持久化。尺寸修正不写入新偏好，不把系统建议的错误客户区保存为设计尺寸；同一次事件等待期间的新事件继续沿用已有序列机制。混合 DPI 的正式包 / SendInput 验收结果见[交付记录](../development/delivery-status.md)，不得以同 DPI 拖动推断通过。
+
 2026-10-07 M15f8 自动回退焦点边界：窗口库的 SW_SHOW 是显式激活命令，临时 WS_EX_NOACTIVATE 样式不能单独保证自动回退保持前台。Windows 小窗显示期间增加仅限自有窗口线程、仅拒绝目标 HWND 的 HCBT_ACTIVATE 临时保护，其他窗口和消息继续转发；显示完成立即卸载并恢复样式，正常用户点击、显示和快捷键仍可激活。位置夹紧仅通过自有 HWND 的 SetWindowPos（NOACTIVATE / NOSIZE / NOZORDER）移动，避免窗口库重新应用显示状态。设计依据 Microsoft [ShowWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow)、[CBTProc](https://learn.microsoft.com/en-us/windows/win32/winmsg/cbtproc) 与 [SetWindowsHookExW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw)，核实日期 2026-10-07；验收与候选包状态见[交付记录](../development/delivery-status.md)。
 
 2026-10-07 M15f7 小窗工作区边界修正：位置存储使用 outer_position，因此实时夹紧必须使用原生 outer_size；无标题栏 WebView 在 Win10 上仍可能有不可见外框，固定 280×220 / 360×380 DIP 是客户区尺寸，不能直接当外框尺寸。保留隐藏创建阶段按固定客户区恢复的位置，再在实际 show 后测量 / 夹紧完整外框，普通移动、DPI / 显示拓扑消息和展开复用同一夹紧函数。此修正不改变固定尺寸、主题、统计范围或账户范围。独立 Win32 GetWindowRect 的边界检查及必要原生验收见[交付记录](../development/delivery-status.md)，已安装 0.1.7 尚未包含修正，需新包真实停用显示器复测。

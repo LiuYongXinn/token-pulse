@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-07 固定客户区回归：小窗新增 Resized 调度，当前真实 DPI 下校对固定 DIP 客户区后再夹紧 / 保存外框。`scripts/native-mini-placement.ps1` 的隔离检查同步改变自有 HWND 并确认不正确尺寸已实际出现，再等候正常事件链恢复；成功需 CLIENT_RESIZE / PLACEMENT / OUTER_BOUNDS 和实际退出 0。它仍不能代替正式包混合 DPI 的鼠标跨屏检查。开发构建空间不足时可用 Cargo 自带 `cargo clean --profile dev -p token-pulse-desktop` 清理该模块可重建产物，保留 release 证据；不要据未完成的编译报告成功。
+
 2026-10-07 自动回退焦点检查：`scripts/native-smoke.ps1 -Taskbar` 使用隔离库 / 缺宿主工厂，核对新建与复用小窗的实际前台 HWND、临时 NOACTIVATE 已撤销、用户隐藏 / 重试 / 恢复和原任务栏几何。失败打印 before / after / mini / main HWND 以区分真实抢焦点与外部前台变化；不能仅凭“窗口显示了”通过。`-TaskbarActions` 的按钮夹具最多创建八个分别分组的合成窗口，让实际覆盖越过 320 DIP 最小区域，再检查槽位移动，退出销毁全部夹具；一个按钮仍处于最小区域内时不应判为产品故障。实际鼠标、正常桌面目视和正式安装继续独立验收，失败日志不删除。
 
 2026-10-07 小窗完整外框回归入口：PowerShell 7 执行 `scripts/native-mini-placement.ps1`，Windows 10 19045 / locked offline 构建后运行独立 `--native-smoke --native-mini-placement-smoke`。只使用自有隔离库与实际 WebView，不修改系统显示配置或启用任务栏。检查位置 / 展开 / 置顶保存、销毁重建、缺失显示器回退，以及紧凑 / 展开窗口在右下边缘的普通 Moved 事件，独立 GetWindowRect 验证完整外框在实际工作区，客户区仍为设计 DIP。与正式实例冲突的 SHORTCUT_CONFLICT 及 WebView 退出 1412 提示记录但不改用户快捷键；成功标记必须出现且实际退出 0。该场不能代替正式新安装包的逻辑停用或物理拖动 / 拔线。

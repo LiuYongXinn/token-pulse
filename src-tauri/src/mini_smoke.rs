@@ -416,7 +416,43 @@ fn verify_placement_restore(app: &tauri::AppHandle, mini: &WebviewWindow) -> Res
                 (280.0, 220.0)
             };
             size(&fallback, width, height)?;
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
+            };
+            let outer = fallback.outer_size().map_err(|e| e.to_string())?;
+            let scale = fallback.scale_factor().map_err(|e| e.to_string())?;
+            let hwnd = fallback.hwnd().map_err(|e| e.to_string())?.0.cast();
+            if unsafe {
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                    i32::try_from(outer.width).map_err(|e| e.to_string())?
+                        - (14.0 * scale).round() as i32,
+                    i32::try_from(outer.height).map_err(|e| e.to_string())?
+                        - (7.0 * scale).round() as i32,
+                    SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
+                )
+            } == 0
+                || size(&fallback, width, height).is_ok()
+            {
+                return Err("authored native client resize was not observed".into());
+            }
+            let deadline = std::time::Instant::now() + Duration::from_secs(6);
+            while size(&fallback, width, height).is_err() {
+                if std::time::Instant::now() >= deadline {
+                    return Err(
+                        "mini fixed client did not recover after actual native resize".into(),
+                    );
+                }
+                thread::sleep(Duration::from_millis(30));
+            }
+            wait_for_outer_fit(&fallback)?;
         }
+        println!(
+            "NATIVE_MINI_CLIENT_RESIZE_OK: fixed compact/expanded logical client restored by actual Resized event before fitting and saving outer bounds"
+        );
     }
     fallback.hide().map_err(|e| e.to_string())?;
     println!(

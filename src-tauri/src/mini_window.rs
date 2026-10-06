@@ -551,6 +551,18 @@ pub(super) fn schedule_placement(app: &tauri::AppHandle) {
                 continue;
             }
             if let Some(window) = app.get_webview_window("mini") {
+                // Windows' suggested DPI-change rectangle can scale the old outer
+                // frame as if it were the client. Restore our fixed logical client
+                // first; the resulting Resized event schedules fitting / persistence
+                // after the real native frame settles.
+                match restore_client_size(&window) {
+                    Ok(false) => break sequence,
+                    Err(_) => {
+                        eprintln!("MINI_DIMENSIONS_UNAVAILABLE");
+                        break sequence;
+                    }
+                    Ok(true) => {}
+                }
                 if fit_current(&window).is_err() {
                     eprintln!("MINI_PLACEMENT_UNAVAILABLE");
                 } else if sequence == runtime.mini_geometry_sequence.load(Ordering::Relaxed)
@@ -567,4 +579,20 @@ pub(super) fn schedule_placement(app: &tauri::AppHandle) {
             schedule_placement(&app);
         }
     });
+}
+fn restore_client_size(window: &WebviewWindow) -> Result<bool, String> {
+    let runtime = window.app_handle().state::<super::RuntimeState>();
+    let expanded = runtime
+        .mini_window
+        .lock()
+        .map_err(|_| "WINDOW_STATE_UNAVAILABLE")?
+        .expanded;
+    let (width, height) = dimensions(expanded);
+    let logical = tauri::LogicalSize::new(width, height);
+    let expected = logical.to_physical::<u32>(window.scale_factor().map_err(|e| e.to_string())?);
+    if window.inner_size().map_err(|e| e.to_string())? != expected {
+        window.set_size(logical).map_err(|e| e.to_string())?;
+        return Ok(false);
+    }
+    Ok(true)
 }

@@ -345,7 +345,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Destroyed) {quota_commands::update_native_visibility(window);}
             if window.label()=="main" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { main_window::schedule(window.app_handle(),matches!(event,tauri::WindowEvent::ScaleFactorChanged {..})); }
-            if window.label()=="mini" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { mini_window::schedule_placement(window.app_handle()); }
+            if window.label()=="mini" && matches!(event,tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged {..}) { mini_window::schedule_placement(window.app_handle()); }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 if window.label()=="main" {if let Some(main)=window.app_handle().get_webview_window("main") {if main_window::save_current(&main).is_err() {eprintln!("MAIN_PLACEMENT_SAVE_FAILED");}}}

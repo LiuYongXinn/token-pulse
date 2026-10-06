@@ -1,5 +1,13 @@
 # 实施与交付记录
 
+M15f10 源码修复验证：独立 Win10 原生位置入口先对自有 HWND 同步施加并观察真实不正确客户区，再检查 Resized 调度恢复两种固定客户区、完整外框与位置；CLIENT_RESIZE / PLACEMENT / OUTER_BOUNDS 三项标记出现，实际退出 0（target/mini-fixed-client-native-retry.log）。同一修复的 -Taskbar 回退 / 用户隐藏 / 显式重试 / 前台保持 / 几何恢复完整退出 0（mini-fixed-client-taskbar.log）；desktop all-target strict Clippy 退出 0（mini-fixed-client-clippy.log）。正式混合 DPI 复测仍需新包，当前不能列为已验。
+
+初次 debug 编译因 E 盘空间耗尽退出 101，未生成可验新包。只读检查显示本仓库增量缓存约 103 GiB；直接递归缓存删除遭自动审批拒绝，随后 Cargo 自带 `clean --profile dev -p token-pulse-desktop` 成功清理 69.8 GiB 桌面开发构建产物、E 盘恢复约 58 GiB，release 安装包 / 签名 / 截图 / 实际数据库保持。重建与上述检查才计为通过；未清理个人目录或重启。正式 0.1.9 在核对 PID / 开始时间后正常自有托盘退出 0，四份 baseline 与摘要保留。辅助时间比较先因 PowerShell JSON 的 DateTime 类型而拒绝，改为同 UTC DateTime 后才退出，没有操作其他 PID。
+
+2026-10-07 M15f10 拖动证据与新缺陷：正式 0.1.9 / 两屏各 150% 的主窗、紧凑小窗、展开小窗共六个 SendInput 按住 / 移动 / 释放检查点全部通过，实际 GetGUIThreadInfo 的 MoveSize 必须为自有窗口，实际几何与 SQLite 保存位置匹配，客户区固定 DIP / 完整工作区边界、原 topmost / 非位置偏好恢复通过；回执 physical-drag-fb81c07f-ae34-4d22-abca-cc2de905c1df.json。辅助 C# 首次打包坐标的 sign-extension 告警先拒绝；早期小窗切换后查询尚忙时输入被正常忽略，旧检查只读到 DOM pointer capture，不能计为已开始系统拖动。等候真实尺寸 / 按钮可用、核对 MoveSize 后重跑通过，所有失败保留。
+
+随后真实 Windows 主屏 100% / 第二屏 150% 的拖动发现正式产品问题：紧凑小窗已到第二屏且保存正确，但客户区为 398×319，而应为 420×330（外框 420×330，实际 DPI 144）。该混合 DPI 场退出 1，系统缩放、原窗口与两屏恢复，无清理错误，已正常关闭本场 Windows 设置窗口；不能把之前 0.1.7 四档单屏缩放或本轮六点同 DPI 拖动扩展为混合 DPI 已通过。正在增加 Resized 监听与客户区固定尺寸校正；0.1.9 未公开、尚未包含该修复。物理拔线未执行，不以逻辑停用冒充。
+
 2026-10-07 M16z8 / M15f9 正式安装与拓扑：0.1.9-60f5a07 完整生产构建退出 0，桌面 release 3m16s，334 份 notices 摘要保持；6,707,348 字节 NSIS SHA-256 f831b89e7f42f2c145d9206615fd19af385e3deb8bb648ca4fb7ba24d70ba227，正式维护程序实际版本绑定验签退出 0，公钥与旧发布相同。NSIS PID 113524 退出 0，本机启动 PID 113428；启动前原 DB 与 WAL 的 SHA / 长度完全相同，登记 / 主程序 NSIS marker / 独立宿主 / notices 均匹配。自有 UI 初始化完成后显示小窗，第一次过早读取按钮被拒绝，等候真实可用按钮后执行，不修改其他应用。
 
 同一正式包在真实 Windows 显示 API 中完成第二屏作为主屏、第一屏负坐标、原主屏恢复、第二屏逻辑停用与恢复，四组采样均通过，完整退出 0。正式任务栏跟随主屏，小窗停用后的完整外框右边恰为工作区 2560，旧包 10 像素越界已修正；两屏原 bounds / primary / work area、current / registry 模式独立等候读回一致，无清理错误。回执 target/release/review/v0.1.9/display-topology-f7ecaaab-d975-47b9-8c6c-0fa6a9d59d2e.json，方法仍非物理拔线。主窗口 SendInput 按住 / 移动 / 释放两屏已通过，但小窗位置保存检查未通过，全部拖动场景不能记为完成；失败和后续独立坐标证据继续保留。本轮未重启 / 未推送，公开仍 0.1.3。
