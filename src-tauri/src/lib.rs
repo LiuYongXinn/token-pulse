@@ -333,6 +333,11 @@ pub fn run() {
                     taskbar_smoke::start(app.handle().clone());
                     return Ok(());
                 }
+                #[cfg(windows)]
+                if std::env::args().any(|arg| arg == "--native-mini-placement-smoke") {
+                    mini_smoke::start_placement(app.handle().clone());
+                    return Ok(());
+                }
                 smoke::start(app.handle().clone());
             }
             Ok(())

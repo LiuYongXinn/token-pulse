@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-07 小窗完整外框回归入口：PowerShell 7 执行 `scripts/native-mini-placement.ps1`，Windows 10 19045 / locked offline 构建后运行独立 `--native-smoke --native-mini-placement-smoke`。只使用自有隔离库与实际 WebView，不修改系统显示配置或启用任务栏。检查位置 / 展开 / 置顶保存、销毁重建、缺失显示器回退，以及紧凑 / 展开窗口在右下边缘的普通 Moved 事件，独立 GetWindowRect 验证完整外框在实际工作区，客户区仍为设计 DIP。与正式实例冲突的 SHORTCUT_CONFLICT 及 WebView 退出 1412 提示记录但不改用户快捷键；成功标记必须出现且实际退出 0。该场不能代替正式新安装包的逻辑停用或物理拖动 / 拔线。
+
 2026-10-07 M16z5 / M13g20 本机回执：实际安装 0.1.7，NSIS / 同版本验签均退出 0，启动前 DB / WAL SHA 完全保持；本机 `target/release/review/v0.1.7/` 包含 local-install.json、前后数据库摘要、正式 UI 和原生区域图片。已安装 PID 89968 是当时身份，后续不得盲目复用。普通任务栏鼠标检查及五菜单项真实 SendInput 通过；首次检查 finally 小窗按钮暂忙失败，等待其唯一且可用后重跑退出 0，失败不删除。菜单设置面板、隐私 146 / 147、停用 148 与自有生产 UIA 恢复 149 的只读核对分别保留。原 taskbar 偏好 / privacy 已恢复，不直接写活跃数据库，不用助记消息当物理证据。新 Pending 文案已真实显示、cache v6 后台已产生，不能因此推断缺实际模式的模型已完整计价。公开仍 0.1.3，剩余窗口 / 系统和最终版本步骤继续；未重启。
 
 2026-10-07 M16z5 构建回执：0.1.7-90236c3 的 `npm run tauri:build` 实际退出 0，37 项前端 / 99 项浏览器检查通过；334 项 notices 内容与此前摘要相同。同原密钥签名、同版本 maintenance verifier 实际退出 0。构建 / 测试日志为 `target/release-build-v0.1.7.log`、`target/frontend-tests-v0.1.7.log`、`target/browser-tests-v0.1.7.log`，签名报告 `target/release/review/v0.1.7/release-verification.json`，未提交文档不纳入 Git 源码归档。实际安装与原生结果按后续独立条目记录；旧 0.1.6 baseline 保留，不能再用 root release 主程序核对旧安装。

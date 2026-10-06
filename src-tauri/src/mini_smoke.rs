@@ -48,6 +48,58 @@ fn size(window: &WebviewWindow, width: f64, height: f64) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(windows)]
+pub(super) fn start_placement(app: tauri::AppHandle) {
+    thread::spawn(move || {
+        let result = (|| {
+            super::mini_window::show(&app)?;
+            let mini = app.get_webview_window("mini").ok_or("mini missing")?;
+            evaluate(
+                &app,
+                &mini,
+                "await wait(()=>document.querySelector('button[aria-label=\"展开小窗\"]')); ",
+            )?;
+            verify_placement_restore(&app, &mini)
+        })();
+        match result {
+            Ok(()) => {
+                println!(
+                    "NATIVE_MINI_OUTER_BOUNDS_OK: actual Win32 outer rectangle, missing-monitor fallback and moved-event edge clamp; fixed client sizes retained"
+                );
+                app.exit(0);
+            }
+            Err(error) => {
+                eprintln!("NATIVE_MINI_OUTER_BOUNDS_FAILED: {error}");
+                app.exit(1);
+            }
+        }
+    });
+}
+#[cfg(windows)]
+fn wait_for_outer_fit(window: &WebviewWindow) -> Result<(), String> {
+    use windows_sys::Win32::{Foundation::RECT, UI::WindowsAndMessaging::GetWindowRect};
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    for _ in 0..200 {
+        let monitor = window
+            .current_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or("native monitor missing")?;
+        let work = monitor.work_area();
+        let mut rect = RECT::default();
+        if unsafe { GetWindowRect(hwnd.0 as _, &mut rect) } == 0 {
+            return Err("independent native outer rectangle unavailable".into());
+        }
+        if rect.left >= work.position.x
+            && rect.top >= work.position.y
+            && i64::from(rect.right) <= i64::from(work.position.x) + i64::from(work.size.width)
+            && i64::from(rect.bottom) <= i64::from(work.position.y) + i64::from(work.size.height)
+        {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(30));
+    }
+    Err("complete native mini frame did not fit actual work area".into())
+}
 pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let main = app.get_webview_window("main").ok_or("main missing")?;
     evaluate(
@@ -316,13 +368,15 @@ fn verify_placement_restore(app: &tauri::AppHandle, mini: &WebviewWindow) -> Res
     let fallback = app
         .get_webview_window("mini")
         .ok_or("fallback mini missing")?;
-    let position = fallback.outer_position().map_err(|e| e.to_string())?;
     let monitor = fallback
         .current_monitor()
         .map_err(|e| e.to_string())?
         .ok_or("fallback monitor missing")?;
     let work = monitor.work_area();
-    let actual = fallback.inner_size().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    wait_for_outer_fit(&fallback)?;
+    let position = fallback.outer_position().map_err(|e| e.to_string())?;
+    let actual = fallback.outer_size().map_err(|e| e.to_string())?;
     if position.x < work.position.x
         || position.y < work.position.y
         || i64::from(position.x) + i64::from(actual.width)
@@ -334,6 +388,35 @@ fn verify_placement_restore(app: &tauri::AppHandle, mini: &WebviewWindow) -> Res
             "fallback mini is outside actual working area: position={position:?} size={actual:?} work={work:?} scale={}",
             monitor.scale_factor()
         ));
+    }
+    #[cfg(windows)]
+    {
+        // Exercise the ordinary native Moved event, not a direct fit_current call.
+        // A client-only clamp leaves the real Win32 frame beyond these right / bottom edges.
+        for expanded in [false, true] {
+            evaluate(
+                app,
+                &fallback,
+                &format!(
+                    "await invoke('mini_window_action',{{requestId:'mini-outer-size',request:{{kind:'set_expanded',expanded:{expanded}}}}});"
+                ),
+            )?;
+            fallback
+                .set_position(tauri::PhysicalPosition::new(
+                    work.position.x + i32::try_from(work.size.width).map_err(|e| e.to_string())?
+                        - 1,
+                    work.position.y + i32::try_from(work.size.height).map_err(|e| e.to_string())?
+                        - 1,
+                ))
+                .map_err(|e| e.to_string())?;
+            wait_for_outer_fit(&fallback)?;
+            let (width, height) = if expanded {
+                (360.0, 380.0)
+            } else {
+                (280.0, 220.0)
+            };
+            size(&fallback, width, height)?;
+        }
     }
     fallback.hide().map_err(|e| e.to_string())?;
     println!(

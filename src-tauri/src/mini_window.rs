@@ -140,6 +140,11 @@ fn show_internal(
     } else {
         window.show().map_err(|e| e.to_string())?;
     }
+    // The native frame can finish changing while a hidden WebView is being created.
+    // Clamp again after showing, using its actual outer bounds rather than the fixed client size.
+    if fit_current(&window).is_err() {
+        eprintln!("MINI_PLACEMENT_UNAVAILABLE");
+    }
     super::quota_commands::update_visibility(&window);
     if fallback.is_some() || action.is_some() {
         Ok(())
@@ -414,8 +419,10 @@ pub(super) fn fit_current(window: &WebviewWindow) -> Result<(), String> {
     let placement = area(&monitor)
         .capture(position.x, position.y, monitor.name().cloned())
         .map_err(|e| e.to_string())?;
+    // An undecorated Win32 WebView can still have a native resize / shadow frame.
+    // Placement uses the outer origin, so fitting only its client leaves that frame off screen.
     let logical = window
-        .inner_size()
+        .outer_size()
         .map_err(|e| e.to_string())?
         .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
     let (x, y) = area(&monitor)

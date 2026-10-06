@@ -1,5 +1,7 @@
 # 实施与交付记录
 
+2026-10-07 M15f7 小窗外框修复：根据实际停用第二屏发现的 10 像素越界，将 fit_current 的客户区测量改为完整 outer_size，并在实际 show 后再次适配，固定客户区尺寸不变。新增独立 debug-only 小窗位置验收入口，增强旧缺失显示器检查为原生完整外框，同时以真实 Moved 事件检查右下边缘的两种尺寸，不直接调用夹紧函数冒充消息链。实际隔离 Win10 / 150% 检查退出 0，NATIVE_MINI_PLACEMENT_OK 与 NATIVE_MINI_OUTER_BOUNDS_OK 均出现；desktop all-target strict Clippy 通过。原正式快捷键冲突 / WebView 1412 提示保留，不改用户偏好。当前修复只在源码和隔离构建，正式 0.1.7 未包含；随后新包 / 实际停用与完整恢复复测继续。日志 target/mini-outer-bounds-native.log 与 mini-outer-bounds-clippy.log，首次构建的辅助 unused variable 已移除，不把告警版本写为最终严格检查。
+
 2026-10-07 M15f6 实际系统缩放：正式安装 0.1.7，在主显示器的 Windows 显示设置中以实际 SelectionItem 切换 100 / 125 / 150 / 200%，另一屏保持 150%，不是向应用发送合成 DPI 通知。主窗、小窗、正式任务栏 GetDpiForWindow 分别确认 96 / 120 / 144 / 192；紧凑客户区依次 280×220、350×275、420×330、560×440，展开为 360×380、450×475、540×570、720×760 物理像素。200% 主窗客户区适配为 2534×1289，外框 (0,0)–(2560,1360)，工作区内可滚动。两轮各八组实际退出 0；第二轮生成 16 张自有截图，四档主窗与八张小窗已查看。读数几何 / 可见性 / 实际 DPI 与非空真实名称通过，不把名称或窗口存在扩展为全部模式的普通桌面人工目视。
 
 回执 `target/release/review/v0.1.7/dpi-matrix-a6a42952-c13f-4763-9013-584cb1c98c30.json`、`dpi-matrix-72a0644d-dc67-4dc1-a37d-79ebf8c0d339.json` 与 dpi-matrix-visual.log；系统实际恢复 150%，原窗口矩形恢复。辅助脚本的 SelectionPattern 调用、100% 实际带“(推荐)”标签及启动设置失败均先拒绝、日志保留；修正检查调用 / 精确选项后才完成实际切换。方法依据 2026-10-07 核实的 Microsoft [显示缩放设置](https://support.microsoft.com/en-us/windows/hardware/display-graphics/change-your-screen-resolution-and-layout-in-windows)。没有重启或注销。
