@@ -1,5 +1,9 @@
 # 实施与交付记录
 
+2026-10-07 M16z8 / M15f9 正式安装与拓扑：0.1.9-60f5a07 完整生产构建退出 0，桌面 release 3m16s，334 份 notices 摘要保持；6,707,348 字节 NSIS SHA-256 f831b89e7f42f2c145d9206615fd19af385e3deb8bb648ca4fb7ba24d70ba227，正式维护程序实际版本绑定验签退出 0，公钥与旧发布相同。NSIS PID 113524 退出 0，本机启动 PID 113428；启动前原 DB 与 WAL 的 SHA / 长度完全相同，登记 / 主程序 NSIS marker / 独立宿主 / notices 均匹配。自有 UI 初始化完成后显示小窗，第一次过早读取按钮被拒绝，等候真实可用按钮后执行，不修改其他应用。
+
+同一正式包在真实 Windows 显示 API 中完成第二屏作为主屏、第一屏负坐标、原主屏恢复、第二屏逻辑停用与恢复，四组采样均通过，完整退出 0。正式任务栏跟随主屏，小窗停用后的完整外框右边恰为工作区 2560，旧包 10 像素越界已修正；两屏原 bounds / primary / work area、current / registry 模式独立等候读回一致，无清理错误。回执 target/release/review/v0.1.9/display-topology-f7ecaaab-d975-47b9-8c6c-0fa6a9d59d2e.json，方法仍非物理拔线。主窗口 SendInput 按住 / 移动 / 释放两屏已通过，但小窗位置保存检查未通过，全部拖动场景不能记为完成；失败和后续独立坐标证据继续保留。本轮未重启 / 未推送，公开仍 0.1.3。
+
 2026-10-07 M16z8 候选准备：新版本 0.1.9 纳入 6ff7cbe 的自动回退前台保护与 d73e68b 的完整外框适配；0.1.8-81f84fa 的构建、安装包、签名、实际验签报告及失败回归全部保留，不以相同版本覆盖。项目版本 / 七个工作区包同步，第三方版本不变，发布准备 6 项检查通过。下一步正式构建、验签、本机原数据库保留安装、实际逻辑停用恢复与物理拖动，结果分别追加；当前尚未安装 / 公开此候选。
 
 M15f8 最终回归：按实际最小边界修正夹具后，Win10 -TaskbarActions 完整退出 0，DETAILS / RECREATE / APPLICATION_POSITION / MENU / ACTIONS 五项标记齐全；日志 target/mini-focus-taskbar-actions-minimum.log。正常显式单击展开、双击统计、两位置、五项菜单、隐私屏障、宿主子窗口丢失和退出几何恢复继续成立。这里输入是已标明的自有 HWND 消息，不能替代正式安装版 SendInput；desktop all-target strict Clippy 最终退出 0（mini-fallback-focus-clippy-final.log），未运行性能测试。
