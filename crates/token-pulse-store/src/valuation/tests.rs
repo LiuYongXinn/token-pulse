@@ -6,6 +6,8 @@ use token_pulse_core::{
     query::{UsageEventSort, UsageEventsQuery, UsageEventsRequest},
 };
 
+mod request_inputs;
+
 fn draft(input: i128) -> PriceRuleDraft {
     PriceRuleDraft {
         provider: "P".into(),

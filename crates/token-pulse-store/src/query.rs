@@ -18,7 +18,7 @@ pub mod events;
 pub mod facets;
 pub mod groups;
 pub mod pricing;
-mod request_input;
+pub(crate) mod request_input;
 pub mod sessions;
 
 pub struct BucketTotals {

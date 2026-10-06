@@ -14,10 +14,14 @@ use token_pulse_core::{
 };
 
 /// Increment when the price algorithm or the fingerprint's interpretation changes.
-pub const CACHE_VERSION: i64 = 4;
+pub const CACHE_VERSION: i64 = 5;
 const BATCH_ROWS: usize = 500;
 
-pub(crate) fn fingerprint(event: &PricingEvent<'_>, accounting: &str) -> StoreResult<String> {
+pub(crate) fn fingerprint(
+    event: &PricingEvent<'_>,
+    accounting: &str,
+    request: Option<&crate::query::request_input::PricingRequestInput>,
+) -> StoreResult<String> {
     let mut sources = event.source_ids.to_vec();
     sources.sort();
     sources.dedup();
@@ -31,6 +35,7 @@ pub(crate) fn fingerprint(event: &PricingEvent<'_>, accounting: &str) -> StoreRe
             sources,
             event.occurred_at_ms,
             event.usage,
+            request,
         ))?)
     ))
 }

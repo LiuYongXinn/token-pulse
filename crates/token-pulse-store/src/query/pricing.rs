@@ -78,7 +78,8 @@ fn visit_where(
         " ORDER BY e.event_id COLLATE BINARY"
     };
     let sql = format!(
-        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id,e.cache_write_input_tokens FROM {FROM} WHERE {}{order}",
+        "SELECT e.event_id,e.ledger_id,e.session_key,json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model,e.project_id,e.occurred_at_ms,e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,{sources},(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.turn_id,e.cache_write_input_tokens,e.source_total_tokens,{} FROM {FROM} WHERE {}{order}",
+        super::request_input::SQL,
         p.sql
     );
     let mut statement = tx.prepare(&sql)?;
@@ -124,7 +125,14 @@ fn visit_where(
             occurred_at_ms,
             usage,
         };
-        let cache_fingerprint = crate::valuation::fingerprint(&event, &version)?;
+        let request = super::request_input::pricing(
+            row.get::<_, Option<String>>(17)?.as_deref(),
+            UsageVector {
+                reported_total: row.get(16)?,
+                ..usage
+            },
+        );
+        let cache_fingerprint = crate::valuation::fingerprint(&event, &version, request.as_ref())?;
         let cached = if let Some(cache) = &mut cache {
             cache.lookup(&event_id, &cache_fingerprint)?
         } else {

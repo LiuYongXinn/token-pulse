@@ -142,7 +142,15 @@ fn rows(
             occurred_at_ms,
             usage,
         };
-        let fingerprint = crate::valuation::fingerprint(&pricing_event, &version)?;
+        let request_input = super::request_input::pricing(
+            row.get::<_, Option<String>>(23)?.as_deref(),
+            UsageVector {
+                reported_total: row.get(13)?,
+                ..usage
+            },
+        );
+        let fingerprint =
+            crate::valuation::fingerprint(&pricing_event, &version, request_input.as_ref())?;
         let price = cache
             .lookup(&event_id, &fingerprint)?
             .unwrap_or_else(|| catalog.estimate(&pricing_event, &query.price_basis));
@@ -164,13 +172,7 @@ fn rows(
             }),
             raw_last: raw(row.get(20)?)?,
             raw_cumulative: raw(row.get(21)?)?,
-            request_input: super::request_input::project(
-                row.get::<_, Option<String>>(23)?.as_deref(),
-                UsageVector {
-                    reported_total: row.get(13)?,
-                    ..usage
-                },
-            ),
+            request_input: request_input.map(|request| request.input),
             calculation_method: row.get(15)?,
             quality_flags,
             price,

@@ -1,5 +1,5 @@
 //! Read only retained fields necessary to project exact per-response input.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use token_pulse_core::{
     domain::{PhysicalPosition, RequestUsageEvidence, UsageVector},
     pricing::request::{RequestInputContext, RequestInputEvidence},
@@ -14,12 +14,17 @@ struct NecessaryInput {
     last: Option<UsageVector>,
     cumulative: Option<UsageVector>,
 }
-pub(super) fn project(
-    json: Option<&str>,
-    consumption: UsageVector,
-) -> Option<RequestInputEvidence> {
+/// Internal cache identity. Never serialize response IDs or positions into public DTOs.
+#[derive(Serialize)]
+pub(crate) struct PricingRequestInput {
+    pub input: RequestInputEvidence,
+    response_id: String,
+    turn_id: String,
+    position: PhysicalPosition,
+}
+pub(crate) fn pricing(json: Option<&str>, consumption: UsageVector) -> Option<PricingRequestInput> {
     let input: NecessaryInput = serde_json::from_str(json?).ok()?;
-    input.evidence.project_input(
+    let projected = input.evidence.project_input(
         RequestInputContext {
             position: &input.position,
             turn_id: input.turn_id.as_deref(),
@@ -27,5 +32,11 @@ pub(super) fn project(
             cumulative: input.cumulative,
         },
         consumption,
-    )
+    )?;
+    Some(PricingRequestInput {
+        input: projected,
+        response_id: input.evidence.response_id,
+        turn_id: input.evidence.turn_id,
+        position: input.evidence.physical_position,
+    })
 }

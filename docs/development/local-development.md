@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M09h3b2c1 请求费用指纹：运行 `cargo test -p token-pulse-store --lib --tests --locked --offline` 与 `cargo clippy -p token-pulse-store --all-targets --locked --offline -- -D warnings`，均通过；301 项自动测试 / 1 原性能夹具 ignored。`cargo check -p token-pulse-desktop --release --locked --offline` 通过。新用例在 valuation/tests/request_inputs.rs，只用应用自有临时库和合成必要证据，不打开真实日志 / 登录文件；白名单身份与原 source_total=null 关联跨汇总、明细和后台缓存保持一致。CACHE_VERSION=5、schema v14，无新 DTO；旧 v4 不参与读取但保留。当前正式安装 0.1.6 的 cache v4 不因 cargo check 改变，不把编译检查当安装或真实模式计价通过。详见[计价专题](../design/price-accounting.md#16-生产请求输入与费用缓存身份m09h3b2c1)。
+
 2026-10-06 M13g16 输入门禁补记：正式任务栏另一位置应先确认自有主窗口 / WebView 所有权及实际 WindowFromPoint 命中。UIA IsOffscreen=false、DWM cloak=0 或 SetWindowPos 成功都不足以证明桌面点击点属于应用；SetForegroundWindow 后须读取实际前台，拒绝时不注入其他窗口、不借 Alt / 其他应用改焦点。保持 WTS / 输入桌面 / 已按住键与鼠标门禁，测试指针仅在用户没有移动时恢复。本轮三种拒绝均保留，未选择 / 保存位置，正式另一位置仍待验。当前已安装 0.1.6、任务栏 notification_left / two_rows / enabled；见[交付记录](delivery-status.md)。
 
 2026-10-06 M16z4 当前正式安装 0.1.6-327183e：完整构建、原密钥签名与独立 native verifier / NSIS 实际退出 0，通过宿主 manifest 提取与安装字节验证。只读旧库前后 schema 14、data 1496 / price 1 / settings 138 保留，随后正式 UI 恢复采集。回执和逐张查看的真实截图在 `target/release/review/v0.1.6/`，包括 60 秒无捕获状态 / 真实物理输入；不要把窗口状态或捕获图替代普通桌面目视。独立试验普通桌面透明显示已确认，正式包目视答复仍待收到。公开仍 0.1.3、未重启或推送；范围与失败历史见[交付记录](delivery-status.md)。
