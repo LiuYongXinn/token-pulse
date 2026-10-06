@@ -451,7 +451,11 @@
           "INVALID_USAGE",
           "WINDOW_UNAVAILABLE",
           "SHORTCUT_CONFLICT",
-          "SHORTCUT_UNAVAILABLE"
+          "SHORTCUT_UNAVAILABLE",
+          "NOTIFY_INTEGRATION_FAILED",
+          "UPDATE_UNAVAILABLE",
+          "UPDATE_BUSY",
+          "UPDATE_FAILED"
         ],
         "type": "string"
       },
@@ -548,7 +552,7 @@
             "items": {
               "$ref": "#/$defs/HostSourceStatus"
             },
-            "maxItems": 6,
+            "maxItems": 11,
             "type": "array"
           },
           "theme": {
@@ -777,6 +781,11 @@
           "partially_readable",
           "unreadable",
           "scan_evidence_missing",
+          "scanning",
+          "scan_pending",
+          "scan_interrupted",
+          "scan_changed",
+          "scan_incomplete",
           "unknown"
         ],
         "type": "string"

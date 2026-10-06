@@ -1,5 +1,7 @@
 # 实施与交付记录
 
+2026-10-06 M13g19 来源状态说明：正式 0.1.6 悬停详情中的“来源状态未识别”已追溯到宿主遗漏存储层五种已知扫描代码。源码补齐 scanning / scan_pending / scan_interrupted / scan_changed / scan_incomplete 的受限投影与中文解释，最大无重复状态数由 6 扩为 11，生成协议同步。成功核对时间和 Token、待核对数量保持原快照语义，真正未知仍显示未识别；不传来源 ID / 路径。自动检查 73 passed，另 1 个 guardian 私有子入口按显式子进程方式由父测试执行，默认 ignored 不代表性能测试或失败；taskbar all-target strict Clippy、host contract --check、release-cfg desktop check 通过。新增合成预期验证全部已知状态 / 未知状态、两种隐私、多来源同时状态及越界拒绝，详情文案保留原成功时间和待核对数量。本变更尚未打包或安装，不能把旧安装版截图作为新标签的系统验收；遵守用户“不弹出应用”要求，不运行可见原生场景。
+
 2026-10-06 M13g17 正式包只读复核：11:47 UTC，精确起始时间 / 安装路径 / 主程序与同包宿主字节核对仍匹配 0.1.6-327183e；主 PID 110340 / 宿主 106596 / guardian 63924 保持。无截图 / 无输入读得自有读数 HWND 2624478 仍 Visible / WS_EX_LAYERED，名称含真实当日 Token 42240180 / 未计价状态 / 账户周剩余 95%；此为当时 DTO。再次在读取线程 PMv2 context 下记录物理矩形后恢复原 context。回执 formal-state-after-matched-price*.json 位于本机忽略 v0.1.6 review 目录；首条未设置 PMv2 的矩形仅为调用方虚拟坐标，不作为物理位置验收。只读状态不能证明正常桌面目视 / 点击或新位置通过；透明夹具人工确认独立保留，正式日常目视及 Win10 另一位置 / 剩余矩阵继续。未换包、未改偏好、未重启或推送。
 
 2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。

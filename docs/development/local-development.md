@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g19 来源状态验证：`cargo test -p token-pulse-taskbar --lib --tests --locked --offline` 为 73 passed / 1 默认 ignored；ignored 是 guardian 私有子入口，父测试实际显式运行它。`cargo clippy -p token-pulse-taskbar --all-targets --locked --offline -- -D warnings`、`cargo run -p token-pulse-taskbar --example export_host_contract --locked --offline -- --check` 和 `cargo check -p token-pulse-desktop --release --locked --offline` 通过。初次重复 schemars length 属性编译失败，移除旧属性后重跑通过，保留 target/taskbar-source-status-tests*.log；不放宽重复 / 上限校验。当前修正仅在源码，新主程序和宿主须成对打包；不单独替换已安装宿主。用户要求不弹出应用时，只继续无窗口编译 / 静态检查，不运行 native-smoke、可见宿主或鼠标键盘例程。
+
 2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。
 
 M09h3b2c3 同快照计价解释：`cargo test -p token-pulse-core -p token-pulse-store --lib --tests --locked --offline` 461 passed / 1 原性能夹具 ignored；strict core / store all-target Clippy、契约生成 check、release-cfg desktop check、前端 build 通过。`npm test -- --run ui/src/shared/contracts.test.ts` 11 项和 `npx playwright test tests/ui/events.spec.ts --workers=1` 7 项通过；深 / 浅主题 960px 截图已查看。仅合成 / 临时数据参与模式和价格检查，真实 mode 未采集；正式安装与公开版本不随这些检查改变。

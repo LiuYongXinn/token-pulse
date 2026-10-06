@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+2026-10-06 M13g19：任务栏已接存储层五种来源扫描状态，避免正常核对显示为未知；协议十一个状态上限、中文详情、隐私与未知保留已自动验证（73 passed / 1 guardian 私有子入口默认 ignored），strict Clippy / 生成 check / release-cfg desktop check 通过。源码说明完成，成对新包安装后的真实悬停标签仍待验；用户正在操作其他程序期间不弹出应用、不发送输入。已有计价与 UI 工作保持，不将此文案修正计为核算功能变更。
+
 2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。
 
 2026-10-06 M09h3b2c3：同快照公开价格依据与明细展示已实现；已匹配自定义规则即使用量不足也可解释，目录 Standard 平价明确为参考假设，生产实际模式仍未知。core 152 + store 309 = 461 项自动测试 / 1 原性能夹具 ignored，11 契约检查及 7 明细浏览器检查通过；深色和浅色 960px 图像已逐张检查。源码 cache v6 / schema 14，正式安装仍 0.1.6 / cache v4，不能把源码说明当安装或真实条件计费验收。第 8 节 M09h3 项更新为已接公开依据，模式 / 地区和真实条件金额仍后续。

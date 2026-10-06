@@ -193,6 +193,11 @@ pub enum HostSourceStatus {
     PartiallyReadable,
     Unreadable,
     ScanEvidenceMissing,
+    Scanning,
+    ScanPending,
+    ScanInterrupted,
+    ScanChanged,
+    ScanIncomplete,
     Unknown,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
@@ -210,7 +215,7 @@ pub struct HostDetails {
     pub scope: HostScope,
     /// Most recent successful source check, never the generation time of the usage query.
     pub source_last_success_at_ms: Option<EpochMs>,
-    #[schemars(length(max = 6))]
+    #[schemars(length(max = 11))]
     pub source_statuses: Vec<HostSourceStatus>,
     pub pending_observations: DecimalInt,
     pub pending_files: DecimalInt,
@@ -336,6 +341,11 @@ impl TaskbarView {
                         "source_awaiting_directory" => Some(HostSourceStatus::AwaitingDirectory),
                         "source_partially_readable" => Some(HostSourceStatus::PartiallyReadable),
                         "source_unreadable" => Some(HostSourceStatus::Unreadable),
+                        "source_scanning" => Some(HostSourceStatus::Scanning),
+                        "source_scan_pending" => Some(HostSourceStatus::ScanPending),
+                        "source_scan_interrupted" => Some(HostSourceStatus::ScanInterrupted),
+                        "source_scan_changed" => Some(HostSourceStatus::ScanChanged),
+                        "source_scan_incomplete" => Some(HostSourceStatus::ScanIncomplete),
                         _ => Some(HostSourceStatus::Unknown),
                     })
                     .collect::<std::collections::BTreeSet<_>>()
@@ -355,7 +365,7 @@ impl TaskbarView {
         if let Some(details) = &self.details {
             if details.range.validate().is_err()
                 || details.range.timezone != self.timezone
-                || details.source_statuses.len() > 6
+                || details.source_statuses.len() > 11
                 || details
                     .source_statuses
                     .iter()

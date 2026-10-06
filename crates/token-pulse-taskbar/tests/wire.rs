@@ -629,4 +629,83 @@ fn projection_keeps_unknown_zero_and_exact_consumption_while_redacting_private_f
     assert!(!json.contains("SYNTHETIC PRIVATE"));
     assert!(hidden.costs.is_empty());
     assert!(hidden.quota.is_none());
+    // Literal coverage codes originate in the store. Concurrent sources may
+    // contribute every known state; preserve them without exposing source IDs.
+    let states = [
+        ("source_paused", HostSourceStatus::Paused),
+        (
+            "source_awaiting_directory",
+            HostSourceStatus::AwaitingDirectory,
+        ),
+        (
+            "source_partially_readable",
+            HostSourceStatus::PartiallyReadable,
+        ),
+        ("source_unreadable", HostSourceStatus::Unreadable),
+        (
+            "scan_evidence_missing",
+            HostSourceStatus::ScanEvidenceMissing,
+        ),
+        ("source_scanning", HostSourceStatus::Scanning),
+        ("source_scan_pending", HostSourceStatus::ScanPending),
+        ("source_scan_interrupted", HostSourceStatus::ScanInterrupted),
+        ("source_scan_changed", HostSourceStatus::ScanChanged),
+        ("source_scan_incomplete", HostSourceStatus::ScanIncomplete),
+        ("synthetic_future_status", HostSourceStatus::Unknown),
+    ];
+    for (code, expected) in states {
+        usage.coverage.source_issues = vec![token_pulse_core::protocol::SourceIssue {
+            source_id: "SYNTHETIC PRIVATE SOURCE".into(),
+            code: code.into(),
+            last_success_ms: if code == "scan_evidence_missing" {
+                None
+            } else {
+                Some(EpochMs::new(500).unwrap())
+            },
+        }];
+        for privacy in [false, true] {
+            let value = TaskbarView::from_optional_snapshots(
+                &usage,
+                None,
+                privacy,
+                token_pulse_core::settings::AppTheme::Dark,
+            );
+            value.validate().unwrap();
+            assert_eq!(
+                value.details.as_ref().unwrap().source_statuses,
+                vec![expected]
+            );
+            assert!(
+                !serde_json::to_string(&value)
+                    .unwrap()
+                    .contains("SYNTHETIC PRIVATE SOURCE")
+            );
+        }
+    }
+    usage.coverage.source_issues = states
+        .iter()
+        .map(|(code, _)| token_pulse_core::protocol::SourceIssue {
+            source_id: "SYNTHETIC PRIVATE SOURCE".into(),
+            code: (*code).into(),
+            last_success_ms: None,
+        })
+        .collect();
+    let mut combined = TaskbarView::from_optional_snapshots(
+        &usage,
+        None,
+        false,
+        token_pulse_core::settings::AppTheme::Dark,
+    );
+    combined.validate().unwrap();
+    assert_eq!(
+        combined.details.as_ref().unwrap().source_statuses,
+        states.map(|(_, state)| state)
+    );
+    combined
+        .details
+        .as_mut()
+        .unwrap()
+        .source_statuses
+        .push(HostSourceStatus::Unknown);
+    assert_eq!(combined.validate(), Err(WireError::InvalidFrame));
 }

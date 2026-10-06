@@ -215,6 +215,11 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
                 HostSourceStatus::PartiallyReadable => "部分来源文件不可读",
                 HostSourceStatus::Unreadable => "来源不可读，保留可信统计",
                 HostSourceStatus::ScanEvidenceMissing => "尚无来源成功核对时间",
+                HostSourceStatus::Scanning => "正在核对来源目录",
+                HostSourceStatus::ScanPending => "部分文件待采集或重新核对",
+                HostSourceStatus::ScanInterrupted => "来源核对已中断，等待补扫",
+                HostSourceStatus::ScanChanged => "来源文件发生变化，等待重新核对",
+                HostSourceStatus::ScanIncomplete => "来源核对未完成，请查看采集诊断",
                 HostSourceStatus::Unknown => "来源状态未识别",
             };
             rows.push(row("来源状态", text, Tone::Warning));

@@ -247,3 +247,40 @@ fn extreme_timestamps_and_countdown_carry_are_bounded_and_null_details_stay_unkn
     );
     assert_eq!(content(&view, i64::MIN), Err(WireError::InvalidFrame));
 }
+
+#[test]
+fn scan_progress_and_gaps_have_specific_readable_text_without_claiming_success() {
+    let mut view = fixture();
+    for (status, expected) in [
+        (HostSourceStatus::Scanning, "正在核对来源目录"),
+        (HostSourceStatus::ScanPending, "部分文件待采集或重新核对"),
+        (
+            HostSourceStatus::ScanInterrupted,
+            "来源核对已中断，等待补扫",
+        ),
+        (
+            HostSourceStatus::ScanChanged,
+            "来源文件发生变化，等待重新核对",
+        ),
+        (
+            HostSourceStatus::ScanIncomplete,
+            "来源核对未完成，请查看采集诊断",
+        ),
+    ] {
+        view.details.as_mut().unwrap().source_statuses = vec![status];
+        let text = content(&view, view.generated_at_ms.value())
+            .unwrap()
+            .accessible_text();
+        assert!(text.contains(expected), "{text}");
+        assert!(!text.contains("来源状态未识别"));
+        assert!(text.contains("待核对文件：1"));
+        assert!(text.contains("来源最近成功核对：1970-01-01 08:00:00.500"));
+    }
+    view.details.as_mut().unwrap().source_statuses = vec![HostSourceStatus::Unknown];
+    assert!(
+        content(&view, view.generated_at_ms.value())
+            .unwrap()
+            .accessible_text()
+            .contains("来源状态未识别")
+    );
+}

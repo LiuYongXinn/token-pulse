@@ -175,7 +175,9 @@ OpenFloat 复用 mini 的创建 / 交互恢复 / 展开持久保存与回滚逻�
 
 ## M13e4a：悬停详情显示投影
 
-TaskbarView.details: HostDetails | null 增加 theme、range、scope、source_last_success_at_ms、source_statuses、pending_observations、pending_files、breakdown_complete、input_complete / cached_complete / output_complete、pricing_calculating。range 必须为合法半开时间范围且时区等于外层 timezone；source_statuses 是最多六个无重复受限枚举，不传来源 ID / 路径或任意错误原文。生产主端在同一 SQLite 快照取得主题 / 隐私 / 范围和设置修订，源成功时间取该快照已知成功时间的最大值，并按“来源最近成功核对”解释，不声称所有来源最新。
+TaskbarView.details: HostDetails | null 增加 theme、range、scope、source_last_success_at_ms、source_statuses、pending_observations、pending_files、breakdown_complete、input_complete / cached_complete / output_complete、pricing_calculating。range 必须为合法半开时间范围且时区等于外层 timezone；source_statuses 是最多十一个无重复受限枚举（M13g19 扩展，原上限为六个），不传来源 ID / 路径或任意错误原文。生产主端在同一 SQLite 快照取得主题 / 隐私 / 范围和设置修订，源成功时间取该快照已知成功时间的最大值，并按“来源最近成功核对”解释，不声称所有来源最新。
+
+2026-10-06 M13g19：正式 0.1.6 悬停检查发现采集目录正在核对时显示“来源状态未识别”。存储覆盖投影已经产生 source_scanning / source_scan_pending / source_scan_interrupted / source_scan_changed / source_scan_incomplete，宿主投影此前遗漏这些已知代码。本次分别映射 scanning / scan_pending / scan_interrupted / scan_changed / scan_incomplete，在详情解释为核对中、待采集或核对、中断待补扫、变化待核对、核对未完成。真正未知代码仍为 unknown；不改变成功时间、Token / 待核对数量或可信覆盖判据，隐私模式仍只传受限状态。同步生成 taskbar-host-v1.json；主程序和宿主必须成对部署，不能把新枚举传给旧宿主。本次源码验证与尚未入包的界限见[交付记录](../development/delivery-status.md)。
 
 HostQuota 增加 nullable last_attempt_at_ms / ErrorCode error_code，fetched_at_ms 仍是独立成功读取时间；未知码保留 null，QuotaState 继续表达失败。隐私边界仍删除整个账户 / 成本和原范围名称，details 只保留无敏感名称的枚举、数字和日期。details 未提供时解释为未提供，不默认成功时间或主题。新版应用与宿主成对部署，旧宿主拒绝不支持字段后走既有失败处理。
 
