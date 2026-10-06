@@ -13,6 +13,7 @@
 - [Windows 任务栏显示模式](design/taskbar-display.md)
 - [任务栏原生宿主协议](design/taskbar-host-protocol.md)
 - [TokenPulse UI 设计](design/token-pulse-ui.md)
+- [UI 方向提案](design/ui-directions.md)：黑白银灰的银雾、碳素、纸墨三版，包含按钮状态设计板、并排对比、可点击原型和小窗预览，待选择后实施。
 
 ## 开发与维护
 
