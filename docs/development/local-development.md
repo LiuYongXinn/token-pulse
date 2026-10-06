@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-06 M16z3 本机已升级到签名 0.1.5-7cfb09e，实际安装退出 0 / schema 14 / 旧表行与 data、price、settings 修订保留；主程序 / 独立宿主 / notices 字节核对通过。当前包暂停 / 恢复标签修正已接入，任务栏浅底在捕获中已修正，但普通桌面不可见仍是用户确认的缺陷。安装、真实鼠标输入、失败历史与捕获证据的边界见[交付记录](delivery-status.md)，回执 `target/release/review/v0.1.5-db965d6/`；公开仍 0.1.3，未重启或推送。下面仍 0.1.4 的段落是历史阶段记录。
+
 M15f5 已安装跨屏检查：使用 PowerShell 7 运行 `scripts/verify-installed-cross-monitor.ps1 -ApplicationId <实际 PID> -BaselineExecutable <对应 release 主程序> -PythonExecutable <本机 Python>`，默认只读检测。显式 `-Exercise` 才通过自有窗口原生移动与真实 React 按钮检查实际屏幕上的主窗口 / 两小窗及 SQLite 位置；不修改显示拓扑或 DPI。要求安装字节对应 NSIS 基线、进程起始时间保持、至少两屏，穿透已开启时拒绝测试；原位置、展开、隐藏和最大化分别尝试恢复，核对非位置设置摘要并以 CreateNew 写入 `target/native-cross-monitor/<UUID>/receipt.json`。测试位置必须完整落在工作区，恢复时保留用户原窗口即使其原先越界。2026-10-06 Win10 两屏 150% 六组实际通过，失败 / 成功回执与边界见[交付记录](delivery-status.md)。程序化移动不替代真实鼠标拖动、其他 DPI 或拓扑改变。
 
 2026-10-06 M10k 状态修复可用 `npx playwright test tests/ui/sources.spec.ts tests/ui/diagnostics.spec.ts --workers=1` 复核（3 项），`npm test` 为 37 项，`npm run build` 与 desktop strict Clippy / fmt 通过。native SourceDialogs 新增暂停 / 异步恢复 / 历史保留状态标签和显式夹具日期；先构建 `cargo build -p token-pulse-desktop --features custom-protocol`，以 Start-Process / PassThru / WaitForExit 启动 `--native-smoke --native-source-dialogs-smoke`，不要把 Windows GUI 的启动返回当退出证据。本轮 PID 104944 实际退出 0，日志 target/release/review/v0.1.4-4e4e052/runtime-status-native-*.log，原 SHORTCUT_CONFLICT / 1412 警告保留。正式安装仍先前 4e4e052 构建，不包含本次状态修复，公开仍 0.1.3，详见[交付记录](delivery-status.md)。
