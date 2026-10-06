@@ -211,6 +211,24 @@ unsafe extern "system" fn keep_nonactivating_show(
     result
 }
 #[cfg(windows)]
+thread_local! {
+    static FALLBACK_ACTIVATION_TARGET: std::cell::Cell<windows_sys::Win32::Foundation::HWND> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+}
+#[cfg(windows)]
+unsafe extern "system" fn prevent_fallback_activation(
+    code: i32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{CallNextHookEx, HCBT_ACTIVATE};
+    if code == HCBT_ACTIVATE as i32
+        && FALLBACK_ACTIVATION_TARGET.with(|target| target.get() == wparam as _)
+    {
+        return 1;
+    }
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
+}
+#[cfg(windows)]
 fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
     use windows_sys::Win32::{
         Foundation::{GetLastError, SetLastError},
@@ -235,13 +253,24 @@ fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
         SetLastError(0);
         let old = SetWindowLongPtrW(hwnd, GWL_EXSTYLE, previous | WS_EX_NOACTIVATE as isize);
         let prepared = old != 0 || GetLastError() == 0;
+        // SW_SHOW explicitly activates even with NOACTIVATE styles. Veto only this
+        // owned window's activation, on its own thread, during the synchronous show.
+        let hook = SetWindowsHookExW(
+            WH_CBT,
+            Some(prevent_fallback_activation),
+            std::ptr::null_mut(),
+            windows_sys::Win32::System::Threading::GetCurrentThreadId(),
+        );
+        FALLBACK_ACTIVATION_TARGET.with(|target| target.set(hwnd));
         // Tauri/tao must observe the visibility transition so later hide/style changes work.
         // The temporary subclass retains NOACTIVATE through tao's style reconstruction.
-        let result = if prepared {
+        let result = if prepared && !hook.is_null() {
             window.show().map_err(|e| e.to_string())
         } else {
             Err("WINDOW_STATE_UNAVAILABLE".into())
         };
+        let hook_removed = hook.is_null() || UnhookWindowsHookEx(hook) != 0;
+        FALLBACK_ACTIVATION_TARGET.with(|target| target.set(std::ptr::null_mut()));
         let removed = RemoveWindowSubclass(
             hwnd,
             Some(keep_nonactivating_show),
@@ -258,7 +287,7 @@ fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
         } else {
             false
         };
-        if !removed || !restored {
+        if !removed || !restored || !hook_removed {
             return Err("WINDOW_STATE_UNAVAILABLE".into());
         }
         result?;
@@ -429,11 +458,40 @@ pub(super) fn fit_current(window: &WebviewWindow) -> Result<(), String> {
         .restore(&placement, logical.width, logical.height)
         .map_err(|e| e.to_string())?;
     if (x, y) != (position.x, position.y) {
-        window
-            .set_position(tauri::PhysicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
+        move_for_fit(window, x, y)?;
     }
     Ok(())
+}
+#[cfg(windows)]
+fn move_for_fit(window: &WebviewWindow, x: i32, y: i32) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+    };
+    // tao's set_position also reapplies visibility flags, which calls ShowWindow(SW_SHOW)
+    // after the fallback's temporary NOACTIVATE guard has been removed. Only move this
+    // already-sized owned window; keep its visibility, z-order and foreground unchanged.
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0.cast();
+    if unsafe {
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            x,
+            y,
+            0,
+            0,
+            SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER,
+        )
+    } == 0
+    {
+        return Err("WINDOW_STATE_UNAVAILABLE".into());
+    }
+    Ok(())
+}
+#[cfg(not(windows))]
+fn move_for_fit(window: &WebviewWindow, x: i32, y: i32) -> Result<(), String> {
+    window
+        .set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())
 }
 fn persist(app: &tauri::AppHandle, change: MiniPreferenceChange) -> Result<(), ErrorCode> {
     let runtime = app.state::<super::RuntimeState>();

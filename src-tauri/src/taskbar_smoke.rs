@@ -273,21 +273,33 @@ fn verify_application_position(
                 && rect.top >= baseline.taskbar.top
         })
     };
-    until_action(app, correct)?;
+    until_action(app, correct).map_err(|e| format!("application-right initial slot: {e}"))?;
     let old = probe
         .inspect()
         .map_err(|e| format!("before fixture: {e:?}"))?;
     let original_left = native_rect().ok_or("application readout absent")?.left;
-    let fixture =
-        TaskButtonFixture::create().map_err(|e| format!("owned button fixture: {e:?}"))?;
-    until_action(app, || {
-        probe
-            .inspect()
-            .is_ok_and(|current| current.occupied.len() > old.occupied.len())
-            && correct()
-            && native_rect().is_some_and(|rect| rect.left > original_left)
-    })?;
-    drop(fixture);
+    // The 320 DIP minimum can absorb several new buttons without moving the slot.
+    // Add a bounded number of separately grouped owned fixtures until measured
+    // button coverage crosses that minimum; do not assume one button must move it.
+    let mut fixtures = Vec::new();
+    for _ in 0..8 {
+        fixtures
+            .push(TaskButtonFixture::create().map_err(|e| format!("owned button fixture: {e:?}"))?);
+        until_action(app, || {
+            probe
+                .inspect()
+                .is_ok_and(|current| current.occupied.len() >= old.occupied.len() + fixtures.len())
+                && correct()
+        })
+        .map_err(|e| format!("application-right added button: {e}"))?;
+        if native_rect().is_some_and(|rect| rect.left > original_left) {
+            break;
+        }
+    }
+    if native_rect().is_none_or(|rect| rect.left <= original_left) {
+        return Err("owned buttons did not cross the minimum application area".into());
+    }
+    drop(fixtures);
     until_action(app, || {
         probe
             .inspect()
@@ -1087,8 +1099,13 @@ pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let mini = app
         .get_webview_window("mini")
         .ok_or("fallback did not create mini")?;
-    if unsafe { GetForegroundWindow() } != foreground {
-        return Err("automatic fallback stole foreground focus".into());
+    let after_fallback = unsafe { GetForegroundWindow() };
+    if after_fallback != foreground {
+        return Err(format!(
+            "automatic fallback changed foreground: before={foreground:?}, after={after_fallback:?}, mini={:?}, main={:?}",
+            mini.hwnd().map_err(|e| e.to_string())?.0,
+            main.hwnd().map_err(|e| e.to_string())?.0
+        ));
     }
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_NOACTIVATE,

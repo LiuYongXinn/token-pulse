@@ -1,5 +1,11 @@
 # 实施与交付记录
 
+M15f8 最终回归：按实际最小边界修正夹具后，Win10 -TaskbarActions 完整退出 0，DETAILS / RECREATE / APPLICATION_POSITION / MENU / ACTIONS 五项标记齐全；日志 target/mini-focus-taskbar-actions-minimum.log。正常显式单击展开、双击统计、两位置、五项菜单、隐私屏障、宿主子窗口丢失和退出几何恢复继续成立。这里输入是已标明的自有 HWND 消息，不能替代正式安装版 SendInput；desktop all-target strict Clippy 最终退出 0（mini-fallback-focus-clippy-final.log），未运行性能测试。
+
+2026-10-07 M15f8 回退焦点修正：0.1.8-81f84fa 已完成生产构建、同一发布密钥的实际版本绑定验签，但任务栏原生回归失败，不能据构建 / 签名成功发布。失败详情明确前台从本次主窗变为本次新建小窗；单独替换位置移动、临时 WINDOWPOS.NOACTIVATE 与 focusable 试验未解决，失败日志逐项保留。最终显示期间的同线程、自有目标 HWND 激活保护通过 -Taskbar 实际场景：新建 / 复用回退保持前台、临时保护卸载、用户隐藏不重开、显式重试和重新嵌入保留小窗，以及退出恢复原任务栏几何，实际退出 0（target/mini-frame-taskbar-owned-activation.log）。小窗完整外框 / 两尺寸 / Moved 链实际回归退出 0（mini-placement-focus-fixed.log）；desktop strict Clippy 通过（mini-fallback-focus-clippy.log）。WebView 退出 1412 诊断保留。
+
+普通任务栏动作回归已完成详情和画布重建，但“增加一个按钮应移动读数”的旧夹具在本轮桌面按钮较少时失败：产品保留 320 DIP 最小应用区域，一个新增按钮仍可被该最小区域吸收。检查改为最多八个明确合成、分别分组的自有按钮，按实际 UIA 覆盖越过最小边界后再检查移动，绝不降低几何正确性要求；最终完整场景结果另行追加。此候选不安装 / 不公开，下一修正版使用新版本保留旧签名证据。已安装 0.1.7 已通过自有退出命令正常退出 0，数据库保留，计算机未重启。前条 SystemSettings 错误关闭途径特指已核对的系统错误对话框“确定”标准按钮，并非 TokenPulse 自有提示。
+
 2026-10-07 M16z7 候选准备：源码版本同步 0.1.8，纳入 d73e68b 的小窗完整外框修正及独立原生位置回归；schema 14 / cache v6 和已有计价证据边界保持。Windows offline metadata 同步七个项目包，第三方锁定版本未变，发布准备 6 项检查通过。0.1.7 的 release / installed 主程序及独立宿主按 SHA / 长度保存在本机忽略 `target/release/review/v0.1.7/baseline/`，已有安装包 / 签名不覆盖。当前只是准备，正式仍 0.1.7，下一步完整构建、同密钥验签、本机安装与真实逻辑停用 / 恢复复测；不能把隔离修复测试当新包已交付。此前已确认的 SystemSettings.exe 0x40000015 错误提示通过唯一自有标准确认按钮的消息关闭成功，之前物理点击未关闭的日志保留，未操作其他系统错误提示或重启。
 
 2026-10-07 M15f7 小窗外框修复：根据实际停用第二屏发现的 10 像素越界，将 fit_current 的客户区测量改为完整 outer_size，并在实际 show 后再次适配，固定客户区尺寸不变。新增独立 debug-only 小窗位置验收入口，增强旧缺失显示器检查为原生完整外框，同时以真实 Moved 事件检查右下边缘的两种尺寸，不直接调用夹紧函数冒充消息链。实际隔离 Win10 / 150% 检查退出 0，NATIVE_MINI_PLACEMENT_OK 与 NATIVE_MINI_OUTER_BOUNDS_OK 均出现；desktop all-target strict Clippy 通过。原正式快捷键冲突 / WebView 1412 提示保留，不改用户偏好。当前修复只在源码和隔离构建，正式 0.1.7 未包含；随后新包 / 实际停用与完整恢复复测继续。日志 target/mini-outer-bounds-native.log 与 mini-outer-bounds-clippy.log，首次构建的辅助 unused variable 已移除，不把告警版本写为最终严格检查。
