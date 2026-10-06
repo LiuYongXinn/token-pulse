@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-07 M16z5 构建回执：0.1.7-90236c3 的 `npm run tauri:build` 实际退出 0，37 项前端 / 99 项浏览器检查通过；334 项 notices 内容与此前摘要相同。同原密钥签名、同版本 maintenance verifier 实际退出 0。构建 / 测试日志为 `target/release-build-v0.1.7.log`、`target/frontend-tests-v0.1.7.log`、`target/browser-tests-v0.1.7.log`，签名报告 `target/release/review/v0.1.7/release-verification.json`，未提交文档不纳入 Git 源码归档。实际安装与原生结果按后续独立条目记录；旧 0.1.6 baseline 保留，不能再用 root release 主程序核对旧安装。
+
 2026-10-07 M16z5 版本准备：源码 0.1.7 / schema 14 / cache v6，Windows locked / offline metadata 和 `node --test scripts/prepare-update-release.test.mjs` 6 项通过。此前“不弹出应用”限制由用户最新指示解除，保留不重启电脑；取消功能与性能范围仍保持。旧 0.1.6 的 release / installed 主程序与宿主分别保存于 `target/release/review/v0.1.6/baseline/`，后续核对要选择对应基线，不混用新的 root release exe。正式构建入口仍 `npm run tauri:build`，用现有 DPAPI 项目密钥签名，不生成新密钥或打印密钥。此条为准备阶段，本机安装 / 公开版本尚未变化。
 
 2026-10-06 M13g18 实际正式包应用图标右侧：`target/release/review/v0.1.6/inspect-installed-taskbar.ps1 -ApplicationId 110340 -Hover -Actions` 当时精确身份 / 物理命中保护检查实际退出 0，悬停 / 单击 / 双击 / 右键结构通过；随后无捕获例程退出 0、24 次 / 两分钟状态保持，用户确认普通桌面“持续可见，底色融入”。PID 是历史身份，不得复用作当前操作目标。右键结构不代表五项命令验收，截图不代替普通目视。用户要求不弹出应用后，停止 UIA 动作和物理输入；原 notification_left 由忽略 review 目录的无窗口 helper 在停止进程门禁、settings 144 CAS 与非位置 / data / price 不变检查下恢复为 145，随后只读复核原非位置摘要保持。首个 apply 因进程存在拒绝，后一次退出 0；只读核查最初遗漏 sqlite connect 的 uri=True 而未打开数据库，修正后成功，无写入。现有 schema 14 校验保持，不新增迁移或恢复功能。正式包仍 0.1.6，未因源码检查重新安装 / 启动，剩余可见系统场景等用户工作空闲再继续。
