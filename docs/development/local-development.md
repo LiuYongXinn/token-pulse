@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-06 M13g16 输入门禁补记：正式任务栏另一位置应先确认自有主窗口 / WebView 所有权及实际 WindowFromPoint 命中。UIA IsOffscreen=false、DWM cloak=0 或 SetWindowPos 成功都不足以证明桌面点击点属于应用；SetForegroundWindow 后须读取实际前台，拒绝时不注入其他窗口、不借 Alt / 其他应用改焦点。保持 WTS / 输入桌面 / 已按住键与鼠标门禁，测试指针仅在用户没有移动时恢复。本轮三种拒绝均保留，未选择 / 保存位置，正式另一位置仍待验。当前已安装 0.1.6、任务栏 notification_left / two_rows / enabled；见[交付记录](delivery-status.md)。
+
 2026-10-06 M16z4 当前正式安装 0.1.6-327183e：完整构建、原密钥签名与独立 native verifier / NSIS 实际退出 0，通过宿主 manifest 提取与安装字节验证。只读旧库前后 schema 14、data 1496 / price 1 / settings 138 保留，随后正式 UI 恢复采集。回执和逐张查看的真实截图在 `target/release/review/v0.1.6/`，包括 60 秒无捕获状态 / 真实物理输入；不要把窗口状态或捕获图替代普通桌面目视。独立试验普通桌面透明显示已确认，正式包目视答复仍待收到。公开仍 0.1.3、未重启或推送；范围与失败历史见[交付记录](delivery-status.md)。
 
 M13g15 可用 `cargo build -p token-pulse-taskbar --example check_taskbar_layout` 后显式运行 `check_taskbar_layout.exe --native-taskbar-visible-check`。它使用明确的开发夹具 / 自有安全槽，120 秒内每 2 秒刷新并核对三处真实 WindowFromPoint 命中，完全不调用捕获函数，之后检查隐私更新、禁用 / 再挂接 / Drop 恢复；不修改正式库，也不把合成价格或账户当真实数据。应先让正式程序经自有托盘命令正常退出，结束后恢复正式程序；缺少独占预留不得并行挂接。长观察允许用户自行改变前台，记录前台差异而不据此宣称程序夺焦点，原短自动例程仍严格保持焦点判据。新 manifest 必须嵌入宿主、example 和原生测试，不能仅修改窗口样式；本机旧宿主无资源 / 无清单，远程样式试验实际错误 87 并恢复。2026-10-06 72 项自动 / strict Clippy 与无捕获检查实际退出 0 通过；失败历史 / 实际范围见[交付记录](delivery-status.md)。
