@@ -4,7 +4,7 @@ import type { AppTheme } from './generated/contracts';
 /** Shared by both webviews. Saved preference is authoritative; system changes only affect system mode. */
 export function useAppTheme(theme: AppTheme | undefined) {
   useEffect(() => {
-    const preference = theme ?? 'dark';
+    const preference = theme ?? 'light';
     const system = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
       document.documentElement.dataset.themePreference = preference;

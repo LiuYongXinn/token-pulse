@@ -239,7 +239,7 @@ test('saved theme changes real surfaces, persists reload and keeps timezone and 
   await page.goto('/'); await openSettings(page); await expect(page.getByLabel('应用主题')).toHaveValue('dark');
   await page.getByLabel('应用主题').selectOption('light'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
-  expect(await page.locator('html').evaluate(e => getComputedStyle(e).color)).toBe('rgb(32, 33, 36)');
+  expect(await page.locator('html').evaluate(e => getComputedStyle(e).color)).toBe('rgb(41, 41, 41)');
   expect(await page.locator('.panel').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   await page.screenshot({ path: 'test-results/theme-light-1280.png', fullPage: true });
   await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/theme-light-960.png', fullPage: true });

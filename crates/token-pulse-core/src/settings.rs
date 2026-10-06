@@ -7,10 +7,26 @@ pub const SETTINGS_VERSION: u32 = 1;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum AppTheme {
-    #[default]
     Dark,
+    #[default]
     Light,
     System,
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::{AppTheme, DisplayPreferences};
+
+    #[test]
+    fn new_preferences_use_silver_mist_without_replacing_saved_themes() {
+        assert_eq!(DisplayPreferences::default().theme, AppTheme::Light);
+        for (saved, expected) in [("dark", AppTheme::Dark), ("light", AppTheme::Light), ("system", AppTheme::System)] {
+            let preferences: DisplayPreferences = serde_json::from_str(&format!(r#"{{"display_timezone":"Asia/Shanghai","privacy":true,"theme":"{saved}"}}"#)).unwrap();
+            assert_eq!(preferences.theme, expected);
+            assert!(preferences.privacy);
+            assert_eq!(preferences.display_timezone.as_deref(), Some("Asia/Shanghai"));
+        }
+    }
 }
 pub fn validate_timezone(value: &str) -> Result<(), ErrorCode> {
     if value.is_empty() || value.len() > 128 || value.parse::<chrono_tz::Tz>().is_err() {
