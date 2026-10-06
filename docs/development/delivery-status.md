@@ -1,5 +1,13 @@
 # 实施与交付记录
 
+2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。
+
+2026-10-06 M09h3b2c3：公开同快照价格依据已接领域契约、SQLite 明细查询和正式 React 明细依据区。新增 required-nullable `matched_price`，取自固定价格租约下的同次不可变选择与父行核对，缓存命中沿用原金额并校验选择身份 / 状态后展示依据；不宣称重算核对缓存金额。别名显示计价规范模型，规则修订为该规则发布修订；来源专用只公开 bool，不新增路径 / 响应 ID / 物理位置。目录 Standard 平价写为参考假设，不包含实际模式；只有核心可信响应条件选择才公开实际 tier / context，生产工厂仍 actual_tier=None。缺条件无选择返回 null；已选规则因用量不足未计价仍可解释。最新隐私策略同时清除费用与匹配依据，Token 保留。
+
+自动检查 core 152 + store 309 = 461 passed / 1 原性能夹具 ignored；新增三组 SQLite 检查覆盖来源规则 / 别名 / 退休后的旧分页快照 / 缓存、不足用量及序列化时隐私、历史 Standard 假设与已知零 / 精确原子。五模式 / 两档合成检查同时验证公开条件元数据与内部响应身份不泄露。11 契约检查、7 明细浏览器检查、strict Clippy、生成契约 check、release-cfg desktop check 和前端 build 通过；深色自定义 / Standard 与浅色 960px 布局截图已逐张查看。图片只来自标记 synthetic 的开发夹具；真实模式采集、真实条件后台金额、正式新包安装仍分别待验。
+
+2026-10-06 用户再次回复“持续可见，底色已融入”：对应问题明确标注透明底色独立开发夹具 Token 683.1K / 两分钟，记录为正常桌面人工观察通过。不重复当正式包目视或新版本安装证据。只读复核正式主 PID 110340 和宿主 106596 / guardian 63924 仍来自已安装目录；本模块未退出 / 替换它们、未修改任务栏偏好、未重启或推送。正式正常桌面目视、另一位置及 Win10 剩余矩阵继续单列。
+
 2026-10-06 M09h3b2c2 已接所选规则与生产未缓存引用核对：核心 PriceEvaluation 保留同次别名 / 来源优先级 / 历史时点匹配的完整普通或条件规则；SQLite 比较父行全部字段、普通 / 条件标记及目录 / 模型 / 模式 / 档位索引，Priced 身份和币种一致。汇总、明细即时计算、后台 / 手动重估未缓存生成共用核对入口。请求工厂 actual_tier=None、必要内部证据不传前端；原 source_total 可空值贯通核心关联，避免发布总量代替原证据。指纹语义改为原总量，因此源码 cache v6（前次 v5 保留阶段记录）、schema 14 无新 DDL，v4 / v5 排除且保存；Token / 原日志 / 基线 / 检查点未改。
 
 core 152 + store 306 = 458 passed / 1 原性能夹具 ignored；五组新检查覆盖五个合成模式 / 两档四费率独立金额、原价格读取快照 / 指定时点 / 别名、未知模式 / 不足量 / 原总量 null、父行 / 条件索引一致性，以及生产和后台拒绝把配置模式当响应事实。v4 / v5 版本排除另定向通过，strict core / store all-target Clippy、release-cfg desktop check / fmt / diff 通过；日志 `target/release/review/v0.1.6/selected-price-*.log`。初次夹具使用错误别名方法、其次遗漏观察模型 / 时间被原 CheckpointConflict 拒绝，修正后通过，失败日志保留。本轮没有真实模式或地区来源证据，不能宣称后台真实条件金额 / 公开匹配依据已完成；已发布缓存仍沿用修订 / SHA 门控，非逐次重算核对金额。正式安装仍 0.1.6-327183e / cache v4、公开 0.1.3，本增量尚未打包签名 / 安装 / 推送；没有重启或性能测试。详见[计价专题第 17 节](../design/price-accounting.md#17-所选不可变规则核对与生产请求关联m09h3b2c2)。

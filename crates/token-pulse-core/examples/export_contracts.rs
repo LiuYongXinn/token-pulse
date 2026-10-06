@@ -10,8 +10,9 @@ use token_pulse_core::pricing::offline::*;
 use token_pulse_core::pricing::request::{RequestConsumptionBinding, RequestInputEvidence};
 use token_pulse_core::pricing::revalue::*;
 use token_pulse_core::pricing::{
-    ModelAlias, ModelAliasDraft, ModelAliasMutation, PriceChanged, PriceOrigin, PriceOutcome,
-    PriceRule, PriceRuleDraft, PriceRuleMutation, PriceRulesSnapshot, UnpricedCode,
+    MatchedPrice, ModelAlias, ModelAliasDraft, ModelAliasMutation, PriceChanged, PriceMatchBasis,
+    PriceOrigin, PriceOutcome, PriceRule, PriceRuleDraft, PriceRuleMutation, PriceRulesSnapshot,
+    UnpricedCode,
 };
 use token_pulse_core::query::{
     ClassificationKind, RawTokenCount, RawUsageVector, SessionActivity, SessionBundle,
@@ -189,6 +190,8 @@ fn main() {
         ModelAlias,
         UnpricedCode,
         PriceOutcome,
+        MatchedPrice,
+        PriceMatchBasis,
         CoverageState,
         SourceIssue,
         FormatIssue,

@@ -252,7 +252,7 @@ export type UsageEventRow = { event_id: string, session_key: string, session_dis
 /**
  * Published increment; raw_last/cumulative retain original source vectors.
  */
-usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsageVector | null, request_input: RequestInputEvidence | null, calculation_method: string, quality_flags: Array<string>, price: PriceOutcome, parser_version: string, accounting_version: string, };
+usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsageVector | null, request_input: RequestInputEvidence | null, calculation_method: string, quality_flags: Array<string>, price: PriceOutcome, matched_price: MatchedPrice | null, parser_version: string, accounting_version: string, };
 
 export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
 
@@ -317,6 +317,10 @@ export type ModelAlias = { alias_id: string, provider: string, alias: string, ca
 export type UnpricedCode = "unknown_model" | "missing_rule" | "ambiguous_rule" | "insufficient_usage" | "incomplete_pricing_conditions" | "overflow";
 
 export type PriceOutcome = { "status": "redacted", } | { "status": "priced", rule_id: string, currency: string, cost_atoms: DecimalInt, estimated_cost: DecimalMoney, } | { "status": "unpriced", reason: UnpricedCode, };
+
+export type MatchedPrice = { rule_id: string, model_exact: string, introduced_revision: DecimalInt, basis: PriceMatchBasis, };
+
+export type PriceMatchBasis = { "kind": "custom_rule", source_specific: boolean, } | { "kind": "offline_standard_reference", catalog_id: string, reference_basis: OfflineReferenceBasis, } | { "kind": "offline_rule", } | { "kind": "offline_request_reference", catalog_id: string, actual_tier: OfflinePriceTier, context: OfflineContextBand, reference_basis: OfflineReferenceBasis, };
 
 export type CoverageState = "complete" | "partial" | "unknown";
 

@@ -449,3 +449,5 @@ fn event_cursors_cannot_be_rebound_or_leak_slots_after_close_or_bad_rows() {
         2
     );
 }
+
+mod matched_price;

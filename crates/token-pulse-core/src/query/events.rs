@@ -3,8 +3,8 @@ use crate::{
     domain::UsageVector,
     error::ErrorCode,
     numeric::{DecimalInt, EpochMs},
-    pricing::PriceOutcome,
     pricing::request::RequestInputEvidence,
+    pricing::{MatchedPrice, PriceOutcome},
     protocol::{Coverage, PriceBasis, PricingSummary, SnapshotMeta, TokenTotals, UsageFilter},
 };
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
@@ -134,6 +134,7 @@ pub struct UsageEventRow {
     #[schemars(length(max = 16))]
     pub quality_flags: Vec<String>,
     pub price: PriceOutcome,
+    pub matched_price: Option<MatchedPrice>,
     pub parser_version: String,
     pub accounting_version: String,
 }

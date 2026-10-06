@@ -111,12 +111,19 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateTurns({ ...turnPage, turns: Array(201).fill(turn) })).toBe(false);
   expect(validateTurns({ ...turnPage, turns: [{ ...turn, messages: ['private'] }] })).toBe(false);
   const raw = { input_total: '100', cached_input: '60', output_total: '10', reasoning_output: '2', cache_write_input: null, reported_total: '110' };
-  const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, request_input: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
+  const event = { event_id: 'synthetic-event', session_key: 'synthetic', session_display_name: 'Synthetic', occurred_at_ms: 1000, model: null, provider: null, project_id: null, project_display_name: null, source_ids: ['synthetic-source'], turn_id: null, total_tokens: '110', usage: raw, raw_last: { ...raw, input_total: '-1' }, raw_cumulative: null, request_input: null, matched_price: null, calculation_method: 'synthetic', quality_flags: ['confirmed'], price: { status: 'unpriced', reason: 'unknown_model' }, parser_version: 'synthetic', accounting_version: 'synthetic' };
   const eventPage = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, events: [event], next_cursor: null };
   const validateEvents = ajv.compile(protocol.schemas.UsageEventsPage);
   expect(validateEvents(eventPage)).toBe(true);
   expect(validateEvents({ ...eventPage, events: [{ ...event, raw_last: undefined }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: undefined }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: undefined }] })).toBe(false);
+  const matched = { rule_id: 'fixture', model_exact: 'fixture-model', introduced_revision: '9007199254740993', basis: { kind: 'offline_standard_reference', catalog_id: 'openai-text-fixture', reference_basis: 'global_api_reference' } };
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: matched }] })).toBe(true);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, response_id: 'private' } }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, introduced_revision: 9007199254740993 } }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, basis: { ...matched.basis, actual_tier: 'fast' } } }] })).toBe(false);
+
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '272001', binding: 'full_request' } }] })).toBe(true);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '0', binding: 'different_consumption' } }] })).toBe(true);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: 272001, binding: 'full_request' } }] })).toBe(false);

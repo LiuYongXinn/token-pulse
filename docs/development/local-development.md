@@ -1,5 +1,9 @@
 # 本地开发与运行
 
+2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。
+
+M09h3b2c3 同快照计价解释：`cargo test -p token-pulse-core -p token-pulse-store --lib --tests --locked --offline` 461 passed / 1 原性能夹具 ignored；strict core / store all-target Clippy、契约生成 check、release-cfg desktop check、前端 build 通过。`npm test -- --run ui/src/shared/contracts.test.ts` 11 项和 `npx playwright test tests/ui/events.spec.ts --workers=1` 7 项通过；深 / 浅主题 960px 截图已查看。仅合成 / 临时数据参与模式和价格检查，真实 mode 未采集；正式安装与公开版本不随这些检查改变。
+
 M09h3b2c2 自动检查：`cargo test -p token-pulse-core -p token-pulse-store --lib --tests --locked --offline` 458 passed / 1 原性能夹具 ignored；`cargo test -p token-pulse-store v4_and_v5 --lib --locked --offline`、core / store all-target strict Clippy 与 release-cfg desktop check 通过。合成模式仅进入应用自有临时库的内部求值入口，正式请求工厂 actual_tier=None；不使用用户日志或配置代替响应模式。源码 cache v6 / schema 14，原始 source_total 可空值参与指纹和完整关联；实际安装仍 0.1.6 / cache v4。候选后台生成核对同快照不可变父行与条件索引，缓存命中仍原修订 / SHA 门控；不能把这些自动检查称为真实条件费用 / 账户或新包验收。详见[第 17 节](../design/price-accounting.md#17-所选不可变规则核对与生产请求关联m09h3b2c2)。
 
 M13g16 UIA 补试：正式 WebView select 暴露 ExpandCollapse 不保证能枚举选项；本机展开后没有可 Select / Invoke 的自有选项，Collapse provider 拒绝，失败保留。只能确认值仍原 notification_left 且重置草稿禁用，再通过自有 WM_CLOSE 恢复原主窗口隐藏。只读 settings 141 / 原 taskbar 偏好保持；不可将 ValuePattern 可读、UIA 导航、自有托盘命令或窗口未 cloak 写成真实位置输入通过。回执与范围见[交付记录](delivery-status.md)。

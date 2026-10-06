@@ -5081,6 +5081,156 @@
       ],
       "title": "ManageSourceAction"
     },
+    "MatchedPrice": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        },
+        "PriceMatchBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "custom_rule",
+                  "type": "string"
+                },
+                "source_specific": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "source_specific"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Standard is a reference assumption; the request's actual mode remains unknown.",
+              "properties": {
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "offline_standard_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "reference_basis"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "offline_rule",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "actual_tier": {
+                  "$ref": "#/$defs/OfflinePriceTier"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "kind": {
+                  "const": "offline_request_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "actual_tier",
+                "context",
+                "reference_basis"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/PriceMatchBasis"
+        },
+        "introduced_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "model_exact": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "rule_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "model_exact",
+        "introduced_revision",
+        "basis"
+      ],
+      "title": "MatchedPrice",
+      "type": "object"
+    },
     "MiniOpacityMutation": {
       "$defs": {
         "DecimalInt": {
@@ -8270,6 +8420,123 @@
       ],
       "title": "PriceChanged",
       "type": "object"
+    },
+    "PriceMatchBasis": {
+      "$defs": {
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "custom_rule",
+              "type": "string"
+            },
+            "source_specific": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "source_specific"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Standard is a reference assumption; the request's actual mode remains unknown.",
+          "properties": {
+            "catalog_id": {
+              "maxLength": 96,
+              "minLength": 1,
+              "type": "string"
+            },
+            "kind": {
+              "const": "offline_standard_reference",
+              "type": "string"
+            },
+            "reference_basis": {
+              "$ref": "#/$defs/OfflineReferenceBasis"
+            }
+          },
+          "required": [
+            "kind",
+            "catalog_id",
+            "reference_basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "offline_rule",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "actual_tier": {
+              "$ref": "#/$defs/OfflinePriceTier"
+            },
+            "catalog_id": {
+              "maxLength": 96,
+              "minLength": 1,
+              "type": "string"
+            },
+            "context": {
+              "$ref": "#/$defs/OfflineContextBand"
+            },
+            "kind": {
+              "const": "offline_request_reference",
+              "type": "string"
+            },
+            "reference_basis": {
+              "$ref": "#/$defs/OfflineReferenceBasis"
+            }
+          },
+          "required": [
+            "kind",
+            "catalog_id",
+            "actual_tier",
+            "context",
+            "reference_basis"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PriceMatchBasis"
     },
     "PriceOrigin": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -16084,6 +16351,147 @@
           "minimum": -8640000000000000,
           "type": "integer"
         },
+        "MatchedPrice": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PriceMatchBasis"
+            },
+            "introduced_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "model_exact": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rule_id": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule_id",
+            "model_exact",
+            "introduced_revision",
+            "basis"
+          ],
+          "type": "object"
+        },
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        },
+        "PriceMatchBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "custom_rule",
+                  "type": "string"
+                },
+                "source_specific": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "source_specific"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Standard is a reference assumption; the request's actual mode remains unknown.",
+              "properties": {
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "offline_standard_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "reference_basis"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "offline_rule",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "actual_tier": {
+                  "$ref": "#/$defs/OfflinePriceTier"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "kind": {
+                  "const": "offline_request_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "actual_tier",
+                "context",
+                "reference_basis"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "PriceOutcome": {
           "oneOf": [
             {
@@ -16274,6 +16682,16 @@
         "event_id": {
           "type": "string"
         },
+        "matched_price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MatchedPrice"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "model": {
           "type": [
             "string",
@@ -16390,6 +16808,7 @@
         "calculation_method",
         "quality_flags",
         "price",
+        "matched_price",
         "parser_version",
         "accounting_version"
       ],
@@ -16526,6 +16945,58 @@
           ],
           "type": "object"
         },
+        "MatchedPrice": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "$ref": "#/$defs/PriceMatchBasis"
+            },
+            "introduced_revision": {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            "model_exact": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "rule_id": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule_id",
+            "model_exact",
+            "introduced_revision",
+            "basis"
+          ],
+          "type": "object"
+        },
+        "OfflineContextBand": {
+          "enum": [
+            "all",
+            "short",
+            "long"
+          ],
+          "type": "string"
+        },
+        "OfflinePriceTier": {
+          "enum": [
+            "standard",
+            "batch",
+            "flex",
+            "fast",
+            "ultrafast"
+          ],
+          "type": "string"
+        },
+        "OfflineReferenceBasis": {
+          "enum": [
+            "global_api_reference"
+          ],
+          "type": "string"
+        },
         "PriceBasis": {
           "oneOf": [
             {
@@ -16555,6 +17026,95 @@
               "required": [
                 "mode",
                 "specified_at_ms"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "PriceMatchBasis": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "custom_rule",
+                  "type": "string"
+                },
+                "source_specific": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "source_specific"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Standard is a reference assumption; the request's actual mode remains unknown.",
+              "properties": {
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "offline_standard_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "reference_basis"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "offline_rule",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "actual_tier": {
+                  "$ref": "#/$defs/OfflinePriceTier"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "kind": {
+                  "const": "offline_request_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "actual_tier",
+                "context",
+                "reference_basis"
               ],
               "type": "object"
             }
@@ -16967,6 +17527,16 @@
             "event_id": {
               "type": "string"
             },
+            "matched_price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/MatchedPrice"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "model": {
               "type": [
                 "string",
@@ -17083,6 +17653,7 @@
             "calculation_method",
             "quality_flags",
             "price",
+            "matched_price",
             "parser_version",
             "accounting_version"
           ],

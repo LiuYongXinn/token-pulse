@@ -151,21 +151,19 @@ fn rows(
         );
         let fingerprint =
             crate::valuation::fingerprint(&pricing_event, &version, request_input.as_ref())?;
-        let price = match cache.lookup(&event_id, &fingerprint)? {
-            Some(outcome) => outcome,
-            None => {
-                crate::pricing::evaluate(
-                    tx,
-                    &catalog,
-                    &pricing_event,
-                    &query.price_basis,
-                    request_input
-                        .as_ref()
-                        .map(|request| request.price_evidence()),
-                )?
-                .outcome
-            }
-        };
+        let evaluation = crate::pricing::evaluate(
+            tx,
+            &catalog,
+            &pricing_event,
+            &query.price_basis,
+            request_input
+                .as_ref()
+                .map(|request| request.price_evidence()),
+        )?;
+        let price = cache
+            .lookup(&event_id, &fingerprint)?
+            .unwrap_or_else(|| evaluation.outcome.clone());
+        let matched_price = evaluation.matched_price(&price);
         events.push(UsageEventRow {
             event_id,
             session_key,
@@ -188,6 +186,7 @@ fn rows(
             calculation_method: row.get(15)?,
             quality_flags,
             price,
+            matched_price,
             parser_version: row.get(17)?,
             accounting_version: version,
         });

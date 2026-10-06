@@ -144,6 +144,15 @@ fn synthetic_modes_and_bands_keep_exact_verified_rule_identity_and_four_category
                         * factor,
                 ) * 1_000_000_000;
                 assert_eq!(atoms(&evaluation.outcome), expected);
+                let matched = evaluation.matched_price(&evaluation.outcome).unwrap();
+                assert!(matches!(&matched.basis,
+                    token_pulse_core::pricing::PriceMatchBasis::OfflineRequestReference {
+                        catalog_id, actual_tier, context: band, ..
+                    } if catalog_id == "openai-text-selection-fixture" && *actual_tier == tier && *band == context));
+                let encoded = serde_json::to_string(&matched)?;
+                assert!(!encoded.contains("synthetic-response"));
+                assert!(!encoded.contains("physical_position"));
+                assert!(evaluation.matched_price(&PriceOutcome::Redacted {}).is_none());
                 Ok(())
             })
             .unwrap();
@@ -167,6 +176,7 @@ fn missing_modes_and_unknown_quantities_have_distinct_selection_results() {
             Some(proof(&observed, None)),
         )?;
         assert!(unknown.selection.is_none());
+        assert!(unknown.matched_price(&unknown.outcome).is_none());
         assert!(matches!(
             unknown.outcome,
             PriceOutcome::Unpriced {

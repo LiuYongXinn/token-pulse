@@ -219,6 +219,7 @@ fn aliases_are_shared_across_list_detail_children_and_events_and_unknowns_stay_n
     increment["input_total"] = Value::Null;
     let mut events = base();
     events["events"] = json!([{"event_id":"event-key","session_key":"session-key","session_display_name":"SECRET title","occurred_at_ms":1000,"model":"public-model","provider":"public-provider","project_id":"project-key","project_display_name":"SECRET path","source_ids":["source-key"],"turn_id":null,"total_tokens":"9007199254740993","usage":increment,"raw_last":vector,"raw_cumulative":null,"calculation_method":"last_with_baseline","quality_flags":["confirmed"],"price":{"status":"priced","rule_id":"SECRET private rule","currency":"USD","cost_atoms":"9007199254740993","estimated_cost":"9.007199254740993"},"parser_version":"v1","accounting_version":"v2"}]);
+    events["events"][0]["matched_price"] = json!({"rule_id":"SECRET private rule","model_exact":"SECRET pricing alias","introduced_revision":"3","basis":{"kind":"offline_standard_reference","catalog_id":"openai-text-secret","reference_basis":"global_api_reference"}});
     events["next_cursor"] = json!("y".repeat(151));
     let mut events: UsageEventsPage = serde_json::from_value(events).unwrap();
     events.redact();
@@ -229,6 +230,7 @@ fn aliases_are_shared_across_list_detail_children_and_events_and_unknowns_stay_n
         once["sessions"][0]["display_name"]
     );
     assert_eq!(events["events"][0]["price"], json!({"status":"redacted"}));
+    assert_eq!(events["events"][0]["matched_price"], Value::Null);
     assert_eq!(events["events"][0]["raw_last"], vector);
     assert_eq!(events["events"][0]["raw_cumulative"], Value::Null);
     assert_eq!(events["events"][0]["turn_id"], Value::Null);

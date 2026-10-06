@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import type { DashboardRequest, RawUsageVector, RequestInputEvidence, UsageEventRow, UsageEventSort, UsageEventsPage, UsageEventsQuery } from '../shared/generated/contracts';
+import type { DashboardRequest, MatchedPrice, RawUsageVector, RequestInputEvidence, UsageEventRow, UsageEventSort, UsageEventsPage, UsageEventsQuery } from '../shared/generated/contracts';
 import { compactTokens, fullTokens, money, rawTokens } from '../shared/format';
 import { closeQuerySnapshot, queryUsageEvents } from '../shared/runtime';
 import { Cost, coverageNames, reasonNames, when, whenExact } from './usage-display';
@@ -15,12 +15,40 @@ function EventCost({ row }: { row: UsageEventRow }) {
   if (price.status === 'redacted') return <span className="event-unpriced">已隐藏</span>;
   return price.status === 'unpriced' ? <span className="event-unpriced" title={reasonNames[price.reason] ?? price.reason}>未计价</span> : <strong className="event-cost" title={`${price.currency} ${price.estimated_cost} · 规则 ${price.rule_id}`}>{price.currency === 'USD' ? '$' : `${price.currency} `}{money(price.estimated_cost)}</strong>;
 }
+function MatchedPriceExplanation({ row }: { row: UsageEventRow }) {
+  if (row.price.status === 'redacted') return <><dt>价格来源</dt><dd>已隐藏</dd></>;
+  const matched = row.matched_price;
+  if (!matched) return <><dt>价格来源</dt><dd>尚无可确认的匹配依据</dd></>;
+  const basis = matched.basis;
+  let label: string, note: string;
+  switch (basis.kind) {
+    case 'custom_rule':
+      label = basis.source_specific ? '来源专用自定义规则' : '自定义规则 · 全部来源';
+      note = '按自定义单价估算；该规则不证明请求实际模式或地区条件。'; break;
+    case 'offline_standard_reference':
+      label = '离线 Standard 平价参考';
+      note = '请求实际模式未知。使用全球 API 文本参考价，不代表账户订阅账单或独立工具费用。'; break;
+    case 'offline_request_reference': {
+      const tiers = { standard: 'Standard', fast: 'Fast', batch: 'Batch', flex: 'Flex', ultrafast: 'Ultrafast' };
+      const bands = { all: '不分上下文档位', short: '短上下文', long: '长上下文' };
+      label = `响应确认 ${tiers[basis.actual_tier]} · ${bands[basis.context]}`;
+      note = '按已关联请求选择全球 API 文本参考价；地区及独立工具费用未包含。'; break;
+    }
+    case 'offline_rule':
+      label = '离线价格规则'; note = '没有足够依据确认请求实际模式。'; break;
+  }
+  return <><dt>价格来源</dt><dd>{label}<small className="event-price-assumption">{note}</small></dd>
+    {('catalog_id' in basis) && <><dt>目录版本</dt><dd>{basis.catalog_id}</dd></>}
+    <dt>计价模型</dt><dd>{matched.model_exact}</dd><dt>规则发布版本</dt><dd>{matched.introduced_revision}</dd></>;
+}
 function Evidence({ row }: { row: UsageEventRow }) {
   const price = row.price;
-  return <div className="event-evidence" aria-label={`${row.event_id} 核算依据`}><div className="event-evidence-heading"><h3>核算与价格依据</h3><span>{row.quality_flags.map(flag => qualityNames[flag] ?? flag).join(' · ') || '质量标记未知'}</span></div><div className="event-evidence-grid"><div><table className="event-vector-table"><caption>缓存命中与缓存写入均包含在输入内，推理包含在输出内。原始向量可能含未采用的无效值。</caption><thead><tr><th>分项</th><th>已计入增量</th><th>原始 last</th><th>原始累计</th></tr></thead><tbody>{vectors.map(([field,label]) => <tr key={field}><th>{label}</th>{[row.usage,row.raw_last,row.raw_cumulative].map((vector,index) => <td className={vector?.[field]?.startsWith('-') ? 'raw-negative' : ''} key={index}>{rawTokens(vector?.[field] ?? null)}</td>)}</tr>)}</tbody></table><p className="chart-caption">可信总量 {fullTokens(row.total_tokens)} Token。缺失分项保留未知；原始 last / 累计向量不作为额外消费相加。</p></div><dl><RequestInput evidence={row.request_input} /><dt>核算方法</dt><dd title={row.calculation_method}>{methodNames[row.calculation_method] ?? row.calculation_method}</dd><dt>价格依据</dt><dd>{price.status === 'redacted' ? '已隐藏' : price.status === 'priced' ? `${price.currency} ${price.estimated_cost}` : `未计价 · ${reasonNames[price.reason] ?? price.reason}`}</dd><dt>匹配规则</dt><dd>{price.status === 'priced' ? price.rule_id : '—'}</dd><dt>计价原子</dt><dd>{price.status === 'priced' ? `${price.cost_atoms}（10⁻¹⁵）` : '—'}</dd><dt>解析 / 核算版本</dt><dd>{row.parser_version} / {row.accounting_version}</dd><dt>回合标识</dt><dd>{row.turn_id ?? '未知'}</dd><dt>来源标识</dt><dd>{row.source_ids.length ? row.source_ids.join('、') : '未知'}</dd></dl></div></div>;
+  return <div className="event-evidence" aria-label={`${row.event_id} 核算依据`}><div className="event-evidence-heading"><h3>核算与价格依据</h3><span>{row.quality_flags.map(flag => qualityNames[flag] ?? flag).join(' · ') || '质量标记未知'}</span></div><div className="event-evidence-grid"><div><table className="event-vector-table"><caption>缓存命中与缓存写入均包含在输入内，推理包含在输出内。原始向量可能含未采用的无效值。</caption><thead><tr><th>分项</th><th>已计入增量</th><th>原始 last</th><th>原始累计</th></tr></thead><tbody>{vectors.map(([field,label]) => <tr key={field}><th>{label}</th>{[row.usage,row.raw_last,row.raw_cumulative].map((vector,index) => <td className={vector?.[field]?.startsWith('-') ? 'raw-negative' : ''} key={index}>{rawTokens(vector?.[field] ?? null)}</td>)}</tr>)}</tbody></table><p className="chart-caption">可信总量 {fullTokens(row.total_tokens)} Token。缺失分项保留未知；原始 last / 累计向量不作为额外消费相加。</p></div><dl><RequestInput evidence={row.request_input} matched={row.matched_price} hidden={price.status === 'redacted'} /><dt>核算方法</dt><dd title={row.calculation_method}>{methodNames[row.calculation_method] ?? row.calculation_method}</dd><dt>价格依据</dt><dd>{price.status === 'redacted' ? '已隐藏' : price.status === 'priced' ? `${price.currency} ${price.estimated_cost}` : `未计价 · ${reasonNames[price.reason] ?? price.reason}`}</dd><MatchedPriceExplanation row={row} /><dt>匹配规则</dt><dd>{price.status === 'redacted' ? '已隐藏' : row.matched_price?.rule_id ?? (price.status === 'priced' ? price.rule_id : '—')}</dd><dt>计价原子</dt><dd>{price.status === 'priced' ? `${price.cost_atoms}（10⁻¹⁵）` : '—'}</dd><dt>解析 / 核算版本</dt><dd>{row.parser_version} / {row.accounting_version}</dd><dt>回合标识</dt><dd>{row.turn_id ?? '未知'}</dd><dt>来源标识</dt><dd>{row.source_ids.length ? row.source_ids.join('、') : '未知'}</dd></dl></div></div>;
 }
-function RequestInput({ evidence }: { evidence: RequestInputEvidence | null }) {
-  return <><dt>单次请求输入</dt><dd>{evidence ? `${fullTokens(evidence.input_tokens)} Token` : '未知（缺少可核对的响应记录）'}</dd><dt>请求与消费关联</dt><dd>{evidence ? evidence.binding === 'full_request' ? '对应完整请求用量' : '与本笔增量不同，不能据此选档' : '未知'}</dd><dt>实际模式 / 地区</dt><dd>尚未采集，不能据此确认完整计费</dd></>;
+function RequestInput({ evidence, matched, hidden }: { evidence: RequestInputEvidence | null; matched: MatchedPrice | null; hidden: boolean }) {
+  const actual = matched?.basis.kind === 'offline_request_reference' ? matched.basis.actual_tier : null;
+  const tiers = { standard: 'Standard', fast: 'Fast', batch: 'Batch', flex: 'Flex', ultrafast: 'Ultrafast' };
+  return <><dt>单次请求输入</dt><dd>{evidence ? `${fullTokens(evidence.input_tokens)} Token` : '未知（缺少可核对的响应记录）'}</dd><dt>请求与消费关联</dt><dd>{evidence ? evidence.binding === 'full_request' ? '对应完整请求用量' : '与本笔增量不同，不能据此选档' : '未知'}</dd><dt>实际模式 / 地区</dt><dd>{hidden ? '已隐藏' : actual ? `响应模式 ${tiers[actual]}；地区尚未确认` : '尚未采集，不能据此确认完整计费'}</dd></>;
 }
 export function EventsPage({ request, refreshRevision, onSession }: { request: DashboardRequest; refreshRevision: number; onSession: (key: string, name: string) => void }) {
   const [sort, setSort] = useState<UsageEventSort>('time_desc');

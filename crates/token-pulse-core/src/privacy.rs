@@ -306,6 +306,7 @@ impl PrivacyRedact for UsageEventsPage {
                 row.project_id.as_deref(),
             );
             row.price.redact();
+            row.matched_price = None;
         }
     }
 }

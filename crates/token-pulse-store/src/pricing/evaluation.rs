@@ -46,7 +46,8 @@ fn verify_selection(
         tx.query_row("SELECT catalog_id,model_exact,tier,context_band FROM conditional_price_rules WHERE rule_id=?1", [&expected.rule_id], |row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?))).optional()?,
     );
     match selection {
-        SelectedPrice::Rule(_) if flag == 0 && identity.is_none() => {}
+        SelectedPrice::Rule(_) | SelectedPrice::OfflineStandardReference { .. }
+            if flag == 0 && identity.is_none() => {}
         SelectedPrice::Request(reference)
             if flag == 1
                 && identity

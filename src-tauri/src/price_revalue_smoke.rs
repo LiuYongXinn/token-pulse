@@ -140,7 +140,7 @@ pub fn start(app: tauri::AppHandle) {
         let result = verify(&app);
         match &result {
             Ok(()) => println!(
-                "NATIVE_PRICE_REVALUE_OK: own-data four-rate 1300 atoms, React write-rate zero replacement 700 atoms, old revision/history, startup/manual cache, pinned IPC/CAS/idempotence, mini denied, shared privacy, unchanged consumption/checkpoint"
+                "NATIVE_PRICE_REVALUE_OK: own-data four-rate 1300 atoms, React write-rate zero replacement 700 atoms, old revision/history, startup/manual cache, same-snapshot matched-price IPC and privacy, pinned IPC/CAS/idempotence, mini denied, shared privacy, unchanged consumption/checkpoint"
             ),
             Err(error) => eprintln!("NATIVE_PRICE_REVALUE_FAILED: {error}"),
         }
@@ -167,6 +167,12 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         r#"
       const status=await invoke('get_price_revalue_status',{requestId:'revalue-startup'});
       if(status.data.current_price_revision!=='1'||status.data.uncached_ledgers!=='0'||status.data.latest_job.state!=='succeeded'||status.data.latest_job.total_events!=='1')throw new Error('REVALUE_BOOT');
+      const eventRequest={query:{filter:{range:{start_ms:0,end_ms:2000,timezone:'UTC'},sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null};
+      const priced=await invoke('query_usage_events',{requestId:'matched-native-public',request:eventRequest});
+      const row=priced.data.events[0],match=row?.matched_price;
+      if(priced.data.meta.price_revision!=='1'||row.price.cost_atoms!=='1300'||match?.rule_id!==row.price.rule_id||match.model_exact!=='synthetic-model'||match.introduced_revision!=='1'||match.basis.kind!=='custom_rule'||match.basis.source_specific!==false)throw new Error('MATCHED_NATIVE_SELECTION');
+      if('actual_tier' in match.basis||JSON.stringify(match).includes('synthetic-disabled'))throw new Error('MATCHED_NATIVE_FABRICATED_EVIDENCE');
+      if(priced.data.next_cursor!==null)await invoke('close_query_snapshot',{requestId:'matched-native-close',request:{kind:'usage_events',request:{...eventRequest,cursor:priced.data.next_cursor}}});
       const request={scope:{kind:'all'},basis:{mode:'specified_time',specified_at_ms:1500},expected_price_revision:'1',request_key:'native-revalue-manual'};
       const first=await invoke('start_price_revalue',{requestId:'revalue-manual',request});
       const duplicate=await invoke('start_price_revalue',{requestId:'revalue-duplicate',request});
@@ -206,6 +212,10 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       const settings=await invoke('get_display_settings',{requestId:'revalue-policy'});
       await invoke('set_display_privacy',{requestId:'revalue-private',request:{privacy:true,expected_settings_revision:settings.data.settings_revision}});
       const hidden=await invoke('get_price_revalue_status',{requestId:'revalue-private-state'});if(!hidden.display_policy.privacy)throw new Error('REVALUE_POLICY_MISSING');
+      const eventRequest={query:{filter:{range:{start_ms:0,end_ms:2000,timezone:'UTC'},sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null};
+      const hiddenEvents=await invoke('query_usage_events',{requestId:'matched-native-hidden',request:eventRequest});
+      if(!hiddenEvents.display_policy.privacy||hiddenEvents.data.events[0]?.matched_price!==null||hiddenEvents.data.events[0].price.status!=='redacted'||hiddenEvents.data.events[0].total_tokens!=='110')throw new Error('MATCHED_NATIVE_PRIVACY');
+      if(hiddenEvents.data.next_cursor!==null)await invoke('close_query_snapshot',{requestId:'matched-hidden-close',request:{kind:'usage_events',request:{...eventRequest,cursor:hiddenEvents.data.next_cursor}}});
       await wait(()=>!document.querySelector('.price-revalue'));
       const next=await invoke('get_display_settings',{requestId:'revalue-next-policy'});
       await invoke('set_display_privacy',{requestId:'revalue-public',request:{privacy:false,expected_settings_revision:next.data.settings_revision}});

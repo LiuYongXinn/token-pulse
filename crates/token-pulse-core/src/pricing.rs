@@ -14,6 +14,8 @@ use ts_rs::TS;
 pub const MAX_RATE_ATOMS: i128 = 1_000_000_000_000_000;
 
 mod history;
+mod matched;
+pub use matched::{MatchedPrice, PriceMatchBasis};
 mod summary;
 pub use summary::PricingAccumulator;
 pub mod offline;
@@ -337,12 +339,18 @@ pub struct PricingEvent<'a> {
 /// Internal selection evidence for persistence; never an IPC mode override.
 pub enum SelectedPrice {
     Rule(PriceRule),
+    OfflineStandardReference {
+        rule: PriceRule,
+        catalog_id: String,
+        reference_basis: offline::OfflineReferenceBasis,
+    },
     Request(offline::SelectedRequestReference),
 }
 impl SelectedPrice {
     pub fn rule(&self) -> &PriceRule {
         match self {
             Self::Rule(rule) => rule,
+            Self::OfflineStandardReference { rule, .. } => rule,
             Self::Request(reference) => &reference.rule,
         }
     }
@@ -562,7 +570,16 @@ impl PriceCatalog {
             }
             return PriceEvaluation::unpriced(UnpricedCode::MissingRule);
         };
-        PriceEvaluation::selected(event.usage, SelectedPrice::Rule(rule.clone()))
+        let selection =
+            match reference.filter(|reference| reference.owns_flat_rule(rule, canonical)) {
+                Some(reference) => SelectedPrice::OfflineStandardReference {
+                    rule: rule.clone(),
+                    catalog_id: reference.publication.catalog.catalog_id.clone(),
+                    reference_basis: reference.publication.catalog.reference_basis,
+                },
+                None => SelectedPrice::Rule(rule.clone()),
+            };
+        PriceEvaluation::selected(event.usage, selection)
     }
 }
 
