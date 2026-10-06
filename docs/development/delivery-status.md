@@ -1,5 +1,11 @@
 # 实施与交付记录
 
+2026-10-07 M15f6 实际系统缩放：正式安装 0.1.7，在主显示器的 Windows 显示设置中以实际 SelectionItem 切换 100 / 125 / 150 / 200%，另一屏保持 150%，不是向应用发送合成 DPI 通知。主窗、小窗、正式任务栏 GetDpiForWindow 分别确认 96 / 120 / 144 / 192；紧凑客户区依次 280×220、350×275、420×330、560×440，展开为 360×380、450×475、540×570、720×760 物理像素。200% 主窗客户区适配为 2534×1289，外框 (0,0)–(2560,1360)，工作区内可滚动。两轮各八组实际退出 0；第二轮生成 16 张自有截图，四档主窗与八张小窗已查看。读数几何 / 可见性 / 实际 DPI 与非空真实名称通过，不把名称或窗口存在扩展为全部模式的普通桌面人工目视。
+
+回执 `target/release/review/v0.1.7/dpi-matrix-a6a42952-c13f-4763-9013-584cb1c98c30.json`、`dpi-matrix-72a0644d-dc67-4dc1-a37d-79ebf8c0d339.json` 与 dpi-matrix-visual.log；系统实际恢复 150%，原窗口矩形恢复。辅助脚本的 SelectionPattern 调用、100% 实际带“(推荐)”标签及启动设置失败均先拒绝、日志保留；修正检查调用 / 精确选项后才完成实际切换。方法依据 2026-10-07 核实的 Microsoft [显示缩放设置](https://support.microsoft.com/en-us/windows/hardware/display-graphics/change-your-screen-resolution-and-layout-in-windows)。没有重启或注销。
+
+M15f7 拓扑检查暂未通过：Settings.exe 错误提示阻挡了选择第二屏的真实点击，检查拒绝；错误确认的 SendInput 未关闭提示，未操作其他系统窗口。改用 Microsoft 受支持的 [ChangeDisplaySettingsExW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-changedisplaysettingsexw) / [显示枚举和控制](https://learn.microsoft.com/en-us/windows/win32/gdi/enumeration-and-display-control)（2026-10-07 核实），保存原 current / registry 模式，driver TEST、逐屏 staging 和动态 apply，任何需要重启的结果拒绝。实际第二屏主屏 / 负坐标第一屏及原主屏恢复完成，正式任务栏跟随且窗口可见；随后真实逻辑停用第二屏时小窗完整外框未适配，原包最终外框右边比工作区多 10 像素。该场退出 1，不能记为拓扑全场通过。旧辅助检查立即读取恢复后的 work area，短暂读到 1440 而非 1380；独立后续只读预检确认两屏原 bounds / primary / work 1380 已恢复，不改系统任务栏偏好。失败回执 `display-topology-70536aa5-feae-4aae-84c8-4335fb387604.json` 保留。正在修正小窗使用客户区宽度夹紧外框的问题，正式安装尚未包含；物理拔线未执行。
+
 2026-10-07 M16z6 正式页面补验：已安装 0.1.7 / PID 89968，主要七页和五设置分区之外，补齐浅色总览、浅色显示设置、紧凑 / 展开浅色小窗、事件核算与价格依据、会话详情。全部来自正式 UI / 真实 DTO 的自有 PrintWindow，逐张查看，文件位于本机忽略 `target/release/review/v0.1.7/screenshots/`；不同页面读取时点不同，不合并为同一全局快照。明细实际说明单请求输入 / 关联证据未知、模式 / 地区尚未采集，真实 gpt-6.1-sol 未完整计价；缓存写入 0 是该事件已报告值，短周期账户未知仍为“—”，周周期真实为 94%。小窗内容边界与展开后的内部滚动正常，不能把视口截图当整页所有内容已展示。
 
 主题通过实际 UIA→React→IPC 切换浅色后恢复原深色；原展开 / 隐藏状态恢复，独立只读核对 settings 153、privacy=false、原 taskbar 启用 / notification_left / two_rows / 四项内容 / fallback 保持。主题按钮因 aria-pressed 暴露 TogglePattern，事件依据因 aria-expanded 暴露 ExpandCollapsePattern；辅助脚本最初只找 Invoke 而拒绝，修正为实际公开 pattern 后分别退出 0，失败日志保留，不记为产品故障或物理鼠标验收。另对同包托盘真实 SendInput 展开通知区、右键菜单三项 ID 1000 / 1001 / 1002 及清理复测退出 0，未选择退出，记录 `tray-physical.log`。未重启、未推送，其他保留矩阵继续。
