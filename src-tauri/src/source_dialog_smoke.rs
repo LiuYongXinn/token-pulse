@@ -116,8 +116,11 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         r#"
       const button=name=>[...document.querySelectorAll('.source-panel .source-list > .source-card button')].find(n=>n.textContent===name);
       button('暂停采集').click();await wait(()=>button('恢复采集')&&!button('恢复采集').disabled);
+      await wait(()=>document.querySelector('.sidebar-bottom')?.textContent.includes('采集已暂停 · 历史保留'));
       button('恢复采集').click();await wait(()=>button('暂停采集')&&!button('暂停采集').disabled);
+      await wait(()=>document.querySelector('.sidebar-bottom')?.textContent.includes('正在采集本地来源'));
       button('移除来源并保留历史').click();await wait(()=>document.querySelector('.source-panel .source-list > .source-card .source-state')?.textContent==='已移除 · 历史保留');
+      await wait(()=>document.querySelector('.sidebar-bottom')?.textContent.includes('采集已停止 · 历史保留'));
       const after=await invoke('get_sources',{requestId:'dialog-retained'});
       if(after.data.sources.length!==1||!after.data.sources[0].removed||after.data.sources[0].enabled)throw new Error('SOURCE_RETAIN_INVALID');
       const calendar=await invoke('resolve_calendar_selection',{requestId:'dialog-retained-range',request:{timezone:'UTC',selection:{kind:'custom',start_date:'2026-10-03',end_date_inclusive:'2026-10-03'}}});
@@ -126,6 +129,17 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       const events=await invoke('query_usage_events',{requestId:'dialog-write-evidence',request:{query:{filter:retained.data.filter??{range:calendar.data.range,sources:{kind:'all'},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}},price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null}});
       if(events.data.events.length!==1||events.data.events[0].usage.cache_write_input!=='2'||events.data.events[0].raw_last.cache_write_input!=='2'||events.data.events[0].total_tokens!=='17')throw new Error('SOURCE_CACHE_WRITE_EVIDENCE');
       [...document.querySelectorAll('.sidebar nav button')].find(n=>n.textContent==='总览').click();
+      // The fixture has a fixed date. Select it explicitly instead of depending on today's date.
+      await wait(()=>document.querySelector('select[aria-label="日期范围"]')&&!document.querySelector('select[aria-label="日期范围"]').disabled);
+      const date=document.querySelector('select[aria-label="日期范围"]');
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(date,'custom');date.dispatchEvent(new Event('change',{bubbles:true}));
+      await wait(()=>document.querySelector('form[aria-label="自定义日期"]'));
+      for(const label of ['开始日期','结束日期（包含当天）']){
+        const input=document.querySelector(`input[aria-label="${label}"]`);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'2026-10-03');
+        input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      [...document.querySelectorAll('form[aria-label="自定义日期"] button')].find(n=>n.textContent==='应用日期').click();
       await wait(()=>[...document.querySelectorAll('.breakdown-measures .measure')].find(n=>n.querySelector('dt')?.textContent==='缓存写入（输入包含项）')?.querySelector('dd')?.textContent?.startsWith('2'));
     "#,
     )?;

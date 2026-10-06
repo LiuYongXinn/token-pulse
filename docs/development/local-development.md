@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-06 M10k 状态修复可用 `npx playwright test tests/ui/sources.spec.ts tests/ui/diagnostics.spec.ts --workers=1` 复核（3 项），`npm test` 为 37 项，`npm run build` 与 desktop strict Clippy / fmt 通过。native SourceDialogs 新增暂停 / 异步恢复 / 历史保留状态标签和显式夹具日期；先构建 `cargo build -p token-pulse-desktop --features custom-protocol`，以 Start-Process / PassThru / WaitForExit 启动 `--native-smoke --native-source-dialogs-smoke`，不要把 Windows GUI 的启动返回当退出证据。本轮 PID 104944 实际退出 0，日志 target/release/review/v0.1.4-4e4e052/runtime-status-native-*.log，原 SHORTCUT_CONFLICT / 1412 警告保留。正式安装仍先前 4e4e052 构建，不包含本次状态修复，公开仍 0.1.3，详见[交付记录](delivery-status.md)。
+
 2026-10-06 M16z2 当前源码 / 本机候选 0.1.4，schema v14 / cache v4 已实际安装；公开仍 0.1.3。完整 `npm run tauri:build`、同原密钥签名 / 正式版本绑定验签与本机 NSIS 升级通过，实际旧程序 / 安装退出均 0。45 张旧表行摘要、预期 schema 字段转换与修订保留分别核对，两张可重建逐事件费用缓存仅记录数量。真实托盘物理菜单通过；正式页面 / 两小窗截图、两个 150% 屏幕的只读尺寸与正常后台 v4 成功分别记录，不冒充跨屏 / 其他 DPI / 完整条件金额。当前本机回执 target/release/review/v0.1.4-4e4e052/，详见[交付记录](delivery-status.md)。已知恢复来源后顶部状态可短暂滞后，刷新可恢复，后续修正状态刷新与暂停文案。
 
 2026-10-04 M16z1 源码版本为 0.1.4；Windows 前置可用 `cargo metadata --locked --offline --filter-platform x86_64-pc-windows-msvc --format-version 1` 核对。发布准备工具 6 项通过；不把版本同步当成本机 / 线上升级。当前正式安装 / 公开仍 0.1.3，完整构建及同密钥签名、本机数据保留后续执行，详见[交付记录](delivery-status.md)。
