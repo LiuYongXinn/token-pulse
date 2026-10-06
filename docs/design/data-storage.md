@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+2026-10-06 M16z2：本机签名候选 0.1.4 已实际完成 schema 13→14，37 条普通父行旧列内容保留，172 条不可变条件父 / 索引在原价格修订 1 下补建；data / price / settings revision 不因该补建变化。正常后台产生 cache v4 ready 与条件未确认原因，旧 v3 保存但不参与当前门控。安装核对 45 张旧表旧列行摘要，app_state 仅预期 schema 字段更新；两张逐事件可重建估价缓存计数单列，不宣称逐行摘要验证。当前公开仍 0.1.3，详情见[交付记录](../development/delivery-status.md)。
+
 2026-10-04 M09h3b2b2c 无新 DDL，schema 保持源码 v14。catalog_at 在固定价格读取事务内加载 introduced_revision≤请求修订的全部目录，验证摘要 / 原发布属性并按估价时点选区间；候选发布 / 同内容补建也验证完整历史装配。关闭平价参考的历史 ID 与旧格式字节兼容，条件报价复用原目录修订 / 时间。CACHE_VERSION=4 隔离旧 v3 的历史 missing_rule 解释，后台补建不改消费 / 观察 / 基线 / 检查点；旧实际快照、撤价不回退和 SQLite 重开已自动测。真实用户库未改变，安装仍 schema v13 / cache v3；见[第 15 节](price-accounting.md#15-固定目录历史与条件估价时点m09h3b2b2c)。
 
 2026-10-04 M09h3b2b2b schema v14 新增 price_rules.request_conditional 与 conditional_price_rules，条件报价父行保留精确四费率 / 原发布修订，支持 event_valuations 既有外键；普通规则与容量排除条件行，部分索引缺失也不降为平价。目录与完整条件身份同事务发布；同内容启动补建使用原目录修订 / 时间，不改消费或价格历史，旧实际读快照保留。v13 临时库迁移 / 幂等 / 回滚 / FK / 容量已自动验证，用户真实库及正式安装仍 schema v13。费用缓存仍 v3，生产条件金额和跨目录条件时价后续；见[计价专题第 14 节](price-accounting.md#14-不可变条件规则身份与普通规则隔离m09h3b2b2b)。
