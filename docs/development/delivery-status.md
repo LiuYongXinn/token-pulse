@@ -1,5 +1,7 @@
 # 实施与交付记录
 
+2026-10-07 M16z9 候选准备：0.1.10 纳入 0b4fe96 的固定客户区 / Resized 事件修正及既有非激活回退 / 完整外框；项目 / 七个锁定工作区包同步，第三方版本不变，发布准备 6 项通过。0.1.9 已正常退出，原 release / installed 主程序和宿主按长度 / SHA 留存 baseline，安装包、签名、单 DPI 已验及混合 DPI 失败证据均保留。当前为构建准备，不能称新包已安装或正式混合 DPI 已通过；接下来构建、同密钥验签、本机数据字节保留安装和真实复测，不重启。
+
 M15f10 源码修复验证：独立 Win10 原生位置入口先对自有 HWND 同步施加并观察真实不正确客户区，再检查 Resized 调度恢复两种固定客户区、完整外框与位置；CLIENT_RESIZE / PLACEMENT / OUTER_BOUNDS 三项标记出现，实际退出 0（target/mini-fixed-client-native-retry.log）。同一修复的 -Taskbar 回退 / 用户隐藏 / 显式重试 / 前台保持 / 几何恢复完整退出 0（mini-fixed-client-taskbar.log）；desktop all-target strict Clippy 退出 0（mini-fixed-client-clippy.log）。正式混合 DPI 复测仍需新包，当前不能列为已验。
 
 初次 debug 编译因 E 盘空间耗尽退出 101，未生成可验新包。只读检查显示本仓库增量缓存约 103 GiB；直接递归缓存删除遭自动审批拒绝，随后 Cargo 自带 `clean --profile dev -p token-pulse-desktop` 成功清理 69.8 GiB 桌面开发构建产物、E 盘恢复约 58 GiB，release 安装包 / 签名 / 截图 / 实际数据库保持。重建与上述检查才计为通过；未清理个人目录或重启。正式 0.1.9 在核对 PID / 开始时间后正常自有托盘退出 0，四份 baseline 与摘要保留。辅助时间比较先因 PowerShell JSON 的 DateTime 类型而拒绝，改为同 UTC DateTime 后才退出，没有操作其他 PID。
