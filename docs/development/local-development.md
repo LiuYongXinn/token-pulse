@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M15f5 已安装跨屏检查：使用 PowerShell 7 运行 `scripts/verify-installed-cross-monitor.ps1 -ApplicationId <实际 PID> -BaselineExecutable <对应 release 主程序> -PythonExecutable <本机 Python>`，默认只读检测。显式 `-Exercise` 才通过自有窗口原生移动与真实 React 按钮检查实际屏幕上的主窗口 / 两小窗及 SQLite 位置；不修改显示拓扑或 DPI。要求安装字节对应 NSIS 基线、进程起始时间保持、至少两屏，穿透已开启时拒绝测试；原位置、展开、隐藏和最大化分别尝试恢复，核对非位置设置摘要并以 CreateNew 写入 `target/native-cross-monitor/<UUID>/receipt.json`。测试位置必须完整落在工作区，恢复时保留用户原窗口即使其原先越界。2026-10-06 Win10 两屏 150% 六组实际通过，失败 / 成功回执与边界见[交付记录](delivery-status.md)。程序化移动不替代真实鼠标拖动、其他 DPI 或拓扑改变。
+
 2026-10-06 M10k 状态修复可用 `npx playwright test tests/ui/sources.spec.ts tests/ui/diagnostics.spec.ts --workers=1` 复核（3 项），`npm test` 为 37 项，`npm run build` 与 desktop strict Clippy / fmt 通过。native SourceDialogs 新增暂停 / 异步恢复 / 历史保留状态标签和显式夹具日期；先构建 `cargo build -p token-pulse-desktop --features custom-protocol`，以 Start-Process / PassThru / WaitForExit 启动 `--native-smoke --native-source-dialogs-smoke`，不要把 Windows GUI 的启动返回当退出证据。本轮 PID 104944 实际退出 0，日志 target/release/review/v0.1.4-4e4e052/runtime-status-native-*.log，原 SHORTCUT_CONFLICT / 1412 警告保留。正式安装仍先前 4e4e052 构建，不包含本次状态修复，公开仍 0.1.3，详见[交付记录](delivery-status.md)。
 
 2026-10-06 M16z2 当前源码 / 本机候选 0.1.4，schema v14 / cache v4 已实际安装；公开仍 0.1.3。完整 `npm run tauri:build`、同原密钥签名 / 正式版本绑定验签与本机 NSIS 升级通过，实际旧程序 / 安装退出均 0。45 张旧表行摘要、预期 schema 字段转换与修订保留分别核对，两张可重建逐事件费用缓存仅记录数量。真实托盘物理菜单通过；正式页面 / 两小窗截图、两个 150% 屏幕的只读尺寸与正常后台 v4 成功分别记录，不冒充跨屏 / 其他 DPI / 完整条件金额。当前本机回执 target/release/review/v0.1.4-4e4e052/，详见[交付记录](delivery-status.md)。已知恢复来源后顶部状态可短暂滞后，刷新可恢复，后续修正状态刷新与暂停文案。
