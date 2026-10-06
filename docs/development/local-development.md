@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M09h3b2c2 自动检查：`cargo test -p token-pulse-core -p token-pulse-store --lib --tests --locked --offline` 458 passed / 1 原性能夹具 ignored；`cargo test -p token-pulse-store v4_and_v5 --lib --locked --offline`、core / store all-target strict Clippy 与 release-cfg desktop check 通过。合成模式仅进入应用自有临时库的内部求值入口，正式请求工厂 actual_tier=None；不使用用户日志或配置代替响应模式。源码 cache v6 / schema 14，原始 source_total 可空值参与指纹和完整关联；实际安装仍 0.1.6 / cache v4。候选后台生成核对同快照不可变父行与条件索引，缓存命中仍原修订 / SHA 门控；不能把这些自动检查称为真实条件费用 / 账户或新包验收。详见[第 17 节](../design/price-accounting.md#17-所选不可变规则核对与生产请求关联m09h3b2c2)。
+
 M13g16 UIA 补试：正式 WebView select 暴露 ExpandCollapse 不保证能枚举选项；本机展开后没有可 Select / Invoke 的自有选项，Collapse provider 拒绝，失败保留。只能确认值仍原 notification_left 且重置草稿禁用，再通过自有 WM_CLOSE 恢复原主窗口隐藏。只读 settings 141 / 原 taskbar 偏好保持；不可将 ValuePattern 可读、UIA 导航、自有托盘命令或窗口未 cloak 写成真实位置输入通过。回执与范围见[交付记录](delivery-status.md)。
 
 M09h3b2c1 请求费用指纹：运行 `cargo test -p token-pulse-store --lib --tests --locked --offline` 与 `cargo clippy -p token-pulse-store --all-targets --locked --offline -- -D warnings`，均通过；301 项自动测试 / 1 原性能夹具 ignored。`cargo check -p token-pulse-desktop --release --locked --offline` 通过。新用例在 valuation/tests/request_inputs.rs，只用应用自有临时库和合成必要证据，不打开真实日志 / 登录文件；白名单身份与原 source_total=null 关联跨汇总、明细和后台缓存保持一致。CACHE_VERSION=5、schema v14，无新 DTO；旧 v4 不参与读取但保留。当前正式安装 0.1.6 的 cache v4 不因 cargo check 改变，不把编译检查当安装或真实模式计价通过。详见[计价专题](../design/price-accounting.md#16-生产请求输入与费用缓存身份m09h3b2c1)。

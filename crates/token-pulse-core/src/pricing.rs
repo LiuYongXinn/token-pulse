@@ -334,6 +334,38 @@ pub struct PricingEvent<'a> {
     pub usage: UsageVector,
 }
 
+/// Internal selection evidence for persistence; never an IPC mode override.
+pub enum SelectedPrice {
+    Rule(PriceRule),
+    Request(offline::SelectedRequestReference),
+}
+impl SelectedPrice {
+    pub fn rule(&self) -> &PriceRule {
+        match self {
+            Self::Rule(rule) => rule,
+            Self::Request(reference) => &reference.rule,
+        }
+    }
+}
+pub struct PriceEvaluation {
+    pub outcome: PriceOutcome,
+    pub selection: Option<SelectedPrice>,
+}
+impl PriceEvaluation {
+    fn unpriced(reason: UnpricedCode) -> Self {
+        Self {
+            outcome: unpriced(reason),
+            selection: None,
+        }
+    }
+    fn selected(usage: UsageVector, selection: SelectedPrice) -> Self {
+        Self {
+            outcome: outcome_for_rule(usage, selection.rule()),
+            selection: Some(selection),
+        }
+    }
+}
+
 type Models<T> = BTreeMap<String, BTreeMap<String, T>>;
 pub struct PriceCatalog {
     rules: Vec<PriceRule>,
@@ -432,11 +464,22 @@ impl PriceCatalog {
         basis: &PriceBasis,
         evidence: Option<offline::RequestPriceEvidence<'_>>,
     ) -> PriceOutcome {
+        self.evaluate_with_request(event, basis, evidence).outcome
+    }
+    /// Preserve exactly the rule chosen by the same alias/rank/history evaluation.
+    pub fn evaluate_with_request(
+        &self,
+        event: &PricingEvent<'_>,
+        basis: &PriceBasis,
+        evidence: Option<offline::RequestPriceEvidence<'_>>,
+    ) -> PriceEvaluation {
         let (Some(provider), Some(model)) = (event.provider, event.model) else {
-            return unpriced(UnpricedCode::UnknownModel);
+            return PriceEvaluation::unpriced(UnpricedCode::UnknownModel);
         };
         let canonical = match self.aliases.get(provider).and_then(|m| m.get(model)) {
-            Some(names) if names.len() != 1 => return unpriced(UnpricedCode::AmbiguousRule),
+            Some(names) if names.len() != 1 => {
+                return PriceEvaluation::unpriced(UnpricedCode::AmbiguousRule);
+            }
             Some(names) => names.first().expect("nonempty alias set").as_str(),
             None => model,
         };
@@ -479,7 +522,7 @@ impl PriceCatalog {
             }
         }
         if ambiguous {
-            return unpriced(UnpricedCode::AmbiguousRule);
+            return PriceEvaluation::unpriced(UnpricedCode::AmbiguousRule);
         }
         // Explicit custom/source rules and unrelated offline references retain their rank.
         // A confirmed actual tier may replace only this snapshot's flat reference rule.
@@ -507,17 +550,19 @@ impl PriceCatalog {
                 publication.introduced_revision.clone(),
                 publication.installed_at_ms,
             ) {
-                Ok(selected) => outcome_for_rule(event.usage, &selected.rule),
-                Err(_) => unpriced(UnpricedCode::IncompletePricingConditions),
+                Ok(selected) => {
+                    PriceEvaluation::selected(event.usage, SelectedPrice::Request(selected))
+                }
+                Err(_) => PriceEvaluation::unpriced(UnpricedCode::IncompletePricingConditions),
             };
         }
         let Some(rule) = winner else {
             if at_time.is_some_and(|reference| reference.has_conditional_model(canonical)) {
-                return unpriced(UnpricedCode::IncompletePricingConditions);
+                return PriceEvaluation::unpriced(UnpricedCode::IncompletePricingConditions);
             }
-            return unpriced(UnpricedCode::MissingRule);
+            return PriceEvaluation::unpriced(UnpricedCode::MissingRule);
         };
-        outcome_for_rule(event.usage, rule)
+        PriceEvaluation::selected(event.usage, SelectedPrice::Rule(rule.clone()))
     }
 }
 

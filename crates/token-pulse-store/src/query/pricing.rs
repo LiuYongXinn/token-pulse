@@ -123,14 +123,14 @@ fn visit_where(
             model: model.as_deref(),
             source_ids: &sources,
             occurred_at_ms,
-            usage,
-        };
-        let request = super::request_input::pricing(
-            row.get::<_, Option<String>>(17)?.as_deref(),
-            UsageVector {
+            usage: UsageVector {
                 reported_total: row.get(16)?,
                 ..usage
             },
+        };
+        let request = super::request_input::pricing(
+            row.get::<_, Option<String>>(17)?.as_deref(),
+            event.usage,
         );
         let cache_fingerprint = crate::valuation::fingerprint(&event, &version, request.as_ref())?;
         let cached = if let Some(cache) = &mut cache {
@@ -138,7 +138,19 @@ fn visit_where(
         } else {
             None
         };
-        let outcome = cached.unwrap_or_else(|| catalog.estimate(&event, basis));
+        let outcome = match cached {
+            Some(outcome) => outcome,
+            None => {
+                crate::pricing::evaluate(
+                    tx,
+                    catalog,
+                    &event,
+                    basis,
+                    request.as_ref().map(|request| request.price_evidence()),
+                )?
+                .outcome
+            }
+        };
         consume(PricedEvent {
             event_id,
             ledger_id: row.get(1)?,

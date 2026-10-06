@@ -140,20 +140,32 @@ fn rows(
             model: model.as_deref(),
             source_ids: &source_ids,
             occurred_at_ms,
-            usage,
-        };
-        let request_input = super::request_input::pricing(
-            row.get::<_, Option<String>>(23)?.as_deref(),
-            UsageVector {
+            usage: UsageVector {
                 reported_total: row.get(13)?,
                 ..usage
             },
+        };
+        let request_input = super::request_input::pricing(
+            row.get::<_, Option<String>>(23)?.as_deref(),
+            pricing_event.usage,
         );
         let fingerprint =
             crate::valuation::fingerprint(&pricing_event, &version, request_input.as_ref())?;
-        let price = cache
-            .lookup(&event_id, &fingerprint)?
-            .unwrap_or_else(|| catalog.estimate(&pricing_event, &query.price_basis));
+        let price = match cache.lookup(&event_id, &fingerprint)? {
+            Some(outcome) => outcome,
+            None => {
+                crate::pricing::evaluate(
+                    tx,
+                    &catalog,
+                    &pricing_event,
+                    &query.price_basis,
+                    request_input
+                        .as_ref()
+                        .map(|request| request.price_evidence()),
+                )?
+                .outcome
+            }
+        };
         events.push(UsageEventRow {
             event_id,
             session_key,

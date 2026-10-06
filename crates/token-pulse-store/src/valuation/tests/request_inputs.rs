@@ -209,16 +209,17 @@ fn new_request_evidence_misses_old_cache_and_publishes_identical_summary_and_pag
 }
 
 #[test]
-fn v4_ready_set_cannot_supply_v5_input_and_background_build_retains_legacy_rows() {
-    let (_dir, db) = priced();
-    let built = db
-        .build_event_valuation("ledger", &PriceBasis::EventTime {}, 3)
-        .unwrap();
-    let id = built.set_id.clone();
-    db.write(move |conn| {
+fn v4_and_v5_ready_sets_cannot_supply_current_input_and_legacy_rows_are_retained() {
+    for legacy_version in [4, 5] {
+        let (_dir, db) = priced();
+        let built = db
+            .build_event_valuation("ledger", &PriceBasis::EventTime {}, 3)
+            .unwrap();
+        let id = built.set_id.clone();
+        db.write(move |conn| {
         let tx=conn.transaction()?;
         tx.execute("INSERT INTO valuation_sets SELECT 'legacy-v4',price_revision,mode,specified_at_ms,state,created_at_ms FROM valuation_sets WHERE valuation_set_id=?1",[&id])?;
-        tx.execute("INSERT INTO valuation_cache_sets SELECT 'legacy-v4',ledger_id,evidence_revision,4,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?1",[&id])?;
+        tx.execute("INSERT INTO valuation_cache_sets SELECT 'legacy-v4',ledger_id,evidence_revision,?2,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?1",params![id,legacy_version])?;
         tx.execute("INSERT INTO event_valuations SELECT 'legacy-v4',event_id,rule_id,currency,'999999',status FROM event_valuations WHERE valuation_set_id=?1",[&id])?;
         tx.execute("INSERT INTO valuation_cache_inputs SELECT 'legacy-v4',event_id,input_sha256 FROM valuation_cache_inputs WHERE valuation_set_id=?1",[&id])?;
         tx.execute("DELETE FROM event_valuations WHERE valuation_set_id=?1",[&id])?;
@@ -226,28 +227,29 @@ fn v4_ready_set_cannot_supply_v5_input_and_background_build_retains_legacy_rows(
         tx.commit()?;
         Ok(())
     }).unwrap();
-    db.snapshot(|tx, r| {
-        assert!(cached(tx, r.price, &PriceBasis::EventTime {})?.is_none());
-        Ok(())
-    })
-    .unwrap();
-    assert_eq!(summary_cost(&db), "0.000000000000900");
-    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 4)
+        db.snapshot(|tx, r| {
+            assert!(cached(tx, r.price, &PriceBasis::EventTime {})?.is_none());
+            Ok(())
+        })
         .unwrap();
-    db.snapshot(|tx, r| {
-        assert_eq!(
-            cost(cached(tx, r.price, &PriceBasis::EventTime {})?.unwrap()),
-            "900"
-        );
-        assert_eq!(
-            tx.query_row(
-                "SELECT cost_atoms FROM event_valuations WHERE valuation_set_id='legacy-v4'",
-                [],
-                |r| r.get::<_, String>(0)
-            )?,
-            "999999"
-        );
-        Ok(())
-    })
-    .unwrap();
+        assert_eq!(summary_cost(&db), "0.000000000000900");
+        db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 4)
+            .unwrap();
+        db.snapshot(|tx, r| {
+            assert_eq!(
+                cost(cached(tx, r.price, &PriceBasis::EventTime {})?.unwrap()),
+                "900"
+            );
+            assert_eq!(
+                tx.query_row(
+                    "SELECT cost_atoms FROM event_valuations WHERE valuation_set_id='legacy-v4'",
+                    [],
+                    |r| r.get::<_, String>(0)
+                )?,
+                "999999"
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
 }

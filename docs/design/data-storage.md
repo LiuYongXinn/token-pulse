@@ -1,5 +1,7 @@
 # 数据与存储详细设计
 
+2026-10-06 M09h3b2c2：源码 CACHE_VERSION=6、schema v14 无新 DDL。核心同一次匹配保留所选完整规则，SQLite 即时估价 / 后台未缓存生成核对父行全部字段、普通 / 条件标记及 catalog_id / 模型 / tier / 档位索引，条件金额不引用未保存身份。PricingEvent 的原 source_total=null 与请求关联一致，故升级指纹 / 集合版本；v4 / v5 排除且旧行保留。已发布缓存仍按原修订 / 输入 SHA 门控，不宣称每次缓存读取核对完整金额。458 项自动、strict core / store Clippy 与 release-cfg desktop check 通过；正式 0.1.6 仍 cache v4，本增量未打包。实际模式与后台真实条件金额 / 公开依据继续，见[第 17 节](price-accounting.md#17-所选不可变规则核对与生产请求关联m09h3b2c2)。
+
 2026-10-06 M09h3b2c1：源码费用缓存升 v5，无新 DDL、schema 保持 v14；集合 / 内容摘要 / 逐事件 SHA 与读取门控共用新版本。已验证可靠请求输入 / 完整消费关联及内部响应 / 回合 / 位置参与输入指纹，汇总、明细、后台重估在同一读取事务使用原 source_total 可空值。旧 v4 保留并排除，现有后台补建不改 Token / 观察 / 基线 / 检查点；真实用户库仍是已安装 0.1.6 / cache v4，源码增量尚未打包。具体验证和剩余条件金额边界见[计价专题第 16 节](price-accounting.md#16-生产请求输入与费用缓存身份m09h3b2c1)。
 
 2026-10-06 M16z2：本机签名候选 0.1.4 已实际完成 schema 13→14，37 条普通父行旧列内容保留，172 条不可变条件父 / 索引在原价格修订 1 下补建；data / price / settings revision 不因该补建变化。正常后台产生 cache v4 ready 与条件未确认原因，旧 v3 保存但不参与当前门控。安装核对 45 张旧表旧列行摘要，app_state 仅预期 schema 字段更新；两张逐事件可重建估价缓存计数单列，不宣称逐行摘要验证。当前公开仍 0.1.3，详情见[交付记录](../development/delivery-status.md)。

@@ -1,5 +1,9 @@
 # 实施与交付记录
 
+2026-10-06 M09h3b2c2 已接所选规则与生产未缓存引用核对：核心 PriceEvaluation 保留同次别名 / 来源优先级 / 历史时点匹配的完整普通或条件规则；SQLite 比较父行全部字段、普通 / 条件标记及目录 / 模型 / 模式 / 档位索引，Priced 身份和币种一致。汇总、明细即时计算、后台 / 手动重估未缓存生成共用核对入口。请求工厂 actual_tier=None、必要内部证据不传前端；原 source_total 可空值贯通核心关联，避免发布总量代替原证据。指纹语义改为原总量，因此源码 cache v6（前次 v5 保留阶段记录）、schema 14 无新 DDL，v4 / v5 排除且保存；Token / 原日志 / 基线 / 检查点未改。
+
+core 152 + store 306 = 458 passed / 1 原性能夹具 ignored；五组新检查覆盖五个合成模式 / 两档四费率独立金额、原价格读取快照 / 指定时点 / 别名、未知模式 / 不足量 / 原总量 null、父行 / 条件索引一致性，以及生产和后台拒绝把配置模式当响应事实。v4 / v5 版本排除另定向通过，strict core / store all-target Clippy、release-cfg desktop check / fmt / diff 通过；日志 `target/release/review/v0.1.6/selected-price-*.log`。初次夹具使用错误别名方法、其次遗漏观察模型 / 时间被原 CheckpointConflict 拒绝，修正后通过，失败日志保留。本轮没有真实模式或地区来源证据，不能宣称后台真实条件金额 / 公开匹配依据已完成；已发布缓存仍沿用修订 / SHA 门控，非逐次重算核对金额。正式安装仍 0.1.6-327183e / cache v4、公开 0.1.3，本增量尚未打包签名 / 安装 / 推送；没有重启或性能测试。详见[计价专题第 17 节](../design/price-accounting.md#17-所选不可变规则核对与生产请求关联m09h3b2c2)。
+
 2026-10-06 M13g16 辅助功能补试：第一次仅找位置控件时当前主窗口已隐藏，控件缺失，未触发展开；重新通过已核对的自有托盘“打开”命令显示主窗口并进入正式设置，UIA Expand 未暴露可选择的选项，随后 Collapse provider 调用失败，未调用 SelectionItem / Invoke 选择、未点击保存。末尾实际读取选择器仍“通知区域左侧”，重置草稿按钮禁用；通过自有主窗口正常关闭事件恢复原先隐藏状态，恢复回执实际退出 0。UTC 11:21:01 只读 SQLite 核对 settings revision 141、notification_left / two_rows / enabled / 原四项与回退保持。相关 `position-selection-uia*.log`、`position-uia-restoration.json` / `position-uia-retained-settings.json` 在 0.1.6 review 目录；该 UIA 尝试不计真实鼠标 / 键盘通过，也不把 provider 拒绝归为产品不能保存位置。正式另一位置仍待实际输入验收。
 
 2026-10-06 M09h3b2c1 已完成可靠请求费用输入身份：主页面汇总 / 分页明细、后台自动补建与手动重估复用严格白名单投影；原 source_total_tokens 可空值参与完整消费关联，不用发布总量补零 / 补已知。可靠输入、FullRequest / DifferentConsumption、内部响应 / 回合 / 物理位置纳入 SHA；身份只内部摘要，公开 DTO 仍只有既有输入投影。CACHE_VERSION 从 4 升 5，集合身份 / 候选摘要 / 查询门控同步，旧 v4 行保留并排除、原重估计划使用同一版本，无新 DDL、schema 14 保持。缺失 / 无效辅助证据不破坏可信 Token，也不产生默认实际模式。

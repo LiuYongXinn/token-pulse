@@ -28,6 +28,7 @@ pub enum RequestPriceSelectionError {
 }
 /// A global API reference only: it does not prove a region, subscription bill or tool cost.
 pub struct SelectedRequestReference {
+    pub catalog_id: String,
     pub rule: PriceRule,
     pub tier: OfflinePriceTier,
     pub context: OfflineContextBand,
@@ -153,6 +154,7 @@ impl OfflinePriceCatalog {
         };
         rule.validate().map_err(|_| E::InvalidCatalog)?;
         Ok(SelectedRequestReference {
+            catalog_id: self.catalog_id.clone(),
             rule,
             tier,
             context: entry.context,

@@ -21,6 +21,25 @@ pub(crate) struct PricingRequestInput {
     response_id: String,
     turn_id: String,
     position: PhysicalPosition,
+    #[serde(skip)]
+    necessary: NecessaryInput,
+}
+impl PricingRequestInput {
+    pub(crate) fn price_evidence(
+        &self,
+    ) -> token_pulse_core::pricing::offline::RequestPriceEvidence<'_> {
+        token_pulse_core::pricing::offline::RequestPriceEvidence {
+            response: &self.necessary.evidence,
+            context: RequestInputContext {
+                position: &self.necessary.position,
+                turn_id: self.necessary.turn_id.as_deref(),
+                last: self.necessary.last,
+                cumulative: self.necessary.cumulative,
+            },
+            // No response-confirmed service mode in current retained rollout evidence.
+            actual_tier: None,
+        }
+    }
 }
 pub(crate) fn pricing(json: Option<&str>, consumption: UsageVector) -> Option<PricingRequestInput> {
     let input: NecessaryInput = serde_json::from_str(json?).ok()?;
@@ -35,8 +54,9 @@ pub(crate) fn pricing(json: Option<&str>, consumption: UsageVector) -> Option<Pr
     )?;
     Some(PricingRequestInput {
         input: projected,
-        response_id: input.evidence.response_id,
-        turn_id: input.evidence.turn_id,
-        position: input.evidence.physical_position,
+        response_id: input.evidence.response_id.clone(),
+        turn_id: input.evidence.turn_id.clone(),
+        position: input.evidence.physical_position.clone(),
+        necessary: input,
     })
 }
