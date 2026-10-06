@@ -207,7 +207,7 @@ fn migrate_with_hook(
                         .as_millis(),
                 )
                 .map_err(|_| ErrorCode::NumericOverflow)?;
-                tx.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,1,?1,?2)",params![r#"{"theme":"dark","privacy":false,"mini_scope":{"kind":"today_all_sources"},"taskbar_enabled":false,"startup_enabled":false}"#,initialized])?;
+                tx.execute("INSERT INTO settings(singleton,settings_version,payload_json,updated_at_ms) VALUES(1,1,?1,?2)",params![r#"{"theme":"light","privacy":false,"mini_scope":{"kind":"today_all_sources"},"taskbar_enabled":false,"startup_enabled":false}"#,initialized])?;
             }
             tx.execute(
                 "INSERT INTO schema_migrations(version,checksum) VALUES(?1,?2)",

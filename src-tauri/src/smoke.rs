@@ -234,7 +234,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 const waitFor=async predicate=> {
                     const deadline=Date.now()+2500;
                     while(!predicate()) {
-                        if(Date.now()>=deadline) throw new Error('UI did not render');
+                        if(Date.now()>=deadline) throw new Error('UI did not render: '+predicate.toString());
                         await new Promise(resolve=>setTimeout(resolve,25));
                     }
                 };
@@ -277,7 +277,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                     }
                 }
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
-                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===4);
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
                 [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
                 await waitFor(()=>document.querySelector('input[aria-label="统计时区"]')?.value==='UTC');
                 const timezoneInput=document.querySelector('input[aria-label="统计时区"]');
@@ -339,7 +339,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 try {await invoke('set_display_privacy',{requestId:'native-smoke-privacy-conflict',request:{privacy:false,expected_settings_revision:'4'}});} catch(error) {privacyConflict=error.code==='REVISION_CONFLICT';}
                 ok=ok && privacyNoop.data.settings_revision==='5' && privatePickerBlocked && privacyConflict;
                 [...document.querySelectorAll('nav button')].find(button=>button.textContent==='设置')?.click();
-                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===4);
+                await waitFor(()=>document.querySelectorAll('[role="tab"]').length===5);
                 [...document.querySelectorAll('[role="tab"]')].find(button=>button.textContent==='显示与窗口')?.click();
                 await waitFor(()=>document.querySelector('input[aria-label="隐私模式"]')?.checked===true && !document.querySelector('input[aria-label="隐私模式"]')?.disabled);
                 document.querySelector('input[aria-label="隐私模式"]').click();
@@ -360,7 +360,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 await waitFor(()=>document.querySelector('.privacy-status')?.textContent.includes('隐私已关闭'));
                 const disabledByUI=await invoke('get_display_settings',{requestId:'native-smoke-privacy-ui-final'});
                 ok=ok && disabledByUI.data.settings_revision==='8' && disabledByUI.data.preferences.privacy===false;
-                for (const [theme,revision] of [['light','9'],['system','10'],['dark','11']]) {
+                for (const [theme,revision] of [['dark','9'],['system','10'],['light','11']]) {
                     await waitFor(()=>!document.querySelector('select[aria-label="应用主题"]')?.disabled);
                     const themeSelect=document.querySelector('select[aria-label="应用主题"]');
                     themeSelect.value=theme; themeSelect.dispatchEvent(new Event('change',{bubbles:true}));
@@ -372,7 +372,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
                 }
                 let themeConflict=false;
                 try { await invoke('set_display_theme',{requestId:'native-smoke-theme-conflict',request:{theme:'light',expected_settings_revision:'8'}}); } catch(error) { themeConflict=error.code==='REVISION_CONFLICT'; }
-                const themeNoop=await invoke('set_display_theme',{requestId:'native-smoke-theme-noop',request:{theme:'dark',expected_settings_revision:'11'}});
+                const themeNoop=await invoke('set_display_theme',{requestId:'native-smoke-theme-noop',request:{theme:'light',expected_settings_revision:'11'}});
                 ok=ok && themeConflict && themeNoop.data.settings_revision==='11';
                 const miniDefault=await invoke('get_mini_scope',{requestId:'native-smoke-mini-default'});
                 const miniUsage=await invoke('get_mini_usage',{requestId:'native-smoke-mini-usage'});

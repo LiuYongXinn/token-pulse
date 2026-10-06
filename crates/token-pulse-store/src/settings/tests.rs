@@ -428,13 +428,13 @@ fn theme_defaults_persists_system_and_keeps_all_other_configuration_and_revision
     let (dir, db) = setup();
     assert_eq!(
         db.display_settings().unwrap().preferences.theme,
-        AppTheme::Dark
+        AppTheme::Light
     );
     db.mutate_display_timezone(initialize("Asia/Shanghai"), at())
         .unwrap();
     db.mutate_display_privacy(privacy(true, 1), at()).unwrap();
     let (saved, changed) = db
-        .mutate_display_theme(theme(AppTheme::Light, 2), at())
+        .mutate_display_theme(theme(AppTheme::Dark, 2), at())
         .unwrap();
     assert!(changed);
     assert_eq!(saved.settings_revision.as_str(), "3");
@@ -444,12 +444,12 @@ fn theme_defaults_persists_system_and_keeps_all_other_configuration_and_revision
         Some("Asia/Shanghai")
     );
     assert!(
-        !db.mutate_display_theme(theme(AppTheme::Light, 3), at())
+        !db.mutate_display_theme(theme(AppTheme::Dark, 3), at())
             .unwrap()
             .1
     );
     assert_eq!(
-        db.mutate_display_theme(theme(AppTheme::Dark, 2), at())
+        db.mutate_display_theme(theme(AppTheme::Light, 2), at())
             .unwrap_err()
             .code,
         ErrorCode::RevisionConflict
@@ -475,14 +475,14 @@ fn theme_writer_failure_rolls_back_payload_and_revision_and_does_not_repair_corr
     let (_dir, db) = setup();
     db.write(|conn| { conn.execute_batch("CREATE TRIGGER fail_theme_revision BEFORE UPDATE OF settings_revision ON app_state BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")?; Ok(()) }).unwrap();
     assert_eq!(
-        db.mutate_display_theme(theme(AppTheme::Light, 0), at())
+        db.mutate_display_theme(theme(AppTheme::Dark, 0), at())
             .unwrap_err()
             .code,
         ErrorCode::DbWriteFailed
     );
     assert_eq!(
         db.display_settings().unwrap().preferences.theme,
-        AppTheme::Dark
+        AppTheme::Light
     );
     assert_eq!(
         db.display_settings().unwrap().settings_revision.as_str(),
