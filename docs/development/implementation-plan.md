@@ -1,5 +1,7 @@
 # 开发实施与验收计划
 
+2026-10-06 M13g18：正式安装 0.1.6 的 application_right 已通过真实位置选择 / 保存、物理悬停 / 单击 / 双击 / 右键菜单结构、两分钟 24 次无捕获状态检查，用户明确确认“持续可见，底色融入”。正式普通桌面呈现本位置已完成，原 M13g16 / M13g17 另一位置或人工答复待验条目由此收敛，历史记录保留。已在应用停止时通过现有 typed Store CAS 无窗口恢复原 notification_left，settings 145，非位置设置 / data / price 保持。恢复后的再启动呈现、各菜单命令、其他 DPI / 实际拖动 / 显示拓扑仍分别待验；用户正在操作其他程序期间仅继续后台开发检查，不弹出应用、不发送输入，不把全部 Windows 10 矩阵写成完成。Win11 维持取消，未重启或推送。
+
 2026-10-06 M13g19：任务栏已接存储层五种来源扫描状态，避免正常核对显示为未知；协议十一个状态上限、中文详情、隐私与未知保留已自动验证（73 passed / 1 guardian 私有子入口默认 ignored），strict Clippy / 生成 check / release-cfg desktop check 通过。源码说明完成，成对新包安装后的真实悬停标签仍待验；用户正在操作其他程序期间不弹出应用、不发送输入。已有计价与 UI 工作保持，不将此文案修正计为核算功能变更。
 
 2026-10-06 M09h3b2c3 本机原生增量：`scripts/native-smoke.ps1 -PriceRevalue` 重跑实际退出 0 / NATIVE_PRICE_REVALUE_OK，使用应用自有隔离数据库、真实 Windows WebView / 正式 IPC 验证启动缓存金额 1300 原子、matched_price 同规则 / 原修订 / 规范模型、未知模式不补造、隐私隐藏依据但保留 110 Token；原 React 四费率编辑 / 重估 / 历史、mini 权限与检查点验证保持。首次新增检查错误地为无续页结果提交 null cursor 的关闭请求，正式接口正确拒绝 INVALID_QUERY；改为只在有实际续页时关闭后通过，生产校验未改。两个输出保存在 target/matched-price-native.log 与 target/matched-price-native-retry.log（本机忽略目录）。隔离恢复快捷键与正式实例冲突的 SHORTCUT_CONFLICT、原 WebView 退出 1412 提示保留，不影响场景实际退出 0；不将此检查当真实日志 / 账户 / 正式安装或日常目视验收。

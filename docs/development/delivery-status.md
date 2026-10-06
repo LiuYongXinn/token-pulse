@@ -1,5 +1,11 @@
 # 实施与交付记录
 
+2026-10-06 M13g18 正式 0.1.6 应用图标右侧验证：精确已安装主程序 / 同包宿主身份仍为 327183e，Windows 10 19045 / 150% DPI。实际物理选择应用图标右侧并保存，settings 141→142，其他设置摘要保持原值。WebView 选项在本机 UIA 暴露 IsEnabled=false，不能把 provider 属性当成功；最终通过自有控件 / 命中点 / 进程族保护的真实点击和保存值、只读 SQLite 共同证明。自有主窗口临时 topmost 在点击后即恢复；不修改系统任务栏或其他程序。
+
+独立实际物理检查退出 0：悬停详情、单击小窗、双击统计、右键菜单结构通过，读数物理矩形 (1045,1380)–(1565,1440)，数据为真实当日消费 / 未计价状态 / 实际账户周剩余 95%。回执 `target/release/review/v0.1.6/taskbar-inspection-59369bda-f517-466c-a068-e4c63460690d/receipt.json`；随后 `formal-application-right-without-capture.json` 记录两分钟 / 24 次、同代次 / owner / parent / Visible / layered 检查，例程退出 0，不捕获或注入输入。用户明确答复正式安装版“持续可见，底色融入”，这是本位置的正常桌面人工验收，不复用早前开发夹具反馈。已有实际区域截图、悬停图和正式设置 `screenshots/taskbar-application-right-formal.png` 已查看；捕获图与无捕获 / 人工证据分别保留。来源未知文案发现由 M13g19 修正，仍未入包；不将右键菜单结构扩展为所有菜单命令通过。
+
+恢复与用户工作保护：可见恢复尝试遇到窗口变化 / 最小化而未保存，失败保留。用户要求“不弹出应用，我在操作其他程序”后，停止显示 / 激活 / 置顶与物理输入，不再通过主窗口恢复设置。只读确认旧主 PID 已结束、设置仍 application_right / 144；本机忽略目录中的无窗口 helper 使用现有 Store::mutate_taskbar_preferences，要求主程序和宿主均停止、原 settings 144、带修订校验并仅修改位置，检查其余设置及 data / price 不变。一次执行因发现应用 / 宿主进程而拒绝，未写入；确认停止后实际退出 0，settings 144→145 / notification_left，启用、两行、各读数开关与回退保持。独立只读复核 schema 14 / data 1716 / price 1 / settings 145，其他设置 SHA-256 与测试前 141 / 142 相同；回执 `position-restored-without-window.json`。没有直接 SQL UPDATE、打开窗口、替换安装包、重启或推送；恢复持久设置不冒充重新启动后的显示验收。其他 DPI、鼠标拖动、主屏 / 断屏和未完成菜单命令继续独立待验。下面旧阶段待答复 / 另一位置待验保留历史，当前以此条为准。
+
 2026-10-06 M13g19 来源状态说明：正式 0.1.6 悬停详情中的“来源状态未识别”已追溯到宿主遗漏存储层五种已知扫描代码。源码补齐 scanning / scan_pending / scan_interrupted / scan_changed / scan_incomplete 的受限投影与中文解释，最大无重复状态数由 6 扩为 11，生成协议同步。成功核对时间和 Token、待核对数量保持原快照语义，真正未知仍显示未识别；不传来源 ID / 路径。自动检查 73 passed，另 1 个 guardian 私有子入口按显式子进程方式由父测试执行，默认 ignored 不代表性能测试或失败；taskbar all-target strict Clippy、host contract --check、release-cfg desktop check 通过。新增合成预期验证全部已知状态 / 未知状态、两种隐私、多来源同时状态及越界拒绝，详情文案保留原成功时间和待核对数量。本变更尚未打包或安装，不能把旧安装版截图作为新标签的系统验收；遵守用户“不弹出应用”要求，不运行可见原生场景。
 
 2026-10-06 M13g17 正式包只读复核：11:47 UTC，精确起始时间 / 安装路径 / 主程序与同包宿主字节核对仍匹配 0.1.6-327183e；主 PID 110340 / 宿主 106596 / guardian 63924 保持。无截图 / 无输入读得自有读数 HWND 2624478 仍 Visible / WS_EX_LAYERED，名称含真实当日 Token 42240180 / 未计价状态 / 账户周剩余 95%；此为当时 DTO。再次在读取线程 PMv2 context 下记录物理矩形后恢复原 context。回执 formal-state-after-matched-price*.json 位于本机忽略 v0.1.6 review 目录；首条未设置 PMv2 的矩形仅为调用方虚拟坐标，不作为物理位置验收。只读状态不能证明正常桌面目视 / 点击或新位置通过；透明夹具人工确认独立保留，正式日常目视及 Win10 另一位置 / 剩余矩阵继续。未换包、未改偏好、未重启或推送。
