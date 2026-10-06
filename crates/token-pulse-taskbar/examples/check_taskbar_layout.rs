@@ -7,7 +7,9 @@ async fn main() {
         windows::{control::NativeController, topology::inspect_primary_taskbar},
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    if std::env::args().skip(1).collect::<Vec<_>>() != ["--native-taskbar-development-check"] {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let visual_check = arguments == ["--native-taskbar-visible-check"];
+    if !visual_check && arguments != ["--native-taskbar-development-check"] {
         std::process::exit(2);
     }
     println!(
@@ -37,8 +39,19 @@ async fn main() {
         shown.embedding_failure
     );
     // Scope exit also detaches on a failed check; explicit detachment verifies restoration.
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    if shown.embedded {
+    if visual_check {
+        // No capture API is called during this observation: screen capture can
+        // change Shell composition and hide the real presentation defect.
+        for _ in 0..60 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let observed = controller.replace(Some(fixture.clone())).await.unwrap();
+            assert!(observed.embedded && !observed.paint_failed);
+            verify_own_input_surface();
+        }
+    } else {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+    if shown.embedded && !visual_check {
         capture_own_readout("visible");
     }
     let visible_check = controller
@@ -54,7 +67,7 @@ async fn main() {
         .replace(Some(private))
         .await
         .expect("native privacy update");
-    if updated.embedded {
+    if updated.embedded && !visual_check {
         capture_own_readout("privacy");
     }
     let focus_preserved = unsafe { GetForegroundWindow() } == foreground;
@@ -87,7 +100,9 @@ async fn main() {
         drop_was_embedded && drop_restored,
         "ordinary owner Drop restores layout"
     );
-    assert!(focus_preserved, "attachment never activates its window");
+    if !visual_check {
+        assert!(focus_preserved, "attachment never activates its window");
+    }
     assert!(
         shown.embedded
             && visible_check.embedded
@@ -97,6 +112,92 @@ async fn main() {
             && !updated.paint_failed
             && shown.embedding_failure.is_none(),
         "actual guarded native embedding"
+    );
+}
+#[cfg(windows)]
+fn verify_own_input_surface() {
+    use std::{mem, ptr};
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM, POINT, RECT},
+        UI::{
+            HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
+            WindowsAndMessaging::{
+                EnumChildWindows, FindWindowW, GetClassNameW, GetWindowRect,
+                GetWindowThreadProcessId, WindowFromPoint,
+            },
+        },
+    };
+    unsafe extern "system" fn find(window: HWND, data: LPARAM) -> i32 {
+        let found = unsafe { &mut *(data as *mut Vec<HWND>) };
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        let mut class = [0; 128];
+        let length = unsafe { GetClassNameW(window, class.as_mut_ptr(), 128) };
+        if pid == std::process::id()
+            && length > 0
+            && String::from_utf16_lossy(&class[..length as usize])
+                .starts_with("TokenPulse.Taskbar.Readout.")
+        {
+            found.push(window);
+        }
+        1
+    }
+    let root_name: Vec<_> = "Shell_TrayWnd".encode_utf16().chain(Some(0)).collect();
+    let root = unsafe { FindWindowW(root_name.as_ptr(), ptr::null()) };
+    let mut found = Vec::<HWND>::new();
+    unsafe {
+        EnumChildWindows(root, Some(find), (&mut found as *mut Vec<HWND>) as LPARAM);
+    }
+    assert_eq!(found.len(), 1);
+    let previous =
+        unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    assert!(!previous.is_null());
+    let mut rect: RECT = unsafe { mem::zeroed() };
+    let valid = unsafe { GetWindowRect(found[0], &mut rect) } != 0;
+    let points = [
+        POINT {
+            x: rect.left + 1,
+            y: rect.top + 1,
+        },
+        POINT {
+            x: (rect.left + rect.right) / 2,
+            y: (rect.top + rect.bottom) / 2,
+        },
+        POINT {
+            x: rect.right - 2,
+            y: rect.bottom - 2,
+        },
+    ];
+    let matches = valid
+        && points.iter().all(|point| {
+            let hit = unsafe { WindowFromPoint(*point) };
+            if hit != found[0] {
+                let mut pid = 0;
+                unsafe {
+                    GetWindowThreadProcessId(hit, &mut pid);
+                }
+                let mut class = [0; 128];
+                let length = unsafe { GetClassNameW(hit, class.as_mut_ptr(), 128) };
+                eprintln!(
+                    "INPUT_SURFACE_MISMATCH point={},{} owner={} class={} owned={:?} hit={:?}",
+                    point.x,
+                    point.y,
+                    pid,
+                    String::from_utf16_lossy(&class[..length.max(0) as usize]),
+                    found[0],
+                    hit
+                );
+            }
+            hit == found[0]
+        });
+    unsafe {
+        SetThreadDpiAwarenessContext(previous);
+    }
+    assert!(
+        matches,
+        "transparent spacing must still target our owned readout"
     );
 }
 /// Capture only the visible readout window owned by this process. This helper never enters the

@@ -7,11 +7,12 @@ use std::{mem, ptr};
 use windows_sys::Win32::{
     Foundation::{COLORREF, RECT, SIZE},
     Graphics::Gdi::{
-        BI_RGB, BITMAPINFO, BITMAPINFOHEADER, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateCompatibleDC,
-        CreateDIBSection, CreateFontIndirectW, CreateSolidBrush, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor, GetTextExtentPoint32W,
-        GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION, RestoreDC, SaveDC,
-        SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT, TextOutW,
+        ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, COLOR_WINDOW, COLOR_WINDOWTEXT,
+        CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW, CreateSolidBrush,
+        DIB_RGB_COLORS, DeleteDC, DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor,
+        GetTextExtentPoint32W, GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION,
+        RestoreDC, SaveDC, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT,
+        TextOutW,
     },
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -138,6 +139,9 @@ impl NativeFont {
         {
             return Err(WireError::InvalidState);
         }
+        // Grayscale coverage can be composited over the real taskbar without
+        // ClearType fringes that were calculated against an opaque background.
+        metrics.lfMessageFont.lfQuality = ANTIALIASED_QUALITY;
         let font = unsafe { CreateFontIndirectW(&metrics.lfMessageFont) };
         if font.is_null() {
             return Err(WireError::InvalidState);
@@ -315,6 +319,148 @@ impl NativeFont {
             self.paint(dc, plan, width, height, palette)
         })
     }
+    /// Present a per-pixel surface containing only our glyphs and focus marker.
+    /// A 1/255 input surface preserves clicks in the spacing between glyphs;
+    /// a fully zero-alpha surface would pass those clicks to Explorer.
+    pub(crate) fn present(
+        &self,
+        window: windows_sys::Win32::Foundation::HWND,
+        plan: Option<&MeasuredPlan>,
+        width: i32,
+        height: i32,
+        palette: Palette,
+        focused: bool,
+    ) -> Result<(), WireError> {
+        use windows_sys::Win32::{
+            Foundation::{POINT, SIZE},
+            Graphics::Gdi::{AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION, DrawFocusRect},
+            UI::WindowsAndMessaging::{ULW_ALPHA, UpdateLayeredWindow},
+        };
+        let white = rgb(255, 255, 255);
+        let mask = self.bitmap_with(width, height, |dc| unsafe {
+            self.paint(
+                dc,
+                plan,
+                width,
+                height,
+                Palette {
+                    background: 0,
+                    foreground: white,
+                    muted: white,
+                    cost: white,
+                    warning: white,
+                    accent: white,
+                },
+            )?;
+            if focused {
+                DrawFocusRect(
+                    dc,
+                    &RECT {
+                        left: 1,
+                        top: 1,
+                        right: width - 1,
+                        bottom: height - 1,
+                    },
+                );
+            }
+            Ok(())
+        })?;
+        let mut pixels = mask[54..].to_vec();
+        // Span bounds come from the same system font measurement, not guessed
+        // character widths. A pixel outside a span belongs to our marker/focus.
+        let bounds = plan
+            .map(|plan| {
+                plan.spans
+                    .iter()
+                    .map(|span| {
+                        Ok((
+                            span.x,
+                            span.y,
+                            span.x + self.width(&span.span.text)?,
+                            span.y + self.height,
+                            palette.tone(span.span.tone),
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, WireError>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
+        for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+            let x = index as i32 % width;
+            let y = index as i32 / width;
+            let color = bounds
+                .iter()
+                .find(|&&(left, top, right, bottom, _)| {
+                    x >= left && x < right && y >= top && y < bottom
+                })
+                .map(|bound| bound.4)
+                .unwrap_or(palette.accent);
+            let coverage = pixel[0].max(pixel[1]).max(pixel[2]);
+            pixel.copy_from_slice(&premultiplied_pixel(color, coverage));
+        }
+        let dc = Dc(unsafe { CreateCompatibleDC(ptr::null_mut()) });
+        if dc.0.is_null() {
+            return Err(WireError::InvalidState);
+        }
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB,
+                ..unsafe { mem::zeroed() }
+            },
+            ..unsafe { mem::zeroed() }
+        };
+        let mut bits = ptr::null_mut();
+        let bitmap = Object(unsafe {
+            CreateDIBSection(dc.0, &info, DIB_RGB_COLORS, &mut bits, ptr::null_mut(), 0)
+        });
+        if bitmap.0.is_null() || bits.is_null() {
+            return Err(WireError::InvalidState);
+        }
+        unsafe {
+            ptr::copy_nonoverlapping(pixels.as_ptr(), bits.cast::<u8>(), pixels.len());
+        }
+        let previous = unsafe { SelectObject(dc.0, bitmap.0) };
+        if previous.is_null() || previous as isize == -1 {
+            return Err(WireError::InvalidState);
+        }
+        let size = SIZE {
+            cx: width,
+            cy: height,
+        };
+        let source = POINT { x: 0, y: 0 };
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: 255,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
+        let ok = unsafe {
+            UpdateLayeredWindow(
+                window,
+                ptr::null_mut(),
+                ptr::null(),
+                &size,
+                dc.0,
+                &source,
+                0,
+                &blend,
+                ULW_ALPHA,
+            )
+        } != 0;
+        unsafe {
+            SelectObject(dc.0, previous);
+        }
+        if ok {
+            Ok(())
+        } else {
+            Err(WireError::InvalidState)
+        }
+    }
     pub(crate) fn bitmap_with(
         &self,
         width: i32,
@@ -390,6 +536,13 @@ impl NativeFont {
         Ok(output)
     }
 }
+fn premultiplied_pixel(color: COLORREF, coverage: u8) -> [u8; 4] {
+    if coverage == 0 {
+        return [0, 0, 0, 1];
+    }
+    let channel = |shift: u32| (((color >> shift) & 255_u32) * u32::from(coverage) / 255) as u8;
+    [channel(16), channel(8), channel(0), coverage]
+}
 /// The DC is borrowed on its owning paint thread. Empty visibility is a valid no-op;
 /// an invalid DC remains an error. Used by both the readout and its hidden details.
 pub(crate) unsafe fn has_visible_clip(dc: HDC) -> Result<bool, WireError> {
@@ -428,6 +581,20 @@ impl Drop for NativeFont {
 mod tests {
     use super::*;
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, SelectClipRgn};
+
+    #[test]
+    fn alpha_pixels_preserve_input_spacing_and_exact_premultiplied_glyph_colors() {
+        assert_eq!(premultiplied_pixel(rgb(241, 244, 248), 0), [0, 0, 0, 1]);
+        assert_eq!(
+            premultiplied_pixel(rgb(85, 220, 157), 255),
+            [157, 220, 85, 255]
+        );
+        assert_eq!(
+            premultiplied_pixel(rgb(85, 220, 157), 128),
+            [78, 110, 42, 128]
+        );
+        assert_eq!(premultiplied_pixel(rgb(0, 0, 0), 255), [0, 0, 0, 255]);
+    }
 
     #[test]
     fn empty_clip_preserves_pixels_and_dc_state_then_visible_repaint_succeeds() {

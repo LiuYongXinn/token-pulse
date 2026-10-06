@@ -22,8 +22,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::Gdi::{
-        BeginPaint, ClientToScreen, DrawFocusRect, EndPaint, GdiFlush, GetDC, InvalidateRect,
-        PAINTSTRUCT, ReleaseDC, UpdateWindow,
+        BeginPaint, ClientToScreen, DrawFocusRect, EndPaint, InvalidateRect, PAINTSTRUCT,
+        UpdateWindow,
     },
     System::{LibraryLoader::GetModuleHandleW, SystemInformation::GetTickCount64},
     UI::{
@@ -37,8 +37,8 @@ use windows_sys::Win32::{
             WM_ERASEBKGND, WM_GETDLGCODE, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDBLCLK,
             WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_MOUSEWHEEL,
             WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_RBUTTONDOWN, WM_RBUTTONUP,
-            WM_SETFOCUS, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_EX_NOACTIVATE, WS_EX_NOPARENTNOTIFY,
-            WS_TABSTOP,
+            WM_SETFOCUS, WM_TIMER, WNDCLASSEXW, WS_CHILD, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+            WS_EX_NOPARENTNOTIFY, WS_TABSTOP,
         },
     },
 };
@@ -323,6 +323,15 @@ unsafe extern "system" fn procedure(
                 let mut rect: RECT = unsafe { mem::zeroed() };
                 let result = if dc.is_null() || unsafe { GetClientRect(window, &mut rect) } == 0 {
                     Err(WireError::InvalidState)
+                } else if message == WM_PAINT && rect.right > 0 && rect.bottom > 0 {
+                    state.font.present(
+                        window,
+                        state.plan.as_ref(),
+                        rect.right,
+                        rect.bottom,
+                        state.palette,
+                        slot.focused.get(),
+                    )
                 } else {
                     unsafe {
                         state.font.paint(
@@ -335,7 +344,7 @@ unsafe extern "system" fn procedure(
                     }
                 };
                 state.paint_failed |= result.is_err();
-                if result.is_ok() && slot.focused.get() {
+                if message == WM_PRINTCLIENT && result.is_ok() && slot.focused.get() {
                     let focus = RECT {
                         left: 1,
                         top: 1,
@@ -501,7 +510,7 @@ impl NativeCanvas {
         }
         let window = unsafe {
             CreateWindowExW(
-                WS_EX_NOACTIVATE | WS_EX_NOPARENTNOTIFY,
+                WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_NOPARENTNOTIFY,
                 class.as_ptr(),
                 wide("TokenPulse").as_ptr(),
                 WS_CHILD | WS_TABSTOP,
@@ -622,31 +631,21 @@ impl NativeCanvas {
             return Err(WireError::InvalidState);
         }
         if rect.right > 0 && rect.bottom > 0 {
-            let dc = unsafe { GetDC(self.window) };
-            if dc.is_null() {
-                acceptance_trace("clear_render_dc");
-                return Err(WireError::InvalidState);
-            }
             let result = {
                 let state = unsafe { &*self.state.get() };
-                unsafe {
-                    state
-                        .font
-                        .paint(dc, None, rect.right, rect.bottom, state.palette)
-                }
+                state.font.present(
+                    self.window,
+                    None,
+                    rect.right,
+                    rect.bottom,
+                    state.palette,
+                    false,
+                )
             };
-            let flushed = unsafe { GdiFlush() } != 0;
-            unsafe {
-                ReleaseDC(self.window, dc);
-            }
             if result.is_err() {
                 acceptance_trace("clear_render_font_paint");
             }
             result?;
-            if !flushed {
-                acceptance_trace("clear_render_gdi_flush");
-                return Err(WireError::InvalidState);
-            }
         }
         Ok(())
     }
@@ -765,6 +764,13 @@ mod tests {
         };
         assert!(!parent.is_null());
         let canvas = unsafe { NativeCanvas::create(parent, 96) }.unwrap();
+        // Verify the kernel layer rather than inferring presentation from WS_VISIBLE
+        // or a screenshot. This also fails if the test/host loses its OS-aware manifest.
+        use windows_sys::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE;
+        assert_ne!(
+            unsafe { GetWindowLongPtrW(canvas.window, GWL_EXSTYLE) } as u32 & WS_EX_LAYERED,
+            0
+        );
         assert!(!canvas.own_visible_style());
         assert!(!canvas.visible());
         unsafe {

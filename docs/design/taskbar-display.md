@@ -1,5 +1,9 @@
 # Windows 任务栏显示模式
 
+2026-10-06 M13g15 普通桌面呈现修正：0.1.5 的截图可见 / 正常桌面不可见而仍可点击，不能由 WS_VISIBLE / Embedded 证明绘制成功。独立宿主原先没有兼容性 manifest，实际尝试 layered child 返回错误 87 并恢复原样；新增 Windows 8 / 10 supportedOS 清单后，自有读数采用 WS_EX_LAYERED 与 UpdateLayeredWindow 的预乘 BGRA 表面。系统字体先生成灰度覆盖，再按原语义文字 / 费用 / 警告颜色合成，不绘制不透明矩形、不修改 Explorer 的全局合成设置。字形保留真实 coverage；空白仅保留 1/255 的输入底层（视觉近透明，非精确零 alpha），避免 Windows 把整块间距的点击交给 Explorer。焦点标记、清屏和隐私更新同样发布自有表面，失败仍为实际绘制失败。原有安全预留、租约、独立宿主、详情 / 手势和配色证据门禁保持。
+
+用户已分别在不截图时确认独立不透明合成试验“能持续看到”，以及透明底色试验“持续可见，底色已融入”；这是开发夹具证据，正式包仍需安装验证。此前截图通过的说法不构成日常显示通过。原生回执 / 失败日志及剩余验证见[交付记录](../development/delivery-status.md)。Microsoft [Using Windows](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-windows) 的子窗口清单要求、[Window Features](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features) 的透明命中规则和 [UpdateLayeredWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow) 的表面契约于 2026-10-06 核实；系统 API 可行性与本机呈现证据分别记录。
+
 2026-10-06 M13g14 背景取色修正：正式 0.1.4 的白底已实际复现，旧 ReBar (0,1) 落在 Windows `DynamicContent1` 天气组件而非空白任务栏。源码改为读取已验证任务列表中、所有 UIA 直接控件之后的空白像素；列表身份 / 完整几何前后校验，空间不足或取色失败保持明确失败。真实自动隐藏仅在存活有效租约和已确认 palette 下保留颜色，重新显示再采样；不以默认深色伪造成功。两位置共用只读控件几何探针；新的 2 项独立预期及 taskbar 71 项自动检查 / strict Clippy 通过，正式安装尚未含本修正。“不截图时消失”仍单独复测，不能从白底原因推断已修复。背景像素的坐标及无效返回按 Microsoft [GetDCEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdcex) / [GetPixel](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getpixel) 文档核实（2026-10-06），实际证据见[交付记录](../development/delivery-status.md)。
 
 M13g13 补齐 application_right 的真实 S3 验收，与 notification_left 独立运行。主 / 小窗隐藏、固定同一合成会话及 3→10 正式补扫，恢复后新原生快照 / 详情与设置位置保持，原 Explorer 和退出完整任务区 Exact 已在 Win10 19045 / 150% 通过。仅 debug 验收入口增加显式位置参数与位置证明，生产电源路由、布局规则和当前签名宿主保持原实现。证据使用同包 release 宿主 + debug 桌面，不代替正式安装版物理输入 / 全包验收，见[范围与实际证据](../development/delivery-status.md#m13g13应用图标右侧的真实-s3-恢复链)。
