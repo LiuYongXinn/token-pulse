@@ -1,5 +1,7 @@
 # 实施与交付记录
 
+2026-10-07 M16z8 候选准备：新版本 0.1.9 纳入 6ff7cbe 的自动回退前台保护与 d73e68b 的完整外框适配；0.1.8-81f84fa 的构建、安装包、签名、实际验签报告及失败回归全部保留，不以相同版本覆盖。项目版本 / 七个工作区包同步，第三方版本不变，发布准备 6 项检查通过。下一步正式构建、验签、本机原数据库保留安装、实际逻辑停用恢复与物理拖动，结果分别追加；当前尚未安装 / 公开此候选。
+
 M15f8 最终回归：按实际最小边界修正夹具后，Win10 -TaskbarActions 完整退出 0，DETAILS / RECREATE / APPLICATION_POSITION / MENU / ACTIONS 五项标记齐全；日志 target/mini-focus-taskbar-actions-minimum.log。正常显式单击展开、双击统计、两位置、五项菜单、隐私屏障、宿主子窗口丢失和退出几何恢复继续成立。这里输入是已标明的自有 HWND 消息，不能替代正式安装版 SendInput；desktop all-target strict Clippy 最终退出 0（mini-fallback-focus-clippy-final.log），未运行性能测试。
 
 2026-10-07 M15f8 回退焦点修正：0.1.8-81f84fa 已完成生产构建、同一发布密钥的实际版本绑定验签，但任务栏原生回归失败，不能据构建 / 签名成功发布。失败详情明确前台从本次主窗变为本次新建小窗；单独替换位置移动、临时 WINDOWPOS.NOACTIVATE 与 focusable 试验未解决，失败日志逐项保留。最终显示期间的同线程、自有目标 HWND 激活保护通过 -Taskbar 实际场景：新建 / 复用回退保持前台、临时保护卸载、用户隐藏不重开、显式重试和重新嵌入保留小窗，以及退出恢复原任务栏几何，实际退出 0（target/mini-frame-taskbar-owned-activation.log）。小窗完整外框 / 两尺寸 / Moved 链实际回归退出 0（mini-placement-focus-fixed.log）；desktop strict Clippy 通过（mini-fallback-focus-clippy.log）。WebView 退出 1412 诊断保留。
