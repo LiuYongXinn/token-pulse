@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+M13g16 UIA 补试：正式 WebView select 暴露 ExpandCollapse 不保证能枚举选项；本机展开后没有可 Select / Invoke 的自有选项，Collapse provider 拒绝，失败保留。只能确认值仍原 notification_left 且重置草稿禁用，再通过自有 WM_CLOSE 恢复原主窗口隐藏。只读 settings 141 / 原 taskbar 偏好保持；不可将 ValuePattern 可读、UIA 导航、自有托盘命令或窗口未 cloak 写成真实位置输入通过。回执与范围见[交付记录](delivery-status.md)。
+
 M09h3b2c1 请求费用指纹：运行 `cargo test -p token-pulse-store --lib --tests --locked --offline` 与 `cargo clippy -p token-pulse-store --all-targets --locked --offline -- -D warnings`，均通过；301 项自动测试 / 1 原性能夹具 ignored。`cargo check -p token-pulse-desktop --release --locked --offline` 通过。新用例在 valuation/tests/request_inputs.rs，只用应用自有临时库和合成必要证据，不打开真实日志 / 登录文件；白名单身份与原 source_total=null 关联跨汇总、明细和后台缓存保持一致。CACHE_VERSION=5、schema v14，无新 DTO；旧 v4 不参与读取但保留。当前正式安装 0.1.6 的 cache v4 不因 cargo check 改变，不把编译检查当安装或真实模式计价通过。详见[计价专题](../design/price-accounting.md#16-生产请求输入与费用缓存身份m09h3b2c1)。
 
 2026-10-06 M13g16 输入门禁补记：正式任务栏另一位置应先确认自有主窗口 / WebView 所有权及实际 WindowFromPoint 命中。UIA IsOffscreen=false、DWM cloak=0 或 SetWindowPos 成功都不足以证明桌面点击点属于应用；SetForegroundWindow 后须读取实际前台，拒绝时不注入其他窗口、不借 Alt / 其他应用改焦点。保持 WTS / 输入桌面 / 已按住键与鼠标门禁，测试指针仅在用户没有移动时恢复。本轮三种拒绝均保留，未选择 / 保存位置，正式另一位置仍待验。当前已安装 0.1.6、任务栏 notification_left / two_rows / enabled；见[交付记录](delivery-status.md)。

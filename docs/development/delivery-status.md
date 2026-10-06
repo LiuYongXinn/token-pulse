@@ -1,5 +1,7 @@
 # 实施与交付记录
 
+2026-10-06 M13g16 辅助功能补试：第一次仅找位置控件时当前主窗口已隐藏，控件缺失，未触发展开；重新通过已核对的自有托盘“打开”命令显示主窗口并进入正式设置，UIA Expand 未暴露可选择的选项，随后 Collapse provider 调用失败，未调用 SelectionItem / Invoke 选择、未点击保存。末尾实际读取选择器仍“通知区域左侧”，重置草稿按钮禁用；通过自有主窗口正常关闭事件恢复原先隐藏状态，恢复回执实际退出 0。UTC 11:21:01 只读 SQLite 核对 settings revision 141、notification_left / two_rows / enabled / 原四项与回退保持。相关 `position-selection-uia*.log`、`position-uia-restoration.json` / `position-uia-retained-settings.json` 在 0.1.6 review 目录；该 UIA 尝试不计真实鼠标 / 键盘通过，也不把 provider 拒绝归为产品不能保存位置。正式另一位置仍待实际输入验收。
+
 2026-10-06 M09h3b2c1 已完成可靠请求费用输入身份：主页面汇总 / 分页明细、后台自动补建与手动重估复用严格白名单投影；原 source_total_tokens 可空值参与完整消费关联，不用发布总量补零 / 补已知。可靠输入、FullRequest / DifferentConsumption、内部响应 / 回合 / 物理位置纳入 SHA；身份只内部摘要，公开 DTO 仍只有既有输入投影。CACHE_VERSION 从 4 升 5，集合身份 / 候选摘要 / 查询门控同步，旧 v4 行保留并排除、原重估计划使用同一版本，无新 DDL、schema 14 保持。缺失 / 无效辅助证据不破坏可信 Token，也不产生默认实际模式。
 
 三组新自动测试覆盖响应身份、回合 / 位置 / 输入边界 / 关联变化的隔离，源总量真实 null 下汇总和明细一致、旧缓存失效 / v5 补建 / SQLite 重开及消费 / 检查点不变。用合成修改的可丢弃费用判明两个读取路径实际命中同一身份，不将其称为缓存金额真实性验证。store 全套 301 passed / 1 原性能夹具 ignored，store all-targets strict Clippy、release-cfg desktop check、fmt / diff 通过。日志在 `target/release/review/v0.1.6/request-cache-*.log`；真实来源及用户库未写。正式本机仍已安装的 0.1.6-327183e / cache v4，公开仍 0.1.3，本增量尚未构建安装包、签名或安装。生产条件金额引用核对 / 后台金额 / 公开匹配依据、实际响应模式 / 地区证据继续，扩展工具 / 多模态 / 联网目录不作为本模块完成项；详见[第 16 节](../design/price-accounting.md#16-生产请求输入与费用缓存身份m09h3b2c1)。
