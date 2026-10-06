@@ -1,5 +1,7 @@
 # 本地开发与运行
 
+2026-10-06 M16z4 当前正式安装 0.1.6-327183e：完整构建、原密钥签名与独立 native verifier / NSIS 实际退出 0，通过宿主 manifest 提取与安装字节验证。只读旧库前后 schema 14、data 1496 / price 1 / settings 138 保留，随后正式 UI 恢复采集。回执和逐张查看的真实截图在 `target/release/review/v0.1.6/`，包括 60 秒无捕获状态 / 真实物理输入；不要把窗口状态或捕获图替代普通桌面目视。独立试验普通桌面透明显示已确认，正式包目视答复仍待收到。公开仍 0.1.3、未重启或推送；范围与失败历史见[交付记录](delivery-status.md)。
+
 M13g15 可用 `cargo build -p token-pulse-taskbar --example check_taskbar_layout` 后显式运行 `check_taskbar_layout.exe --native-taskbar-visible-check`。它使用明确的开发夹具 / 自有安全槽，120 秒内每 2 秒刷新并核对三处真实 WindowFromPoint 命中，完全不调用捕获函数，之后检查隐私更新、禁用 / 再挂接 / Drop 恢复；不修改正式库，也不把合成价格或账户当真实数据。应先让正式程序经自有托盘命令正常退出，结束后恢复正式程序；缺少独占预留不得并行挂接。长观察允许用户自行改变前台，记录前台差异而不据此宣称程序夺焦点，原短自动例程仍严格保持焦点判据。新 manifest 必须嵌入宿主、example 和原生测试，不能仅修改窗口样式；本机旧宿主无资源 / 无清单，远程样式试验实际错误 87 并恢复。2026-10-06 72 项自动 / strict Clippy 与无捕获检查实际退出 0 通过；失败历史 / 实际范围见[交付记录](delivery-status.md)。
 
 2026-10-06 M16z3 本机已升级到签名 0.1.5-7cfb09e，实际安装退出 0 / schema 14 / 旧表行与 data、price、settings 修订保留；主程序 / 独立宿主 / notices 字节核对通过。当前包暂停 / 恢复标签修正已接入，任务栏浅底在捕获中已修正，但普通桌面不可见仍是用户确认的缺陷。安装、真实鼠标输入、失败历史与捕获证据的边界见[交付记录](delivery-status.md)，回执 `target/release/review/v0.1.5-db965d6/`；公开仍 0.1.3，未重启或推送。下面仍 0.1.4 的段落是历史阶段记录。

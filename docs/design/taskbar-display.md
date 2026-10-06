@@ -1,5 +1,7 @@
 # Windows 任务栏显示模式
 
+2026-10-06 M16z4 已安装正式 0.1.6：同包宿主清单资源实际提取确认 Windows 8 / 10 supportedOS，正常使用逐像素合成表面。正式真实 DTO 的 60 秒 / 30 次无截图状态检查、真实物理悬停 / 单击 / 双击 / 右键菜单结构及实际区域效果图通过；独立开发试验普通桌面持续可见 / 透明底色已由用户确认，正式 0.1.6 的普通桌面目视反馈仍待用户答复。截图不能替代此项。通知区域左侧位置已复测，不据此扩展为两位置 / 其他 DPI / 所有 Explorer 生命周期均验证；安装 / 旧库保留 / 失败历史见[交付记录](../development/delivery-status.md)。
+
 2026-10-06 M13g15 普通桌面呈现修正：0.1.5 的截图可见 / 正常桌面不可见而仍可点击，不能由 WS_VISIBLE / Embedded 证明绘制成功。独立宿主原先没有兼容性 manifest，实际尝试 layered child 返回错误 87 并恢复原样；新增 Windows 8 / 10 supportedOS 清单后，自有读数采用 WS_EX_LAYERED 与 UpdateLayeredWindow 的预乘 BGRA 表面。系统字体先生成灰度覆盖，再按原语义文字 / 费用 / 警告颜色合成，不绘制不透明矩形、不修改 Explorer 的全局合成设置。字形保留真实 coverage；空白仅保留 1/255 的输入底层（视觉近透明，非精确零 alpha），避免 Windows 把整块间距的点击交给 Explorer。焦点标记、清屏和隐私更新同样发布自有表面，失败仍为实际绘制失败。原有安全预留、租约、独立宿主、详情 / 手势和配色证据门禁保持。
 
 用户已分别在不截图时确认独立不透明合成试验“能持续看到”，以及透明底色试验“持续可见，底色已融入”；这是开发夹具证据，正式包仍需安装验证。此前截图通过的说法不构成日常显示通过。原生回执 / 失败日志及剩余验证见[交付记录](../development/delivery-status.md)。Microsoft [Using Windows](https://learn.microsoft.com/en-us/windows/win32/winmsg/using-windows) 的子窗口清单要求、[Window Features](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features) 的透明命中规则和 [UpdateLayeredWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatelayeredwindow) 的表面契约于 2026-10-06 核实；系统 API 可行性与本机呈现证据分别记录。
