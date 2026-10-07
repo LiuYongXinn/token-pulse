@@ -72,7 +72,7 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
     <div className="source-heading"><div><h2>Codex 通知（可选）</h2><p className="muted">回合完成后核对用量日志。</p></div><button disabled={busy} onClick={() => void reload()}>刷新通知状态</button></div>
     {!visible && <p className="notice">隐私模式已隐藏通知路径与配置。关闭后可预览接入或停用。</p>}
     {(error ?? readError) && <p className="notice" role="alert">{error ?? readError}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    <p className="notify-health">{!snapshot ? '正在读取通知状态…' : snapshot.service_issue ? notifyIssueText(snapshot.service_issue) : snapshot.listener_count === null ? '正在检查通知监听…' : snapshot.listener_count === 0 ? '暂无正在监听的通知接入' : `${snapshot.listener_count} 个通知入口监听中`}</p>
+    {snapshot?.service_issue && <p className="notice" role="alert">{notifyIssueText(snapshot.service_issue)}</p>}
     {snapshot?.registry_issue && <p className="notice">{notifyIssueText(snapshot.registry_issue)}</p>}
     {snapshot?.registrations?.map(row => <article className="source-card notify-registration" key={row.registration_id}>
       <h3>{row.configured === true ? '通知已启用' : row.configured === false ? '通知已停用' : '通知状态未知'}</h3>

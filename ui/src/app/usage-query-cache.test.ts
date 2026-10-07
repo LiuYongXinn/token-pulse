@@ -10,7 +10,7 @@ test('protected results reject excess admission without exceeding the hard byte 
   expect(cache.stats().bytes).toBeLessThanOrEqual(12);
   expect(cache.get('a').value).toBe('123456');
   expect(cache.get('b').value).toBeNull();
-  expect(cache.get('b').error).toContain('缓存');
+  expect(cache.get('b').error).toContain('请稍后重试或缩小查询范围');
   stop();
 });
 test('restored DTO is visible during a blocked fresh query and cannot overwrite a newer identity', async () => {

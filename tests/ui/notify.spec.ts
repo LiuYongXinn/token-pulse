@@ -53,7 +53,8 @@ test.beforeEach(async ({ page }) => {
 async function open(page: import('@playwright/test').Page) {
   await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click();
   const region = page.getByRole('region', { name: 'Codex 通知接入' });
-  await expect(region.getByText('暂无正在监听的通知接入')).toBeVisible();
+  await expect(region.locator('.notify-health')).toHaveCount(0);
+  await expect(region.getByLabel('通知接入来源')).toBeEnabled();
   await region.getByLabel('通知接入来源').selectOption('synthetic-notify'); return region;
 }
 test('review and default original precede enable; stop also reviews restore', async ({ page }) => {

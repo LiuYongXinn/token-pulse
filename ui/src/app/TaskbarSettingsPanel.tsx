@@ -59,5 +59,5 @@ export function TaskbarSettingsPanel({ timezone }: { timezone: string | null }) 
 
 export function TaskbarDiagnosticsPanel({ timezone }: { timezone: string | null }) {
   const runtime = useTaskbarRuntime();
-  return <section className="panel taskbar-diagnostics"><div className="panel-heading"><h2>任务栏显示</h2><button onClick={() => void runtime.refresh()}>刷新任务栏状态</button></div><TaskbarRuntimeDetails snapshot={runtime.snapshot} error={runtime.error} timezone={timezone} /></section>;
+  return <section className="panel taskbar-diagnostics"><div className="panel-heading"><h2>任务栏显示</h2><button onClick={() => void runtime.refresh()}>刷新任务栏状态</button></div><TaskbarRuntimeDetails snapshot={runtime.snapshot} error={runtime.error} timezone={timezone} diagnostics /></section>;
 }

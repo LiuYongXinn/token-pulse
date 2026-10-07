@@ -80,7 +80,7 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
         this.cursor = page.next_cursor;
         if (this.disposed) { await this.release(); return; }
         const first = replacement ? null : this.value.pages[0];
-        if (first && JSON.stringify([page.meta, page.summary, page.pricing, page.coverage]) !== JSON.stringify([first.meta, first.summary, first.pricing, first.coverage])) throw new Error(`${this.adapter.label}分页快照不一致，请重新查询。`);
+        if (first && JSON.stringify([page.meta, page.summary, page.pricing, page.coverage]) !== JSON.stringify([first.meta, first.summary, first.pricing, first.coverage])) throw new Error(`${this.adapter.label}列表已变化，请重新查询。`);
         const keys = this.adapter.keys(page), seen = new Set(replacement ? [] : this.value.pages.flatMap(this.adapter.keys));
         if (new Set(keys).size !== keys.length || keys.some(key => seen.has(key))) throw new Error(`${this.adapter.label}分页包含重复位置，请重新查询。`);
         if (keys.length > this.query.page_size || (page.next_cursor !== null && !keys.length)) throw new Error(`${this.adapter.label}分页大小无效，请重新查询。`);
@@ -123,7 +123,7 @@ function admitPages<Query extends { page_size: number }, Page extends SnapshotPa
   }
   let trimmed = 0;
   while (pages.length > 1 && others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) { pages.shift(); ++trimmed; }
-  if (residentOthers() >= 10 || others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) throw new Error('分页结果超过展示缓存容量，请缩小查询范围或每页数量。');
+  if (residentOthers() >= 10 || others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) throw new Error('查询结果较多，请缩小范围或减少每页数量。');
   return trimmed;
 }
 export function pagedUsage<Query extends { page_size: number }, Page extends SnapshotPage>(key: string, query: Query, adapter: PageAdapter<Query, Page>): PagedUsage<Query, Page> {

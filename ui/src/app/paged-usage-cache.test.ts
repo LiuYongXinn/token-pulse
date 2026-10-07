@@ -29,7 +29,7 @@ test('failed replacement keeps old multi-page display and snapshot mismatch neve
   const controller = new PagedUsage({ page_size: 1 }, { label: 'test', keys: (page: Page) => page.rows,
     read: async ({ cursor }) => { if (fail) throw new Error('failed'); return { ...base, meta: { ...base.meta, snapshot_id: cursor ? 'other' : 'old' }, rows: [cursor ? 'b' : 'a'], next_cursor: 'cursor' }; }, close: async () => {} });
   const stop = controller.attach({}, true); await flush(); controller.next(); await flush();
-  expect(controller.get().pages).toHaveLength(1); expect(controller.get().error).toContain('不一致');
+  expect(controller.get().pages).toHaveLength(1); expect(controller.get().error).toContain('列表已变化');
   fail = true; controller.reload(); await flush();
   expect(controller.get().pages[0].meta.snapshot_id).toBe('old'); expect(controller.get().error).toBe('failed');
   stop(); controller.dispose(); await flush(); vi.unstubAllGlobals();
@@ -45,6 +45,6 @@ test('ten protected resident ranges retain their pages and reject an eleventh re
   }
   for (const view of views.slice(0, 10)) expect(view.get().pages).toHaveLength(1);
   expect(views[10].get().pages).toHaveLength(0);
-  expect(views[10].get().error).toContain('缓存容量');
+  expect(views[10].get().error).toContain('查询结果较多');
   for (const stop of stops) stop(); clearPagedUsage(); await flush(); vi.unstubAllGlobals();
 });

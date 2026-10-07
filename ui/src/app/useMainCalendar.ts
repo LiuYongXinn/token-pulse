@@ -42,7 +42,7 @@ export function useMainCalendar(selection: CalendarSelection, ready: boolean, re
     if (!ready || timezone === null) return;
     let active = true;
     void resolveCalendarSelection({ timezone, selection }).then(value => {
-      if (value.range.timezone !== timezone || value.heatmap_range.timezone !== timezone || !Number.isSafeInteger(value.range.start_ms) || !Number.isSafeInteger(value.range.end_ms) || value.range.start_ms >= value.range.end_ms || !Number.isSafeInteger(value.heatmap_range.start_ms) || !Number.isSafeInteger(value.heatmap_range.end_ms) || value.heatmap_range.start_ms >= value.heatmap_range.end_ms) throw new Error('后台日期范围与请求不一致，请重新查询。');
+      if (value.range.timezone !== timezone || value.heatmap_range.timezone !== timezone || !Number.isSafeInteger(value.range.start_ms) || !Number.isSafeInteger(value.range.end_ms) || value.range.start_ms >= value.range.end_ms || !Number.isSafeInteger(value.heatmap_range.start_ms) || !Number.isSafeInteger(value.heatmap_range.end_ms) || value.heatmap_range.start_ms >= value.heatmap_range.end_ms) throw new Error('日期读取失败，请重新查询。');
       if (active) { ranges.delete(key); ranges.set(key, { value, resolvedAt: clock }); while (ranges.size > 20) ranges.delete(ranges.keys().next().value!); setResolved({ key, value }); setFailure(null); }
     }).catch(error => { if (active) setFailure({ key, error: runtimeError(error) }); });
     return () => { active = false; };

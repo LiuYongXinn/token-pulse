@@ -12,7 +12,7 @@ test('taskbar controls accept their non-sensitive unstamped DTOs and retain resp
   await expect(setTaskbarPreferences({ preferences: {}, expected_settings_revision: '9007199254740993' } as never)).resolves.toBeNull();
   await expect(retryTaskbarEmbed()).resolves.toBeUndefined();
   api.invoke.mockImplementationOnce(async () => ({ api_version: 1, request_id: 'wrong-request', data: null }));
-  await expect(getTaskbarStatus()).rejects.toThrow('响应身份不匹配');
+  await expect(getTaskbarStatus()).rejects.toThrow('读取失败，请重试。');
 });
 
 test('old serialized page after protection is discarded and original continuation is released', async () => {

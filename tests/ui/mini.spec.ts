@@ -112,11 +112,12 @@ test('account display has actual periods, zero, reset waiting, details and bound
   const entry = page.getByLabel('查看账户额度详情');
   await expect(entry).toContainText('2 小时剩余 0%'); await expect(entry).toContainText('周剩余 14%');
   await expect(entry).toContainText('1分钟');
-  const bounds = await page.locator('.mini-health').boundingBox(); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(219);
+  await expect(page.locator('.mini-health')).toHaveCount(0);
+  const bounds = await entry.boundingBox(); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(219);
   await page.screenshot({ path: 'test-results/mini-quota-compact.png' });
   await entry.click(); await page.setViewportSize({ width: 360, height: 380 });
   const details = page.getByRole('dialog', { name: '账户额度详情' });
-  await expect(details).toContainText('SYNTHETIC ACCOUNT BUCKET'); await expect(details).toContainText('显示时区：UTC');
+  await expect(details).not.toContainText('SYNTHETIC ACCOUNT BUCKET'); await expect(details).not.toContainText('显示时区：UTC');
   await expect(details.getByRole('progressbar', { name: '2 小时额度剩余' })).toHaveAttribute('value', '0');
   await expect(details).toContainText('未知周期剩余 —'); await expect(details).toContainText('时间未提供');
   await details.getByRole('button', { name: '刷新账户额度' }).click(); await expect(details).toContainText('请在 5 秒后刷新。');
@@ -124,7 +125,7 @@ test('account display has actual periods, zero, reset waiting, details and bound
   await page.keyboard.press('Escape'); await expect(details).toHaveCount(0); await expect(entry).toBeFocused();
   await page.clock.fastForward(61_000); await expect(entry).toContainText('等待额度更新'); await expect(entry).toContainText('周剩余 14%');
   await page.evaluate(value => { (window as unknown as QuotaQA).__miniQuotaQA.set(value); }, { ...syntheticQuota(now), quota_revision: '9007199254740994', state: 'stale' });
-  await expect(entry).toContainText('旧快照 · 更新失败'); await expect(entry).toContainText('周剩余 14%');
+  await expect(entry).toContainText('更新失败 · 显示上次结果'); await expect(entry).toContainText('周剩余 14%');
 });
 
 test('account invalidation rejects late identity and privacy responses, then supports only-week data', async ({ page }) => {
@@ -137,7 +138,7 @@ test('account invalidation rejects late identity and privacy responses, then sup
   await page.evaluate(value => (window as unknown as QuotaQA).__miniQuotaQA.set(value), next);
   await expect(entry).toContainText('周剩余 83%'); await expect(entry).toContainText('短周期剩余 —');
   await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.release()); await expect(entry).toContainText('周剩余 83%');
-  await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.fail(true)); await expect(entry).toContainText('旧快照 · 更新失败');
+  await page.evaluate(() => (window as unknown as QuotaQA).__miniQuotaQA.fail(true)); await expect(entry).toContainText('更新失败 · 显示上次结果');
   await page.evaluate(value => { const qa = (window as unknown as QuotaQA).__miniQuotaQA; qa.fail(false); qa.hold(); qa.set(value); }, next);
   await page.evaluate(() => (window as unknown as QA).__miniQA.privacy(true));
   await expect(entry).toContainText('周剩余 已隐藏'); await expect(entry).toBeDisabled();
@@ -148,7 +149,7 @@ test('account invalidation rejects late identity and privacy responses, then sup
 
 test('real DTO presentation has compact and expanded layouts, exact pricing and unknown account fields', async ({ page }) => {
   await page.goto('/?window=mini');
-  await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await expect(page.getByLabel('费用估算详情')).toContainText('$0.57');
   await expect(page.getByLabel('查看账户额度详情')).toContainText('短周期剩余 —');
   await expect(page.getByLabel('查看账户额度详情')).toContainText('周重置 —');
@@ -161,8 +162,8 @@ test('real DTO presentation has compact and expanded layouts, exact pricing and 
   await expect(page.locator('.mini-breakdown')).toContainText('输出（含推理）83.1K');
   await page.screenshot({ path: 'test-results/mini-expanded-dark.png' });
   await page.getByLabel('费用估算详情').click();
-  await expect(page.getByLabel('小窗价格覆盖')).toContainText('USD 0.573123');
-  await expect(page.getByLabel('小窗价格覆盖')).toContainText('未计价 83.1K');
+  await expect(page.getByLabel('小窗费用详情')).toContainText('USD 0.573123');
+  await expect(page.getByLabel('小窗费用详情')).toContainText('未计价 83.1K');
   await page.getByLabel('打开小窗范围统计').click();
   expect(await page.evaluate(() => (window as unknown as QA).__miniQA.calls().filter(v => v.command === 'open_mini_stats').at(-1)?.request)).toEqual({ expected_settings_revision: '9007199254740993' });
   await page.getByLabel('小窗置顶').click(); await expect(page.getByLabel('小窗置顶')).toHaveAttribute('aria-pressed', 'true');
@@ -183,7 +184,7 @@ test('shared theme and privacy clear retained names, money details and reject a 
   await expect(page.getByLabel('费用估算详情')).toContainText('已隐藏');
   await page.evaluate(() => (window as unknown as QA).__miniQA.release());
   await expect(page.locator('.mini-scope')).toHaveAttribute('title', '固定会话（已隐藏）');
-  await expect(page.getByLabel('小窗价格覆盖')).toHaveCount(0);
+  await expect(page.getByLabel('小窗费用详情')).toHaveCount(0);
   expect(await page.locator('body').innerHTML()).not.toContain('SYNTHETIC PRIVATE SESSION');
   expect(await page.locator('body').innerHTML()).not.toContain('0.573123');
   await page.getByLabel('小窗隐私模式').click();
@@ -193,9 +194,9 @@ test('shared theme and privacy clear retained names, money details and reject a 
 });
 
 test('failed refresh keeps an explicitly old success, scope reset carries precise revision and never queries main data', async ({ page }) => {
-  await page.goto('/?window=mini'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await page.goto('/?window=mini'); await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await page.evaluate(() => (window as unknown as QA).__miniQA.fail(true)); await page.getByLabel('刷新小窗').click();
-  await expect(page.getByRole('alert')).toContainText('保留上次快照'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await expect(page.getByRole('alert')).toContainText('更新失败，点击时间重试'); await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await expect(page.getByLabel('刷新小窗')).toHaveAttribute('title', /更新时间.*10:40:00\.456.*UTC/);
   await page.evaluate(() => (window as unknown as QA).__miniQA.fail(false));
   await page.getByLabel('展开小窗').click(); await page.setViewportSize({ width: 360, height: 380 });
@@ -209,8 +210,8 @@ test('failed refresh keeps an explicitly old success, scope reset carries precis
 test('ordinary browser preview exposes no invented usage or account percentages', async ({ page }) => {
   // Remove the test bridge on the next navigation: this route is also usable for honest visual previews.
   await page.addInitScript(() => { Object.assign(window, { isTauri: false }); delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__; });
-  await page.goto('/?window=mini'); await expect(page.getByRole('alert')).toContainText('读取失败');
-  await expect(page.getByLabel('可信 Token 分解')).toHaveText('—');
+  await page.goto('/?window=mini'); await expect(page.getByRole('alert')).toContainText('更新失败');
+  await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('—');
   await expect(page.getByLabel('费用估算详情')).toContainText('已隐藏');
   await expect(page.getByLabel('查看账户额度详情')).toContainText('周剩余 已隐藏');
   await expect(page.getByLabel('查看账户额度详情')).toBeDisabled();
@@ -218,19 +219,19 @@ test('ordinary browser preview exposes no invented usage or account percentages'
 
 
 test('unknown evidence stays unknown, confirmed zero and unpriced consumption remain distinct', async ({ page }) => {
-  await page.goto('/?window=mini'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await page.goto('/?window=mini'); await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await page.evaluate(() => (window as unknown as QA).__miniQA.mode('unknown'));
-  await expect(page.getByLabel('可信 Token 分解')).toHaveText('—'); await expect(page.getByLabel('费用估算详情')).toContainText('—');
-  await expect(page.getByRole('status')).toHaveText('尚无已确认用量');
+  await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('—'); await expect(page.getByLabel('费用估算详情')).toContainText('—');
+  await expect(page.getByRole('status')).toHaveText('暂无用量');
   await page.evaluate(() => (window as unknown as QA).__miniQA.mode('zero'));
-  await expect(page.getByLabel('可信 Token 分解')).toHaveText('0'); await expect(page.getByLabel('费用估算详情')).toContainText('$0.00');
+  await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('0'); await expect(page.getByLabel('费用估算详情')).toContainText('$0.00');
   await page.evaluate(() => (window as unknown as QA).__miniQA.mode('unpriced'));
-  await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K'); await expect(page.getByLabel('费用估算详情')).toContainText('未计价');
+  await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K'); await expect(page.getByLabel('费用估算详情')).toContainText('未计价');
   await expect(page.locator('.mini-meta')).toContainText('输入缓存 —');
 });
 
 async function editor(page: Page) {
-  await page.goto('/?window=mini'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await page.goto('/?window=mini'); await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await page.getByLabel('展开小窗').click(); await page.setViewportSize({ width: 360, height: 380 });
   await page.getByLabel('选择小窗会话与起点').click();
   await expect(page.getByRole('dialog', { name: '小窗统计范围' })).toBeVisible();
@@ -258,7 +259,7 @@ test('expiry does not mix snapshots; search and cancellation release original cu
   await editor(page); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(25);
   await page.evaluate(() => (window as unknown as QA).__miniQA.expireCandidates(true));
   await page.getByRole('button', { name: '加载更多会话' }).click();
-  await expect(page.getByRole('alert')).toContainText('快照已过期'); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(25);
+  await expect(page.getByRole('alert')).toContainText('请重新查询'); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(25);
   await page.evaluate(() => (window as unknown as QA).__miniQA.expireCandidates(false));
   await page.getByLabel('搜索小窗会话').fill('CANDIDATE 54'); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(1);
   await page.getByLabel('搜索小窗会话').fill(''); await expect(page.getByRole('listbox', { name: '小窗会话候选' }).getByRole('option')).toHaveCount(25);
@@ -289,7 +290,7 @@ test('scope conflict preserves selection and fixed draft, future start issues no
 });
 
 test('external privacy closes unsaved picker and a late unmasked page closes its exact original capability', async ({ page }) => {
-  await page.goto('/?window=mini'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
+  await page.goto('/?window=mini'); await expect(page.getByLabel('Token 分解', { exact: true })).toHaveText('683.1K');
   await page.getByLabel('展开小窗').click(); await page.setViewportSize({ width: 360, height: 380 });
   await page.evaluate(() => (window as unknown as QA).__miniQA.holdCandidates());
   await page.getByLabel('选择小窗会话与起点').click(); await expect(page.getByRole('dialog')).toBeVisible();

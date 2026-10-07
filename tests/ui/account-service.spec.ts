@@ -82,7 +82,7 @@ test('explicit selection and save precede connection; quotas keep zero and unkno
   await region.scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test-results/account-service-settings.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await region.getByRole('button', { name: '刷新账户额度' }).click(); await expect(region.getByText('请在 稍后刷新额度。')).toBeVisible();
-  await region.getByLabel('账户额度桶').selectOption('other'); await expect(region.getByText('剩余 75%')).toHaveCount(0);
+  await region.getByLabel('账户方案').selectOption('other'); await expect(region.getByText('剩余 75%')).toHaveCount(0);
   await region.getByRole('button', { name: '断开本次连接' }).click(); await expect(region.getByRole('status')).toContainText('未连接');
   await expect(region.getByRole('checkbox')).toBeChecked();
   await page.getByRole('button', { name: '模型', exact: true }).click();

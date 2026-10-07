@@ -115,12 +115,12 @@ test('expired or mismatched continuations never append fresh data to a frozen ev
   await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage('mismatch'));
   await page.getByRole('button', { name: '下一页', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('明细分页快照不一致');
+  await expect(page.getByRole('alert')).toContainText('明细列表已变化');
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage(null)); await page.getByRole('button', { name: '重新查询', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage('expired')); await page.getByRole('button', { name: '下一页', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('查询快照已过期'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await expect(page.getByRole('alert')).toContainText('请重新查询'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
 });
 
 test('price notification replaces the whole snapshot and navigation keeps bounded listeners but releases capabilities', async ({ page }) => {

@@ -59,7 +59,7 @@ export function MiniScopeEditor({ usage, onSaved, onClose }: { usage: MiniUsageS
       {!validSearch ? <p className="mini-editor-error" role="alert">搜索最多 256 个字符，不能含控制字符。</p> : !ready ? <p className="mini-editor-note">正在准备搜索…</p> : <>
         {candidates.error && <p className="mini-editor-error" role="alert">{candidates.error}</p>}
         <div className="mini-options" role="listbox" aria-label="小窗会话候选">{candidates.options.map(option => <button key={option.session_key} role="option" className={session === option.session_key ? 'mini-option selected' : 'mini-option'} aria-selected={session === option.session_key} disabled={busy} onClick={() => { setSession(option.session_key); setName(option.display_name); }}><span>{option.display_name}</span><small>{option.session_key.slice(0, 12)}</small></button>)}</div>
-        {candidates.loading && <p className="mini-editor-note" role="status">正在读取会话快照…</p>}
+        {candidates.loading && <p className="mini-editor-note" role="status">正在读取会话…</p>}
         {!candidates.loading && !candidates.error && candidates.options.length === 0 && <p className="mini-editor-note">没有匹配的已登记会话。</p>}
         {candidates.limited && <p className="mini-editor-note">已显示 1,000 项，请缩小搜索。</p>}
         <div className="mini-picker-actions">{candidates.more && <button disabled={busy || candidates.loading} onClick={candidates.loadMore}>加载更多会话</button>}<button disabled={busy || candidates.loading} onClick={candidates.reload}>重新查询会话</button></div>

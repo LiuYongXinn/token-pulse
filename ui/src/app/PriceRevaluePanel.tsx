@@ -8,8 +8,8 @@ import './price-revalue.css';
 const states: Record<PriceRevalueState, string> = { queued: '等待重估', running: '正在重估', cancelling: '正在取消', succeeded: '重估完成', cancelled: '已取消重估', failed: '重估失败', interrupted: '重估已中断' };
 function revalueError(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'code' in error) {
-    if (error.code === 'DB_WRITE_FAILED') return '数据库操作失败，已发布缓存仍可用，请重试。';
-    if (error.code === 'CANDIDATE_OBSOLETE') return '重估输入已变化，已发布缓存仍可用，请重新提交。';
+    if (error.code === 'DB_WRITE_FAILED') return '费用重估失败，原有费用结果已保留，请重试。';
+    if (error.code === 'CANDIDATE_OBSOLETE') return '用量已发生变化，原有费用结果已保留，请重新提交。';
   }
   return runtimeError(error);
 }
@@ -61,10 +61,9 @@ export function PriceRevaluePanel({ revision, historical }: { revision: string; 
     {notice && <p role="status" className="muted">{notice}</p>}
     {!status && !readError && <p className="muted" role="status">正在读取重估状态…</p>}
     {status && <>
-      <p className="muted">当前价格版本 {status.current_price_revision} · 按事件发生时价格待补缓存：{fullTokens(status.uncached_ledgers)} 个会话账本。</p>
       {job ? <div className="revalue-progress" role="status" aria-live="polite">
-        <div className="revalue-progress-heading"><strong>{states[job.state]}</strong><span>{job.automatic ? '自动任务' : '手动任务'} · 价格版本 {job.price_revision}</span></div>
-        <p>已处理记录 {fullTokens(job.processed_events)} / {fullTokens(job.total_events)} · 完成账本 {fullTokens(job.completed_ledgers)} / {fullTokens(job.total_ledgers)}</p>
+        <div className="revalue-progress-heading"><strong>{states[job.state]}</strong></div>
+        <p>已处理记录 {fullTokens(job.processed_events)} / {fullTokens(job.total_events)} · 完成会话 {fullTokens(job.completed_ledgers)} / {fullTokens(job.total_ledgers)}</p>
         {percent !== null && <progress aria-label="费用重估进度" value={percent} max={100}>{percent}%</progress>}
         <p className="muted">{job.basis.mode === 'event_time' ? '按每条事件发生时的有效单价' : `指定估价时点：${new Date(job.basis.specified_at_ms).toISOString()}`}</p>
         {job.error && <p className="notice">{revalueError({ code: job.error })}</p>}
@@ -73,7 +72,7 @@ export function PriceRevaluePanel({ revision, historical }: { revision: string; 
     </>}
     {historical ? <p className="muted">历史价格版本只读；回到当前版本后可创建重估任务。</p> : <>
       {stale && <p className="notice">当前规则已变化，请刷新当前版本后重估。</p>}
-      <div className="revalue-actions"><PriceBasisFilter basis={basis} disabled={busy} onChange={next => { pendingStart.current = null; setBasis(next); }} /><button className="primary" disabled={busy || !status || stale || status.active_job !== null} onClick={() => void run(start, '重估请求已接受。')}>重估全部已确认用量</button></div>
+      <div className="revalue-actions"><PriceBasisFilter basis={basis} disabled={busy} onChange={next => { pendingStart.current = null; setBasis(next); }} /><button className="primary" disabled={busy || !status || stale || status.active_job !== null} onClick={() => void run(start, '重估请求已接受。')}>重估全部用量</button></div>
     </>}
   </section>;
 }

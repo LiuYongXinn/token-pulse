@@ -63,14 +63,16 @@ test('model table keeps precise large tokens, mixed currencies, true zero, unkno
   await page.screenshot({ path: 'test-results/projects-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
-  await expect(page.getByRole('heading', { name: '当前筛选暂无可信消费' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '当前筛选暂无用量' })).toBeVisible();
   await expect(page.getByLabel('0 Token', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '模型', exact: true }).click();
   await expect(page.getByLabel('来源', { exact: true })).toHaveValue('synthetic-b');
-  await expect(page.getByRole('heading', { name: '当前筛选暂无可信消费' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '当前筛选暂无用量' })).toBeVisible();
   await page.getByLabel('来源', { exact: true }).selectOption('');
   await expect(page.getByRole('table')).toBeVisible();
-  await page.getByRole('button', { name: '已计价 100%', exact: true }).first().click();
+  await expect(page.getByRole('columnheader', { name: '已计价比例' })).toHaveCount(0);
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '价格规则', exact: true }).click();
   await expect(page.getByRole('tabpanel', { name: '价格规则设置' })).toBeVisible();
 });
 

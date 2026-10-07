@@ -116,46 +116,47 @@ test('overview preserves prototype layout, known breakdown and real unknown stat
   const activity = page.getByRole('group', { name: '近 26 周每日活动' });
   await expect(activity.getByRole('button')).toHaveCount(182);
   await activity.getByRole('button').nth(1).focus();
-  await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-2 · 0 Token · 已统计可信用量，部分记录待核对');
+  await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-2 · 0 Token');
   await activity.getByRole('button').first().click();
   await expect(page.getByLabel('日期范围')).toHaveValue('custom');
   await expect(page.getByTitle('编辑已应用日期')).toBeVisible();
   await page.screenshot({ path: 'test-results/overview-known-1280.png', fullPage: true });
   await page.getByRole('button', { name: '日', exact: true }).click();
   await expect(page.getByRole('button', { name: '日', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('group', { name: '各时间桶可信 Token' }).getByRole('button')).toHaveCount(1);
+  await expect(page.getByRole('group', { name: '各时段 Token' }).getByRole('button')).toHaveCount(1);
   await page.getByLabel('日期范围').selectOption('last7');
   await page.getByRole('button', { name: '模型', exact: true }).click();
   await page.getByRole('button', { name: '总览', exact: true }).click();
   await expect(page.getByLabel('日期范围')).toHaveValue('last7');
-  await expect(page.getByRole('group', { name: '各时间桶可信 Token' }).getByRole('button')).toHaveCount(7);
+  await expect(page.getByRole('group', { name: '各时段 Token' }).getByRole('button')).toHaveCount(7);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect(page.getByText('未计价', { exact: true })).toBeVisible();
   await expect(page.getByLabel('完整 Token 分解')).toHaveCount(0);
-  await expect(page.getByText('分项覆盖不足或无输入')).toBeVisible();
+  await expect(page.getByText('分项覆盖不足或无输入')).toHaveCount(0);
   await page.setViewportSize({ width: 960, height: 680 });
   await page.screenshot({ path: 'test-results/overview-partial-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: /覆盖 0% · 查看依据/ }).click();
+  await expect(page.getByRole('button', { name: /覆盖.*查看依据/ })).toHaveCount(0);
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '价格规则', exact: true }).click();
   await expect(page.getByRole('tabpanel', { name: '价格规则设置' })).toBeVisible();
 });
 
-test('coverage shows verification progress separately and keeps confirmed totals available', async ({ page }) => {
+test('collection diagnostics stay off overview while totals remain available', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 680 });
   await page.evaluate(() => (window as unknown as { __setSyntheticCoverage: (v: Record<string, unknown>) => void }).__setSyntheticCoverage({ state: 'unknown', pending_observation_count: '0', pending_file_count: '0', verifying_file_count: '89', source_issues: [{ source_id: 'synthetic-a', code: 'source_scan_verifying', last_success_ms: 1000 }] }));
   await page.getByRole('button', { name: '刷新', exact: true }).click();
-  await expect(page.locator('.overview-coverage')).toContainText('正在校验来源覆盖 · 待校验文件 89');
-  await expect(page.locator('.overview-coverage')).not.toContainText('待核对用量记录');
-  await expect(page.locator('.overview-coverage')).not.toContainText('待采集文件');
+  await expect(page.locator('.overview-coverage')).toHaveCount(0);
+  await expect(page.getByText(/待校验文件|正在校验来源覆盖/)).toHaveCount(0);
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(960);
   await page.screenshot({ path: 'test-results/overview-verifying-960.png', fullPage: true });
   await page.evaluate(() => (window as unknown as { __setSyntheticCoverage: (v: Record<string, unknown>) => void }).__setSyntheticCoverage({ state: 'partial', pending_observation_count: '15', verifying_file_count: '0', source_issues: [] }));
   await page.getByRole('button', { name: '刷新', exact: true }).click();
-  await expect(page.locator('.overview-coverage')).toContainText('待核对用量记录 15');
-  await expect(page.locator('.overview-coverage')).not.toContainText('文件 0');
-  await page.getByRole('button', { name: '查看诊断', exact: true }).click();
+  await expect(page.locator('.overview-coverage')).toHaveCount(0);
+  await expect(page.getByText(/待核对用量记录/)).toHaveCount(0);
+  await page.getByRole('button', { name: '采集诊断', exact: true }).click();
   await expect(page.getByRole('heading', { name: '采集诊断', exact: true })).toBeVisible();
 });
 
@@ -173,10 +174,10 @@ test('same-filter refresh retains prior values on error and older-filter replies
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('synthetic refresh failure');
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('保留上次快照');
+  await expect(page.getByRole('alert')).toContainText('显示上次结果');
   await page.evaluate(() => { const w = window as unknown as { __setSyntheticDashboardFailure: (v: boolean) => void; __deferSyntheticDashboard: () => void }; w.__setSyntheticDashboardFailure(false); w.__deferSyntheticDashboard(); });
   await page.getByRole('button', { name: '刷新', exact: true }).click();
-  await expect(page.getByText('正在刷新…', { exact: true })).toBeVisible();
+  await expect(page.getByText('正在刷新…', { exact: true })).toHaveCount(0);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { __releaseSyntheticDashboard: () => void }).__releaseSyntheticDashboard());
@@ -240,7 +241,7 @@ test('long custom history changes trend grain to daily without reducing the sele
   await page.getByRole('button', { name: '应用日期' }).click();
   await expect(page.getByRole('button', { name: '日', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: '小时', exact: true })).toBeDisabled();
-  await expect(page.getByRole('group', { name: '各时间桶可信 Token' }).getByRole('button')).toHaveCount(365);
+  await expect(page.getByRole('group', { name: '各时段 Token' }).getByRole('button')).toHaveCount(365);
   await expect(page.getByTitle('编辑已应用日期')).toHaveText('2025-10-01 — 2026-09-30');
 });
 
@@ -316,7 +317,7 @@ test('overview quota is account-scoped, actual-period aware and hidden by shared
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect(card).toContainText('周额度剩余 14%');
-  await expect(card).toContainText('SYNTHETIC ACCOUNT BUCKET');
+  await expect(card).not.toContainText('SYNTHETIC ACCOUNT BUCKET');
   await page.screenshot({ path: 'test-results/overview-account-quota.png' });
   await page.evaluate(() => (window as unknown as { __emitSyntheticPrivacyChange(v: boolean): void }).__emitSyntheticPrivacyChange(true));
   await expect(card).toContainText('隐私模式已隐藏账户额度');
@@ -348,6 +349,6 @@ test('cache-write quantity is shown without changing the trusted total', async (
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   const measure = page.locator('.breakdown-measures .measure').filter({ has: page.locator('dt', { hasText: '缓存写入（输入包含项）' }) });
   await expect(measure.locator('dd')).toContainText('12,000');
-  await expect(page.getByText('非缓存命中输入', { exact: true })).toBeVisible();
+  await expect(page.locator('.breakdown-measures').getByText('非缓存输入', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/cache-write-overview.png', fullPage: true });
 });

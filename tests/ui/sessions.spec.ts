@@ -116,7 +116,7 @@ test('sessions show exact consumption and independent context, stable pages and 
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await expect(page.locator('.session-table tbody tr').first().locator('td.numeric[title="9,007,199,254,740,993"]')).toBeVisible();
   await expect(page.locator('.session-table tbody tr').nth(1)).toContainText('未知项目');
-  await expect(page.locator('.session-table tbody tr').nth(1)).toContainText('父会话尚未解析');
+  await expect(page.locator('.session-table tbody tr').nth(1)).not.toContainText('父会话尚未解析');
   await expect(page.locator('.session-table tbody tr').first().locator('td').nth(4)).toContainText('2 / 1');
   await page.screenshot({ path: 'test-results/sessions-1280.png' });
   const trigger = page.getByRole('button', { name: 'Synthetic 会话 0', exact: true });
@@ -126,11 +126,9 @@ test('sessions show exact consumption and independent context, stable pages and 
   await expect(drawer.getByRole('heading', { name: '所选范围累计消耗' })).toBeVisible();
   await expect(drawer.getByRole('heading', { name: '最近请求上下文' })).toBeVisible();
   await expect(drawer.getByText('窗口容量未知', { exact: true })).toBeVisible();
-  await expect(drawer.locator('.session-context')).toContainText('快照');
+  await expect(drawer.locator('.session-context')).toContainText('更新于');
   await expect(drawer.locator('.session-drawer-total')).toContainText('321');
-  await expect(drawer.getByRole('heading', { name: '当前账本分类证据' })).toBeVisible();
-  await expect(drawer.locator('.session-classifications')).toContainText('父序列前缀已验证');
-  await expect(drawer.locator('.session-classifications')).toContainText('继承边界待确认');
+  await expect(drawer.getByText('父序列前缀已验证')).not.toBeVisible();
   await expect(drawer).toContainText('显示前 1 个子关系，共 3 个');
   await expect(drawer.getByRole('list', { name: '已解析子会话' }).getByRole('button', { name: 'Synthetic 会话 2' })).toBeVisible();
   await expect(page.getByRole('button', { name: '关闭会话详情' })).toBeFocused();
@@ -139,6 +137,9 @@ test('sessions show exact consumption and independent context, stable pages and 
   await page.keyboard.press('Shift+Tab');
   await expect(drawer.getByRole('button', { name: '按所选起点固定到小窗' })).toBeFocused();
   await page.screenshot({ path: 'test-results/session-drawer-1280.png' });
+  await drawer.getByText('高级采集信息', { exact: true }).click();
+  await expect(drawer.locator('.session-classifications')).toContainText('父序列前缀已验证');
+  await expect(drawer.locator('.session-classifications')).toContainText('继承边界待确认');
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0); await expect(trigger).toBeFocused();
   expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(false);
@@ -165,7 +166,7 @@ test('expired pages preserve the frozen page and explicit requery replaces it wi
   await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
   await page.evaluate(() => (window as unknown as { __expireSyntheticSessions: () => void }).__expireSyntheticSessions());
   await page.getByRole('button', { name: '下一页', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('查询快照已过期');
+  await expect(page.getByRole('alert')).toContainText('请重新查询');
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.evaluate(() => (window as unknown as { __resetSyntheticSessions: () => void }).__resetSyntheticSessions());
@@ -264,11 +265,12 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   type Bridge = { __syntheticSessionCalls: () => { command: string; args: { request?: { kind?: string } } }[]; __expireSyntheticTurns: () => void; __resetSyntheticTurns: () => void };
   await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
   const drawer = page.getByRole('dialog');
-  const trigger = drawer.getByRole('button', { name: '查看可靠回合' });
+  const trigger = drawer.getByRole('button', { name: '查看回合' });
   await trigger.click();
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
-  await expect(drawer.locator('.session-turn-list')).toContainText('已识别回合 23，未识别回合的用量事件 3 条');
-  await expect(drawer.locator('.session-turn-list')).toContainText('回合识别不完整');
+  await expect(drawer.locator('.session-turn-list')).toContainText('23 个回合');
+  await expect(drawer.locator('.session-turn-list')).not.toContainText('未识别回合的用量事件');
+  await expect(drawer.locator('.session-turn-list')).not.toContainText('回合识别不完整');
   await expect(drawer.locator('.session-turn-cards [title="18,446,744,073,709,551,614"]')).toBeVisible();
   await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/session-turns-1280.png' });
@@ -281,7 +283,7 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   await drawer.getByRole('button', { name: '重新读取回合' }).click();
   await page.evaluate(() => (window as unknown as Bridge).__expireSyntheticTurns());
   await drawer.getByRole('button', { name: '下一页回合' }).click();
-  await expect(drawer.locator('.session-turn-list').getByRole('alert')).toContainText('查询快照已过期');
+  await expect(drawer.locator('.session-turn-list').getByRole('alert')).toContainText('请重新查询');
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
   await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeDisabled();
   await page.evaluate(() => (window as unknown as Bridge).__resetSyntheticTurns());
@@ -306,7 +308,7 @@ test('specified estimate time reaches session pages, detail and reliable turns w
   await expect(page.locator('.session-table>tbody>tr')).toHaveCount(50);
   await page.locator('.session-table>tbody>tr').first().getByRole('button').click();
   await expect(page.getByRole('dialog', { name: 'Synthetic 会话 0' })).toBeVisible();
-  await page.getByRole('button', { name: '查看可靠回合' }).click(); await expect(page.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  await page.getByRole('button', { name: '查看回合' }).click(); await expect(page.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
   type Bridge = { __syntheticSessionCalls: () => { command: string; args: { request: { query?: { price_basis: unknown }; price_basis?: unknown } } }[] };
   const calls = await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls());
   const expected = { mode: 'specified_time', specified_at_ms: Date.parse('2026-11-01T05:30:00.123Z') };

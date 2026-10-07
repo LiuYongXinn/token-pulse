@@ -49,9 +49,9 @@ test('specified basis, exact progress and cancellation retain ordinary layout', 
   await panel.getByTitle('编辑明确估价时点（UTC）').click();
   await panel.getByLabel('估价时点（UTC）', { exact: true }).fill('2026-10-02T00:00:00.123');
   await panel.getByRole('button', { name: '应用估价时点' }).click();
-  await panel.getByRole('button', { name: '重估全部已确认用量' }).click();
+  await panel.getByRole('button', { name: '重估全部用量' }).click();
   await expect(panel.getByText('正在重估', { exact: true })).toBeVisible();
-  await expect(panel.getByText('已处理记录 9,007,199,254,740,992 / 9,007,199,254,740,993 · 完成账本 1 / 2')).toBeVisible();
+  await expect(panel.getByText('已处理记录 9,007,199,254,740,992 / 9,007,199,254,740,993 · 完成会话 1 / 2')).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __revalueFixture: { request: () => unknown } }).__revalueFixture.request())).toMatchObject({ expected_price_revision: '1', scope: { kind: 'all' }, basis: { mode: 'specified_time', specified_at_ms: 1790899200123 } });
   await page.screenshot({ path: 'test-results/price-revalue-dark-1280.png', fullPage: true });
   await panel.getByRole('button', { name: '取消当前重估' }).click();
@@ -59,7 +59,7 @@ test('specified basis, exact progress and cancellation retain ordinary layout', 
   await page.evaluate(() => (window as unknown as { __revalueFixture: { finish: () => void } }).__revalueFixture.finish());
   await panel.getByRole('button', { name: '刷新重估状态' }).click();
   await expect(panel.getByText('已取消重估', { exact: true })).toBeVisible();
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toBeEnabled();
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toBeEnabled();
   await page.setViewportSize({ width: 960, height: 860 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await page.screenshot({ path: 'test-results/price-revalue-light-960.png', fullPage: true });
@@ -72,18 +72,19 @@ test('read failure and stale or historical versions cannot become a new job', as
   await page.evaluate(() => (window as unknown as { __revalueFixture: { advance: () => void } }).__revalueFixture.advance());
   await panel.getByRole('button', { name: '刷新重估状态' }).click();
   await expect(panel.getByText('当前规则已变化，请刷新当前版本后重估。')).toBeVisible();
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toBeDisabled();
   await page.getByRole('button', { name: '刷新当前版本', exact: true }).click();
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toBeEnabled();
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toBeEnabled();
   await page.evaluate(() => (window as unknown as { __revalueFixture: { fail: (v: boolean) => void } }).__revalueFixture.fail(true));
   await panel.getByRole('button', { name: '刷新重估状态' }).click();
   await expect(panel.getByRole('alert')).toContainText('重估状态读取失败');
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toBeDisabled();
   await page.evaluate(() => (window as unknown as { __revalueFixture: { fail: (v: boolean) => void } }).__revalueFixture.fail(false));
+  await page.getByText('价格历史', { exact: true }).click();
   await page.getByLabel('历史价格版本').fill('1');
   await page.locator('.price-version form').getByRole('button', { name: '查看', exact: true }).click();
   await expect(panel.getByText('历史价格版本只读；回到当前版本后可创建重估任务。')).toBeVisible();
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toHaveCount(0);
 });
 
 test('latest privacy projection unmounts progress and its editor', async ({ page }) => {
@@ -101,13 +102,13 @@ test('retry after an unknown submission outcome keeps the original idempotency k
   const panel = page.getByRole('region', { name: '后台费用重估' });
   await expect(panel.getByText('暂无重估任务。')).toBeVisible();
   await page.evaluate(() => (window as unknown as { __revalueFixture: { ambiguousStart: () => void } }).__revalueFixture.ambiguousStart());
-  await panel.getByRole('button', { name: '重估全部已确认用量' }).click();
+  await panel.getByRole('button', { name: '重估全部用量' }).click();
   await expect(panel.getByRole('alert')).toContainText('synthetic response unavailable');
   await expect(panel.getByText('正在重估', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { __revalueFixture: { finish: () => void } }).__revalueFixture.finish());
   await panel.getByRole('button', { name: '刷新重估状态' }).click();
-  await expect(panel.getByRole('button', { name: '重估全部已确认用量' })).toBeEnabled();
-  await panel.getByRole('button', { name: '重估全部已确认用量' }).click();
+  await expect(panel.getByRole('button', { name: '重估全部用量' })).toBeEnabled();
+  await panel.getByRole('button', { name: '重估全部用量' }).click();
   await expect(panel.getByText('重估请求已接受。')).toBeVisible();
   const keys = await page.evaluate(() => (window as unknown as { __revalueFixture: { keys: () => string[] } }).__revalueFixture.keys());
   expect(keys).toHaveLength(2); expect(keys[0]).toBe(keys[1]);

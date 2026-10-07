@@ -52,7 +52,7 @@ async function open(page: Page) { await page.goto('/'); await page.getByRole('bu
 
 test('real DTO switches use exact CAS, saved enabled does not invent embedded or fallback', async ({ page }) => {
   const panel = await open(page);
-  await expect(panel.getByRole('status')).toHaveText('已关闭'); await expect(panel.getByText('尚未确认', { exact: true })).toHaveCount(3);
+  await expect(panel.getByRole('status')).toHaveText('已关闭'); await expect(panel.getByText('尚未确认', { exact: true })).toHaveCount(2);
   await panel.getByRole('checkbox', { name: '启用任务栏显示' }).check();
   await panel.getByRole('checkbox', { name: '费用估算', exact: true }).uncheck();
   await panel.getByRole('combobox', { name: '任务栏显示布局' }).selectOption('single_row');

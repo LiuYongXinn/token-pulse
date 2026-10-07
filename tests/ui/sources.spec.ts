@@ -35,16 +35,17 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
   const panel = page.getByRole('tabpanel', { name: '数据来源设置' });
   await expect(panel.locator('.source-list .source-path')).toHaveText('E:\\synthetic-fixture\\.codex');
   await expect(panel.getByText('等待目录出现')).toBeVisible();
-  await expect(panel.getByText('尚无成功记录')).toHaveCount(2);
+  await expect(panel.getByText('尚无成功记录')).toHaveCount(0);
   await expect(panel.getByText('文件监听能力', { exact: true })).toHaveCount(0);
   await panel.getByRole('button', { name: '暂停采集' }).click();
   await expect(panel.getByText('已暂停', { exact: true })).toBeVisible();
   const status = page.locator('.sidebar-bottom');
-  await expect(status).toContainText('采集已暂停 · 历史保留');
+  await expect(panel.locator('.source-list .source-state')).toHaveText('已暂停');
   await panel.getByRole('button', { name: '恢复采集' }).click();
   // The source mutation returns before the service acknowledges its new configuration.
   // No manual refresh: a later runtime result must update the status on its own.
-  await expect(status).toContainText('正在采集本地来源');
+  await expect(panel.locator('.source-list .source-state')).toHaveText('等待目录出现');
+  await expect(status.locator('.status-dot')).toHaveCount(0);
   await page.evaluate(() => {
     const control = window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<{ data: { collector: string } }> }; releaseOldPoll?: () => void };
     const invoke = control.__TAURI_INTERNALS__.invoke;
@@ -61,16 +62,16 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
   });
   await expect.poll(() => page.evaluate(() => typeof (window as unknown as { releaseOldPoll?: () => void }).releaseOldPoll)).toBe('function');
   await panel.getByRole('button', { name: '暂停采集' }).click();
-  await expect(status).toContainText('采集已暂停 · 历史保留');
+  await expect(panel.locator('.source-list .source-state')).toHaveText('已暂停');
   await page.evaluate(async () => {
     (window as unknown as { releaseOldPoll: () => void }).releaseOldPoll();
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
-  await expect(status).toContainText('采集已暂停 · 历史保留');
+  await expect(panel.locator('.source-list .source-state')).toHaveText('已暂停');
   await expect(status).not.toContainText('采集需要处理');
   await panel.getByRole('button', { name: '恢复采集' }).click();
   await panel.getByRole('button', { name: '移除来源并保留历史' }).click();
   await expect(panel.getByText('已移除 · 历史保留')).toBeVisible();
-  await expect(status).toContainText('采集已停止 · 历史保留');
+  await expect(status).not.toContainText('采集已停止');
   await expect(panel.getByRole('button', { name: '恢复采集' })).toBeVisible();
 });

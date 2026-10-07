@@ -11,7 +11,7 @@ export function priceAtoms(value: string): string {
 }
 export function pricePerMillion(atoms: string | null): string {
   if (atoms === null) return '未知';
-  if (!/^(0|[1-9][0-9]*)$/.test(atoms)) throw new Error('无效的单价原子值。');
+  if (!/^(0|[1-9][0-9]*)$/.test(atoms)) throw new Error('单价数据无效，请刷新价格规则。');
   const value = BigInt(atoms);
   const fraction = (value % atomScale).toString().padStart(9, '0').replace(/0+$/, '');
   return `${value / atomScale}${fraction ? `.${fraction}` : ''}`;

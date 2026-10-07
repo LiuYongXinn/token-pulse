@@ -52,14 +52,14 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.getByRole('button', { name: '模型', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '当前筛选暂无可信消费' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '当前筛选暂无用量' })).toBeVisible();
 });
 
 test('searchable dimensions keep exact counts, stable pages, unknown selections and shared scope across pages', async ({ page }) => {
   await page.getByRole('combobox', { name: '模型', exact: true }).click();
   await expect(page.getByRole('textbox', { name: '搜索模型' })).toBeFocused();
   await expect(page.getByRole('option', { name: /未知模型/ })).toContainText('9,007,199,254,740,993');
-  await expect(page.locator('.facet-count[title="9,007,199,254,740,993 个可信事件"]')).toBeVisible();
+  await expect(page.locator('.facet-count[title="9,007,199,254,740,993 条用量记录"]')).toBeVisible();
   await page.screenshot({ path: 'test-results/filters-1280.png', fullPage: true });
   await page.getByRole('button', { name: '加载下一页' }).click();
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(3);
@@ -111,7 +111,7 @@ test('expired continuation never appends a new snapshot and requery replaces old
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await page.evaluate(() => (window as unknown as { __expireFacet: () => void }).__expireFacet());
   await page.getByRole('button', { name: '加载下一页' }).click();
-  await expect(page.getByRole('alert')).toHaveText('查询快照已过期，请重新查询。');
+  await expect(page.getByRole('alert')).toHaveText('请重新查询以继续查看记录。');
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await expect(page.getByRole('option', { name: /Synthetic Beta/ })).toHaveCount(0);
   await page.getByRole('button', { name: '重新查询', exact: true }).click();

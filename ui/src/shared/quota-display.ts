@@ -1,6 +1,6 @@
 import type { QuotaSnapshot, QuotaState, QuotaWindow } from './generated/contracts';
 
-export const quotaStates: Record<QuotaState, string> = { disconnected: '未连接', connecting: '正在读取本地账户', authorization_required: '本地登录态不可用', unsupported: '当前连接不提供账户额度', ready: '额度已更新', stale: '旧快照 · 更新失败', error: '额度读取失败' };
+export const quotaStates: Record<QuotaState, string> = { disconnected: '未连接', connecting: '正在读取本地账户', authorization_required: '本地登录态不可用', unsupported: '当前连接不提供账户额度', ready: '额度已更新', stale: '更新失败 · 显示上次结果', error: '额度读取失败' };
 export function quotaPeriod(window: QuotaWindow): string {
   const minutes = window.duration_mins;
   return minutes === null ? '未知周期' : minutes === 10080 ? '周额度' : minutes > 0 && minutes % 60 === 0 ? `${minutes / 60} 小时额度` : `${minutes} 分钟额度`;

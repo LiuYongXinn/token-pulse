@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
           const requested = args.revision ?? revision;
           if (fail) { fail = false; throw { code: 'DB_WRITE_FAILED' }; }
           if (hold && requested === '1') { hold = false; await new Promise<void>(resolve => { release = resolve; }); }
-          return response({ price_revision: requested, catalog: requested === '0' ? null : { ...facts, catalog_id: requested === '1' ? facts.catalog_id : 'openai-text-synthetic-next' } });
+          return response({ price_revision: requested, catalog: requested === '0' ? null : { ...facts, verified_at_ms: requested === '1' ? facts.verified_at_ms : Date.UTC(2030, 0, 2), catalog_id: requested === '1' ? facts.catalog_id : 'openai-text-synthetic-next' } });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
       } },
@@ -42,20 +42,21 @@ test('browse exact factual prices, conditions, modes and absent catalog history'
   await region.getByLabel('查找目录模型').fill('GPT-6.1-SOL');
   const rows = region.locator('tbody tr');
   await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText('需请求档位与缓存写入');
+  await expect(region.getByRole('columnheader', { name: '参考适用情况' })).toHaveCount(0);
   const short = rows.filter({ hasText: '输入 ≤ 272K' });
   await expect(short).toContainText('2.50');
   await expect(short.getByRole('link', { name: '官方来源' })).toHaveAttribute('href', 'https://developers.openai.com/api/docs/pricing');
   await region.getByLabel('目录处理模式').selectOption('fast');
-  await expect(rows.first()).toContainText('非默认参考模式');
+  await expect(rows.first()).toContainText('Fast');
   await region.getByLabel('查找目录模型').fill('gpt-5.3-codex');
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText('3.50');
   await region.getByLabel('目录处理模式').selectOption('standard');
-  await expect(rows).toContainText('已接自动参考计价');
+  await expect(rows).toContainText('Standard');
   await expect(rows).toContainText('1.75');
   await region.getByLabel('查找目录模型').fill('gpt-5.3-codex-unknown');
   await expect(region).toContainText('没有匹配的目录条目');
+  await page.getByText('价格历史', { exact: true }).click();
   await page.getByLabel('历史价格版本').fill('0');
   await page.getByRole('button', { name: '查看', exact: true }).click();
   await expect(region).toContainText('此价格版本尚无内置目录');
@@ -76,7 +77,7 @@ test('browse exact factual prices, conditions, modes and absent catalog history'
 
 test('failed catalog is independently retryable and stale response cannot replace captured newer revision', async ({ page }) => {
   const region = page.getByRole('region', { name: '离线价格目录', exact: true });
-  await expect(region).toContainText('openai-text-2026-10-02');
+  await expect(region).toContainText('核实于 2026-10-02');
   const fixture = async (method: 'advance' | 'fail' | 'hold' | 'release') => page.evaluate(name => {
     (window as unknown as { __offlineFixture: Record<string, () => void> }).__offlineFixture[name]();
   }, method);
@@ -85,15 +86,15 @@ test('failed catalog is independently retryable and stale response cannot replac
   await expect(region.getByRole('alert')).toContainText('目录读取失败');
   await expect(page.getByRole('button', { name: '新增规则', exact: true })).toBeEnabled();
   await region.getByRole('button', { name: '重新读取目录' }).click();
-  await expect(region).toContainText('openai-text-2026-10-02');
+  await expect(region).toContainText('核实于 2026-10-02');
   await fixture('hold');
   await region.getByRole('button', { name: '重新读取目录' }).click();
-  await expect(region).toContainText('正在读取版本 1');
+  await expect(region).toContainText('正在读取内置价格');
   await fixture('advance');
   await page.getByRole('button', { name: '刷新当前版本', exact: true }).click();
-  await expect(region).toContainText('openai-text-synthetic-next');
-  await expect(region).toContainText('价格版本 2');
+  await expect(region).toContainText('核实于 2030-01-02');
+  await expect(region).not.toContainText('价格版本 2');
   await fixture('release');
-  await expect(region).toContainText('openai-text-synthetic-next');
-  await expect(region).not.toContainText('openai-text-2026-10-02');
+  await expect(region).toContainText('核实于 2030-01-02');
+  await expect(region).not.toContainText('核实于 2026-10-02');
 });

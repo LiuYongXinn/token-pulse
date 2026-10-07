@@ -25,14 +25,14 @@ export class UsageQueryCache {
   }
   private admit<T>(entry: Entry<T>, value: T) {
     const bytes = new TextEncoder().encode(JSON.stringify(value)).length;
-    if (bytes > this.budget) throw new Error('结果超过展示缓存容量，请缩小查询范围。');
+    if (bytes > this.budget) throw new Error('查询结果较多，请缩小范围。');
     let others = [...this.entries.values()].filter(other => other !== entry && other.snapshot.value !== null);
     for (const [key, other] of [...this.entries].sort((a, b) => a[1].used - b[1].used)) {
       if (others.length < this.limit && others.reduce((sum, item) => sum + item.bytes, 0) + bytes <= this.budget) break;
       if (other === entry || other.listeners.size || other.flight) continue;
       this.entries.delete(key); others = others.filter(item => item !== other);
     }
-    if (others.length >= this.limit || others.reduce((sum, item) => sum + item.bytes, 0) + bytes > this.budget) throw new Error('展示缓存正被使用，请稍后重试或缩小查询范围。');
+    if (others.length >= this.limit || others.reduce((sum, item) => sum + item.bytes, 0) + bytes > this.budget) throw new Error('请稍后重试或缩小查询范围。');
     entry.bytes = bytes;
   }
   canPrefetch(key: string) {

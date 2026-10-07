@@ -59,7 +59,7 @@ async function request<T>(command: string, args: Record<string, unknown> = {}, e
   const requestId = crypto.randomUUID();
   const started = performance.now();
   const response = await invoke<Response<T>>(command, { ...args, requestId }).finally(() => recordQueryTiming(command, 'ipc', started));
-  if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('桌面协议版本或响应身份不匹配。');
+  if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('读取失败，请重试。');
   if (!plainCommands.has(command)) {
     const stamp = response.display_policy;
     let accepted = false;
@@ -181,14 +181,14 @@ export function runtimeError(error: unknown): string {
       const issue = details && 'notify_issue' in details ? String(details.notify_issue) : '';
       return notifyIssueText(issue);
     }
-    if (code === 'SNAPSHOT_EXPIRED') return '查询快照已过期，请重新查询。';
+    if (code === 'SNAPSHOT_EXPIRED') return '请重新查询以继续查看记录。';
     if (code === 'UPDATE_UNAVAILABLE') return '更新不可用，请确认正在使用已配置发布源的正式安装版。';
     if (code === 'UPDATE_BUSY') return '已有更新操作正在进行，请等待完成。';
     if (code === 'UPDATE_FAILED') return '更新未能完成，请重新检查后重试。';
-    if (code === 'CURSOR_INVALID') return '分页条件或游标已失效，请重新查询。';
+    if (code === 'CURSOR_INVALID') return '请重新查询以继续查看记录。';
     if (code === 'DB_WRITE_FAILED') return '数据库写入失败，设置未保存，请重试。';
-    const descriptions: Record<string, string> = { QUOTA_DISCONNECTED: '账户服务未连接，请先连接已保存服务。', QUOTA_UNSUPPORTED: '当前连接不提供账户额度，本地统计继续可用。', QUOTA_AUTH_REQUIRED: '所选 Codex Home 的本地登录态不可用，请选择已登录账户使用的 Home 后重新连接。', QUOTA_TIMEOUT: '账户服务响应超时，保留已知旧快照。', QUOTA_PROTOCOL_ERROR: '账户服务响应无法验证，请检查服务版本或重新连接。', QUOTA_SERVICE_UNAVAILABLE: '账户服务程序不可用，请检查已选择程序和 Home。', SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '选择已过期或程序已变化，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
-    return descriptions[code] ?? `操作失败（${code}），请查看采集诊断。`;
+    const descriptions: Record<string, string> = { QUOTA_DISCONNECTED: '账户服务未连接，请先连接已保存服务。', QUOTA_UNSUPPORTED: '当前连接不提供账户额度，本地统计继续可用。', QUOTA_AUTH_REQUIRED: '所选 Codex Home 的本地登录态不可用，请选择已登录账户使用的 Home 后重新连接。', QUOTA_TIMEOUT: '账户额度更新超时，请重试。', QUOTA_PROTOCOL_ERROR: '账户服务响应无法验证，请检查服务版本或重新连接。', QUOTA_SERVICE_UNAVAILABLE: '账户服务程序不可用，请检查已选择程序和 Home。', SHORTCUT_CONFLICT: '恢复快捷键已被其他应用占用，旧组合保持生效，请更换组合。', SHORTCUT_UNAVAILABLE: '无法注册恢复快捷键，托盘恢复入口继续可用。', UNSUPPORTED_SETTINGS_VERSION: '配置版本高于或不同于当前应用支持的版本，已有配置已保留。', REVISION_CONFLICT: '配置或作业状态已发生变化，请刷新后重试。', PRICE_RULE_CONFLICT: '同一范围和优先级的价格规则有效期重叠，请调整日期或优先级。', SOURCE_UNREADABLE: '无法读取所选来源，请检查目录和访问权限。', INVALID_QUERY: '请求参数或当前数据范围无效，请检查后重试。', STALE_CONFIRMATION: '选择已过期或程序已变化，请重新选择。', PERMISSION_DENIED: '该窗口或目录不在允许范围内。', CANDIDATE_OBSOLETE: '重建输入已发生变化，旧统计已保留，请核对来源后重试。', JOB_INTERRUPTED: '作业已中断，旧统计已保留，可重新提交。', JOB_CANCELLED: '作业已安全取消。' };
+    return descriptions[code] ?? '操作未能完成，请重试或查看采集诊断。';
   }
   return '桌面服务未能完成操作，请重试。';
 }
@@ -231,7 +231,7 @@ export async function releaseNotifyPreview(planId: string): Promise<void> {
   if (!isTauri()) return;
   const requestId = crypto.randomUUID();
   const response = await invoke<Response<null>>('release_notify_preview', { requestId, planId });
-  if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('桌面协议版本或响应身份不匹配。');
+  if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('读取失败，请重试。');
 }
 
 export async function windowAction(action: WindowAction): Promise<void> {
