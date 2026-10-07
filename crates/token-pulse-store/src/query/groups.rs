@@ -6,9 +6,7 @@ use rusqlite::{Transaction, params_from_iter};
 use token_pulse_core::query::model_key;
 use token_pulse_core::{
     numeric::{DecimalInt, EpochMs},
-    protocol::{
-        DimensionSelection, PricingSummary, SnapshotMeta, TokenTotals, validate_request_id,
-    },
+    protocol::{PricingSummary, SnapshotMeta, TokenTotals, validate_request_id},
     query::{GroupDimension, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup},
 };
 
@@ -71,8 +69,10 @@ fn assemble(
     )?;
     let pricing = common.pricing.clone();
     check_pricing(&summary, &pricing)?;
+    let grouped_coverage =
+        coverage::grouped_coverage(tx, filter, request.dimension, &groups, &common.coverage)?;
     let mut output = Vec::with_capacity(groups.len());
-    for group in groups.drain(..) {
+    for (group, coverage) in groups.drain(..).zip(grouped_coverage) {
         let prices = match request.dimension {
             GroupDimension::Models => &common.models,
             GroupDimension::Projects => &common.projects,
@@ -82,16 +82,6 @@ fn assemble(
             .ok_or(ErrorCode::DbCorrupt)?
             .clone();
         check_pricing(&group.totals, &pricing)?;
-        let selection = DimensionSelection::Ids {
-            ids: group.key.iter().cloned().collect(),
-            include_unknown: group.key.is_none(),
-        };
-        let mut scope = filter.clone();
-        match request.dimension {
-            GroupDimension::Models => scope.models = selection,
-            GroupDimension::Projects => scope.projects = selection,
-        }
-        let coverage = coverage::narrowed_coverage(tx, &scope, &group.totals, &common.coverage)?;
         output.push(PricedUsageGroup {
             key: group.key,
             display_name: group.display_name,

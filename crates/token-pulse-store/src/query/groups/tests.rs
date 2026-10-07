@@ -1,12 +1,13 @@
 //! Application-owned facts and synthetic prices with independent expected sums.
 use super::*;
+use rusqlite::params;
 use crate::{
     batch::tests::{fixture, setup},
     query::tests::{extra, filter, ids},
 };
 use token_pulse_core::{
     pricing::{PriceRuleDraft, PriceRuleMutation},
-    protocol::{CoverageState, PriceBasis},
+    protocol::{CoverageState, DimensionSelection, PriceBasis},
     query::GroupSort,
 };
 fn request(dimension: GroupDimension) -> GroupedUsageRequest {
@@ -44,6 +45,102 @@ fn known(db: &Database) {
         conn.execute("UPDATE usage_events SET model='synthetic-model' WHERE event_id='event'", [])?;
         Ok(())
     }).unwrap();
+}
+
+#[test]
+fn grouped_pending_matches_each_independent_scope_and_keeps_an_old_snapshot() {
+    let (_directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    known(&db);
+    db.write(|c| {
+        c.execute("INSERT INTO projects VALUES('a','synthetic-a','A',NULL,1)", [])?;
+        c.execute("UPDATE observations SET model='synthetic-model',project_id='a' WHERE observation_id='observation'", [])?;
+        c.execute("UPDATE usage_events SET project_id='a' WHERE event_id='event'", [])?;
+        Ok(())
+    }).unwrap();
+    extra(
+        &db,
+        "other",
+        2000,
+        1,
+        (Some("synthetic-model"), Some("other-provider")),
+        None,
+        Some("a"),
+    );
+    extra(&db, "unknown", 3000, 1, (None, None), None, None);
+    db.write(|c| {
+        for (id, observation, kind, vector) in [
+            ("known-pending", "observation", "pending", "{}"),
+            ("known-amount", "observation", "unattributed", r#"{"input_total":9007199254740993,"cached_input":0,"output_total":0,"reasoning_output":0,"reported_total":9007199254740993}"#),
+            ("other-missing", "other", "unattributed", "{}"),
+            ("unknown-pending", "unknown", "pending", "{}"),
+        ] {
+            c.execute("INSERT INTO pending_usage VALUES(?1,'ledger',?2,?3,'synthetic',NULL,?4)", params![id,observation,kind,vector])?;
+        }
+        c.execute("UPDATE observations SET observed_at_ms=NULL WHERE observation_id='unknown'", [])?;
+        Ok(())
+    }).unwrap();
+    let verify = |tx: &Transaction<'_>| -> StoreResult<Vec<serde_json::Value>> {
+        let mut requests = vec![filter()];
+        let mut narrowed = filter();
+        narrowed.range.start_ms = EpochMs::new(2000)?;
+        requests.push(narrowed);
+        let mut empty = filter();
+        empty.sources = ids(&[], false);
+        requests.push(empty);
+        let mut unknown = filter();
+        unknown.models = ids(&[], true);
+        requests.push(unknown);
+        let mut project = filter();
+        project.projects = ids(&["a"], true);
+        requests.push(project);
+        let mut results = vec![];
+        for scope in requests {
+            let totals = super::super::totals(tx, &scope)?;
+            let common = coverage::coverage(tx, &scope, &totals)?;
+            for dimension in [GroupDimension::Models, GroupDimension::Projects] {
+                let groups = grouped(tx, &scope, dimension, GroupSort::TotalDesc, 200)?;
+                let actual = coverage::grouped_coverage(tx, &scope, dimension, &groups, &common)?;
+                assert_eq!(actual.len(), groups.len());
+                for (group, value) in groups.iter().zip(actual) {
+                    let mut selected = scope.clone();
+                    let selection = DimensionSelection::Ids {
+                        ids: group.key.iter().cloned().collect(),
+                        include_unknown: group.key.is_none(),
+                    };
+                    match dimension {
+                        GroupDimension::Models => selected.models = selection,
+                        GroupDimension::Projects => selected.projects = selection,
+                    }
+                    let expected =
+                        coverage::narrowed_coverage(tx, &selected, &group.totals, &common)?;
+                    assert_eq!(
+                        serde_json::to_value(&value).unwrap(),
+                        serde_json::to_value(expected).unwrap()
+                    );
+                    results.push(serde_json::to_value(value).unwrap());
+                }
+            }
+        }
+        Ok(results)
+    };
+    let before = db
+        .snapshot(|tx, _| {
+            let before = verify(tx)?;
+            db.write(|c| {
+                c.execute("UPDATE sources SET enabled=0", [])?;
+                c.execute(
+                    "UPDATE pending_usage SET vector_json='{}' WHERE pending_id='known-amount'",
+                    [],
+                )?;
+                Ok(())
+            })?;
+            assert_eq!(verify(tx)?, before);
+            Ok(before)
+        })
+        .unwrap();
+    let after = db.snapshot(|tx, _| verify(tx)).unwrap();
+    assert_ne!(after, before);
 }
 
 #[test]

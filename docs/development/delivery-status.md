@@ -2707,3 +2707,10 @@ Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROU
 实际执行计划显示批量读取从候选 valuation set 开始，再读取事件并判断活跃账本与日期，范围外和退役账本也产生探测。新 SQL 先在同一事务将完整筛选下的 event / ledger 固定为 MATERIALIZED selected，将每账本至多两个完整合格集合绑定为 wanted；先遍历小型 wanted，再通过 selected 的账本临时索引及 event_valuations / valuation_cache_inputs 主键读取。页级点读取不变，候选上限、64 MiB 整体超限回退、指纹及冲突验证保持。没有新增数据库迁移或跨版本临时映射。
 
 真实副本单独 SQL 比较 11,360 行全部缓存字段相等：旧执行计划约 350.4ms，固定范围后约 167.0ms（Python SQLite 3.49.1，系统缓存未控制，不能替代真实 WebView 的端到端验收）。新增确定性 VM 回归：两千个范围外缓存事件仍只取得一个对应范围事件，遍历工作量小于 1,000 VM steps，精确费用与点查询相等。24 项 valuation 回归通过；完整 core-store-collector 570 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 隐私 / 离线价格通过。最终原生优化构建使用 bundled SQLite 3.53.2，其完整未预热回执随后追加。
+
+
+## 毫秒级复查 I19：模型 / 项目覆盖一次分组读取
+
+按实际阶段计时继续减少模型 / 项目行重复读取待核对范围。当前事务内一次 materialized pending / unattributed 读取，按本页至多 200 个实际分组的模型身份或项目 ID 分组；保留完整日期、来源、模型、项目、会话条件、NULL 时间、活跃账本和精确整数规则。只复用同一事务的来源健康；每组的待核对、未归属及已知金额 / 缺失标记独立，成功查询的空计数为零，金额仍为 NULL，未知不补零。临时结果按当前页面的分组数有界，不新增持久缓存或跨版本结果。会话仍使用 schema 18 的账本窄查询。
+
+新增一次分组与各组独立 coverage SQL 的逐字段等价回归，包含不同 provider 的同名模型、未知模型 / 项目、NULL 时间、来源与日期筛选、超过 JavaScript 安全整数的金额、混合未知金额；并发来源暂停及金额变化后真实旧事务结果不变，新事务正确变化。query 84 passed / 1 ignored，完整 core-store-collector 571 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 当前隐私 / 离线价格通过。日志 millisecond-grouped-coverage-tests2.log / millisecond-group-final-regression.log / millisecond-group-final-clippy.log / millisecond-group-release-check.log / millisecond-group-native-*.log。最终实际数据三轮首次 / 重启回执追加于下一节。

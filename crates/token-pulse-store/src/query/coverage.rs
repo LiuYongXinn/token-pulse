@@ -92,7 +92,13 @@ pub(super) fn narrowed_coverage(
     totals: &TokenTotals,
     common: &Coverage,
 ) -> StoreResult<Coverage> {
-    let (pending, unattributed, known_total, missing) = pending_counts(tx, filter)?;
+    narrowed_from_counts(totals, common, pending_counts(tx, filter)?)
+}
+fn narrowed_from_counts(
+    totals: &TokenTotals,
+    common: &Coverage,
+    (pending, unattributed, known_total, missing): PendingCounts,
+) -> StoreResult<Coverage> {
     let mut result = common.clone();
     result.pending_observation_count = DecimalInt::from_nonnegative(pending.into())?;
     result.unattributed_observation_count = DecimalInt::from_nonnegative(unattributed.into())?;
@@ -119,6 +125,67 @@ pub(super) fn narrowed_coverage(
     .iter()
     .all(|m| m.complete);
     Ok(result)
+}
+/// Scan the selected range once for bounded model/project rows, in the SAME snapshot.
+pub(super) fn grouped_coverage(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    dimension: token_pulse_core::query::GroupDimension,
+    groups: &[token_pulse_core::query::GroupedUsage],
+    common: &Coverage,
+) -> StoreResult<Vec<Coverage>> {
+    if groups.is_empty() {
+        return Ok(vec![]);
+    }
+    let started = std::time::Instant::now();
+    let p = pending_predicate(filter)?;
+    let key = match dimension {
+        token_pulse_core::query::GroupDimension::Models => {
+            "usage_model_key(json_extract(o.normalized_json,'$.effective_metadata.provider'),o.model)"
+        }
+        token_pulse_core::query::GroupDimension::Projects => "o.project_id",
+    };
+    let mut selected = Predicate {
+        sql: "1".into(),
+        values: vec![],
+    };
+    selected.selection(
+        "group_key",
+        &DimensionSelection::Ids {
+            ids: groups.iter().filter_map(|g| g.key.clone()).collect(),
+            include_unknown: groups.iter().any(|g| g.key.is_none()),
+        },
+    );
+    let sql = format!(
+        "WITH selected AS MATERIALIZED (SELECT p.observation_id,p.kind,p.vector_json,{key} AS group_key FROM {} JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')) SELECT group_key,COUNT(DISTINCT CASE WHEN kind='pending' THEN observation_id END),COUNT(DISTINCT CASE WHEN kind='unattributed' THEN observation_id END),sum_token_decimal(CASE WHEN kind='unattributed' THEN usage_vector_total(vector_json) END),COUNT(CASE WHEN kind='unattributed' AND usage_vector_total(vector_json) IS NULL THEN 1 END) FROM selected WHERE {} GROUP BY group_key",
+        pending_from(filter),
+        p.sql,
+        selected.sql
+    );
+    let mut statement = tx.prepare(&sql)?;
+    let mut rows = statement.query(params_from_iter(
+        p.values.into_iter().chain(selected.values),
+    ))?;
+    let mut counts = std::collections::BTreeMap::<Option<String>, PendingCounts>::new();
+    while let Some(row) = rows.next()? {
+        counts.insert(
+            row.get(0)?,
+            (row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?),
+        );
+    }
+    // No matching pending rows is an authoritative empty count; its amount stays NULL.
+    let result = groups
+        .iter()
+        .map(|group| {
+            narrowed_from_counts(
+                &group.totals,
+                common,
+                counts.remove(&group.key).unwrap_or((0, 0, None, 0)),
+            )
+        })
+        .collect();
+    crate::query_timing::record("coverage_grouped_pending", started);
+    result
 }
 fn common_gap(base: &Coverage) -> bool {
     base.pending_file_count.value() > 0
