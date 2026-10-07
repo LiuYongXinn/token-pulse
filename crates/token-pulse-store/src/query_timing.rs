@@ -26,3 +26,7 @@ pub fn take() -> Vec<QueryTiming> {
         .map(|mut timings| timings.drain(..).collect())
         .unwrap_or_default()
 }
+/// Native report provenance: backend assertions can differ from the probe package.
+pub fn build_debug_assertions_enabled() -> bool {
+    cfg!(debug_assertions)
+}

@@ -60,8 +60,14 @@ fn pending_predicate(filter: &UsageFilter) -> StoreResult<Predicate> {
     Ok(p)
 }
 
-fn pending_from(_filter: &UsageFilter) -> &'static str {
-    "observations o INDEXED BY observation_usage_time CROSS JOIN pending_usage p INDEXED BY pending_observation_lookup ON p.observation_id=o.observation_id CROSS JOIN sessions s INDEXED BY session_active_ledger_read ON s.active_ledger_id=p.ledger_id"
+// A fixed date-first plan is bad for a single session: it would scan the
+// whole month for every row in a session page. Narrow sessions lead from ledgers.
+fn pending_from(filter: &UsageFilter) -> &'static str {
+    if matches!(&filter.sessions, DimensionSelection::Ids { .. }) {
+        "sessions s INDEXED BY session_active_ledger_read CROSS JOIN pending_usage p INDEXED BY pending_ledger_lookup ON p.ledger_id=s.active_ledger_id CROSS JOIN observations o ON o.observation_id=p.observation_id"
+    } else {
+        "observations o INDEXED BY observation_usage_time CROSS JOIN pending_usage p INDEXED BY pending_observation_lookup ON p.observation_id=o.observation_id CROSS JOIN sessions s INDEXED BY session_active_ledger_read ON s.active_ledger_id=p.ledger_id"
+    }
 }
 type PendingCounts = (i64, i64, Option<String>, i64);
 fn pending_counts(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<PendingCounts> {

@@ -38,7 +38,19 @@ pub(crate) fn critical_check(connection: &mut Connection) -> StoreResult<()> {
             continue;
         }
         let sql = format!("PRAGMA quick_check('{}')", name.replace('\'', "''"));
+        let table_started = Instant::now();
         let result: String = tx.query_row(&sql, [], |r| r.get(0))?;
+        crate::query_timing::record(
+            match name.as_str() {
+                "observations" => "startup_observations",
+                "pending_usage" => "startup_pending",
+                "diagnostics" => "startup_diagnostics",
+                "file_candidate_observations" => "startup_candidates",
+                "usage_events" => "startup_events",
+                _ => "startup_other_tables",
+            },
+            table_started,
+        );
         if result != "ok" {
             return Err(ErrorCode::DbCorrupt.into());
         }

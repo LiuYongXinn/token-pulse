@@ -2675,3 +2675,12 @@ Schema 17 增加 observation 时间 / 小型覆盖字段索引、pending observa
 全量 core-store-collector 569 passed / 1 ignored，store 310 passed / 1 ignored；前端 54 单元通过，typecheck / Vite build / 生成契约校验 / core-store-collector-desktop strict Clippy 通过。无其他测试负载的原生优化构建阶段回执 millisecond-perf-before-adaptive-first.json：7 天 732.6ms、30 天仍 1,547.9ms，更新 740.5ms；状态 / 来源 / 候选 / 总览 / 模型 / 项目 / 会话 / 详情 / 明细分别 2.0 / 3.3 / 36.2 / 462.6 / 286.1 / 47.5 / 223.6 / 78.6 / 23.6ms，小窗 191.9–353.9ms。该构建所有 crate 开启 debug assertions，不能称为已安装生产构建。启动 3,063.1ms，后台完整检查尚未完成，继续排查。
 
 真实副本 16→17 首次备份、迁移及启动 176,074.7ms（并发构建期间），独立记录，不混入日常启动性能。备份与匿名回执保留。原生负载回归发现固定日期优先会让某些会话范围扫描过大，后续使用独立账本索引修正并再次验证，不以本阶段结果宣称全部秒级路径已经消除。
+
+
+## 毫秒级复查 I15：按会话账本选择覆盖读取入口
+
+Schema 18 独立追加 pending ledger / kind / observation 索引，保持已发布 schema 17 的 SQL 字节及校验和不变。指定会话的覆盖读取从活跃 session / ledger 出发，其他范围仍按日期读取；各自仍验证同一事务的活跃账本、来源与完整筛选，保留 NULL 时间和未知金额。避免每个会话重复扫描整个月的 pending，旧事务和独立 coverage 等价测试保持通过。
+
+当前全量 core-store-collector 569 passed / 1 ignored，桌面 strict all-target Clippy 通过；前端 54 单元 / 110 Playwright、typecheck、Vite build、契约校验通过。副屏真实 17→18 迁移回执 millisecond-ledger-migration-first.json 通过，但同时有编译负载：备份、迁移与启动 212,807.1ms；7 / 30 天 1,663.2 / 3,218.0ms，会话 191.6ms、详情 61.3ms、来源更新 692.6ms。一次性维护成本和有负载测量分别保留，不当作最终无负载性能。
+
+补充每张关键表匿名启动耗时，以及后端 debug assertions 编译标志。后续优化测量使用 release 优化后端，桌面与 taskbar 单独保留 debug 原生探针；与全 crate debug assertions 的旧回执明确区分。最终回执另行追加，尚未用开发构建或局部指标宣称全部路径达到毫秒级。
