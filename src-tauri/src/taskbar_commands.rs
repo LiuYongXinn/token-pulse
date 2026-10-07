@@ -322,11 +322,15 @@ pub async fn set_taskbar_preferences(
     })?;
     let app = window.app_handle().clone();
     let (data, changed) = tauri::async_runtime::spawn_blocking(move || {
-        let _pause = owner.pause_publication()?;
-        db.mutate_taskbar_preferences(
+        // Display preferences do not change privacy. Keep the existing readout until
+        // the committed replacement is ready; Configure invalidates stale host data.
+        let result = db.mutate_taskbar_preferences(
             request,
             token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?,
-        )
+        )?;
+        // Also retry a saved no-op: the user may be recovering an unavailable host.
+        owner.invalidate();
+        Ok::<_, token_pulse_store::StoreError>(result)
     })
     .await
     .map_err(|_| {
