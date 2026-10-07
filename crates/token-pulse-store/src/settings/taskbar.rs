@@ -106,7 +106,9 @@ mod tests {
         .unwrap();
         db.mutate_display_theme(
             token_pulse_core::settings::DisplayThemeMutation {
-                theme: token_pulse_core::settings::AppTheme::Light,
+                // The default is now Light. Use a real change so revision 3 is
+                // created before checking the shared privacy/usage snapshot.
+                theme: token_pulse_core::settings::AppTheme::Dark,
                 expected_settings_revision: DecimalInt::parse("2").unwrap(),
             },
             at,
@@ -121,7 +123,7 @@ mod tests {
         )
         .unwrap();
         let input = db.taskbar_input(at, "synthetic-native-details").unwrap();
-        assert_eq!(input.theme, token_pulse_core::settings::AppTheme::Light);
+        assert_eq!(input.theme, token_pulse_core::settings::AppTheme::Dark);
         assert!(input.privacy);
         assert_eq!(input.configuration.settings_revision.as_str(), "4");
         assert_eq!(
