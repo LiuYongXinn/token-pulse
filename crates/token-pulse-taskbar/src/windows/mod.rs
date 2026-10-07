@@ -14,6 +14,7 @@ pub mod render;
 mod security;
 pub mod topology;
 pub mod transport;
+mod ui_text;
 pub use layout::RestoreDisposition;
 pub use layout::recover_terminated_host;
 pub use process::HostProcess;
