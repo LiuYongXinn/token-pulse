@@ -1,4 +1,4 @@
-param([switch]$CopyOnly, [switch]$ToolsOnly, [switch]$SkipRelease, [switch]$SkipTools)
+param([switch]$CopyOnly, [switch]$ToolsOnly, [switch]$SkipRelease, [switch]$SkipTools, [string]$LegacyNpmCache)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'This migration applies to the existing Windows installation.' }
 $migrationRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -16,6 +16,14 @@ $migrationAllowedSources = @(
     (Join-Path $migrationOldLocal 'tauri'),
     (Join-Path $migrationProfile '.tokenpulse\release-signing')
 )
+if ($LegacyNpmCache) {
+    if (-not [IO.Path]::IsPathFullyQualified($LegacyNpmCache)) { throw 'Legacy npm cache must be an explicit absolute path.' }
+    $LegacyNpmCache = [IO.Path]::GetFullPath($LegacyNpmCache).TrimEnd('\')
+    if ($LegacyNpmCache -eq [IO.Path]::GetPathRoot($LegacyNpmCache).TrimEnd('\') -or
+        $LegacyNpmCache.StartsWith($migrationRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy npm source must be a separate cache directory.' }
+    if ((Test-Path -LiteralPath $LegacyNpmCache) -and -not (Test-Path -LiteralPath (Join-Path $LegacyNpmCache '_cacache') -PathType Container)) { throw 'Legacy source is not an npm cache.' }
+    $migrationAllowedSources += $LegacyNpmCache
+}
 if ([IO.Path]::GetPathRoot($migrationRoot) -in @('C:\', ($env:SystemDrive + '\'))) { throw 'Migration destination must be outside the system drive.' }
 [IO.Directory]::CreateDirectory($migrationLocal) | Out-Null
 
@@ -111,3 +119,7 @@ foreach ($entry in @(@((Join-Path $migrationProfile '.cargo'),'tools\cargo'), @(
     Move-TokenPulseOwnedPath $entry[0] (Join-Path $migrationLocal $entry[1])
 }
 Move-TokenPulseOwnedPath (Join-Path $migrationOldLocal 'tauri') (Join-Path $migrationRoot 'target\.tauri')
+if ($LegacyNpmCache) {
+    # Keep old mutable index/log files separate from the active npm cache.
+    Move-TokenPulseOwnedPath $LegacyNpmCache (Join-Path $migrationLocal 'cache\npm\legacy')
+}

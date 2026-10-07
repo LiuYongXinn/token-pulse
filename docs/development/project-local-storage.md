@@ -12,6 +12,7 @@ TokenPulse 的可写数据集中在项目目录内。当前仓库位于 `E:\Docu
 | `.local/tools/cargo/` | Cargo 代理程序、注册表源码及下载缓存 |
 | `.local/tools/rustup/` | Rust 工具链及组件 |
 | `.local/cache/npm/` | npm 包缓存及 npm 日志 |
+| `.local/cache/npm/legacy/` | 迁入的历史 npm 缓存，避免覆盖当前缓存索引与日志 |
 | `.local/cache/playwright/` | Playwright 浏览器 |
 | `.local/cache/python/` | 项目子进程的 Python 字节码缓存 |
 | `.local/secrets/release-signing/` | 当前用户权限保护的本地发布签名材料 |
@@ -32,6 +33,8 @@ cargo test --workspace --locked --offline
 
 桌面程序根据自身可执行文件向上定位仓库，主进程与无界面通知进程使用同一套路径规则。安装在 `.local/app/` 和构建在 `target/debug/`、`target/release/` 时，都使用当前项目的 `.local/data/`。也可通过 `TOKENPULSE_PROJECT_ROOT` 明确指定绝对根目录。程序在建立 WebView 前覆盖全部 Tauri 应用数据目录，不会回退到 AppData。Windows 下拒绝 C 盘、系统盘、网络路径和重解析到系统盘的数据位置。
 
+Windows 程序入口在启动 Tauri、通知运行时和工作线程之前，将自身的 `TEMP`、`TMP`、`TMPDIR` 设置为 `.local/tmp/`。从快捷方式双击启动时也会执行，因此 WebView 和程序启动的子进程不会继承默认的 C 盘临时目录。
+
 脱离仓库的便携程序将 `.local/` 放在可执行文件旁，因此必须放在可写的数据盘。更换仓库位置时，需要一并移动 `.local/`，并重新加载开发环境；用户环境中持久化的工具路径也需相应更新。
 
 ## 现有数据迁移
@@ -45,6 +48,16 @@ pwsh -NoProfile -File scripts/migrate-local-data.ps1
 
 第一步逐文件复制并校验 SHA-256，保留源数据。第二步再次核对后只删除白名单中的明确源目录。目标存在不同数据、源路径被重解析或应用仍在运行时会拒绝迁移。Cargo 临时锁和可重建的全局缓存元数据不迁移；通知登记及签名材料保留原有权限。
 
-安装目录移动后应同步更新当前用户的安装登记和快捷方式，并安装包含新路径逻辑的程序。已启用的 Codex 通知命令也需同步到新程序路径。旧验收记录内的历史绝对路径保留原文。
+历史 npm 缓存若位于其他目录，可通过 `-ToolsOnly -LegacyNpmCache '原缓存绝对路径'` 迁入 `.local/cache/npm/legacy/`。同样先加 `-CopyOnly` 校验，再执行实际迁移；源目录必须包含 npm 的 `_cacache`，迁移目标不会覆盖当前缓存。
+
+迁移现有 NSIS 安装后，可直接编译并更新程序，不生成安装包。关闭 TokenPulse 后执行：
+
+```powershell
+. .\scripts\project-env.ps1
+cargo build -p token-pulse-desktop --release --features custom-protocol --locked --offline
+pwsh -NoProfile -File scripts/refresh-local-app.ps1
+```
+
+刷新脚本要求已有正式数据库和迁入的 `uninstall.exe`，按 Tauri 规则保留原安装类型标记，并验证程序其他字节与编译结果完全一致。脚本同步当前用户的安装登记、原有快捷方式，以及仍属于 TokenPulse 的 Codex 通知命令和恢复记录；用户自行更改的通知命令不覆盖。旧验收记录内的历史绝对路径保留原文。
 
 本配置约束 TokenPulse 和本项目启动的工具写入。Windows 注册表、安装快捷方式、系统级 WebView2 运行时由 Windows 管理；Codex Home 与源会话日志属于外部数据源，不能作为项目缓存整体移动。
