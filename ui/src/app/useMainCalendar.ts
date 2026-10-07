@@ -3,6 +3,24 @@ import type { CalendarSelection, CalendarSelectionResult, DisplaySettingsSnapsho
 import { getDisplaySettings, onSettingsChanged, resolveCalendarSelection, runtimeError, setDisplayTimezone } from '../shared/runtime';
 
 const ranges = new Map<string, { value: CalendarSelectionResult; resolvedAt: number }>();
+const flights = new Map<string, Promise<CalendarSelectionResult>>();
+
+/** Shared Rust-resolved ranges let prepared dates render on their first frame. */
+export async function prepareMainCalendar(selection: CalendarSelection, timezone: string, clock: number): Promise<CalendarSelectionResult> {
+  const key = JSON.stringify([selection, timezone]);
+  const cached = ranges.get(key);
+  if (cached && clock >= cached.resolvedAt && clock < cached.value.heatmap_range.end_ms) return cached.value;
+  const existing = flights.get(key);
+  if (existing) return existing;
+  const flight = resolveCalendarSelection({ timezone, selection }).then(value => {
+    if (value.range.timezone !== timezone || value.heatmap_range.timezone !== timezone || !Number.isSafeInteger(value.range.start_ms) || !Number.isSafeInteger(value.range.end_ms) || value.range.start_ms >= value.range.end_ms || !Number.isSafeInteger(value.heatmap_range.start_ms) || !Number.isSafeInteger(value.heatmap_range.end_ms) || value.heatmap_range.start_ms >= value.heatmap_range.end_ms) throw new Error('日期读取失败，请重新查询。');
+    ranges.delete(key); ranges.set(key, { value, resolvedAt: clock });
+    while (ranges.size > 20) ranges.delete(ranges.keys().next().value!);
+    return value;
+  });
+  flights.set(key, flight);
+  try { return await flight; } finally { if (flights.get(key) === flight) flights.delete(key); }
+}
 /** Saved timezone is authoritative; every date range comes from Rust. */
 export function useMainCalendar(selection: CalendarSelection, ready: boolean, refreshRevision: number, clock: number) {
   const [settings, setSettings] = useState<DisplaySettingsSnapshot | null>(null);
@@ -41,9 +59,8 @@ export function useMainCalendar(selection: CalendarSelection, ready: boolean, re
   useEffect(() => {
     if (!ready || timezone === null) return;
     let active = true;
-    void resolveCalendarSelection({ timezone, selection }).then(value => {
-      if (value.range.timezone !== timezone || value.heatmap_range.timezone !== timezone || !Number.isSafeInteger(value.range.start_ms) || !Number.isSafeInteger(value.range.end_ms) || value.range.start_ms >= value.range.end_ms || !Number.isSafeInteger(value.heatmap_range.start_ms) || !Number.isSafeInteger(value.heatmap_range.end_ms) || value.heatmap_range.start_ms >= value.heatmap_range.end_ms) throw new Error('日期读取失败，请重新查询。');
-      if (active) { ranges.delete(key); ranges.set(key, { value, resolvedAt: clock }); while (ranges.size > 20) ranges.delete(ranges.keys().next().value!); setResolved({ key, value }); setFailure(null); }
+    void prepareMainCalendar(selection, timezone, clock).then(value => {
+      if (active) { setResolved({ key, value }); setFailure(null); }
     }).catch(error => { if (active) setFailure({ key, error: runtimeError(error) }); });
     return () => { active = false; };
   }, [ready, key, minute, refreshRevision, timezone, selection]);

@@ -5,8 +5,9 @@ type QA = { __navigationCacheQA: { reads: () => string[]; concurrency: () => num
 
 test.beforeEach(async ({ page }, info) => {
   const cold = info.title.includes('unwarmed');
+  const dated = info.title.includes('prepared date presets');
   await installSyntheticCalendar(page);
-  await page.addInitScript(({ cold }) => {
+  await page.addInitScript(({ cold, dated }) => {
     const reads: string[] = [], pending: (() => void)[] = [];
     let hold = cold, fail = false, serial = 0, version = 1, statusFail = false, storageFail = false;
     let inFlight = 0, maximum = 0;
@@ -28,7 +29,7 @@ test.beforeEach(async ({ page }, info) => {
         if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'synthetic', root_path: 'Synthetic Source', enabled: true, removed: false }] });
         if (command === 'get_account_quota') return response({ connection_epoch: 'synthetic', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], windows: [], fetched_at_ms: null, last_attempt_at_ms: null, error_code: null });
         if (command === 'get_main_navigation' || command === 'get_mini_stats_request' || command === 'close_query_snapshot') return response(null);
-        const request = args.request as { dimension?: string; filter?: { range: { timezone: string } }; query?: { filter: { range: { timezone: string } } } };
+        const request = args.request as { dimension?: string; filter?: { range: { timezone: string; start_ms: number; end_ms: number } }; query?: { filter: { range: { timezone: string; start_ms: number; end_ms: number } } } };
         if (['get_dashboard_bundle', 'get_grouped_usage', 'query_sessions', 'query_usage_events'].includes(command)) {
           reads.push(request.dimension ?? command);
           maximum = Math.max(maximum, ++inFlight);
@@ -36,7 +37,9 @@ test.beforeEach(async ({ page }, info) => {
           if (hold) await new Promise<void>(resolve => pending.push(resolve));
           --inFlight;
           if (fail) throw new Error('Synthetic background read failed');
-          const bundle = { meta: { snapshot_id: `synthetic-${++serial}`, data_revision: '1', price_revision: '1', generated_at_ms: Date.now(), parser_versions: [], accounting_versions: [], display_timezone: (request.filter ?? request.query!.filter).range.timezone }, summary, pricing, coverage };
+          const range = (request.filter ?? request.query!.filter).range;
+          const total = dated ? String(Math.round((range.end_ms - range.start_ms) / 86_400_000) * 101) : summary.total_tokens;
+          const bundle = { meta: { snapshot_id: `synthetic-${++serial}`, data_revision: '1', price_revision: '1', generated_at_ms: Date.now(), parser_versions: [], accounting_versions: [], display_timezone: range.timezone }, summary: { ...summary, total_tokens: total }, pricing: { ...pricing, unpriced_total_tokens: total }, coverage };
           if (command === 'get_dashboard_bundle') return response({ ...bundle, series: [], heatmap: [], recent_sessions: [] });
           if (command === 'get_grouped_usage') return response({ ...bundle, groups: [], total_group_count: '0', truncated: false });
           if (command === 'query_sessions') return response({ ...bundle, sessions: [], next_cursor: null });
@@ -45,14 +48,44 @@ test.beforeEach(async ({ page }, info) => {
         throw new Error(`Unexpected synthetic command ${command}`);
       } },
     });
-  }, { cold });
+  }, { cold, dated });
   await page.clock.install();
   await page.goto('/');
   if (cold) { await expect(page.getByRole('heading', { name: 'Token 分解' })).toBeVisible(); return; }
-  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await expect(page.getByLabel(`${dated ? '101' : '777'} Token`, { exact: true })).toBeVisible();
   await expect.poll(async () => page.evaluate(() => new Set((window as unknown as QA).__navigationCacheQA.reads()).size)).toBe(5);
   expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBeLessThanOrEqual(3);
   await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
+  await page.clock.runFor(350);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().filter(kind => kind === 'get_dashboard_bundle').length)).toBe(3);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
+});
+
+test('prepared date presets paint their own totals on the first frame while new reads are blocked', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
+  const before = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().filter(kind => kind === 'get_dashboard_bundle').length);
+  for (const [kind, total] of [['last7', '707'], ['last30', '3030'], ['today', '101'], ['last7', '707']] as const) {
+    await page.getByLabel('日期范围').selectOption(kind);
+    const painted = await page.evaluate(total => new Promise<boolean>(resolve => requestAnimationFrame(() => resolve(Boolean(document.querySelector(`[aria-label="${total} Token"]`))))), Number(total).toLocaleString('en-US'));
+    expect(painted).toBe(true);
+  }
+  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().filter(kind => kind === 'get_dashboard_bundle').length)).toBe(before);
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
+});
+
+test('unwarmed selected date promotes a queued preset while another background date is blocked', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
+  await page.clock.runFor(350);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().filter(kind => kind === 'get_dashboard_bundle').length)).toBe(2);
+  await page.getByLabel('日期范围').selectOption('last30');
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().filter(kind => kind === 'get_dashboard_bundle').length)).toBe(3);
+  await expect(page.getByLabel('777 Token', { exact: true })).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBeLessThanOrEqual(3);
 });
 
 test('a slow refresh retains cached content and dispatches foreground on independent resources', async ({ page }) => {

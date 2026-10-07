@@ -24,6 +24,7 @@ import { useMainNavigation } from './useMainNavigation';
 import { whenFull } from './usage-display';
 import type { MiniStatsRequest } from '../shared/generated/contracts';
 import { DateFilter } from './DateFilter';
+import { DatePresetCache } from './DatePresetCache';
 import { PriceBasisFilter } from './PriceBasisFilter';
 import { AdvancedFilters, type FilterChoices } from './AdvancedFilters';
 import { mainRequestForCalendar } from '../shared/main-filter';
@@ -177,6 +178,7 @@ export function App() {
       {/* Keep query owners mounted across navigation; inactive views render no DOM. */}
       {policy.privacy !== null && ready && query !== null && <>
         <OverviewPage active={page === 'overview'} request={query} refreshRevision={refreshRevision} sources={sources} accountTimezone={display.settings?.preferences.display_timezone ?? null} onSources={openSources} onSessions={() => setPage('sessions')} onGrain={setGrain} onDay={day => { setMiniStats(null); setSelection({ kind: 'custom', start_date: day, end_date_inclusive: day }); }} />
+        {miniStats === null && <DatePresetCache request={query} refreshRevision={refreshRevision} />}
         <GroupedPage active={page === 'models'} request={query} dimension="models" refreshRevision={refreshRevision} />
         <GroupedPage active={page === 'projects'} request={query} dimension="projects" refreshRevision={refreshRevision} />
         <SessionsPage active={page === 'sessions'} request={query} refreshRevision={refreshRevision} onSessionScope={(key, name) => setChoices(value => ({ ...value, sessions: { key, display_name: name } }))} />

@@ -16,7 +16,7 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
   if (!readers.has(read)) readers.set(read, `read-${++serial}`);
   const key = usageQueryKey(readers.get(read)!, request, policy.epoch);
   const visible = useRef(foreground); visible.current = foreground;
-  const subscribe = useCallback((listener: () => void) => usageQueryCache.subscribe(key, listener), [key]);
+  const subscribe = useCallback((listener: () => void) => usageQueryCache.subscribe(key, listener, foreground), [key, foreground]);
   const get = useCallback(() => usageQueryCache.get<Bundle>(key), [key]);
   const result = useSyncExternalStore(subscribe, get);
   const refresh = useCallback(() => {
@@ -27,7 +27,7 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
       if (restored && policy.epoch === displayPolicy.get().epoch && !displayPolicy.get().pending) prime(restored.value);
     }
     let value!: Bundle;
-    await scheduleUsageQuery(async () => { value = await read(request); }, () => visible.current, () => policy.epoch === displayPolicy.get().epoch);
+    await scheduleUsageQuery(async () => { value = await read(request); }, () => visible.current || usageQueryCache.isForeground(key), () => policy.epoch === displayPolicy.get().epoch);
     return value;
   }, runtimeError);
   }, [key, read]);
@@ -38,5 +38,5 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
     if (!policy.pending) void refresh();
   }, [key, refreshRevision, policy.pending, refresh]);
   useEffect(() => { if (result.stale && !result.loading && !result.error && !policy.pending) void refresh(); }, [result, refresh, policy.pending]);
-  return { bundle: result.value, restored: result.restored, error: result.error, loading: result.loading || (result.value === null && result.error === null), reload: () => { usageQueryCache.invalidate(key); void refresh(); }, accept: (value: Bundle) => usageQueryCache.accept(key, value) };
+  return { bundle: result.value, stale: result.stale, restored: result.restored, error: result.error, loading: result.loading || (result.value === null && result.error === null), reload: () => { usageQueryCache.invalidate(key); void refresh(); }, accept: (value: Bundle) => usageQueryCache.accept(key, value) };
 }

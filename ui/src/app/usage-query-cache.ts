@@ -1,5 +1,5 @@
 export type CachedResult<T> = Readonly<{ value: T | null; loading: boolean; stale: boolean; restored: boolean; error: string | null; fetchedAt: number | null }>;
-type Entry<T> = { snapshot: CachedResult<T>; listeners: Set<() => void>; flight: Promise<void> | null; invalidation: number; bytes: number; used: number };
+type Entry<T> = { snapshot: CachedResult<T>; listeners: Set<() => void>; foreground: Set<() => void>; flight: Promise<void> | null; invalidation: number; bytes: number; used: number };
 
 /** Failed refreshes keep a complete DTO; external-store references stay stable. */
 export class UsageQueryCache {
@@ -9,16 +9,18 @@ export class UsageQueryCache {
     let entry = this.entries.get(key);
     if (!entry) {
       this.evict(1);
-      entry = { snapshot: { value: null, loading: false, stale: true, restored: false, error: null, fetchedAt: null }, listeners: new Set(), flight: null, invalidation: 0, bytes: 0, used: Date.now() };
+      entry = { snapshot: { value: null, loading: false, stale: true, restored: false, error: null, fetchedAt: null }, listeners: new Set(), foreground: new Set(), flight: null, invalidation: 0, bytes: 0, used: Date.now() };
       this.entries.set(key, entry);
     }
     return entry as Entry<T>;
   }
   get<T>(key: string): CachedResult<T> { return this.entry<T>(key).snapshot; }
-  subscribe(key: string, listener: () => void) {
+  subscribe(key: string, listener: () => void, foreground = false) {
     const entry = this.entry(key); entry.used = Date.now(); entry.listeners.add(listener);
-    return () => { entry.listeners.delete(listener); this.evict(); };
+    if (foreground) entry.foreground.add(listener);
+    return () => { entry.listeners.delete(listener); entry.foreground.delete(listener); this.evict(); };
   }
+  isForeground(key: string) { return (this.entries.get(key)?.foreground.size ?? 0) > 0; }
   private publish<T>(entry: Entry<T>, update: Partial<CachedResult<T>>) {
     entry.snapshot = { ...entry.snapshot, ...update };
     for (const listener of entry.listeners) listener();

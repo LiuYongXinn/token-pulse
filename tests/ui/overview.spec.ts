@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }) => {
     let deferNavigation = false; const navigationWaits: (() => void)[] = [];
     let fail = false, deferNext = false, release: (() => void) | null = null;
     let lastDashboardRequest: unknown = null;
-    let priceRevision = '3', cost = '0.871234567890123', reads = 0, hidden = false;
+    let priceRevision = '3', cost = '0.871234567890123', reads = 0, currentDateReads = 0, hidden = false;
     let quota: Record<string, unknown> = { connection_epoch: 'synthetic-overview-disconnected', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], fetched_at_ms: null, last_attempt_at_ms: null, windows: [], error_code: null };
     let callbackId = 0, eventId = 0;
     const callbacks = new Map<number, (event: unknown) => void>();
@@ -74,6 +74,7 @@ test.beforeEach(async ({ page }) => {
         ++reads; lastDashboardRequest = structuredClone(args.request);
         if (fail) throw new Error('synthetic refresh failure');
         const r = args.request as { price_basis: { mode: string }; filter: { sources: { ids?: string[] }; range: { start_ms: number; end_ms: number; timezone: string } }; grain: string; heatmap_range: { start_ms: number; end_ms: number } };
+        if (r.filter.range.end_ms - r.filter.range.start_ms === 86_400_000) ++currentDateReads;
         const partial = r.filter.sources.ids?.includes('synthetic-b') ?? false;
         const step = r.grain === 'hour' ? 3_600_000 : 86_400_000;
         const series = Array.from({ length: Math.ceil((r.filter.range.end_ms - r.filter.range.start_ms) / step) }, (_, i) => {
@@ -96,7 +97,7 @@ test.beforeEach(async ({ page }) => {
       for (const [id, listener] of listeners) if (listener.event === 'main_navigation_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null });
     },
     __taskbarNavigationQA: { settings: () => { navigationRevision=String(BigInt(navigationRevision)+1n);miniIntent={kind:'taskbar_settings'}; for(const [id,listener] of listeners)if(listener.event==='main_navigation_changed')callbacks.get(listener.handler)?.({event:listener.event,id,payload:{kind:'mini_stats'}}); }, hold:()=>{deferNavigation=true;},release:()=>navigationWaits.splice(0).forEach(resolve=>resolve()), revision:(value:string)=>{navigationRevision=value;}, listeners:()=>[...listeners.values()].filter(v=>v.event==='main_navigation_changed').length },
-    __syntheticPriceState: () => ({ reads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
+    __syntheticPriceState: () => ({ reads, currentDateReads, listeners: [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length }),
     __setSyntheticHidden: (value: boolean) => { hidden = value; document.dispatchEvent(new Event('visibilitychange')); },
     __emitSyntheticPrivacyChange: (value: boolean) => { privacy = value; policyRevision = String(BigInt(policyRevision) + 1n); for (const [id, listener] of listeners) if (listener.event === 'display_policy_changed' || listener.event === 'settings_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { settings_revision: policyRevision, privacy } }); },
     __emitSyntheticPriceChange: () => { priceRevision = String(Number(priceRevision) + 1); cost = '1.231234567890123'; for (const [id, listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: priceRevision, all_models: true } }); } });
@@ -186,14 +187,14 @@ test('same-filter refresh retains prior values on error and older-filter replies
 });
 
 test('price notifications refresh whole bundles and warm offscreen views with bounded subscriptions', async ({ page }) => {
-  type Bridge = { __syntheticPriceState: () => { reads: number; listeners: number }; __emitSyntheticPriceChange: () => void; __setSyntheticHidden: (v: boolean) => void };
+  type Bridge = { __syntheticPriceState: () => { reads: number; currentDateReads: number; listeners: number }; __emitSyntheticPriceChange: () => void; __setSyntheticHidden: (v: boolean) => void };
   const state = () => page.evaluate(() => (window as unknown as Bridge).__syntheticPriceState());
   await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
   await expect.poll(async () => (await state()).listeners).toBe(1);
-  const before = (await state()).reads;
+  const before = (await state()).currentDateReads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await expect(page.getByText('$1.23', { exact: true })).toBeVisible({ timeout: 3000 });
-  expect((await state()).reads).toBe(before + 1);
+  expect((await state()).currentDateReads).toBe(before + 1);
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(true));
   const hiddenReads = (await state()).reads;
@@ -202,15 +203,15 @@ test('price notifications refresh whole bundles and warm offscreen views with bo
   expect((await state()).reads).toBe(hiddenReads);
   await expect(page.getByText('$1.23', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(false));
-  await expect.poll(async () => (await state()).reads).toBe(before + 2);
+  await expect.poll(async () => (await state()).currentDateReads).toBe(before + 2);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect.poll(async () => (await state()).listeners).toBe(1);
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await expect.poll(async () => (await state()).listeners).toBe(1);
-  const offscreenReads = (await state()).reads;
+  const offscreenReads = (await state()).currentDateReads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
-  await expect.poll(async () => (await state()).reads).toBe(offscreenReads + 1);
+  await expect.poll(async () => (await state()).currentDateReads).toBe(offscreenReads + 1);
   await page.getByRole('button', { name: '总览', exact: true }).click();
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '正在读取统计快照' })).toHaveCount(0);

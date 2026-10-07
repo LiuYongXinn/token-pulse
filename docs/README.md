@@ -8,6 +8,8 @@
 
 ## 设计
 
+- [日期切换与统计聚合复用](design/date-switching.md)：CC GUI / TokenTracker 对照、热力图缓存、快捷日期预读、精度边界与验证。
+
 - [会话标题显示](design/session-titles.md)：读取 Codex 标题索引、改名更新、ID 回退、快照和隐私规则。
 
 - [默认参考费用估算设计](design/reference-estimates.md)：Standard 默认估算、请求档位、未知写入假设、公开依据与缓存 v7。
