@@ -96,7 +96,7 @@ if (-not $ToolsOnly) {
         }
     }
     $applicationEntries = @(@('com.tokenpulse.desktop.dev','data\dev'), @('TokenPulse','app'))
-    if (-not $SkipRelease) { $applicationEntries = @(@('com.tokenpulse.desktop','data\release')) + $applicationEntries }
+    if (-not $SkipRelease) { $applicationEntries = ,@('com.tokenpulse.desktop','data\release') + $applicationEntries }
     foreach ($entry in $applicationEntries) {
         Move-TokenPulseOwnedPath (Join-Path $migrationOldLocal $entry[0]) (Join-Path $migrationLocal $entry[1]) -Private
     }
