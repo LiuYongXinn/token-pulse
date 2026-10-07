@@ -89,6 +89,20 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("main window missing")?;
+    place_on_secondary(app)?;
+    super::main_window::fit_current(&window).map_err(|_| "secondary window fit")?;
+    let monitor = window
+        .current_monitor()
+        .map_err(|_| "current monitor unavailable")?
+        .ok_or("current monitor missing")?;
+    let primary = window
+        .primary_monitor()
+        .map_err(|_| "primary monitor unavailable")?
+        .ok_or("primary monitor missing")?;
+    if monitor.position() == primary.position() {
+        return Err("probe remained on primary monitor".into());
+    }
+    let secondary_screen = serde_json::json!({ "secondary": true, "scale": monitor.scale_factor(), "width": monitor.size().width, "height": monitor.size().height });
     window.show().map_err(|_| "probe window show")?;
     window.unminimize().map_err(|_| "probe window restore")?;
 
@@ -102,14 +116,15 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
             &serde_json::to_string(&event).map_err(|_| "probe event encoding")?,
         )
         .replace("RESTART_PHASE", if restart { "true" } else { "false" });
+    println!("NATIVE_NAVIGATION_UI_START");
     let result = super::mini_smoke::evaluate_with_timeout(
         app,
         &window,
         &script,
         std::time::Duration::from_secs(120),
     );
-    app.unlisten(listener);
     result?;
+    println!("NATIVE_NAVIGATION_UI_OK");
     let ui = report
         .lock()
         .map_err(|_| "probe report lock")?
@@ -124,6 +139,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
     );
     BLOCKED.store(false, std::sync::atomic::Ordering::Release);
     blocked?;
+    println!("NATIVE_NAVIGATION_BLOCKED_OK");
     let timings = token_pulse_store::query_timing::take();
     let request = state
         .native_dashboard_request
@@ -136,14 +152,38 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
         "DASHBOARD_REQUEST",
         &serde_json::to_string(&request).map_err(|_| "probe request encoding")?,
     );
+    let drain = drain.replace(
+        "MEASUREMENT_EVENT",
+        &serde_json::to_string(&event).map_err(|_| "probe event encoding")?,
+    );
     super::mini_smoke::evaluate_with_timeout(
         app,
         &window,
         &drain,
         std::time::Duration::from_secs(60),
     )?;
+    println!("NATIVE_NAVIGATION_AUX_OK");
+    let ancillary = report.lock().map_err(|_| "probe report lock")?.take();
+    super::mini_window::show(app)?;
+    let mini = app
+        .get_webview_window("mini")
+        .ok_or("mini window missing")?;
+    let mini_script = include_str!("navigation_mini_smoke.js").replace(
+        "MEASUREMENT_EVENT",
+        &serde_json::to_string(&event).map_err(|_| "probe event encoding")?,
+    );
+    super::mini_smoke::evaluate_with_timeout(
+        app,
+        &mini,
+        &mini_script,
+        std::time::Duration::from_secs(60),
+    )?;
+    println!("NATIVE_NAVIGATION_MINI_OK");
+    let mini_queries = report.lock().map_err(|_| "probe report lock")?.take();
+    mini.hide().map_err(|_| "mini probe hide")?;
+    app.unlisten(listener);
     let baseline = benchmark(database, &request)?;
-    let report = serde_json::json!({ "format": 1, "input": "programmatic DOM click in visible Windows WebView2", "database_startup_ms": database_startup_ms, "counts": counts, "ui": ui, "blocked_refresh_passed": true, "backend": timings, "baseline": baseline, "summary_cache": database.summary_cache_stats(), "build": "debug custom-protocol" });
+    let report = serde_json::json!({ "format": 1, "input": "programmatic DOM click in visible Windows WebView2", "database_startup_ms": database_startup_ms, "screen": secondary_screen, "counts": counts, "ui": ui, "blocked_refresh_passed": true, "backend": timings, "baseline": baseline, "ancillary": ancillary, "mini": mini_queries, "summary_cache": database.summary_cache_stats(), "build": "debug custom-protocol" });
     let phase = if std::env::args().any(|arg| arg == "--native-navigation-restart") {
         "restart"
     } else {
@@ -222,6 +262,9 @@ pub(super) fn place_on_secondary(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("main window missing")?;
+    place_window_on_secondary(&window)
+}
+pub(super) fn place_window_on_secondary(window: &tauri::WebviewWindow) -> Result<(), String> {
     let primary = window
         .primary_monitor()
         .map_err(|_| "primary monitor unavailable")?
@@ -240,4 +283,9 @@ pub(super) fn place_on_secondary(app: &tauri::AppHandle) -> Result<(), String> {
         ))
         .map_err(|_| "secondary placement failed")?;
     Ok(())
+}
+
+pub(super) fn secondary_probe() -> bool {
+    std::env::args()
+        .any(|arg| arg == "--native-secondary-screen" || arg.starts_with("--native-navigation-id="))
 }

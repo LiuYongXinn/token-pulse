@@ -61,7 +61,12 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
       if (!this.restorationTried && !this.value.pages.length) {
         this.restorationTried = true;
         const restored = await restoreUsageSnapshot(this.adapter.read, { query: this.query, cursor: null }).catch(() => null);
-        if (restored && !this.disposed) this.publish({ pages: [{ ...restored.value, next_cursor: null }], index: 0, firstNumber: 1, hasMore: restored.hasMore, renewal: restored.hasMore, restored: true });
+        if (restored && !this.disposed) {
+          try {
+            const pages = [{ ...restored.value, next_cursor: null }]; admitPages(this, pages);
+            this.publish({ pages, index: 0, firstNumber: 1, hasMore: restored.hasMore, renewal: restored.hasMore, restored: true });
+          } catch (error) { this.publish({ error: runtimeError(error) }); }
+        }
       }
       if (!this.disposed) await this.read(true);
     });
@@ -110,14 +115,15 @@ const views = new Map<string, PagedUsage<{ page_size: number }, SnapshotPage>>()
 function admitPages<Query extends { page_size: number }, Page extends SnapshotPage>(current: PagedUsage<Query, Page>, pages: Page[]) {
   const budget = 16 * 1024 * 1024;
   const others = () => [...views.values()].filter(view => view !== (current as unknown));
+  const residentOthers = () => others().filter(view => view.get().pages.length > 0).length;
   const size = () => new TextEncoder().encode(JSON.stringify(pages)).length;
   for (const [key, view] of [...views].sort((a, b) => a[1].used - b[1].used)) {
-    if (others().reduce((sum, item) => sum + item.bytes, 0) + size() <= budget) break;
+    if (residentOthers() < 10 && others().reduce((sum, item) => sum + item.bytes, 0) + size() <= budget) break;
     if (view !== (current as unknown) && !view.protected) { view.dispose(); views.delete(key); }
   }
   let trimmed = 0;
   while (pages.length > 1 && others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) { pages.shift(); ++trimmed; }
-  if (others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) throw new Error('分页结果超过展示缓存容量，请缩小查询范围或每页数量。');
+  if (residentOthers() >= 10 || others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) throw new Error('分页结果超过展示缓存容量，请缩小查询范围或每页数量。');
   return trimmed;
 }
 export function pagedUsage<Query extends { page_size: number }, Page extends SnapshotPage>(key: string, query: Query, adapter: PageAdapter<Query, Page>): PagedUsage<Query, Page> {

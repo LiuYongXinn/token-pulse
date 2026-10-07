@@ -215,7 +215,7 @@ impl Database {
                     available: Condvar::new(),
                 },
                 usage_readers: pool(2)?,
-                interactive_readers: pool(1)?,
+                interactive_readers: pool(2)?,
                 light_readers: pool(1)?,
                 leases: lease_service(&path)?,
                 usage_listener: Mutex::new(None),

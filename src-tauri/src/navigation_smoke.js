@@ -19,8 +19,25 @@ const warm = [];
 const presented = [];
 for (let n = 0; n < 100; ++n) { const started = performance.now(); const name = names[n % names.length]; nav(name).click(); await frame(); if (!hasContent() || document.querySelector('h1').textContent !== name) throw new Error(`CACHE_FIRST_FRAME_FAILED_${n}`); warm.push(performance.now() - started); await frame(); presented.push(performance.now() - started); }
 
+const ranges = [];
+if (!RESTART_PHASE) {
+  nav('模型').click(); await frame(); await until(() => document.querySelector('h1').textContent === '模型' && !!document.querySelector('.group-total[aria-label]'));
+  const originalTotal = document.querySelector('.group-total[aria-label]').getAttribute('aria-label');
+  const date = document.querySelector('select[aria-label="日期范围"]');
+  for (const selection of ['last7', 'last30']) {
+    const previousSnapshot = document.querySelector('.group-stat-strip').dataset.snapshotId;
+    const started = performance.now(); date.value = selection; date.dispatchEvent(new Event('change', { bubbles: true })); await frame();
+    const shell_ms = performance.now()-started;
+    if (!structure()) throw new Error('RANGE_STRUCTURE_FAILED');
+    await until(() => !!document.querySelector('.group-total[aria-label]') && document.querySelector('.group-stat-strip').dataset.snapshotId !== previousSnapshot); ranges.push({ kind: selection, shell_ms, ready_ms: performance.now()-started });
+  }
+  const started = performance.now(); date.value = 'today'; date.dispatchEvent(new Event('change', { bubbles: true })); await frame();
+  if (!hasContent() || document.querySelector('.group-total[aria-label]')?.getAttribute('aria-label') !== originalTotal) throw new Error('RETURNED_RANGE_CACHE_FAILED');
+  ranges.push({ kind: 'returned_today', ready_ms: performance.now()-started });
+}
+
 // Commit a real display-only change in the isolated copy. Tokens must remain unchanged.
-nav('模型').click(); await frame(); await until(hasContent);
+nav('模型').click(); await frame(); await until(() => document.querySelector('h1').textContent === '模型' && !!document.querySelector('.group-total[aria-label]'));
 const before = document.querySelector('.group-stat-strip').dataset.snapshotId;
 const tokensBefore = document.querySelector('.group-total[aria-label]').getAttribute('aria-label');
 const sources = (await original('get_sources', { requestId: crypto.randomUUID() })).data;
@@ -34,4 +51,4 @@ if (source && !RESTART_PHASE) {
   update = { milliseconds: performance.now() - started, tokensUnchanged: tokensBefore === document.querySelector('.group-total[aria-label]').getAttribute('aria-label') };
   if (!update.tokensUnchanged) throw new Error('DISPLAY_UPDATE_CHANGED_TOKENS');
 }
-await original('plugin:event|emit', { event: REPORT_EVENT, payload: { cold, initial_content_ms: initial, cached_click_ms: warm, following_frame_ms: presented, update, stages: window.__tokenPulseQueryTimings() } });
+await original('plugin:event|emit', { event: REPORT_EVENT, payload: { ranges, cold, initial_content_ms: initial, cached_click_ms: warm, following_frame_ms: presented, update, stages: window.__tokenPulseQueryTimings() } });

@@ -200,15 +200,12 @@ pub(super) fn initialize(app: &tauri::AppHandle) {
         eprintln!("MAIN_PLACEMENT_UNAVAILABLE");
     }
     #[cfg(all(debug_assertions, windows))]
-    if std::env::args()
-        .any(|arg| arg == "--native-secondary-screen" || arg.starts_with("--native-navigation-id="))
+    if super::navigation_smoke::secondary_probe()
+        && (super::navigation_smoke::place_on_secondary(app).is_err()
+            || fit_current(&window).is_err())
     {
-        if super::navigation_smoke::place_on_secondary(app).is_err()
-            || fit_current(&window).is_err()
-        {
-            eprintln!("NATIVE_SECONDARY_PLACEMENT_FAILED");
-            return;
-        }
+        eprintln!("NATIVE_SECONDARY_PLACEMENT_FAILED");
+        return;
     }
     if window.show().is_err() {
         eprintln!("MAIN_WINDOW_SHOW_FAILED");

@@ -27,6 +27,10 @@ fn show_internal(
     fallback: Option<&super::taskbar_service::FallbackRequest>,
     action: Option<&super::taskbar_service::ActionRequest>,
 ) -> Result<(), String> {
+    #[cfg(all(debug_assertions, windows))]
+    let secondary_probe = super::navigation_smoke::secondary_probe();
+    #[cfg(not(all(debug_assertions, windows)))]
+    let secondary_probe = false;
     let current = || {
         fallback.is_none_or(|request| request.current())
             && action.is_none_or(|request| request.current())
@@ -85,7 +89,7 @@ fn show_internal(
         .always_on_top(interaction.pinned)
         .theme(theme)
         .center()
-        .focused(fallback.is_none() && action.is_none())
+        .focused(fallback.is_none() && action.is_none() && !secondary_probe)
         .visible(false)
         .build()
         .map_err(|e| e.to_string())?;
@@ -114,6 +118,11 @@ fn show_internal(
     super::mini_passthrough::recover(&window).map_err(|e| e.to_string())?;
     if !current() {
         return Ok(());
+    }
+    #[cfg(all(debug_assertions, windows))]
+    if secondary_probe {
+        super::navigation_smoke::place_window_on_secondary(&window)?;
+        fit_current(&window)?;
     }
     if save_current_placement(&window).is_err() {
         eprintln!("MINI_PLACEMENT_SAVE_FAILED");
@@ -150,7 +159,7 @@ fn show_internal(
         eprintln!("MINI_PLACEMENT_UNAVAILABLE");
     }
     super::quota_commands::update_visibility(&window);
-    if fallback.is_some() || action.is_some() {
+    if fallback.is_some() || action.is_some() || secondary_probe {
         Ok(())
     } else {
         window.set_focus().map_err(|e| e.to_string())

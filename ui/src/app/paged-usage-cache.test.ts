@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { PagedUsage, type SnapshotPage } from './paged-usage-cache';
+import { PagedUsage, pagedUsage, clearPagedUsage, type SnapshotPage } from './paged-usage-cache';
 const base = { meta: { snapshot_id: 'old' }, summary: {}, pricing: {}, coverage: {} } as SnapshotPage;
 type Page = SnapshotPage & { rows: string[] };
 const flush = async () => { for (let i = 0; i < 20; ++i) await Promise.resolve(); };
@@ -33,4 +33,18 @@ test('failed replacement keeps old multi-page display and snapshot mismatch neve
   fail = true; controller.reload(); await flush();
   expect(controller.get().pages[0].meta.snapshot_id).toBe('old'); expect(controller.get().error).toBe('failed');
   stop(); controller.dispose(); await flush(); vi.unstubAllGlobals();
+});
+
+test('ten protected resident ranges retain their pages and reject an eleventh result', async () => {
+  vi.stubGlobal('document', { hidden: false });
+  clearPagedUsage();
+  const stops: (() => void)[] = [], views: PagedUsage<{ page_size: number }, Page>[] = [];
+  for (let n = 0; n < 11; ++n) {
+    const view = pagedUsage(`capacity-${n}`, { page_size: 1 }, { label: 'capacity', keys: (page: Page) => page.rows, read: async () => ({ ...base, rows: [`row-${n}`], next_cursor: null }), close: async () => {} });
+    views.push(view); stops.push(view.attach({}, true)); await flush();
+  }
+  for (const view of views.slice(0, 10)) expect(view.get().pages).toHaveLength(1);
+  expect(views[10].get().pages).toHaveLength(0);
+  expect(views[10].get().error).toContain('缓存容量');
+  for (const stop of stops) stop(); clearPagedUsage(); await flush(); vi.unstubAllGlobals();
 });

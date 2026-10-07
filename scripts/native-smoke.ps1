@@ -1,4 +1,4 @@
-param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
+param([switch]$SecondaryScreen, [switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
@@ -19,6 +19,7 @@ if (-not ($Notify -or $Updates -or $SourceDialogs -or $AccountDialogs -or $Notif
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 $probeArgs = @('--native-smoke')
+if ($SecondaryScreen) { $probeArgs += '--native-secondary-screen' }
 if ($Taskbar) { $probeArgs += '--native-taskbar-smoke' }
 if ($TaskbarActions) { $probeArgs += '--native-taskbar-actions-smoke' }
 if ($TaskbarExplorerRestart) { $probeArgs += '--native-taskbar-explorer-restart-smoke' }

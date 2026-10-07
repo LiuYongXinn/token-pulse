@@ -77,3 +77,28 @@ fn read_urgent(db: &Database) -> crate::StoreResult<()> {
     );
     Ok(())
 }
+
+#[test]
+fn a_slow_detail_reader_leaves_a_second_interactive_connection_available() {
+    let (_dir, db) = setup();
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let slow_db = db.clone();
+    let slow = std::thread::spawn(move || {
+        slow_db.interactive_snapshot(|_, _| {
+            ready_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            Ok(())
+        })
+    });
+    ready_rx.recv().unwrap();
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let fast = std::thread::spawn(move || {
+        reply_tx.send(db.mini_scope()).unwrap();
+    });
+    let reply = reply_rx.recv_timeout(std::time::Duration::from_secs(2));
+    release_tx.send(()).unwrap();
+    slow.join().unwrap().unwrap();
+    fast.join().unwrap();
+    assert!(reply.unwrap().is_ok());
+}

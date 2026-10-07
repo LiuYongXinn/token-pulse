@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom';
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { timeNavigation } from '../shared/query-timing';
@@ -149,7 +150,7 @@ export function App() {
   return <div className="workspace" data-page={page}>
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><Icon name="pulse" size={23} /></span>TokenPulse</div>
-      <nav aria-label="主导航">{pages.map(([id, label]) => <button key={id} className={page === id ? 'active' : ''} aria-current={page === id ? 'page' : undefined} onClick={() => { timeNavigation(id); setPage(id); }}><Icon name={id} /><span>{label}</span></button>)}</nav>
+      <nav aria-label="主导航">{pages.map(([id, label]) => <button key={id} className={page === id ? 'active' : ''} aria-current={page === id ? 'page' : undefined} onClick={() => { timeNavigation(id); flushSync(() => setPage(id)); }}><Icon name={id} /><span>{label}</span></button>)}</nav>
       <div className="sidebar-bottom"><span className="status-dot" />{collectorText === '正在采集' ? '正在采集本地来源' : collectorText}<ActionButton icon="mini" disabled={!status} onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示悬浮窗</ActionButton></div>
     </aside>
     <main>
