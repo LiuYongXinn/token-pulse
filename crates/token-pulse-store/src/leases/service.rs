@@ -47,6 +47,7 @@ struct Reservation {
     binding: QueryBinding,
     cancelled: Arc<AtomicBool>,
     positions: Arc<Mutex<BTreeMap<[u8; 32], Position>>>,
+    summary: Arc<Mutex<Option<Arc<crate::query::summary_cache::ScopeSummary>>>>,
 }
 #[derive(Clone)]
 struct Guard {
@@ -201,6 +202,7 @@ impl LeaseService {
                 binding: binding.clone(),
                 cancelled: Arc::new(AtomicBool::new(false)),
                 positions: Arc::new(Mutex::new(BTreeMap::new())),
+                summary: Arc::new(Mutex::new(None)),
             };
             *state = Some(reservation.clone());
             drop(state);
@@ -265,6 +267,39 @@ impl LeaseService {
             })
             .map_err(|_| ErrorCode::SnapshotExpired)?;
         receive.recv().map_err(|_| ErrorCode::SnapshotExpired)?
+    }
+    pub(crate) fn read_summary<T: Send + 'static>(
+        &self,
+        handle: &LeaseHandle,
+        binding: &QueryBinding,
+        database: crate::Database,
+        filter: token_pulse_core::protocol::UsageFilter,
+        basis: token_pulse_core::protocol::PriceBasis,
+        query: impl FnOnce(
+            &Transaction<'_>,
+            Revision,
+            &crate::query::summary_cache::ScopeSummary,
+        ) -> StoreResult<T>
+        + Send
+        + 'static,
+    ) -> StoreResult<T> {
+        let worker = self.worker(handle, binding)?;
+        let summary = worker
+            .state
+            .lock()
+            .map_err(|_| ErrorCode::DbWriteFailed)?
+            .as_ref()
+            .filter(|active| active.id == handle.snapshot_id)
+            .ok_or(ErrorCode::SnapshotExpired)?
+            .summary
+            .clone();
+        self.read(handle, binding, move |tx, revision| {
+            let mut cached = summary.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
+            if cached.is_none() {
+                *cached = Some(database.scope_summary(tx, revision, &filter, &basis)?);
+            }
+            query(tx, revision, cached.as_deref().ok_or(ErrorCode::DbCorrupt)?)
+        })
     }
     /// Call after the page read, never reentrantly inside an actor callback.
     pub fn issue_cursor(

@@ -1,15 +1,15 @@
 //! Bounded model/project groups, priced inside the same SQLite snapshot.
-use super::{MODEL_KEY, coverage, dashboard, fact_from, grouped, predicate, pricing, totals};
+use super::{MODEL_KEY, coverage, fact_from, grouped, predicate};
 use crate::{Database, ErrorCode, Revision, StoreResult};
 use rusqlite::{Transaction, params_from_iter};
-use std::collections::BTreeMap;
+#[cfg(test)]
+use token_pulse_core::query::model_key;
 use token_pulse_core::{
     numeric::{DecimalInt, EpochMs},
-    pricing::PricingAccumulator,
     protocol::{
         DimensionSelection, PricingSummary, SnapshotMeta, TokenTotals, validate_request_id,
     },
-    query::{GroupDimension, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup, model_key},
+    query::{GroupDimension, GroupedUsageBundle, GroupedUsageRequest, PricedUsageGroup},
 };
 
 fn check_pricing(totals: &TokenTotals, pricing: &PricingSummary) -> StoreResult<()> {
@@ -30,11 +30,23 @@ pub fn bundle(
     at: EpochMs,
     snapshot_id: &str,
 ) -> StoreResult<GroupedUsageBundle> {
+    let common =
+        super::summary_cache::compute(tx, revision, &request.filter, &request.price_basis)?;
+    assemble(tx, revision, request, at, snapshot_id, &common)
+}
+fn assemble(
+    tx: &Transaction<'_>,
+    revision: Revision,
+    request: &GroupedUsageRequest,
+    at: EpochMs,
+    snapshot_id: &str,
+    common: &super::summary_cache::ScopeSummary,
+) -> StoreResult<GroupedUsageBundle> {
     request.validate()?;
     validate_request_id(snapshot_id)?;
     let filter = &request.filter;
-    let summary = totals(tx, filter)?;
-    let coverage = coverage::coverage(tx, filter, &summary)?;
+    let summary = common.totals.clone();
+    let coverage = common.coverage.clone();
     let p = predicate(filter)?;
     let key = match request.dimension {
         GroupDimension::Models => MODEL_KEY,
@@ -57,38 +69,18 @@ pub fn bundle(
         request.sort,
         usize::from(request.limit),
     )?;
-    let mut sums = groups
-        .iter()
-        .map(|group| {
-            (
-                group.key.clone(),
-                PricingAccumulator::new(request.price_basis.clone()),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    if sums.len() != groups.len() {
-        return Err(ErrorCode::DbCorrupt.into());
-    }
-    let mut overall = PricingAccumulator::new(request.price_basis.clone());
-    let catalog = crate::pricing::catalog_at(tx, revision.price)?;
-    pricing::visit(tx, filter, &request.price_basis, &catalog, |event| {
-        let key = match request.dimension {
-            GroupDimension::Models => model_key(event.provider.as_deref(), event.model.as_deref()),
-            GroupDimension::Projects => event.project_id.clone(),
-        };
-        if let Some(sum) = sums.get_mut(&key) {
-            sum.push(event.total_tokens, event.outcome.clone())?;
-        }
-        Ok(overall.push(event.total_tokens, event.outcome)?)
-    })?;
-    let pricing = overall.summary(false)?;
+    let pricing = common.pricing.clone();
     check_pricing(&summary, &pricing)?;
     let mut output = Vec::with_capacity(groups.len());
     for group in groups.drain(..) {
-        let pricing = sums
-            .remove(&group.key)
+        let prices = match request.dimension {
+            GroupDimension::Models => &common.models,
+            GroupDimension::Projects => &common.projects,
+        };
+        let pricing = prices
+            .get(group.key.as_deref().unwrap_or(""))
             .ok_or(ErrorCode::DbCorrupt)?
-            .summary(false)?;
+            .clone();
         check_pricing(&group.totals, &pricing)?;
         let selection = DimensionSelection::Ids {
             ids: group.key.iter().cloned().collect(),
@@ -108,7 +100,8 @@ pub fn bundle(
             coverage,
         });
     }
-    let (parser_versions, accounting_versions) = dashboard::versions(tx, filter, filter)?;
+    let (parser_versions, accounting_versions) =
+        (common.parsers.clone(), common.accounting.clone());
     Ok(GroupedUsageBundle {
         meta: SnapshotMeta {
             snapshot_id: snapshot_id.into(),
@@ -134,7 +127,10 @@ impl Database {
         at: EpochMs,
         snapshot_id: &str,
     ) -> StoreResult<GroupedUsageBundle> {
-        self.snapshot(|tx, revision| bundle(tx, revision, request, at, snapshot_id))
+        self.snapshot(|tx, revision| {
+            let common = self.scope_summary(tx, revision, &request.filter, &request.price_basis)?;
+            assemble(tx, revision, request, at, snapshot_id, &common)
+        })
     }
 }
 

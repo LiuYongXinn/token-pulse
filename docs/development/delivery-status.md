@@ -2560,3 +2560,9 @@ M16y1 构建准备澄清：首次完整构建因 Cargo.lock 的七个本项目�
 schema 15 / Rust UsageRevision / 生成 TS-schema / 主窗口 get_usage_revision / usage_changed 完整注册。触发器覆盖 Token 不变的状态、覆盖、诊断和名称变化；写操作结束后通知，真实事务回滚静默、数据库重开身份稳定及不同库隔离测试通过。统一控制器通知合并 200ms / 最长 1s，隐藏时保留失效、恢复版本核对，三十秒轻量版本轮询替代统计 Hook 重型轮询。普通缓存同步全失效，分页多页只提示替换。
 
 typecheck / build / desktop check / core-store-desktop all-target strict Clippy 通过；控制器单元与导航六项通过，包括独立未预热、六秒阻塞、错范围清除、状态失败保留、无版本变化零重型刷新。存储全量首次 288 通过 / 6 失败：一项新项目夹具字段错误、五项旧 schema 夹具缺少移除新 additive schema，已修复。随后 293 通过 / 1 极短租约时间测试在并行负载下超时 / 1 性能夹具忽略；该租约定向串行复测记录另附。fmt 全仓库受 Windows 文件映射锁及既有格式差异影响，将对任务修改文件定向执行，未提交无关格式化。
+
+## 即时导航 I07：一致范围与固定分页汇总
+
+同一 SQLite 事务中的数据库身份 / data / price / view 完整版本与规范化 filter、计价方式共同标识公共汇总。最多 20 项 / 16 MiB，仅缓存完成结果，单项超限不驻留。单次权威费用遍历计算总览及会话 / 模型 / 项目费用；总览、分组、会话、明细复用公共汇总。租约 reservation 持有固定汇总，释放 / 过期时一起销毁；后续页不依赖公共 LRU 是否仍驻留，不改 snapshot ID 和生成时间。
+
+查询串行回归 80 passed / 1 性能夹具 ignored，覆盖旧事务并发提交和精确核算；新增缓存等价 / 状态变化 / 实际旧事务引用复用测试通过。store strict all-target Clippy 已通过公共汇总版，固定租约版继续随全量复测。匿名计时增加 reader_wait / snapshot_compute / summary_compute / heatmap_compute。真实数据量级和热力图决策留到原生性能报告，不以合成夹具宣称性能验收。

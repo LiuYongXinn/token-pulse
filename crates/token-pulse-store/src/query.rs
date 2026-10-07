@@ -20,6 +20,7 @@ pub mod groups;
 pub mod pricing;
 pub(crate) mod request_input;
 pub mod sessions;
+pub(crate) mod summary_cache;
 
 pub struct BucketTotals {
     pub bucket: CalendarBucket,

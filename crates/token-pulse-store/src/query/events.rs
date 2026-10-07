@@ -1,5 +1,5 @@
 //! Published usage, whitelisted source vectors and price audit share a lease.
-use super::{FROM, coverage, dashboard, predicate, pricing, totals};
+use super::{FROM, predicate};
 use crate::{
     Database, ErrorCode, Revision, StoreResult,
     leases::{LeaseHandle, cursor::QueryBinding},
@@ -53,6 +53,7 @@ fn rows(
     query: &UsageEventsQuery,
     last: Option<&Position>,
     at: EpochMs,
+    common: &super::summary_cache::ScopeSummary,
 ) -> StoreResult<Page> {
     let p = predicate(&query.filter)?;
     let mut values = p.values;
@@ -193,9 +194,9 @@ fn rows(
     }
     let more = events.len() > usize::from(query.page_size);
     events.truncate(usize::from(query.page_size));
-    let summary = totals(tx, &query.filter)?;
-    let coverage = coverage::coverage(tx, &query.filter, &summary)?;
-    let pricing = pricing::summary(tx, &query.filter, &query.price_basis, revision.price)?;
+    let summary = common.totals.clone();
+    let coverage = common.coverage.clone();
+    let pricing = common.pricing.clone();
     if pricing
         .priced_total_tokens
         .value()
@@ -206,7 +207,7 @@ fn rows(
         return Err(ErrorCode::DbCorrupt.into());
     }
     let (parser_versions, accounting_versions) =
-        dashboard::versions(tx, &query.filter, &query.filter)?;
+        (common.parsers.clone(), common.accounting.clone());
     let id = handle
         .snapshot_id
         .iter()
@@ -250,9 +251,17 @@ impl Database {
             None => (self.leases().open(&binding)?, None),
         };
         let query = request.query.clone();
-        let page = self.leases().read(&handle, &binding, move |tx, revision| {
-            rows(tx, revision, handle, &query, last.as_ref(), at)
-        });
+        let database = self.clone();
+        let page = self.leases().read_summary(
+            &handle,
+            &binding,
+            database,
+            query.filter.clone(),
+            query.price_basis.clone(),
+            move |tx, revision, common| {
+                rows(tx, revision, handle, &query, last.as_ref(), at, common)
+            },
+        );
         let mut page = match page {
             Ok(page) => page,
             Err(error) => {

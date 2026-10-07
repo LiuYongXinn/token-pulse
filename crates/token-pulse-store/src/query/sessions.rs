@@ -1,7 +1,6 @@
 //! Bounded session pages retain facts, relations and prices in one real lease.
-use super::{
-    aggregate_sql, context, coverage, dashboard, fact_from, predicate, pricing, read_totals, totals,
-};
+use super::{aggregate_sql, context, coverage, fact_from, predicate, read_totals};
+use super::{dashboard, pricing, totals};
 use crate::{Database, ErrorCode, Revision, StoreResult, leases::cursor::QueryBinding};
 use rusqlite::{Transaction, params_from_iter, types::Value};
 use serde::{Deserialize, Serialize};
@@ -46,6 +45,7 @@ fn rows(
     query: &SessionsQuery,
     last: Option<&Position>,
     at: EpochMs,
+    common: &super::summary_cache::ScopeSummary,
 ) -> StoreResult<Page> {
     let filter = &query.filter;
     let p = predicate(filter)?;
@@ -119,35 +119,20 @@ fn rows(
     }
     let more = sessions.len() > usize::from(query.page_size);
     sessions.truncate(usize::from(query.page_size));
-    let mut prices = sessions
-        .iter()
-        .map(|session| {
-            (
-                session.session_key.clone(),
-                PricingAccumulator::new(query.price_basis.clone()),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let catalog = crate::pricing::catalog_at(tx, revision.price)?;
-    let mut overall = PricingAccumulator::new(query.price_basis.clone());
-    pricing::visit(tx, filter, &query.price_basis, &catalog, |event| {
-        if let Some(price) = prices.get_mut(&event.session_key) {
-            price.push(event.total_tokens, event.outcome.clone())?;
-        }
-        Ok(overall.push(event.total_tokens, event.outcome)?)
-    })?;
     for session in &mut sessions {
-        session.pricing = prices
-            .remove(&session.session_key)
+        session.pricing = common
+            .sessions
+            .get(&session.session_key)
             .ok_or(ErrorCode::DbCorrupt)?
-            .summary(false)?;
+            .clone();
         check_price(&session.summary, &session.pricing)?;
     }
-    let summary = totals(tx, filter)?;
-    let coverage = coverage::coverage(tx, filter, &summary)?;
-    let pricing = overall.summary(false)?;
+    let summary = common.totals.clone();
+    let coverage = common.coverage.clone();
+    let pricing = common.pricing.clone();
     check_price(&summary, &pricing)?;
-    let (parser_versions, accounting_versions) = dashboard::versions(tx, filter, filter)?;
+    let (parser_versions, accounting_versions) =
+        (common.parsers.clone(), common.accounting.clone());
     Ok(Page {
         more,
         data: SessionsPage {
@@ -208,9 +193,17 @@ impl Database {
                 .map(|b| format!("{b:02x}"))
                 .collect::<String>()
         );
-        let page = self.leases().read(&handle, &binding, move |tx, revision| {
-            rows(tx, revision, snapshot_id, &query, last.as_ref(), at)
-        });
+        let database = self.clone();
+        let page = self.leases().read_summary(
+            &handle,
+            &binding,
+            database,
+            query.filter.clone(),
+            query.price_basis.clone(),
+            move |tx, revision, common| {
+                rows(tx, revision, snapshot_id, &query, last.as_ref(), at, common)
+            },
+        );
         let mut page = match page {
             Ok(page) => page,
             Err(error) => {

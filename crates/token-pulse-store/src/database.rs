@@ -38,6 +38,7 @@ struct Inner {
     path: PathBuf,
     leases: crate::leases::LeaseService,
     usage_listener: Mutex<Option<UsageListener>>,
+    summaries: crate::query::summary_cache::SummaryCache,
 }
 impl Drop for Inner {
     fn drop(&mut self) {
@@ -196,6 +197,7 @@ impl Database {
                 },
                 leases: lease_service(&path)?,
                 usage_listener: Mutex::new(None),
+                summaries: Default::default(),
                 path,
             }),
         })
@@ -203,6 +205,7 @@ impl Database {
     pub fn path(&self) -> &Path {
         &self.inner.path
     }
+    pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache { &self.inner.summaries }
     pub fn leases(&self) -> &crate::leases::LeaseService {
         &self.inner.leases
     }
@@ -241,14 +244,18 @@ impl Database {
         &self,
         query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
     ) -> StoreResult<T> {
+        let waited = Instant::now();
         let mut reader = self.inner.readers.take()?;
+        crate::query_timing::record("reader_wait", waited);
         let transaction = reader
             .connection
             .as_mut()
             .ok_or(ErrorCode::DbWriteFailed)?
             .transaction_with_behavior(TransactionBehavior::Deferred)?;
         let revision = transaction.query_row("SELECT data_revision,price_revision,settings_revision FROM app_state WHERE singleton=1", [], |r| Ok(Revision { data:r.get(0)?, price:r.get(1)?, settings:r.get(2)? }))?;
+        let started = Instant::now();
         let result = query(&transaction, revision)?;
+        crate::query_timing::record("snapshot_compute", started);
         transaction.commit()?;
         Ok(result)
     }

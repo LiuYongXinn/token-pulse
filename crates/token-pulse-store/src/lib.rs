@@ -19,6 +19,7 @@ pub mod mini;
 pub mod pricing;
 mod proof_jobs;
 pub mod query;
+pub mod query_timing;
 pub mod rebuild;
 mod registration;
 pub mod revalue_jobs;

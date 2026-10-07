@@ -1,11 +1,8 @@
 //! Dashboard components are captured by one real SQLite read transaction.
-use super::{
-    BucketTotals, aggregate_sql, coverage, fact_from, predicate, pricing, read_totals, series,
-    totals,
-};
+use super::{BucketTotals, aggregate_sql, coverage, fact_from, predicate, read_totals, series};
 use crate::{Database, ErrorCode, Revision, StoreResult};
 use rusqlite::{Transaction, params_from_iter};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use token_pulse_core::{
     calendar::Grain,
     numeric::{DecimalInt, EpochMs},
@@ -104,39 +101,30 @@ pub fn bundle(
     generated_at_ms: EpochMs,
     snapshot_id: &str,
 ) -> StoreResult<DashboardBundle> {
+    let common =
+        super::summary_cache::compute(tx, revision, &request.filter, &request.price_basis)?;
+    assemble(tx, revision, request, generated_at_ms, snapshot_id, &common)
+}
+fn assemble(
+    tx: &Transaction<'_>,
+    revision: Revision,
+    request: &DashboardRequest,
+    generated_at_ms: EpochMs,
+    snapshot_id: &str,
+    common: &super::summary_cache::ScopeSummary,
+) -> StoreResult<DashboardBundle> {
     request.validate()?;
     validate_request_id(snapshot_id)?;
-    let summary = totals(tx, &request.filter)?;
-    let coverage = coverage::coverage(tx, &request.filter, &summary)?;
+    let summary = common.totals.clone();
+    let coverage = common.coverage.clone();
     let series = series_with_coverage(tx, &request.filter, request.grain)?;
     let mut heatmap_filter = request.filter.clone();
     heatmap_filter.range = request.heatmap_range.clone();
+    let heatmap_started = std::time::Instant::now();
     let heatmap = series_with_coverage(tx, &heatmap_filter, Grain::Day)?;
+    crate::query_timing::record("heatmap_compute", heatmap_started);
     let mut recent_sessions = recent_sessions(tx, &request.filter, &request.price_basis)?;
-    let mut per_session = recent_sessions
-        .iter()
-        .map(|s| {
-            (
-                s.session_key.clone(),
-                PricingAccumulator::new(request.price_basis.clone()),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let catalog = crate::pricing::catalog_at(tx, revision.price)?;
-    let mut prices = PricingAccumulator::new(request.price_basis.clone());
-    pricing::visit(
-        tx,
-        &request.filter,
-        &request.price_basis,
-        &catalog,
-        |event| {
-            if let Some(session) = per_session.get_mut(&event.session_key) {
-                session.push(event.total_tokens, event.outcome.clone())?;
-            }
-            Ok(prices.push(event.total_tokens, event.outcome)?)
-        },
-    )?;
-    let pricing = prices.summary(false)?;
+    let pricing = common.pricing.clone();
     let check_pricing = |summary: &token_pulse_core::protocol::TokenTotals,
                          pricing: &token_pulse_core::protocol::PricingSummary|
      -> StoreResult<()> {
@@ -152,10 +140,11 @@ pub fn bundle(
     };
     check_pricing(&summary, &pricing)?;
     for session in &mut recent_sessions {
-        session.pricing = per_session
-            .remove(&session.session_key)
+        session.pricing = common
+            .sessions
+            .get(&session.session_key)
             .ok_or(ErrorCode::DbCorrupt)?
-            .summary(false)?;
+            .clone();
         check_pricing(&session.summary, &session.pricing)?;
     }
     let (parser_versions, accounting_versions) = versions(tx, &request.filter, &heatmap_filter)?;
@@ -184,7 +173,10 @@ impl Database {
         at: EpochMs,
         snapshot_id: &str,
     ) -> StoreResult<DashboardBundle> {
-        self.snapshot(|tx, revision| bundle(tx, revision, request, at, snapshot_id))
+        self.snapshot(|tx, revision| {
+            let common = self.scope_summary(tx, revision, &request.filter, &request.price_basis)?;
+            assemble(tx, revision, request, at, snapshot_id, &common)
+        })
     }
 }
 #[cfg(test)]

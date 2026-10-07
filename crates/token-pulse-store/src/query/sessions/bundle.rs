@@ -71,6 +71,7 @@ pub(super) fn bundle(
         )
         .optional()?
         .ok_or(ErrorCode::InvalidQuery)?;
+    let common = super::super::summary_cache::compute(tx, revision, &filter, &request.price_basis)?;
     let mut page = rows(
         tx,
         revision,
@@ -83,6 +84,7 @@ pub(super) fn bundle(
         },
         None,
         at,
+        &common,
     )?
     .data;
     if page.sessions.len() > 1 {
