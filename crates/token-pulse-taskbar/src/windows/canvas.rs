@@ -14,6 +14,7 @@ use std::{
     mem, ptr,
     rc::Rc,
 };
+use token_pulse_core::settings::AppTheme;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, TME_CANCEL, TME_HOVER, TME_LEAVE, TRACKMOUSEEVENT,
     TrackMouseEvent, VK_APPS, VK_DOWN, VK_END, VK_ESCAPE, VK_F10, VK_HOME, VK_NEXT, VK_PRIOR,
@@ -50,6 +51,8 @@ struct State {
     interactive: bool,
     clicks: ClickQueue,
     privacy: bool,
+    theme: AppTheme,
+    dpi: u32,
     interaction_epoch: u64,
     menu_open: bool,
 }
@@ -115,6 +118,9 @@ unsafe extern "system" fn procedure(
             Rc::increment_strong_count(raw);
         }
         let slot = unsafe { Rc::from_raw(raw) };
+        if let Some(result) = super::menu::handle_message(window, message, wparam, lparam) {
+            return result;
+        }
         if message == WM_NCDESTROY {
             slot.alive.set(false);
             slot.details.clear().ok();
@@ -438,16 +444,21 @@ fn context_menu(window: HWND, slot: &CanvasState, lparam: LPARAM) {
         return;
     }
     clear_intentions(window, slot);
-    let (epoch, privacy) = unsafe {
+    let (epoch, privacy, theme, dpi) = unsafe {
         let state = &mut *slot.get();
         state.menu_open = true;
-        (state.interaction_epoch, state.privacy)
+        (
+            state.interaction_epoch,
+            state.privacy,
+            state.theme,
+            state.dpi,
+        )
     };
     let point = (lparam != -1).then_some(POINT {
         x: lparam as u16 as i16 as i32,
         y: (lparam >> 16) as u16 as i16 as i32,
     });
-    let selected = super::menu::show(window, point, privacy);
+    let selected = super::menu::show(window, point, privacy, theme, dpi);
     let state = unsafe { &mut *slot.get() };
     state.menu_open = false;
     if slot.alive.get()
@@ -482,6 +493,8 @@ impl NativeCanvas {
                 interactive: false,
                 clicks: ClickQueue::default(),
                 privacy: true,
+                theme: AppTheme::Light,
+                dpi,
                 interaction_epoch: 0,
                 menu_open: false,
             }),
@@ -689,6 +702,8 @@ impl NativeCanvas {
         unsafe {
             (*self.state.get()).font = font;
             (*self.state.get()).privacy = view.privacy;
+            (*self.state.get()).theme = view.details.as_ref().map_or(AppTheme::System, |d| d.theme);
+            (*self.state.get()).dpi = dpi;
         }
         if let Some(plan) = plan {
             let accessible = wide(&accessible_text(view)?);

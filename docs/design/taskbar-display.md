@@ -93,6 +93,8 @@ Token 683.1K    $0.57 估算
 |右键 / Shift+F10 / 菜单键|打开菜单：悬浮窗、统计、任务栏设置、隐私模式、隐藏任务栏显示|
 |菜单方向键 / Home / End|移动焦点；Escape 关闭并返回任务栏入口|
 
+右键菜单沿用应用的银雾主题和字体：浅色白底 / 深色灰底，约 264 DIP 起的自适应宽度、至少 38 DIP 行高、左侧线性图标、内缩圆角悬停背景和右侧助记键提示。隐私项同时显示“已开启 / 已关闭”并保持原生勾选状态。系统主题使用与详情面板相同的解析方式；高对比度模式使用原生系统菜单。仍由 `TrackPopupMenuEx` 处理定位、方向键和关闭，自绘仅改变菜单项呈现；`WM_MENUCHAR` 映射既有五个助记键，`MSAAMENUINFO` 保留原生可访问名称。依据 [Windows 自绘菜单](https://learn.microsoft.com/en-us/windows/win32/menurc/using-menus)及[自绘菜单的可访问名称](https://learn.microsoft.com/en-us/windows/win32/winauto/exposing-owner-drawn-menu-items)。原生 GDI 测试覆盖浅 / 深主题、100% / 125% / 150% / 200% 缩放、隐私状态、实际模态菜单绘制 / 助记键 / 取消与 UI Automation 名称；这不扩展为所有系统版本或物理输入验收。
+
 原生实现按系统 `GetDoubleClickTime` 延迟确认单击，双击到达后取消待处理单击，避免两种动作连续触发。原型采用 240 ms 演示延迟。自动数据刷新保持当前键盘焦点，不自动弹窗。
 
 M13g1：原生画布的 `WM_GETDLGCODE` 只请求当前可用的 Enter / Space / 菜单键 / Shift+F10；方向 / 翻页 / 首尾 / Escape 只在详情可见时请求。Tab、普通字符及无按键的通用查询交给 Windows，避免无条件 WANTALLKEYS 阻止原生焦点导航。Win10 自有窗口的实际 IsDialogMessage / 焦点 API 已验证 Tab 移出、再进入、详情随失焦关闭且无动作、Enter 仅一次打开小窗动作；不当作 Explorer 物理键盘或屏幕阅读器完成证据。依据 [WM_GETDLGCODE](https://learn.microsoft.com/zh-cn/windows/desktop/dlgbox/wm-getdlgcode) 和 [IsDialogMessage](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-isdialogmessagew)，已经由 IsDialogMessage 处理的消息不再额外分发。

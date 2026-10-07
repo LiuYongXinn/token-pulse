@@ -115,7 +115,7 @@ pub(crate) fn placement(
         bottom: top + height,
     })
 }
-fn palette(theme: AppTheme) -> Result<Palette, WireError> {
+pub(super) fn palette(theme: AppTheme) -> Result<Palette, WireError> {
     let background = match theme {
         AppTheme::Dark => rgb(22, 25, 31),
         AppTheme::Light => rgb(250, 252, 255),

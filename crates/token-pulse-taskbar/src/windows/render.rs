@@ -247,6 +247,37 @@ impl NativeFont {
     pub fn height(&self) -> i32 {
         self.height
     }
+    /// Draw a menu label with the measured font, preserving the caller's DC.
+    pub(crate) unsafe fn text(
+        &self,
+        dc: HDC,
+        x: i32,
+        y: i32,
+        text: &str,
+        color: COLORREF,
+    ) -> Result<(), WireError> {
+        let saved = unsafe { SaveDC(dc) };
+        if saved == 0 {
+            return Err(WireError::InvalidState);
+        }
+        let result = (|| {
+            let previous = unsafe { SelectObject(dc, self.font.0) };
+            if previous.is_null() || previous as isize == -1 {
+                return Err(WireError::InvalidState);
+            }
+            let text: Vec<_> = text.encode_utf16().collect();
+            unsafe {
+                SetBkMode(dc, TRANSPARENT as i32);
+                SetTextColor(dc, color);
+            }
+            if unsafe { TextOutW(dc, x, y, text.as_ptr(), text.len() as i32) } == 0 {
+                return Err(WireError::InvalidState);
+            }
+            Ok(())
+        })();
+        unsafe { RestoreDC(dc, saved) };
+        result
+    }
     pub fn width(&self, text: &str) -> Result<i32, WireError> {
         if text.chars().count() > 4096 {
             return Err(WireError::TooLarge);
