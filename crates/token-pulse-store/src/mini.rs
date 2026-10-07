@@ -21,7 +21,7 @@ fn scope(payload: &serde_json::Map<String, serde_json::Value>) -> StoreResult<Mi
 fn session_label(tx: &Transaction<'_>, scope: &MiniScope) -> StoreResult<Option<String>> {
     match scope {
         MiniScope::TodayAllSources {} => Ok(Some("全部来源 · 今日".into())),
-        MiniScope::Session { session_key, .. } => tx.query_row("SELECT COALESCE(provider_session_id,session_key) FROM sessions WHERE session_key=?1 AND active_ledger_id IS NOT NULL", [session_key], |r| r.get(0)).optional()?.map(Some).ok_or(ErrorCode::InvalidQuery.into()),
+        MiniScope::Session { session_key, .. } => tx.query_row("SELECT display_name FROM session_labels WHERE session_key=?1 AND active_ledger_id IS NOT NULL", [session_key], |r| r.get(0)).optional()?.map(Some).ok_or(ErrorCode::InvalidQuery.into()),
     }
 }
 pub(crate) fn usage(

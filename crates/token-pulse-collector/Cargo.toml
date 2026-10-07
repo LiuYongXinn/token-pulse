@@ -9,6 +9,7 @@ rust-version.workspace = true
 token-pulse-core.workspace = true
 token-pulse-store.workspace = true
 serde_json.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 sha2 = "0.10"
 notify = "8.2.0"
 getrandom = "0.4"

@@ -91,6 +91,8 @@ impl CollectorService {
                 let mut reconcile = true;
                 let mut suspended = false;
                 let mut retries: BTreeMap<String, (usize, Instant)> = BTreeMap::new();
+                let mut titles = crate::session_titles::TitleIndexes::default();
+                let mut titles_at: Option<Instant> = None;
                 loop {
                     if stop.load(Ordering::Acquire) {
                         let _ = database.interrupt_source_scans();
@@ -106,9 +108,11 @@ impl CollectorService {
                         retries.clear();
                         if !suspended {
                             reconcile = true;
+                            titles_at = None;
                         }
                     }
                     if requested.swap(false, Ordering::AcqRel) {
+                        titles_at = None;
                         report(&thread_status, database.interrupt_source_scans());
                         scans.clear();
                         queue = WorkQueue::default();
@@ -159,6 +163,12 @@ impl CollectorService {
                         }
                     }
                     let now = Instant::now();
+                    if !suspended
+                        && titles_at.is_none_or(|at| now.duration_since(at) >= options.active_poll)
+                    {
+                        titles.refresh(&database);
+                        titles_at = Some(now);
+                    }
                     if overflow.swap(false, Ordering::Relaxed) || queue.take_reconcile_required() {
                         report(&thread_status, database.interrupt_source_scans());
                         reconcile = true;

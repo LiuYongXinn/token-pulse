@@ -22,7 +22,7 @@ fn identity(row: &Row<'_>) -> rusqlite::Result<SessionIdentity> {
         parent_provider_id: row.get(4)?,
     })
 }
-const IDENTITY: &str = "SELECT s.session_key,COALESCE(s.provider_session_id,s.session_key),parent.session_key,COALESCE(parent.provider_session_id,parent.session_key),s.parent_provider_id FROM sessions s LEFT JOIN sessions parent ON parent.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key) AND parent.active_ledger_id IS NOT NULL";
+const IDENTITY: &str = "SELECT s.session_key,s.display_name,parent.session_key,parent.display_name,s.parent_provider_id FROM session_labels s LEFT JOIN session_labels parent ON parent.session_key=COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=s.parent_key),s.parent_key) AND parent.active_ledger_id IS NOT NULL";
 
 pub(super) fn scoped_filter(
     tx: &Transaction<'_>,

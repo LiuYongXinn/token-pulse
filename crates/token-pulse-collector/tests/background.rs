@@ -55,6 +55,42 @@ fn wait_for(condition: impl Fn() -> bool) {
 }
 
 #[test]
+fn title_index_is_imported_and_renames_are_polled_without_log_writes() {
+    let (logs, _data, db, path) = setup();
+    let index = logs.path().join("session_index.jsonl");
+    fs::write(&index, "{\"id\":\"background-synthetic\",\"thread_name\":\"原会话标题\",\"updated_at\":\"2026-10-07T12:00:00Z\"}\n").unwrap();
+    let original = fs::read(&path).unwrap();
+    let collector = CollectorService::start(
+        db.clone(),
+        CollectorOptions {
+            watcher: false,
+            active_poll: Duration::from_millis(50),
+            manifest_poll: Duration::from_secs(10),
+        },
+    )
+    .unwrap();
+    let label = || {
+        db.snapshot(|tx, _| Ok(tx.query_row("SELECT display_name FROM session_labels WHERE provider_session_id='background-synthetic'", [], |r| r.get::<_, String>(0))?)).ok()
+    };
+    wait_for(|| total(&db) == 1 && label().as_deref() == Some("原会话标题"));
+    let before = db.usage_revision().unwrap();
+    fs::write(&index, "{\"id\":\"background-synthetic\",\"thread_name\":\"修改后的会话标题\",\"updated_at\":\"2026-10-07T12:01:00Z\"}\n").unwrap();
+    wait_for(|| label().as_deref() == Some("修改后的会话标题"));
+    let after = db.usage_revision().unwrap();
+    assert_eq!(before.data_revision, after.data_revision);
+    assert_eq!(before.price_revision, after.price_revision);
+    assert!(after.usage_view_revision.value() > before.usage_view_revision.value());
+    assert_eq!(total(&db), 1);
+    assert_eq!(fs::read(path).unwrap(), original);
+    fs::remove_file(index).unwrap();
+    collector.reconcile();
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(label().as_deref(), Some("修改后的会话标题"));
+    assert!(collector.status().error.is_none());
+    collector.shutdown();
+}
+
+#[test]
 fn startup_periodic_reconciliation_and_resume_collect_without_watcher() {
     let (_logs, _data, db, path) = setup();
     let collector = CollectorService::start(

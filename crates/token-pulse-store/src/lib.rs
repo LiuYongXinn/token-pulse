@@ -28,6 +28,7 @@ pub mod rollup_service;
 pub mod settings;
 pub mod source_management;
 pub mod source_scan;
+pub mod session_titles;
 #[cfg(test)]
 mod usage_revision_tests;
 pub mod valuation;

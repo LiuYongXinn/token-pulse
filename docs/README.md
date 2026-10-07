@@ -8,6 +8,8 @@
 
 ## 设计
 
+- [会话标题显示](design/session-titles.md)：读取 Codex 标题索引、改名更新、ID 回退、快照和隐私规则。
+
 - [默认参考费用估算设计](design/reference-estimates.md)：Standard 默认估算、请求档位、未知写入假设、公开依据与缓存 v7。
 
 - [账户额度显示设计](design/account-quota.md)

@@ -46,7 +46,7 @@ fn rows(
             p.sql
         ),
         FacetDimension::Sessions => format!(
-            "SELECT e.session_key AS dimension_key,MIN(COALESCE(session.provider_session_id,e.session_key)) AS label,COUNT(*) AS amount FROM {from} JOIN sessions session ON session.session_key=e.session_key WHERE {} GROUP BY e.session_key",
+            "SELECT e.session_key AS dimension_key,MIN(session.display_name) AS label,COUNT(*) AS amount FROM {from} JOIN session_labels session ON session.session_key=e.session_key WHERE {} GROUP BY e.session_key",
             p.sql
         ),
         FacetDimension::Sources => format!(

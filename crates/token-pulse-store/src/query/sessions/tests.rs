@@ -10,6 +10,136 @@ use token_pulse_core::{
     query::model_key,
 };
 
+#[test]
+fn titles_rename_without_changing_usage_identity_or_frozen_pages() {
+    use crate::session_titles::SessionTitle;
+    use token_pulse_core::{
+        mini::{MiniSessionsQuery, MiniSessionsRequest},
+        privacy::PrivacyRedact,
+        query::{FacetDimension, FilterOptionsQuery, FilterOptionsRequest, SessionBundleRequest},
+        settings::TimezoneMutation,
+    };
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    session(&db, "a", None);
+    session(&db, "b", Some("a"));
+    event(&db, "a1", "a", 2000, 20);
+    event(&db, "b1", "b", 1500, 30);
+    let title = |id: &str, name: &str, updated_at_ms| SessionTitle {
+        provider_session_id: id.into(),
+        title: name.into(),
+        updated_at_ms,
+    };
+    let sync = |entries| {
+        db.sync_session_titles("source".into(), "synthetic".into(), entries)
+            .unwrap()
+    };
+    let before = db.usage_revision().unwrap();
+    assert!(sync(vec![
+        title("Name-a", "父会话标题", 1),
+        title("Name-b", "中文旧标题", 1)
+    ]));
+    let after = db.usage_revision().unwrap();
+    assert_eq!(before.data_revision, after.data_revision);
+    assert_eq!(before.price_revision, after.price_revision);
+    assert!(after.usage_view_revision.value() > before.usage_view_revision.value());
+    assert!(!sync(vec![title("Name-b", "中文旧标题", 1)]));
+    assert_eq!(db.usage_revision().unwrap(), after);
+    let mut req = request(SessionSort::LatestDesc, 1);
+    let first = fetch(&db, &req);
+    assert_eq!(first.sessions[0].display_name, "父会话标题");
+    req.cursor = first.next_cursor;
+    assert!(sync(vec![title("Name-b", "中文新标题", 2)]));
+    assert!(!sync(vec![title("Name-b", "过时标题", 1)]));
+    let pinned = fetch(&db, &req);
+    assert_eq!(pinned.sessions[0].display_name, "中文旧标题");
+    assert_eq!(pinned.sessions[0].session_key, "b");
+    db.close_sessions(
+        "main",
+        &SessionsRequest {
+            cursor: pinned.next_cursor,
+            ..req
+        },
+    )
+    .unwrap();
+    let fresh = fetch(&db, &request(SessionSort::LatestDesc, 50));
+    assert_eq!(fresh.sessions[1].display_name, "中文新标题");
+    assert_eq!(
+        fresh.sessions[1].parent_display_name.as_deref(),
+        Some("父会话标题")
+    );
+    assert_eq!(fresh.sessions[2].display_name, "provider-session");
+    assert_eq!(fresh.summary.total_tokens.as_str(), "160");
+    let detail = db
+        .session_bundle(
+            &SessionBundleRequest {
+                session_key: "b".into(),
+                filter: filter(),
+                price_basis: token_pulse_core::protocol::PriceBasis::EventTime {},
+            },
+            EpochMs::new(1234).unwrap(),
+            "titles-detail",
+        )
+        .unwrap();
+    assert_eq!(detail.identity.display_name, "中文新标题");
+    assert_eq!(
+        detail.identity.parent_display_name.as_deref(),
+        Some("父会话标题")
+    );
+    let facet = db
+        .filter_options(
+            "main",
+            &FilterOptionsRequest {
+                query: FilterOptionsQuery {
+                    filter: filter(),
+                    dimension: FacetDimension::Sessions,
+                    search: "新标题".into(),
+                    page_size: 50,
+                },
+                cursor: None,
+            },
+            EpochMs::new(1234).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(facet.options.len(), 1);
+    assert_eq!(facet.options[0].key.as_deref(), Some("b"));
+    db.mutate_display_timezone(
+        TimezoneMutation::Initialize {
+            system_timezone: "UTC".into(),
+        },
+        EpochMs::new(100).unwrap(),
+    )
+    .unwrap();
+    let mini = db
+        .mini_sessions(
+            "mini",
+            &MiniSessionsRequest {
+                query: MiniSessionsQuery {
+                    search: "新标题".into(),
+                    page_size: 50,
+                },
+                cursor: None,
+            },
+            EpochMs::new(1234).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(mini.options[0].display_name, "中文新标题");
+    let mut hidden = fresh;
+    hidden.redact();
+    assert!(!serde_json::to_string(&hidden).unwrap().contains("标题"));
+    assert_eq!(hidden.sessions[1].session_key, "b");
+    assert_eq!(
+        db.sync_session_titles(
+            "source".into(),
+            "wrong-root".into(),
+            vec![title("Name-b", "wrong", 3)]
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::PermissionDenied
+    );
+}
+
 fn request(sort: SessionSort, size: u16) -> SessionsRequest {
     SessionsRequest {
         query: SessionsQuery {

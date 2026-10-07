@@ -3,6 +3,7 @@ pub mod jobs;
 pub mod replacement;
 pub mod replay;
 pub mod service;
+mod session_titles;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use token_pulse_core::{

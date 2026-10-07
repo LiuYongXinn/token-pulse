@@ -1,4 +1,54 @@
 use super::*;
+
+#[test]
+fn schema_eighteen_title_upgrade_preserves_ids_revisions_and_backs_up_old_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("token-pulse.db");
+    let mut conn = Connection::open(&path).unwrap();
+    migrate(&mut conn, &path).unwrap();
+    conn.execute_batch("DROP VIEW session_labels; DROP TABLE session_titles; DELETE FROM schema_migrations WHERE version=19; UPDATE app_state SET schema_version=18,data_revision=19,price_revision=7,settings_revision=77; PRAGMA user_version=18; INSERT INTO sessions(session_key,provider,provider_session_id,identity_status) VALUES('old-session','codex','old-provider','confirmed');").unwrap();
+    let before: i64 = conn
+        .query_row("SELECT usage_view_revision FROM app_state", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    migrate(&mut conn, &path).unwrap();
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        19
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT display_name FROM session_labels WHERE session_key='old-session'",
+            [],
+            |r| r.get::<_, String>(0)
+        )
+        .unwrap(),
+        "old-provider"
+    );
+    assert_eq!(conn.query_row("SELECT data_revision,price_revision,settings_revision,usage_view_revision FROM app_state", [], |r| Ok((r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,r.get::<_,i64>(3)?))).unwrap(), (19,7,77,before));
+    let backup = fs::read_dir(dir.path().join("migration-backups"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|ext| ext == "db"))
+        .unwrap();
+    let old = Connection::open_with_flags(backup, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    assert_eq!(
+        old.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        18
+    );
+    assert_eq!(
+        old.query_row(
+            "SELECT provider_session_id FROM sessions WHERE session_key='old-session'",
+            [],
+            |r| r.get::<_, String>(0)
+        )
+        .unwrap(),
+        "old-provider"
+    );
+}
 fn legacy(path: &Path) -> Connection {
     let conn = Connection::open(path).unwrap();
     conn.execute_batch(MIGRATIONS[0].1).unwrap();
