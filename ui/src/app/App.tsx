@@ -20,6 +20,7 @@ import { useMainCalendar } from './useMainCalendar';
 import { DisplaySettingsPanel } from './DisplaySettingsPanel';
 import { UpdateSettingsPanel } from './UpdateSettingsPanel';
 import { TaskbarDiagnosticsPanel, TaskbarSettingsPanel } from './TaskbarSettingsPanel';
+import { TaskbarToggle } from './TaskbarToggle';
 import { useMainNavigation } from './useMainNavigation';
 import { whenFull } from './usage-display';
 import type { MiniStatsRequest } from '../shared/generated/contracts';
@@ -152,7 +153,7 @@ export function App() {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><Icon name="pulse" size={23} /></span>TokenPulse</div>
       <nav aria-label="主导航">{pages.map(([id, label]) => <button key={id} className={page === id ? 'active' : ''} aria-current={page === id ? 'page' : undefined} onClick={() => { timeNavigation(id); flushSync(() => setPage(id)); }}><Icon name={id} /><span>{label}</span></button>)}</nav>
-      <div className="sidebar-bottom"><ActionButton icon="mini" disabled={!status} onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示悬浮窗</ActionButton></div>
+      <div className="sidebar-bottom"><ActionButton icon="mini" disabled={!status} onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示悬浮窗</ActionButton><TaskbarToggle /></div>
     </aside>
     <main>
       <header className="heading"><div><h1>{current[1]}</h1></div><div className="head-actions"><ActionButton icon="mini" variant="primary" disabled={!status} title="显示小窗" onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示小窗</ActionButton><ActionButton icon="refresh" title="刷新" onClick={() => void refresh()} disabled={loading}>刷新</ActionButton>{status && <ActionButton icon="tray" variant="quiet" title="隐藏到托盘" onClick={() => void windowAction('hide_main').catch(e => setError(runtimeError(e)))}>隐藏到托盘</ActionButton>}</div></header>

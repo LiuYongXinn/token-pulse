@@ -50,6 +50,58 @@ test.beforeEach(async ({ page }) => {
 });
 async function open(page: Page) { await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '任务栏显示' }).click(); const panel = page.getByRole('tabpanel', { name: '任务栏显示设置' }); await expect(panel.getByRole('checkbox', { name: '启用任务栏显示' })).toBeEnabled(); return panel; }
 
+test('sidebar toggles taskbar, stays in sync with settings and preserves display options', async ({ page }, testInfo) => {
+  const panel = await open(page), sidebar = page.locator('.sidebar-bottom');
+  await expect(sidebar.getByRole('button', { name: '显示悬浮窗', exact: true })).toBeVisible();
+  await sidebar.getByRole('button', { name: '显示任务栏', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('checkbox', { name: '启用任务栏显示' })).toBeChecked();
+  await panel.getByRole('checkbox', { name: '费用估算', exact: true }).uncheck();
+  await panel.getByRole('checkbox', { name: '任务栏不可用时显示悬浮窗', exact: true }).uncheck();
+  await panel.getByRole('combobox', { name: '任务栏显示布局' }).selectOption('single_row');
+  await panel.getByRole('combobox', { name: '任务栏显示位置' }).selectOption('application_right');
+  await panel.getByRole('button', { name: '保存任务栏设置' }).click();
+  await expect(panel.getByRole('button', { name: '保存任务栏设置' })).toBeDisabled();
+  await sidebar.getByRole('button', { name: '隐藏任务栏', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '显示任务栏', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(panel.getByRole('checkbox', { name: '启用任务栏显示' })).not.toBeChecked();
+  expect(await page.evaluate(() => (window as unknown as QA).__taskbarQA.calls().filter(v => v.command === 'set_taskbar_preferences').at(-1)?.request)).toEqual({
+    preferences: { enabled: false, display: { layout: 'single_row', show_tokens: true, show_costs: false, show_quota: true, show_weekly_reset: true }, position: 'application_right', fallback_to_mini: false },
+    expected_settings_revision: '9007199254740995',
+  });
+  await panel.getByRole('checkbox', { name: '启用任务栏显示' }).check();
+  await panel.getByRole('button', { name: '保存任务栏设置' }).click();
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '总览', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toBeVisible();
+  await page.locator('.sidebar').screenshot({ path: testInfo.outputPath('sidebar-taskbar-light-1280.png') });
+  await page.setViewportSize({ width: 760, height: 860 });
+  await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('.sidebar').screenshot({ path: testInfo.outputPath('sidebar-taskbar-dark-760.png') });
+});
+
+test('sidebar reports read and write failures without claiming the toggle succeeded', async ({ page }) => {
+  await page.addInitScript(() => (window as unknown as QA).__taskbarQA.failRead(true));
+  await page.goto('/');
+  const sidebar = page.locator('.sidebar-bottom');
+  await expect(sidebar.getByRole('button', { name: '显示任务栏', exact: true })).toBeDisabled();
+  await expect(sidebar.getByRole('alert')).toContainText('读取失败');
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.failRead(false));
+  await sidebar.getByRole('button', { name: '重试任务栏设置' }).click();
+  await expect(sidebar.getByRole('alert')).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.reject(true));
+  await sidebar.getByRole('button', { name: '显示任务栏', exact: true }).click();
+  await expect(sidebar.getByRole('alert')).toContainText('写入失败');
+  await expect(sidebar.getByRole('button', { name: '显示任务栏', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.reject(false));
+  await sidebar.getByRole('button', { name: '显示任务栏', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '隐藏任务栏', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('alert')).toHaveCount(0);
+});
+
 test('real DTO switches use exact CAS, saved enabled does not invent embedded or fallback', async ({ page }) => {
   const panel = await open(page);
   await expect(panel.getByRole('status')).toHaveText('已关闭'); await expect(panel.getByText('尚未确认', { exact: true })).toHaveCount(2);

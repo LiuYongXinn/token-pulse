@@ -11,6 +11,7 @@ const paths = {
   settings: <><path d="M3 6h18M3 12h18M3 18h18" /><rect x="7" y="4" width="3" height="4" rx="1" /><rect x="14" y="10" width="3" height="4" rx="1" /><rect x="6" y="16" width="3" height="4" rx="1" /></>,
   refresh: <path d="M20 7a9 9 0 1 0 1 8M20 3v5h-5" />,
   mini: <><rect x="3" y="4" width="18" height="16" rx="3" /><rect x="12" y="12" width="6" height="5" rx="1" /></>,
+  taskbar: <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M3 15h18M7 18h2M12 18h2M17 18h1" /></>,
   tray: <><path d="M3 13v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6M3 13h5l2 3h4l2-3h5M12 3v8m-4-4 4 4 4-4" /></>,
   close: <path d="m6 6 12 12M18 6 6 18" />,
   pin: <path d="M9 3h6l-1 6 4 4H6l4-4-1-6ZM12 13v8" />,
