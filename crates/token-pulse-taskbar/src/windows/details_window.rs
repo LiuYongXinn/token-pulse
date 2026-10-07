@@ -1,6 +1,6 @@
 //! Thread-owned, nonactivating read-only details. All content comes from the host projection.
 use super::{
-    render::{NativeFont, Palette, has_visible_clip, rgb},
+    render::{NativeFont, Palette, has_visible_clip, paint_buffered, rgb},
     topology::{ScreenRect, wide},
 };
 use crate::{
@@ -33,16 +33,20 @@ use windows_sys::Win32::{
             CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWLP_USERDATA,
             GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST,
             IsWindowVisible, KillTimer, MA_NOACTIVATE, RegisterClassExW, SW_HIDE, SWP_NOACTIVATE,
-            SWP_NOOWNERZORDER, SWP_SHOWWINDOW, SetTimer, SetWindowLongPtrW, SetWindowPos,
-            SetWindowTextW, ShowWindow, UnregisterClassW, WM_CANCELMODE, WM_CLOSE, WM_DPICHANGED,
-            WM_ERASEBKGND, WM_LBUTTONDOWN, WM_MOUSEACTIVATE, WM_MOUSEWHEEL, WM_NCCREATE,
-            WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_THEMECHANGED, WM_TIMER, WNDCLASSEXW,
-            WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+            SWP_NOOWNERZORDER, SWP_NOREDRAW, SWP_SHOWWINDOW, SetTimer, SetWindowLongPtrW,
+            SetWindowPos, SetWindowTextW, ShowWindow, UnregisterClassW, WM_CANCELMODE, WM_CLOSE,
+            WM_DPICHANGED, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_MOUSEACTIVATE, WM_MOUSEWHEEL,
+            WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_PRINTCLIENT, WM_THEMECHANGED, WM_TIMER,
+            WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
         },
     },
 };
 pub const HOVER_MS: u32 = 300;
 const WATCH: usize = 1;
+#[cfg(test)]
+thread_local! {
+    static NATIVE_MESSAGES: RefCell<Vec<(HWND, u32)>> = const { RefCell::new(Vec::new()) };
+}
 fn pixels(dip: i32, dpi: u32) -> i32 {
     dip * dpi as i32 / 96
 }
@@ -485,12 +489,17 @@ impl PopupState {
         }
     }
     fn scroll_by(&self, amount: i32, absolute: bool) {
+        if self.update_scroll(amount, absolute) {
+            self.redraw();
+        }
+    }
+    fn update_scroll(&self, amount: i32, absolute: bool) -> bool {
         let Some(frame) = self.frame.borrow().clone() else {
-            return;
+            return false;
         };
         let mut client: RECT = unsafe { mem::zeroed() };
         if unsafe { GetClientRect(self.window.get(), &mut client) } == 0 {
-            return;
+            return false;
         }
         let max = (frame.layout.plan.height - client.bottom).max(0);
         let next = if absolute {
@@ -499,9 +508,7 @@ impl PopupState {
             self.scroll.get().saturating_add(amount)
         }
         .clamp(0, max);
-        if next != self.scroll.replace(next) {
-            self.redraw();
-        }
+        next != self.scroll.replace(next)
     }
     fn watch(&self) {
         if !self.visible() {
@@ -552,6 +559,16 @@ unsafe extern "system" fn procedure(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    #[cfg(test)]
+    if matches!(
+        message,
+        WM_PAINT
+            | WM_ERASEBKGND
+            | windows_sys::Win32::UI::WindowsAndMessaging::WM_WINDOWPOSCHANGED
+            | windows_sys::Win32::UI::WindowsAndMessaging::WM_SHOWWINDOW
+    ) {
+        NATIVE_MESSAGES.with(|messages| messages.borrow_mut().push((window, message)));
+    }
     if message == WM_NCCREATE {
         let create = unsafe { &*(lparam as *const CREATESTRUCTW) };
         unsafe {
@@ -631,7 +648,9 @@ unsafe extern "system" fn procedure(
                     }
                     if let Some(frame) = frame {
                         return unsafe {
-                            frame.paint(dc, client.right, client.bottom, state.scroll.get())
+                            paint_buffered(dc, client.right, client.bottom, |buffer| {
+                                frame.paint(buffer, client.right, client.bottom, state.scroll.get())
+                            })
                         };
                     }
                     let brush = unsafe { CreateSolidBrush(rgb(22, 25, 31)) };
@@ -774,7 +793,7 @@ impl NativeDetails {
         *self.state.frame.borrow_mut() = Some(frame);
         if visible {
             self.position(false)?;
-            self.state.scroll_by(0, false);
+            self.state.update_scroll(0, false);
             self.state.redraw();
         }
         Ok(())
@@ -790,32 +809,51 @@ impl NativeDetails {
         if unsafe { GetDpiForWindow(self.state.source.get()) } != frame.dpi {
             return Err(WireError::InvalidState);
         }
+        let current = window_rect(self.window).ok();
+        // An open popup keeps its viewport while data changes. Extra rows scroll;
+        // reopening measures a fresh height for the latest contents.
+        let requested_height = if !show && self.visible() {
+            current
+                .map(|rect| rect.height())
+                .unwrap_or(frame.layout.plan.height)
+        } else {
+            frame.layout.plan.height
+        };
         let area = placement(
             anchor,
             work_area(self.state.source.get())?,
             frame.layout.plan.width,
-            frame.layout.plan.height,
+            requested_height,
             frame.dpi,
         )?;
         self.state.anchor.set(anchor);
-        let region = unsafe {
-            CreateRoundRectRgn(
-                0,
-                0,
-                area.width() + 1,
-                area.height() + 1,
-                pixels(8, frame.dpi),
-                pixels(8, frame.dpi),
-            )
-        };
-        if region.is_null() {
-            return Err(WireError::InvalidState);
+        if current == Some(area)
+            && (!show || self.visible())
+            && unsafe { GetDpiForWindow(self.window) } == frame.dpi
+        {
+            return Ok(());
         }
-        if unsafe { SetWindowRgn(self.window, region, 0) } == 0 {
-            unsafe {
-                DeleteObject(region);
+        if current.map(|rect| (rect.width(), rect.height())) != Some((area.width(), area.height()))
+        {
+            let region = unsafe {
+                CreateRoundRectRgn(
+                    0,
+                    0,
+                    area.width() + 1,
+                    area.height() + 1,
+                    pixels(8, frame.dpi),
+                    pixels(8, frame.dpi),
+                )
+            };
+            if region.is_null() {
+                return Err(WireError::InvalidState);
             }
-            return Err(WireError::InvalidState);
+            if unsafe { SetWindowRgn(self.window, region, 0) } == 0 {
+                unsafe {
+                    DeleteObject(region);
+                }
+                return Err(WireError::InvalidState);
+            }
         }
         if unsafe {
             SetWindowPos(
@@ -825,7 +863,10 @@ impl NativeDetails {
                 area.top,
                 area.width(),
                 area.height(),
-                SWP_NOACTIVATE | SWP_NOOWNERZORDER | if show { SWP_SHOWWINDOW } else { 0 },
+                SWP_NOACTIVATE
+                    | SWP_NOOWNERZORDER
+                    | SWP_NOREDRAW
+                    | if show { SWP_SHOWWINDOW } else { 0 },
             )
         } == 0
         {
@@ -1222,6 +1263,39 @@ mod tests {
             .unwrap();
         assert!(details.visible());
         let mut caption = vec![0; 16000];
+        let stable_rect = window_rect(details.window).unwrap();
+        let stable_scroll = details.state.scroll.get();
+        let original_scope = view.scope_label.clone();
+        for update in 0..20 {
+            view.generated_at_ms =
+                token_pulse_core::numeric::EpochMs::new(view.generated_at_ms.value() + 1000)
+                    .unwrap();
+            view.scope_label = if update % 2 == 0 {
+                Some("SYNTHETIC DEVELOPMENT FIXTURE ".repeat(6))
+            } else {
+                original_scope.clone()
+            };
+            NATIVE_MESSAGES.with(|messages| messages.borrow_mut().clear());
+            details
+                .prepare(source, &view, dpi, view.generated_at_ms.value())
+                .unwrap();
+            assert!(details.visible());
+            assert_eq!(window_rect(details.window).unwrap(), stable_rect);
+            assert_eq!(details.state.scroll.get(), stable_scroll);
+            let messages = NATIVE_MESSAGES.with(|messages| {
+                messages
+                    .borrow()
+                    .iter()
+                    .filter(|(window, _)| *window == details.window)
+                    .map(|(_, message)| *message)
+                    .collect::<Vec<_>>()
+            });
+            assert_eq!(
+                messages,
+                [WM_PAINT],
+                "refresh must paint once without erase, resize or show/hide"
+            );
+        }
         let n =
             unsafe { GetWindowTextW(details.window, caption.as_mut_ptr(), caption.len() as i32) };
         assert!(

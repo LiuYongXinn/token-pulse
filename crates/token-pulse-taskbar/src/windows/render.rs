@@ -12,12 +12,13 @@ thread_local! {
 use windows_sys::Win32::{
     Foundation::{COLORREF, RECT, SIZE},
     Graphics::Gdi::{
-        ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, COLOR_WINDOW, COLOR_WINDOWTEXT,
-        CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW, CreateSolidBrush,
-        DEFAULT_CHARSET, DIB_RGB_COLORS, DeleteDC, DeleteObject, FillRect, GdiFlush, GetClipBox,
-        GetSysColor, GetTextExtentPoint32W, GetTextFaceW, GetTextMetricsW, HDC, HFONT, HGDIOBJ,
-        IntersectClipRect, NULLREGION, RestoreDC, SaveDC, SelectObject, SetBkMode, SetTextColor,
-        TEXTMETRICW, TRANSPARENT, TextOutW,
+        ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, COLOR_WINDOW,
+        COLOR_WINDOWTEXT, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection,
+        CreateFontIndirectW, CreateSolidBrush, DEFAULT_CHARSET, DIB_RGB_COLORS, DeleteDC,
+        DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor, GetTextExtentPoint32W,
+        GetTextFaceW, GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION,
+        RestoreDC, SRCCOPY, SaveDC, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW,
+        TRANSPARENT, TextOutW,
     },
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -117,6 +118,40 @@ impl Drop for Dc {
             DeleteDC(self.0);
         }
     }
+}
+/// Complete an opaque popup frame offscreen before copying it to the visible DC.
+pub(crate) unsafe fn paint_buffered(
+    dc: HDC,
+    width: i32,
+    height: i32,
+    paint: impl FnOnce(HDC) -> Result<(), WireError>,
+) -> Result<(), WireError> {
+    if width <= 0 || height <= 0 {
+        return Ok(());
+    }
+    let buffer = Dc(unsafe { CreateCompatibleDC(dc) });
+    if buffer.0.is_null() {
+        return Err(WireError::InvalidState);
+    }
+    let bitmap = Object(unsafe { CreateCompatibleBitmap(dc, width, height) });
+    if bitmap.0.is_null() {
+        return Err(WireError::InvalidState);
+    }
+    let previous = unsafe { SelectObject(buffer.0, bitmap.0) };
+    if previous.is_null() || previous as isize == -1 {
+        return Err(WireError::InvalidState);
+    }
+    let result = paint(buffer.0).and_then(|()| {
+        if unsafe { BitBlt(dc, 0, 0, width, height, buffer.0, 0, 0, SRCCOPY) } == 0 {
+            Err(WireError::InvalidState)
+        } else {
+            Ok(())
+        }
+    });
+    unsafe {
+        SelectObject(buffer.0, previous);
+    }
+    result
 }
 pub struct NativeFont {
     dc: Dc,
@@ -897,4 +932,61 @@ fn detail_metrics_use_data_glyphs_and_switch_back_to_body_without_changing_the_d
             .unwrap();
         assert_eq!(actual, expected, "wrong glyphs at {dpi} DPI");
     }
+}
+
+#[cfg(test)]
+#[test]
+fn buffered_popup_publishes_only_a_complete_frame_and_retains_pixels_on_render_failure() {
+    use windows_sys::Win32::Graphics::Gdi::GetPixel;
+    let font = NativeFont::for_details(96).unwrap();
+    let old = rgb(200, 30, 20);
+    let background = rgb(20, 40, 180);
+    let content = rgb(20, 180, 40);
+    font.bitmap_with(64, 32, |dc| unsafe {
+        let fill = |target, area: RECT, color| {
+            let brush = Object(CreateSolidBrush(color));
+            assert!(!brush.0.is_null());
+            assert_ne!(FillRect(target, &area, brush.0), 0);
+        };
+        let bounds = RECT {
+            left: 0,
+            top: 0,
+            right: 64,
+            bottom: 32,
+        };
+        fill(dc, bounds, old);
+        paint_buffered(dc, 64, 32, |buffer| {
+            fill(buffer, bounds, background);
+            assert_eq!(GetPixel(dc, 0, 0), old, "background must remain offscreen");
+            fill(
+                buffer,
+                RECT {
+                    left: 8,
+                    top: 8,
+                    right: 32,
+                    bottom: 24,
+                },
+                content,
+            );
+            assert_eq!(
+                GetPixel(dc, 16, 16),
+                old,
+                "partial contents must remain offscreen"
+            );
+            Ok(())
+        })?;
+        assert_eq!(GetPixel(dc, 0, 0), background);
+        assert_eq!(GetPixel(dc, 16, 16), content);
+        assert_eq!(
+            paint_buffered(dc, 64, 32, |buffer| {
+                fill(buffer, bounds, 0);
+                Err(WireError::InvalidState)
+            }),
+            Err(WireError::InvalidState)
+        );
+        assert_eq!(GetPixel(dc, 0, 0), background);
+        assert_eq!(GetPixel(dc, 16, 16), content);
+        Ok(())
+    })
+    .unwrap();
 }
