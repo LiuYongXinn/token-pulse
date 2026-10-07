@@ -3,8 +3,9 @@ import { AccountServicePanel } from './AccountServicePanel';
 import { NotifySettingsPanel } from './NotifySettingsPanel';
 import { whenFull } from './usage-display';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { chooseSourceDirectory, getSources, manageSource, runtimeError } from '../shared/runtime';
-import type { CapabilityState, ManageSourceAction, SourceDirectoryKind, SourceReadability, SourcesSnapshot } from '../shared/generated/contracts';
+import { chooseSourceDirectory, manageSource, runtimeError } from '../shared/runtime';
+import type { CapabilityState, ManageSourceAction, SourceDirectoryKind, SourceReadability } from '../shared/generated/contracts';
+import { useSourcesSnapshot } from './main-state-cache';
 
 const readable: Record<SourceReadability, string> = { awaiting_directory: '等待目录出现', readable: '可读取', partially_readable: '部分目录不可读取', unreadable: '读取失败', disabled: '已暂停' };
 const capability: Record<CapabilityState, string> = { not_probed: '尚未探测', available: '可用', unavailable: '不可用' };
@@ -13,7 +14,9 @@ function time(value: number | null, timezone: string | null): string { return va
 
 export function SourcesPanel({ onChanged, timezone, diagnostics = false }: { onChanged: () => void; timezone: string | null; diagnostics?: boolean }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
-  const [snapshot, setSnapshot] = useState<SourcesSnapshot | null>(null);
+  const shared = useSourcesSnapshot();
+  const snapshot = shared.bundle;
+  const setSnapshot = shared.accept;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -21,14 +24,12 @@ export function SourcesPanel({ onChanged, timezone, diagnostics = false }: { onC
   const mounted = useRef(true);
   const refresh = async () => {
     const sequence = ++requestSequence.current;
-    try { const result = await getSources(); if (mounted.current && sequence === requestSequence.current) { setSnapshot(result); setError(null); } }
+    try { shared.reload(); if (mounted.current && sequence === requestSequence.current) setError(null); }
     catch (error) { if (mounted.current && sequence === requestSequence.current) setError(runtimeError(error)); }
   };
   useEffect(() => {
     mounted.current = true;
-    void refresh();
-    const interval = setInterval(() => { if (!busyRef.current) void refresh(); }, 2000);
-    return () => { mounted.current = false; clearInterval(interval); };
+    return () => { mounted.current = false; };
   }, []);
   const run = async (action: ManageSourceAction) => {
     if (!snapshot || busyRef.current) return;
@@ -53,7 +54,7 @@ export function SourcesPanel({ onChanged, timezone, diagnostics = false }: { onC
     <div className="source-heading"><div><h2>数据来源</h2></div><button onClick={() => void refresh()} disabled={busy}>刷新来源</button></div>
     {policy.privacy !== false && <p className="notice">隐私模式已隐藏来源路径；关闭后可选择新目录。</p>}
     <div className="source-actions">{!diagnostics && policy.privacy === false && <button className="primary" disabled={busy || !snapshot} onClick={() => void choose('local')}>添加自定义目录</button>}<button disabled={busy || !snapshot} onClick={() => void run({ kind: 'detect' })}>{diagnostics ? '重新检测来源' : '检测 Windows 本地来源'}</button></div>
-    {error && <div className="notice" role="alert">{error}{snapshot && <span>保留上次来源状态</span>}</div>}
+    {(error || shared.error) && <div className="notice" role="alert">{error || shared.error}{snapshot && <span>保留上次来源状态</span>}</div>}
     {!snapshot && !error && <p className="muted" role="status">正在读取来源配置…</p>}
     {snapshot?.sources.length === 0 && <div className="source-empty"><h3>尚未配置 Codex Home</h3><p>选择包含 sessions 的 Codex Home 目录。</p></div>}
     <div className="source-list">{snapshot?.sources.map(source => <article className="source-card" key={source.source_id}>

@@ -2,7 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } 
 import { displayPolicy } from '../shared/display-policy';
 import { timeNavigation } from '../shared/query-timing';
 import { useAppTheme } from '../shared/useAppTheme';
-import { getAppStatus, getSources, onDisplayPolicyChanged, runtimeError, windowAction } from '../shared/runtime';
+import { getAppStatus, onDisplayPolicyChanged, runtimeError, windowAction } from '../shared/runtime';
+import { useSourcesSnapshot } from './main-state-cache';
+import { PendingOverview, PendingStatistics } from './PendingStatistics';
 import type { AppStatus } from '../shared/runtime';
 import { SourcesPanel } from './SourcesPanel';
 import { JobsPanel } from './JobsPanel';
@@ -25,7 +27,7 @@ import { AdvancedFilters, type FilterChoices } from './AdvancedFilters';
 import { mainRequestForCalendar } from '../shared/main-filter';
 import { Icon } from '../shared/Icon';
 import { ActionButton } from '../shared/ActionButton';
-import type { PriceBasis, CalendarSelection, Grain, SourcesSnapshot } from '../shared/generated/contracts';
+import type { PriceBasis, CalendarSelection, Grain } from '../shared/generated/contracts';
 
 const pages = [
   ['overview', '总览'],
@@ -47,9 +49,10 @@ export function App() {
   const [statusPollError, setStatusPollError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('数据来源');
-  const [sourceCache, setSources] = useState<{ value: SourcesSnapshot; epoch: number } | null>(null);
-  const sources = sourceCache?.epoch === policy.epoch ? sourceCache.value : null;
-  const [sourceError, setSourceError] = useState<string | null>(null);
+  const visitedSettings = useRef(new Set<string>());
+  const diagnosticVisited = useRef(false);
+  if (page === 'settings') visitedSettings.current.add(tab);
+  if (page === 'diagnostics') diagnosticVisited.current = true;
   const [miniStats, setMiniStats] = useState<MiniStatsRequest | null>(null);
   const [selection, setSelection] = useState<CalendarSelection>({ kind: 'today' });
   const [source, setSource] = useState<string | null>(null);
@@ -58,6 +61,8 @@ export function App() {
   const [grain, setGrain] = useState<Grain>('hour');
   const [clock, setClock] = useState(Date.now());
   const [refreshRevision, setRefreshRevision] = useState(0);
+  const sourceState = useSourcesSnapshot(refreshRevision);
+  const sources = sourceState.bundle, sourceError = sourceState.error;
   const statusRequest = useRef(0);
   const statusRefreshBusy = useRef(false);
   const mounted = useRef(false);
@@ -89,9 +94,9 @@ export function App() {
   useEffect(() => {
     // Keep stable filter IDs, discard prior identifying labels on either transition.
     if (policy.epoch === 0) return;
-    setStatus(null); setSources(null);
+    setStatus(null);
     setChoices(value => ({ ...value, projects: value.projects ? { ...value.projects, display_name: '所选项目' } : null, sessions: value.sessions ? { ...value.sessions, display_name: '所选会话' } : null }));
-    setError(null); setStatusPollError(null); setSourceError(null);
+    setError(null); setStatusPollError(null);
   }, [policy.epoch]);
   const current = pages.find(p => p[0] === page)!;
   const refresh = async () => {
@@ -102,8 +107,6 @@ export function App() {
       const result = await getAppStatus();
       if (!mounted.current || sequence !== statusRequest.current) return;
       setStatus({ value: result, epoch: displayPolicy.get().epoch }); setError(null); setStatusPollError(null); setRefreshRevision(value => value + 1);
-      try { const sourceResult = await getSources(); if (mounted.current && sequence === statusRequest.current) { setSources({ value: sourceResult, epoch: displayPolicy.get().epoch }); setSourceError(null); } }
-      catch (e) { if (mounted.current && sequence === statusRequest.current) setSourceError(runtimeError(e)); }
     }
     catch (e) { if (mounted.current && sequence === statusRequest.current) setError(runtimeError(e)); }
     finally { if (sequence === statusRequest.current) { statusRefreshBusy.current = false; if (mounted.current) setLoading(false); } }
@@ -153,10 +156,18 @@ export function App() {
       {sourceError && !['settings', 'diagnostics'].includes(page) && <div className="notice" role="alert">来源候选暂不可用：{sourceError}</div>}
       {display.settingsError && page !== 'settings' && <div className="notice" role="alert">显示设置读取失败：{display.settingsError}<button onClick={() => void display.reloadSettings()}>重试显示设置</button></div>}
       {display.calendarError && !['settings', 'diagnostics'].includes(page) && <div className="notice" role="alert">统计日期解析失败：{display.calendarError}</div>}
-      {policy.privacy === null && !error && !['settings', 'diagnostics'].includes(page) ? <section className="empty panel"><h2>正在确认显示隐私策略</h2></section> : page === 'settings' ? <>
+      <div hidden={page !== 'settings'}>
         <div className="tabs" role="tablist" aria-label="设置分类">{['数据来源', '显示与窗口', '任务栏显示', '价格规则', '软件更新'].map(t => <button role="tab" aria-selected={tab === t} key={t} onClick={() => setTab(t)}>{t}</button>)}</div>
-        {tab === '数据来源' ? <SourcesPanel onChanged={() => void refresh()} timezone={display.settings?.preferences.display_timezone ?? null} /> : tab === '显示与窗口' ? <DisplaySettingsPanel snapshot={display.settings} loadingError={display.settingsError} onRefresh={() => void display.reloadSettings()} onChanged={display.acceptSettings} /> : tab === '软件更新' ? <UpdateSettingsPanel timezone={display.settings?.preferences.display_timezone ?? null} development={status?.development ?? null} /> : tab === '价格规则' ? policy.privacy !== false ? <section className="panel" role="tabpanel"><h2>价格规则已隐藏</h2></section> : <PriceRulesPanel onChanged={() => void refresh()} /> : <TaskbarSettingsPanel timezone={display.settings?.preferences.display_timezone ?? null} />}
-      </> : page === 'diagnostics' ? <><section className="panel"><h2>运行状态</h2><dl><dt>桌面运行壳</dt><dd>{status ? '已连接' : loading ? '正在连接' : '未连接'}</dd><dt>采集服务</dt><dd>{collectorText}</dd><dt>本地数据库</dt><dd>{status?.storage === 'ready' ? '已就绪' : status?.storage_error ?? '未连接'}</dd><dt>核算服务</dt><dd>已接入采集与必要观察重放</dd></dl></section><SourcesPanel diagnostics onChanged={() => void refresh()} timezone={display.settings?.preferences.display_timezone ?? null} /><DiagnosticsIssues sources={sources} /><JobsPanel timezone={display.settings?.preferences.display_timezone ?? null} /><TaskbarDiagnosticsPanel timezone={display.settings?.preferences.display_timezone ?? null} /></> : status?.storage === 'ready' && query !== null ? null : status?.storage === 'ready' && query === null ? <section className="empty panel"><h2>{display.settingsError || display.calendarError ? '统计日期尚未就绪' : '正在读取统计日期'}</h2><button onClick={() => void refresh()}>重新读取</button></section> : <section className="empty panel"><div className="empty-symbol"><Icon name="pulse" size={31} /></div><h2>{loading ? '正在连接桌面服务' : '开始记录本地用量'}</h2><p>添加 Codex Home，开始导入本地用量。</p><button className="primary" onClick={openSources}>查看数据来源</button></section>}
+        {visitedSettings.current.has('数据来源') && <div hidden={tab !== '数据来源'}><SourcesPanel onChanged={() => void refresh()} timezone={display.settings?.preferences.display_timezone ?? null} /></div>}
+        {visitedSettings.current.has('显示与窗口') && <div hidden={tab !== '显示与窗口'}><DisplaySettingsPanel snapshot={display.settings} loadingError={display.settingsError} onRefresh={() => void display.reloadSettings()} onChanged={display.acceptSettings} /></div>}
+        {visitedSettings.current.has('任务栏显示') && <div hidden={tab !== '任务栏显示'}><TaskbarSettingsPanel timezone={display.settings?.preferences.display_timezone ?? null} /></div>}
+        {visitedSettings.current.has('软件更新') && <div hidden={tab !== '软件更新'}><UpdateSettingsPanel timezone={display.settings?.preferences.display_timezone ?? null} development={status?.development ?? null} /></div>}
+        {visitedSettings.current.has('价格规则') && <div hidden={tab !== '价格规则'}>{policy.privacy !== false ? <section className="panel" role="tabpanel"><h2>价格规则已隐藏</h2></section> : <PriceRulesPanel onChanged={() => void refresh()} />}</div>}
+      </div>
+      {diagnosticVisited.current && <div hidden={page !== 'diagnostics'}><section className="panel"><h2>运行状态</h2><dl><dt>桌面运行壳</dt><dd>{statusPollError ? '连接异常，保留已知状态' : status ? '已连接' : loading ? '正在连接' : '未连接'}</dd><dt>采集服务</dt><dd>{collectorText}</dd><dt>本地数据库</dt><dd>{status?.storage === 'ready' ? '已就绪' : status?.storage_error ?? '未连接'}</dd><dt>核算服务</dt><dd>已接入采集与必要观察重放</dd></dl></section><SourcesPanel diagnostics onChanged={() => void refresh()} timezone={display.settings?.preferences.display_timezone ?? null} /><DiagnosticsIssues sources={sources} /><JobsPanel timezone={display.settings?.preferences.display_timezone ?? null} /><TaskbarDiagnosticsPanel timezone={display.settings?.preferences.display_timezone ?? null} /></div>}
+      {!['settings', 'diagnostics'].includes(page) && (query === null || policy.privacy === null || status?.storage !== 'ready') && <>
+        {page === 'overview' ? <PendingOverview grainControls={<span>统计日期确认中</span>} recentAction={<button onClick={() => setPage('sessions')}>查看全部</button>}><section className="panel"><h2>账户额度</h2><p>—</p></section></PendingOverview> : <PendingStatistics label={current[1]} columns={page === 'models' ? ['模型', 'Token 总量', '占总量', '缓存 / 输入', '估算费用', '价格覆盖'] : page === 'projects' ? ['项目', '会话', 'Token 总量', '估算费用'] : ['记录', '项目 / 模型', 'Token 总量', '估算费用']} />}
+      </>}
       {/* Keep query owners mounted across navigation; inactive views render no DOM. */}
       {policy.privacy !== null && status?.storage === 'ready' && query !== null && <>
         <OverviewPage active={page === 'overview'} request={query} refreshRevision={refreshRevision} sources={sources} accountTimezone={display.settings?.preferences.display_timezone ?? null} onSources={openSources} onDiagnostics={() => setPage('diagnostics')} onPrices={() => { setPage('settings'); setTab('价格规则'); }} onSessions={() => setPage('sessions')} onGrain={setGrain} onDay={day => { setMiniStats(null); setSelection({ kind: 'custom', start_date: day, end_date_inclusive: day }); }} />

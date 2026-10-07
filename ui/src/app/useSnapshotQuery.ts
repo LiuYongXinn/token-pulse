@@ -31,5 +31,5 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
     if (!policy.pending) void refresh();
   }, [key, refreshRevision, policy.pending, refresh]);
   useEffect(() => { if (result.stale && !result.loading && !result.error && !policy.pending) void refresh(); }, [result, refresh, policy.pending]);
-  return { bundle: result.value, error: result.error, loading: result.loading || result.value === null };
+  return { bundle: result.value, error: result.error, loading: result.loading || result.value === null, reload: () => { usageQueryCache.invalidate(key); void refresh(); }, accept: (value: Bundle) => usageQueryCache.accept(key, value) };
 }

@@ -25,8 +25,14 @@ export class UsageQueryCache {
   }
   invalidate(key?: string) {
     for (const [id, entry] of this.entries) if (key === undefined || id === key) {
-      ++entry.invalidation; this.publish(entry, { stale: true });
+      ++entry.invalidation; this.publish(entry, { stale: true, error: null });
     }
+  }
+  accept<T>(key: string, value: T) {
+    const old = this.entry<T>(key);
+    const replacement: Entry<T> = { ...old, flight: null, invalidation: old.invalidation + 1, bytes: new TextEncoder().encode(JSON.stringify(value)).length, snapshot: { value, loading: false, stale: false, error: null, fetchedAt: Date.now() } };
+    this.entries.set(key, replacement as Entry<unknown>);
+    for (const listener of old.listeners) listener();
   }
   clear() {
     const entries = [...this.entries.values()]; this.entries.clear();

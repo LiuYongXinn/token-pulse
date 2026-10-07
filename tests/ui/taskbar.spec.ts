@@ -94,7 +94,7 @@ test('runtime events requery, lower revisions cannot roll back, diagnostics shar
   await page.getByRole('button', { name: '采集诊断', exact: true }).click();
   const runtime = page.getByLabel('任务栏实际运行状态'); await expect(runtime.getByRole('status')).toHaveText('已嵌入任务栏');
   await expect.poll(() => page.evaluate(() => (window as unknown as QA).__taskbarQA.listeners())).toBe(1);
-  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect.poll(() => page.evaluate(() => (window as unknown as QA).__taskbarQA.listeners())).toBe(0);
+  await page.getByRole('button', { name: '模型', exact: true }).click(); await expect.poll(() => page.evaluate(() => (window as unknown as QA).__taskbarQA.listeners())).toBe(1); // visited panels keep one shared subscription
 });
 
 test('read failure preserves explicit draft and layout fits dark and light at ordinary window widths', async ({ page }) => {
@@ -130,3 +130,4 @@ test('window action error is independent from embedding and fallback and clears 
   await page.evaluate(() => (window as unknown as QA).__taskbarQA.status({ revision: '9007199254740995', action_error: null }));
   await expect(panel.getByRole('alert')).toHaveCount(0); await expect(panel.getByRole('status')).toHaveText('已嵌入任务栏');
 });
+
