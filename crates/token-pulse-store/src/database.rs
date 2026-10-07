@@ -42,6 +42,7 @@ struct Inner {
     leases: crate::leases::LeaseService,
     usage_listener: Mutex<Option<UsageListener>>,
     summaries: crate::query::summary_cache::SummaryCache,
+    series: crate::query::series_cache::SeriesCache,
     health: crate::integrity::Health,
     verification: Option<crate::integrity::Verification>,
 }
@@ -255,6 +256,7 @@ impl Database {
                 leases,
                 usage_listener: Mutex::new(None),
                 summaries: Default::default(),
+                series: Default::default(),
                 path,
                 health,
                 verification,
@@ -273,6 +275,9 @@ impl Database {
     }
     pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache {
         &self.inner.summaries
+    }
+    pub(crate) fn series_cache(&self) -> &crate::query::series_cache::SeriesCache {
+        &self.inner.series
     }
     pub fn leases(&self) -> &crate::leases::LeaseService {
         &self.inner.leases

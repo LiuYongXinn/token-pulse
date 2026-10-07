@@ -45,19 +45,23 @@ fn series_with_coverage(
     filter: &UsageFilter,
     grain: Grain,
     common: &token_pulse_core::protocol::Coverage,
+    cache: Option<&super::series_cache::SeriesCache>,
 ) -> StoreResult<Vec<UsageSeriesBucket>> {
-    let buckets = series(tx, filter, grain)?;
+    let buckets = match cache {
+        Some(cache) => cache.get(tx, filter, grain)?,
+        None => std::sync::Arc::new(series(tx, filter, grain)?),
+    };
     let gaps = coverage::series_coverage_from(tx, filter, &buckets, common)?;
     Ok(buckets
-        .into_iter()
+        .iter()
         .zip(gaps)
         .map(
             |(BucketTotals { bucket, totals }, coverage)| UsageSeriesBucket {
                 start_ms: bucket.start_ms,
                 end_ms: bucket.end_ms,
-                display_label: bucket.display_label,
-                utc_offset: bucket.utc_offset,
-                totals,
+                display_label: bucket.display_label.clone(),
+                utc_offset: bucket.utc_offset.clone(),
+                totals: totals.clone(),
                 coverage,
             },
         )
@@ -104,7 +108,15 @@ pub fn bundle(
 ) -> StoreResult<DashboardBundle> {
     let common =
         super::summary_cache::compute(tx, revision, &request.filter, &request.price_basis)?;
-    assemble(tx, revision, request, generated_at_ms, snapshot_id, &common)
+    assemble(
+        tx,
+        revision,
+        request,
+        generated_at_ms,
+        snapshot_id,
+        &common,
+        None,
+    )
 }
 fn assemble(
     tx: &Transaction<'_>,
@@ -113,16 +125,17 @@ fn assemble(
     generated_at_ms: EpochMs,
     snapshot_id: &str,
     common: &super::summary_cache::ScopeSummary,
+    cache: Option<&super::series_cache::SeriesCache>,
 ) -> StoreResult<DashboardBundle> {
     request.validate()?;
     validate_request_id(snapshot_id)?;
     let summary = common.totals.clone();
     let coverage = common.coverage.clone();
-    let series = series_with_coverage(tx, &request.filter, request.grain, &common.coverage)?;
+    let series = series_with_coverage(tx, &request.filter, request.grain, &common.coverage, cache)?;
     let mut heatmap_filter = request.filter.clone();
     heatmap_filter.range = request.heatmap_range.clone();
     let heatmap_started = std::time::Instant::now();
-    let heatmap = series_with_coverage(tx, &heatmap_filter, Grain::Day, &common.coverage)?;
+    let heatmap = series_with_coverage(tx, &heatmap_filter, Grain::Day, &common.coverage, cache)?;
     crate::query_timing::record("heatmap_compute", heatmap_started);
     let mut recent_sessions = recent_sessions(tx, &request.filter, &request.price_basis)?;
     let pricing = common.pricing.clone();
@@ -176,7 +189,15 @@ impl Database {
     ) -> StoreResult<DashboardBundle> {
         self.usage_snapshot(|tx, revision| {
             let common = self.scope_summary(tx, revision, &request.filter, &request.price_basis)?;
-            assemble(tx, revision, request, at, snapshot_id, &common)
+            assemble(
+                tx,
+                revision,
+                request,
+                at,
+                snapshot_id,
+                &common,
+                Some(self.series_cache()),
+            )
         })
     }
 }

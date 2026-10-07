@@ -19,9 +19,11 @@ pub mod facets;
 pub mod groups;
 pub mod pricing;
 pub(crate) mod request_input;
+pub(crate) mod series_cache;
 pub mod sessions;
 pub(crate) mod summary_cache;
 
+#[derive(Clone, serde::Serialize)]
 pub struct BucketTotals {
     pub bucket: CalendarBucket,
     pub totals: TokenTotals,

@@ -50,6 +50,52 @@ fn draft(rate: i128) -> PriceRuleDraft {
 }
 
 #[test]
+fn date_and_grain_switches_reuse_heatmap_totals_without_changing_bundle_semantics() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    extra(&db, "second-day", 86_401_000, 7, (None, None), None, None);
+    let mut request = request();
+    for index in 0..3 {
+        if index == 1 {
+            request.filter.range.end_ms = request.heatmap_range.end_ms;
+            request.grain = Grain::Day;
+        } else if index == 2 {
+            request.filter.range.start_ms = EpochMs::new(86_400_000).unwrap();
+            request.grain = Grain::Hour;
+        }
+        let cached = read(&db, &request);
+        let expected = db
+            .snapshot(|tx, revision| {
+                bundle(
+                    tx,
+                    revision,
+                    &request,
+                    EpochMs::new(10_000).unwrap(),
+                    "synthetic-dashboard",
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(cached).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+    db.write(|conn| {
+        conn.execute("UPDATE sources SET enabled=0", [])?;
+        Ok(())
+    })
+    .unwrap();
+    let cached = read(&db, &request);
+    assert!(cached.heatmap.iter().all(|bucket| {
+        bucket
+            .coverage
+            .source_issues
+            .iter()
+            .any(|issue| issue.code == "source_paused")
+    }));
+}
+
+#[test]
 fn summary_series_heatmap_and_recent_sessions_share_dimensions_but_independent_date_ranges() {
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();
