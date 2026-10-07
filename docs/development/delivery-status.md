@@ -2591,3 +2591,55 @@ schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。�
 实测未预热近 7 天范围曾为 49.2s，近 30 天为 19.6s；不能把缓存导航的毫秒级结果当作首次读取完成。定位到约 272 万历史 event_valuations 上，SQLite 从 ready valuation_sets 开始执行每事件查找，导致大量无关集合探测。改用已有 event+fingerprint 索引作为固定首入口；完整 price / mode / specified / cache format / publication 校验和至多两结果的冲突回退保持不变。真实库 1,000 次同键查找 6,873.8ms → 8.7ms。新增 1,000 个无关 ready 历史集合的 SQLite VM 工作量回归，不用易波动的时钟阈值。
 
 增加 summary_totals / coverage / pricing / versions 匿名分段。store 完整串行 302 passed / 1 既有性能夹具 ignored；strict core-store-desktop all-target Clippy、release check 和改动格式检查通过。首次完整副屏复测近 7 天 1.843s / 近 30 天 4.138s，来源显示修订更新 1.091s，data 和 Tokens 均不变，小窗十次 258–333ms。该轮与 Rust 全量测试部分重叠，保留回执并继续无测试负载复测；不宣称为冷磁盘指标。原生诊断空态断言同步到当前产品文案，继续顺序执行完整诊断 / 隐私回归。
+
+
+## 即时导航 I11：最终实测与交付边界（2026-10-07）
+
+八阶段代码及历史计价查询瓶颈修复已经实现。以下为后续最终结果，早期阶段记录中的“待复测”由本节覆盖；不把源码、开发版与安装版合称已经部署。
+
+副屏 Windows WebView2，2560×1440 / 150%，debug custom-protocol；实际数据库只读备份约 3.14 GB，启动后冻结副本采集及派生服务，保留真实查询 / IPC / 提交后通知。实际数量 32,794 用量事件、43,496 observations、222 sessions，约 2,725,179 历史计价行。原数据库、源日志和安装程序未修改。最终 first / restart 均顺序执行，期间没有全量测试负载；未预热是应用范围缓存为空，未控制 Windows 文件缓存，不能宣称冷磁盘基准。
+
+| 实测项目 | 最终结果 |
+| --- | --- |
+| 首次五页完整结构，数据均未就绪 | 3.5–14.8ms，均保持未知占位 |
+| 100 次缓存页签切换 | 首次 rAF 检查正确标题及对应数据：P95 15.6ms / max 19.3ms；后续 rAF P95 18.5ms |
+| 真实统计 IPC 阻塞中的重复切换 | 100 次正确缓存内容通过 |
+| 未预热近 7 天模型范围 | 结构 6.4ms；数据显示 1,444.3ms；修复前完整实测为 49,215.1ms |
+| 未预热近 30 天模型范围 | 结构 1.6ms；数据显示 3,068.3ms；修复前完整实测为 19,559.4ms |
+| 切回已有今日范围 | 1.5ms，精确对应原范围 |
+| 来源状态提交到模型新快照完成 | 1,011.5ms，view 推进、data 与 Tokens 不变 |
+| 重启恢复，新的统计 IPC 仍阻塞 | 五页 10.5–21.8ms，要求恢复说明及数据先出现；缓存切换 P95 19.1ms，后续 rAF 22.3ms |
+| 小窗十次真实 IPC | 227.1–287.5ms；修复前约 1.52–2.18s |
+| 附属状态 / 来源 / 候选 / 会话详情 | 7.9 / 4.1 / 337.2 / 94.8ms |
+| 数据库启动到原生探针开始 | first 9,274.9ms / restart 10,029.4ms，未计入页签点击指标 |
+
+匿名细分：最终公共汇总 max 1,970.1ms，其中计价 max 1,588.1ms、覆盖 max 354.5ms、数量 max 13.8ms、版本 max 13.4ms；统计读池排队 max 0.001ms，轻量池 max 0.374ms。热力图 max 612.7ms，当前主要瓶颈已解决且总览保持完整一致快照，本次未进一步拆分，避免跨版本混合。宽范围首次读取仍为秒级，数据库启动约十秒，均保留为具体性能限制。
+
+同一完整快照 / 请求的当前原始汇总路径与公共缓存路径 DTO 全量比较相等：模型 1,813.5→770.5ms，项目 1,780.0→653.9ms，总览 1,710.3→630.6ms。这个对比证明一致性和复用效果，不能称为与历史安装版的二进制对比。
+
+本机匿名回执保存于 `.local/review/instant-navigation/`：`final-first.json` / `final-restart.json` 为计价索引修复前，`after-selective-lookup-first.json` 为带测试负载的中间复测，`final-idle-first.json` / `final-idle-restart.json` 为最终无测试负载回执；原生输出见 `.local/tmp/instant-navigation-idle-*.log`。报告不记录查询正文、名称、费用或来源内容。
+
+界面：最终前端 54 / 14 files 通过，完整 Playwright 110 通过；typecheck、Vite build 和生成契约 check 通过。新增分页容量测试的推断类型在最后全量 typecheck 中暴露，已补显式类型后重新通过，不把仅 Vitest 运行成功当作类型通过。
+
+原生：真实 first / restart / 阻塞统计查询回执全部 NATIVE_NAVIGATION_OK；诊断 NATIVE_DIAGNOSTIC_POSITIONS_OK、来源重读 NATIVE_SOURCE_REREAD_OK、精确输入 NATIVE_REQUEST_INPUT_OK、价格 NATIVE_OFFLINE_PRICES_OK。覆盖当前隐私投影、小窗禁止诊断和价格访问、修复文件替换、只读字节不变、单次核算和价格幂等；诊断两项过期文案断言已与现有界面同步。WebView2 在成功退出后仍打印 Chrome_WidgetWin_0 unregister 1412，原样保留日志，未把它作为查询失败或已修复的退出问题。
+
+构建：开发 exe 为 `target/debug/token-pulse-desktop.exe`，版本 0.1.10，SHA256 `43381CDCFB9A3C2D93473D8054D98B4F024B208A186EA3C9E877D2125AB65C58`；前端 JS `index-D5EIY2VB.js` / CSS `index-gxUnaf2N.css`。已安装 `D:/Apps/TokenPulse/token-pulse-desktop.exe` 仍为 0.1.10，SHA256 `D918187407F7F98EFEBF60FE405A331F96C58085B6A12B2B6CE0C70F0E548516`。源码功能与开发构建一致，安装版本不一致。本次未安装、未生成可发布签名安装包；release check 是优化配置编译检查，不等于已完成 release 打包。
+
+测量边界：使用真实 WebView 的程序化 DOM click 和 rAF 检查页面内容，达到该测量口径的 100ms 目标；没有测量硬件鼠标输入至 DWM 最终合成显示的全链路 P95，不能将本记录表述为该全链路已验收。未模拟系统冷磁盘、未在安装版测量、未运行会重启 Explorer / 改动主屏的无关原生场景。原有工作区未提交文件保持不动。
+
+
+最终 Rust 回归：`cargo test -p token-pulse-core -p token-pulse-store -p token-pulse-collector -- --test-threads=1` 合计 560 passed / 1 ignored（含 integration 和 doc-test）；`cargo test -p token-pulse-desktop --lib -- --test-threads=1` 30 passed / 3 需显式外部更新器验收的 ignored。core-store-collector-desktop strict all-target Clippy、release check 通过。任务修改 Rust 定向格式检查通过；全仓 fmt 的三处既有差异 `update_installer.rs` / `update_transport/install_acceptance.rs` / `notify_headless.rs` 未改动。日志 `.local/tmp/instant-rust-delivery.log`、`instant-desktop-delivery.log`、`instant-clippy-delivery.log`、`instant-build-delivery2.log`、`instant-unit-delivery2.log`、`instant-e2e-last.log`、`instant-contracts-delivery.log`。
+
+| 本任务模块提交 | 内容 |
+| --- | --- |
+| 4ee8daa | 匿名导航 / 查询计时 |
+| dcc6822 | 完整范围共享缓存 / 即时页面结构 |
+| 7818fbc | 前台优先 / 后台与分页并发调度 |
+| cfe9ab0 | 页面内容与分页租约分离 |
+| 37a15ac | 来源 / 诊断共享与设置草稿保留 |
+| c56c21a | 事务展示修订 / 提交后通知 / 统一更新 |
+| 1249a6d | 同快照公共及固定分页汇总复用 |
+| 60ed753 | 隐私安全重启恢复 / 硬容量 / 轻量状态 |
+| cbd6d95 | 首帧同步提交 / 实测连接预留 / 副屏探针 |
+| 6b00083 | 历史计价索引入口 / VM 工作量回归 |
+| 本记录提交 | 最终验证回执 / 文案断言与测试类型修正 |

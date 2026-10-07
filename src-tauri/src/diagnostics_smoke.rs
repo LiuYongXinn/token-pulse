@@ -158,7 +158,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
       for(;;){const job=await invoke('get_rebuild_status',{requestId:'native-reread-status'});if(job.data?.state==='succeeded'){window.__nativeRereadJob=job.data.job_id;break;}if(['failed','cancelled','interrupted'].includes(job.data?.state))throw Error('NATIVE_REREAD_TERMINAL_'+job.data.state);if(Date.now()>end)throw Error('NATIVE_REREAD_TIMEOUT');await new Promise(r=>setTimeout(r,100));}
       [...document.querySelectorAll('.jobs-panel button')].find(b=>b.textContent==='刷新重建状态').click();
       await wait(()=>document.querySelector('.job-card')?.textContent.includes('已完成'));
-      if(!document.querySelector('.jobs-panel').textContent.includes('补齐旧版未识别的记录'))throw Error('REREAD_EXPLANATION_MISSING');
+      if(!document.querySelector('.jobs-panel').textContent.includes('重读重新导入已启用来源的日志'))throw Error('REREAD_EXPLANATION_MISSING');
     "#,
         Duration::from_secs(18),
     )?;

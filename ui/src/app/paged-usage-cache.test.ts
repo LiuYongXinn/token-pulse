@@ -40,7 +40,7 @@ test('ten protected resident ranges retain their pages and reject an eleventh re
   clearPagedUsage();
   const stops: (() => void)[] = [], views: PagedUsage<{ page_size: number }, Page>[] = [];
   for (let n = 0; n < 11; ++n) {
-    const view = pagedUsage(`capacity-${n}`, { page_size: 1 }, { label: 'capacity', keys: (page: Page) => page.rows, read: async () => ({ ...base, rows: [`row-${n}`], next_cursor: null }), close: async () => {} });
+    const view = pagedUsage<{ page_size: number }, Page>(`capacity-${n}`, { page_size: 1 }, { label: 'capacity', keys: (page: Page) => page.rows, read: async () => ({ ...base, rows: [`row-${n}`], next_cursor: null }), close: async () => {} });
     views.push(view); stops.push(view.attach({}, true)); await flush();
   }
   for (const view of views.slice(0, 10)) expect(view.get().pages).toHaveLength(1);
