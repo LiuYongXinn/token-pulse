@@ -2723,3 +2723,55 @@ Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROU
 上一轮 I19 首次真实副屏回执 millisecond-final-group-1-first.json：7 / 30 天 714.6 / 995.7ms，更新 450.7ms；缓存切换 P95 22.3ms，小窗 102.2–150.4ms，后台阻塞与完整 DTO 等价检查通过。启动 915.1ms，匿名 50ms 焦点采样 204 次，成为前台为 0。30 天余量较小，继续通过本模块计数复用及重复测量确认结果，不只选最快回执。
 
 独立真实 store 后台完整校验回执 millisecond-final-whole-check.log：数据库约 3.14 GB，启动 4,719.951ms，后台完整检查 57,521.920ms，healthy=true，完成后连接关闭。该探针只测存储维护，不替代 WebView；系统缓存状态未控制，启动仍有秒级波动，后台全库扫描和一次性备份 / 迁移成本仍需明确报告。
+
+
+## 毫秒级复查 I21：最终构建三轮未预热与重启验收（2026-10-07）
+
+本节是 I12–I20 后的最新实测结果。源码功能、debug 开发构建和生产优化参数后端的测量构建一致；当前安装应用未更新。普通查询、范围变化、更新通知和缓存切换在本轮实际数据测试中均为毫秒级；启动关键表检查仍受系统文件缓存影响，完整校验及首次迁移仍存在秒级维护成本。不能将本节解释为所有操作、安装应用或冷磁盘启动已经达到毫秒级。
+
+数据采用已有只读备份的独立副本：约 3.14 GB，32,794 个事件、43,496 个观测、222 个会话，2,725,179 行计价明细及对应输入。schema 18；schema 17 / 18 的 SQL 校验和保持不可改写。每轮 first 前只清空这个副本的 usage_display_cache，并恢复副本来源标记；没有等待页签预读完成再开始验收。restart 沿用上一轮成功结果，统计 IPC 在开始前阻塞，要求先恢复正确内容和明确说明，再解除阻塞。副本正常服务启动后停止采集及派生任务，真实查询、IPC 和事务提交后通知继续运行。最终性能测量期间没有并行编译和测试负载；系统磁盘 / 文件缓存未控制。
+
+测量构建采用 release 优化参数（opt-level 3 / thin LTO / codegen-units 1），仅 desktop 与 taskbar 保留 debug 原生测试入口；后端回执 backend_debug_assertions=false。它是有原生探针的优化测量构建，不是已签名、已安装的发布包。
+
+| 最终原生回执 | 数据库启动 ms | 未访问 7 天数据就绪 ms | 未访问 30 天数据就绪 ms | 来源提交至显示更新 ms | 缓存首次 rAF P95 / 最大 ms | 后续 rAF P95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| millisecond-final-model-1-first.json | 950.5 | 594.4 | 859.9 | 422.9 | 19.8 / 26.8 | 22.4 |
+| millisecond-final-model-2-first.json | 916.0 | 609.7 | 863.1 | 431.5 | 23.3 / 27.2 | 27.8 |
+| millisecond-final-model-3-first.json | 931.9 | 574.7 | 845.2 | 436.7 | 18.6 / 33.6 | 22.4 |
+| millisecond-final-model-restart.json | 1,060.5 | 不重新查询该范围 | 不重新查询该范围 | 不触发写入 | 19.4 / 23.0 | 22.4 |
+
+回执及匿名汇总位于 .local/review/instant-navigation/millisecond-final-summary.json 和上述四个 JSON；副屏 2560×1440 / scale 1.5，全部 NATIVE_NAVIGATION_OK。每轮 100 次缓存切换在首次检查帧已经有对应内容，另有统计 IPC 阻塞时的 100 次切换，通过检查。首次五页的结构出现 5.2–171.7ms，未显示整块读取画面；首次实际内容检查为 5.6–190.7ms。无缓存结构的最慢值没有混入缓存命中的 P95。未访问 7 / 30 天结构分别 5.4–9.6 / 1.6–3.7ms，返回今天原范围的内容为 2.0–3.7ms。restart 在 IPC 阻塞期间恢复内容为 15.8–27.2ms，保留明确恢复标识。
+
+来源变化验收确认 data / Token 不变、view 修订推进，显示随后更新；不是仅用 Token 变化触发刷新。普通查询与有界汇总的完整 DTO 在每轮逐字段比较均相等，覆盖总览、模型和项目。四轮状态、来源、候选、总览、模型、项目、会话、详情、明细及租约释放的真实 IPC 总范围 2.3–509.6ms，小窗 95.8–151.7ms。三轮 heatmap_compute 为 161.4–216.8ms，保持同一快照，没有为拆分而制造跨版本混合；本次没有新增热力图独立接口。
+
+副屏显示使用不激活的自有窗口逻辑，50ms 匿名采样合计 628 次，自有应用成为前台 0 次。此采样不证明亚毫秒期间绝对不存在焦点变化。导航测量是可见 Windows WebView2 的程序化 DOM click 至 rAF 内容检查；达到该口径的缓存切换 P95≤100ms 目标，没有测量硬件鼠标输入至 DWM 最终显示的全链路，也没有在安装版进行性能验收。
+
+最新完整 core / store / collector 回归合计 571 passed / 1 ignored（50 个 suite，含 integration / doc-test），日志 millisecond-model-final-regression.log。query 定向 84 passed / 1 ignored；包含分组 coverage 与独立 SQL 相等、旧读取快照、跨 provider / 未知身份、NULL 时间、未计价分组、超安全整数和精确计数。六项完整性门禁及已提交隐私写入回归、24 项计价回归均通过。最新副屏 debug 原生 NATIVE_SOURCE_REREAD_OK / NATIVE_REQUEST_INPUT_OK / NATIVE_DIAGNOSTIC_POSITIONS_OK / NATIVE_OFFLINE_PRICES_OK 通过，覆盖当前隐私、mini 权限限制、源文件只读、重试单次核算和价格幂等；日志 millisecond-model-native-diagnostics.log / millisecond-model-native-prices.log。成功退出后既有 Chrome_WidgetWin_0 unregister 1412 仍记录，未宣称已修复。
+
+最新桌面回归 30 passed / 3 需外部签名更新器验收的 ignored（24.57s），日志 millisecond-model-desktop-final.log。前端没有追加变更，现有最终 54 / 14 files 单元测试、110 Playwright（41.9s）、typecheck、Vite build、生成契约校验通过。core-store-collector-desktop strict all-target Clippy、桌面 release check、debug custom-protocol build 及 native-perf build 通过。定向 Rust 格式检查发现新增测试的一处 import 排序，已按 rustfmt 修正后通过；无运行时代码变化。原本压缩格式的两个 lib.rs 不做全文件重排，全仓已有三处格式差异仍按 I11 保留。
+
+当前构建来源可核验：
+
+| 文件 | SHA256 |
+| --- | --- |
+| target/debug/token-pulse-desktop.exe | D9AF79FC1386938D3D5E28726E73C2A47A7BF5358F57BF1490779FCF31513396 |
+| target/native-perf/token-pulse-desktop.exe | D6F39E8F1031C451A5A7AE613E882E653C4DE483FD0853A58AFD46874E32FD67 |
+| D:/Apps/TokenPulse/token-pulse-desktop.exe（未更新） | D918187407F7F98EFEBF60FE405A331F96C58085B6A12B2B6CE0C70F0E548516 |
+
+三个文件版本号均为 0.1.10，版本号相同不代表功能相同；前端 JS index-D5EIY2VB.js / CSS index-gxUnaf2N.css。源码运行时改动已进入前两个构建，安装版仍是旧二进制。本次没有安装、生成签名安装包或运行会影响主屏 / 重启 Explorer 的其他原生测试。
+
+明确的秒级残留：独立真实存储探针启动 4,719.951ms、低资源优先级后台整库检查 57,521.920ms，healthy=true，扫描完成连接关闭；新 WebView restart 也有 1,060.5ms 启动。完整事实检查、备份、旧 schema 升级不使用不完整的缓存校验跳过，旧版至 schema 17 / 18 首次迁移在并发编译时分别 176.07 / 212.81s，保留独立回执，不作为无负载迁移性能指标。没有控制系统冷磁盘，不能保证任意机器和任意范围首次查询均低于一秒；要宣称全部毫秒级仍缺这些路径的证明，当前只交付已测普通查询及页面交互改善。
+
+| 追加模块 Git 提交 | 内容 |
+| --- | --- |
+| a448465 | 同快照来源覆盖复用 / 限定计价候选 |
+| 3ff487a | 关键事实前台检查 / 可中断后台整库校验 |
+| 696a6ec | 保留已经成功提交的隐私结果及通知语义 |
+| ef174e5 | schema 17 日期索引 / 有界批量计价 |
+| e0df7ee | schema 18 会话账本覆盖入口 |
+| 1fd8e9e | 副屏测试窗口显示不激活 |
+| 5a69705 | 后台完整校验降低 CPU 与 I/O 资源优先级 |
+| d7fad5b | 先固定当前事实范围，再按计价主键读取 |
+| 38127e2 | 模型 / 项目 pending 覆盖同快照一次分组 |
+| 1356f53 | 复用完整模型身份，保持精确计数 |
+| 本节记录提交 | 最终三轮 / 重启回执、测试格式和交付状态 |

@@ -1,10 +1,10 @@
 //! Application-owned facts and synthetic prices with independent expected sums.
 use super::*;
-use rusqlite::params;
 use crate::{
     batch::tests::{fixture, setup},
     query::tests::{extra, filter, ids},
 };
+use rusqlite::params;
 use token_pulse_core::{
     pricing::{PriceRuleDraft, PriceRuleMutation},
     protocol::{CoverageState, DimensionSelection, PriceBasis},
