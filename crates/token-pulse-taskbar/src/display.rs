@@ -70,6 +70,17 @@ pub fn money(value: Option<&DecimalMoney>) -> String {
     let cents = atoms / unit + i128::from(atoms % unit >= unit / 2);
     format!("{}.{:02}", cents / 100, cents % 100)
 }
+/// Match the shared UI cost display: a single USD amount uses $, mixed currencies keep codes.
+pub fn currency_money(currency: &str, value: Option<&DecimalMoney>, multiple: bool) -> String {
+    if value.is_none() {
+        return "—".into();
+    }
+    if currency == "USD" && !multiple {
+        format!("${}", money(value))
+    } else {
+        format!("{currency} {}", money(value))
+    }
+}
 pub fn percent(value: Option<f64>) -> String {
     value
         .map(|v| {
@@ -191,7 +202,13 @@ fn costs(view: &TaskbarView) -> Span {
     let text = view
         .costs
         .iter()
-        .map(|cost| format!("{} {}", cost.currency, money(cost.estimated_cost.as_ref())))
+        .map(|cost| {
+            currency_money(
+                &cost.currency,
+                cost.estimated_cost.as_ref(),
+                view.costs.len() > 1,
+            )
+        })
         .collect::<Vec<_>>()
         .join(" / ");
     span(text, Tone::Cost)

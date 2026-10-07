@@ -101,6 +101,77 @@ fn precise_tokens_costs_scope_timezone_and_independent_timestamps_are_all_readab
     assert_eq!(remaining, vec![72.0, 38.0]);
 }
 #[test]
+fn visible_numbers_use_shared_ui_units_and_currency_rules_without_losing_exact_values() {
+    use token_pulse_core::numeric::DecimalMoney;
+    let mut view = fixture();
+    view.total_tokens = Some(number("23849873"));
+    view.input_tokens = Some(number("23733285"));
+    view.cached_tokens = Some(number("22926848"));
+    view.output_tokens = Some(number("1163588"));
+    view.priced_tokens = number("23849873");
+    view.unpriced_tokens = number("0");
+    view.costs[0].estimated_cost = Some(DecimalMoney::parse("50.690338000000000").unwrap());
+    let details = content(&view, view.generated_at_ms.value()).unwrap();
+    for (label, expected) in [
+        ("Token 用量", "23.8M Token"),
+        ("输入", "23.7M Token"),
+        ("缓存输入（包含在输入中）", "22.9M Token"),
+        ("输出", "1.2M Token"),
+        ("未计价 Token", "0 Token"),
+        ("已计价部分估算", "$50.69"),
+    ] {
+        assert_eq!(
+            details
+                .rows
+                .iter()
+                .find(|row| row.label == label)
+                .unwrap()
+                .value,
+            expected
+        );
+    }
+    let exact = details.accessible_text();
+    assert!(exact.contains("Token 用量：23849873"));
+    assert!(exact.contains("USD 50.690338000000000"));
+    for (count, expected) in [
+        ("999", "999 Token"),
+        ("1000", "1.0K Token"),
+        ("1000500", "1.0M Token"),
+        ("1000000000", "1.0B Token"),
+    ] {
+        view.total_tokens = Some(number(count));
+        view.priced_tokens = number(count);
+        let details = content(&view, view.generated_at_ms.value()).unwrap();
+        assert_eq!(details.rows[0].value, expected);
+    }
+    view.costs[0].estimated_cost = Some(DecimalMoney::parse("0.005").unwrap());
+    let mut other = view.costs[0].clone();
+    other.currency = "CNY".into();
+    other.estimated_cost = Some(DecimalMoney::parse("9.995").unwrap());
+    view.costs.push(other);
+    let details = content(&view, view.generated_at_ms.value()).unwrap();
+    let amounts: Vec<_> = details
+        .rows
+        .iter()
+        .filter(|row| row.label == "已计价部分估算")
+        .map(|row| row.value.as_str())
+        .collect();
+    assert_eq!(amounts, ["USD 0.01", "CNY 10.00"]);
+    view.costs[0].estimated_cost = None;
+    view.total_tokens = None;
+    let details = content(&view, view.generated_at_ms.value()).unwrap();
+    assert_eq!(details.rows[0].value, "—");
+    assert_eq!(
+        details
+            .rows
+            .iter()
+            .find(|row| row.label == "已计价部分估算")
+            .unwrap()
+            .value,
+        "—"
+    );
+}
+#[test]
 fn privacy_removes_cost_account_bucket_and_original_scope_from_all_detail_text() {
     let mut view = fixture();
     view.privacy = true;

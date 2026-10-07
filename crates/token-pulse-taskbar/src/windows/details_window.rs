@@ -1022,10 +1022,12 @@ mod tests {
                 .filter(|s| s.x == pixels(124, dpi))
                 .map(|s| s.span.text.as_str())
                 .collect();
-            assert!(values.contains("9007199254740993"));
-            assert!(values.contains("0.565000000000001"));
+            assert!(values.contains("9007199.3B Token"));
+            assert!(values.contains("$0.57"));
+            assert!(frame.text.contains("9007199254740993"));
+            assert!(frame.text.contains("USD 0.565000000000001"));
             assert!(values.contains("SYNTHETIC DEVELOPMENT FIXTURE"));
-            assert!(values.contains("—（未提供）"));
+            assert!(values.contains("—"));
             let original = "中文很长的会话名称🙂 / C:\\SYNTHETIC\\project 名称 9007199254740993";
             let lines = wrap(original, pixels(70, dpi), &|s| frame.font.width(s)).unwrap();
             assert!(lines.len() > 2);

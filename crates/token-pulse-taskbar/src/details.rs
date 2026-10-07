@@ -1,7 +1,7 @@
 //! Read-only native details from the validated display projection. Never queries a source.
 use crate::{
     HostScope, TaskbarView, WireError,
-    display::{Tone, percent},
+    display::{Tone, compact_tokens, currency_money, percent},
 };
 use chrono::DateTime;
 use chrono_tz::Tz;
@@ -14,6 +14,8 @@ use token_pulse_core::{
 pub struct DetailRow {
     pub label: String,
     pub value: String,
+    /// Unrounded value for accessibility when the visible value uses compact units.
+    pub accessible_value: Option<String>,
     pub tone: Tone,
     /// The actual account remaining percentage. None is an unknown bar, never a zero bar.
     pub remaining_percent: Option<f64>,
@@ -26,11 +28,13 @@ pub struct DetailContent {
 impl DetailContent {
     pub fn accessible_text(&self) -> String {
         std::iter::once(self.title.clone())
-            .chain(
-                self.rows
-                    .iter()
-                    .map(|row| format!("{}：{}", row.label, row.value)),
-            )
+            .chain(self.rows.iter().map(|row| {
+                format!(
+                    "{}：{}",
+                    row.label,
+                    row.accessible_value.as_ref().unwrap_or(&row.value)
+                )
+            }))
             .collect::<Vec<_>>()
             .join("；")
     }
@@ -39,6 +43,7 @@ fn row(label: &str, value: impl Into<String>, tone: Tone) -> DetailRow {
     DetailRow {
         label: label.into(),
         value: value.into(),
+        accessible_value: None,
         tone,
         remaining_percent: None,
     }
@@ -48,6 +53,19 @@ fn integer(value: Option<&DecimalInt>) -> String {
         .map(|value| value.as_str())
         .unwrap_or("—（未提供）")
         .into()
+}
+fn tokens(label: &str, value: Option<&DecimalInt>, tone: Tone) -> DetailRow {
+    let mut result = row(
+        label,
+        if value.is_some() {
+            format!("{} Token", compact_tokens(value))
+        } else {
+            "—".into()
+        },
+        tone,
+    );
+    result.accessible_value = Some(integer(value));
+    result
 }
 fn absolute(value: Option<EpochMs>, timezone: Tz) -> String {
     match value {
@@ -132,18 +150,14 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
         .parse::<Tz>()
         .map_err(|_| WireError::InvalidFrame)?;
     let mut rows = vec![
-        row(
-            "Token 用量",
-            integer(view.total_tokens.as_ref()),
-            Tone::Normal,
-        ),
-        row("输入", integer(view.input_tokens.as_ref()), Tone::Normal),
-        row(
+        tokens("Token 用量", view.total_tokens.as_ref(), Tone::Normal),
+        tokens("输入", view.input_tokens.as_ref(), Tone::Normal),
+        tokens(
             "缓存输入（包含在输入中）",
-            integer(view.cached_tokens.as_ref()),
+            view.cached_tokens.as_ref(),
             Tone::Normal,
         ),
-        row("输出", integer(view.output_tokens.as_ref()), Tone::Normal),
+        tokens("输出", view.output_tokens.as_ref(), Tone::Normal),
     ];
     if let Some(details) = &view.details {
         let scope = match details.scope {
@@ -197,22 +211,28 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
             ));
         }
         for cost in &view.costs {
-            rows.push(row(
+            let mut amount = row(
                 "已计价部分估算",
-                format!(
-                    "{} {}",
-                    cost.currency,
-                    cost.estimated_cost
-                        .as_ref()
-                        .map(|money| money.as_str())
-                        .unwrap_or("—（未提供）")
+                currency_money(
+                    &cost.currency,
+                    cost.estimated_cost.as_ref(),
+                    view.costs.len() > 1,
                 ),
                 Tone::Cost,
+            );
+            amount.accessible_value = Some(format!(
+                "{} {}",
+                cost.currency,
+                cost.estimated_cost
+                    .as_ref()
+                    .map(|money| money.as_str())
+                    .unwrap_or("—（未提供）")
             ));
+            rows.push(amount);
         }
-        rows.push(row(
+        rows.push(tokens(
             "未计价 Token",
-            view.unpriced_tokens.as_str(),
+            Some(&view.unpriced_tokens),
             if view.unpriced_tokens.value() > 0 {
                 Tone::Warning
             } else {

@@ -58,7 +58,7 @@ fn actual_periods_estimate_and_timezone_match_independent_expected_text() {
             .unwrap()
         ),
         vec![
-            vec!["Token 683.1K", "USD 0.57"],
+            vec!["Token 683.1K", "$0.57"],
             vec!["5h 72%", "周 38%", "周重置 10/04 10:25"]
         ]
     );
@@ -71,10 +71,7 @@ fn actual_periods_estimate_and_timezone_match_independent_expected_text() {
         )
         .unwrap(),
     );
-    assert_eq!(
-        compact,
-        vec![vec!["Token 683.1K", "USD 0.57"], vec!["周 38%"]]
-    );
+    assert_eq!(compact, vec![vec!["Token 683.1K", "$0.57"], vec!["周 38%"]]);
     let mut invalid = view.clone();
     invalid.timezone = "INVALID/TIMEZONE".into();
     assert_eq!(
