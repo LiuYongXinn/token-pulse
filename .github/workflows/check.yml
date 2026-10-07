@@ -17,7 +17,7 @@ jobs:
       - run: npm run contracts:check
       - run: cargo run -p token-pulse-taskbar --example export_host_contract -- --check
       - run: npm run test
-      - run: npx playwright install chromium
+      - run: node scripts/project-run.mjs playwright install chromium
       - run: npm run test:e2e
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
