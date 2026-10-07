@@ -13,6 +13,32 @@ use token_pulse_core::{
 };
 
 #[tauri::command]
+pub async fn get_usage_revision(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request_id: String,
+) -> Result<Response<token_pulse_core::query::UsageRevision>, Box<AppError>> {
+    validate_request_id(&request_id)
+        .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
+    if window.label() != "main" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
+    let database = state
+        .database
+        .as_ref()
+        .cloned()
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    let data = tauri::async_runtime::spawn_blocking(move || database.usage_revision())
+        .await
+        .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    Ok(Response::new(request_id, data))
+}
+
+#[tauri::command]
 pub fn resolve_calendar_selection(
     window: WebviewWindow,
     request: CalendarSelectionRequest,

@@ -613,7 +613,7 @@ fn schema_eight_ready_candidate_upgrades_and_registers_without_reimporting_or_ch
     let old = active(&db);
     staging(&db, "new-session", "new-provider", 1, true);
     // A real v8 fixture has the original tables/checksums and no v9 ownership tables.
-    db.write(|conn| {
+    db.write(|conn| { crate::migration::remove_usage_revision_fixture(conn)?;
         let tx=conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         tx.execute_batch("DROP TABLE rebuild_manifests; DROP TABLE file_rebuild_sessions; DROP TABLE file_rebuild_candidates; DROP TABLE conditional_price_rules; ALTER TABLE price_rules DROP COLUMN request_conditional; ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; ALTER TABLE usage_events DROP COLUMN cache_write_input_tokens; DELETE FROM schema_migrations WHERE version>=9; UPDATE app_state SET schema_version=8;")?;
         tx.pragma_update(None,"user_version",8)?;tx.commit()?;Ok(())

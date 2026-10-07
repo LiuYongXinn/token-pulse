@@ -115,6 +115,7 @@ fn main() {
         AppError,
         AppStatus,
         SnapshotMeta,
+        token_pulse_core::query::UsageRevision,
         DateRange,
         Grain,
         CalendarBucket,

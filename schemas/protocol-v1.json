@@ -18421,6 +18421,40 @@
       "title": "UsageFilter",
       "type": "object"
     },
+    "UsageRevision": {
+      "$defs": {
+        "DecimalInt": {
+          "maxLength": 39,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Anonymous version vector; no source labels or event content.",
+      "properties": {
+        "data_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "database_id": {
+          "type": "string"
+        },
+        "price_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        },
+        "usage_view_revision": {
+          "$ref": "#/$defs/DecimalInt"
+        }
+      },
+      "required": [
+        "database_id",
+        "data_revision",
+        "price_revision",
+        "usage_view_revision"
+      ],
+      "title": "UsageRevision",
+      "type": "object"
+    },
     "UsageSeriesBucket": {
       "$defs": {
         "Coverage": {

@@ -17,6 +17,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
+            "get_usage_revision",
             "get_update_status",
             "check_for_updates",
             "download_update",

@@ -7,6 +7,8 @@ pub mod batch;
 mod canonical_progress;
 pub mod collection;
 mod database;
+#[cfg(test)]
+mod usage_revision_tests;
 pub mod diagnostics;
 pub mod file_candidate;
 pub mod jobs;

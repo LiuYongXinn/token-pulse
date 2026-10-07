@@ -471,3 +471,24 @@ npm run test:native
 - [开发实施与验收计划](implementation-plan.md)
 - [本地开发与运行](local-development.md)
 - [实施与交付记录](delivery-status.md)
+
+## 17 实施入口审计（2026-10-07）
+
+当前新增 `usage-query-key` / `usage-query-cache` / `paged-usage-cache` / `main-state-cache` / `usage-query-controller`，原 Hook 委托共享结果；设置和诊断保存已访问面板。阶段验证见交付记录，完整原生性能判据保持。
+
+schema 15 通过数据库触发器在原事务内推进 usage_view_revision，避免不同采集与维护入口漏发。writer 返回后才调用匿名 UsageRevision 回调，通知主窗口；回滚不通知。修订为保守失效，可以多失效，不允许少失效。
+
+| 入口 | 修订依据 |
+| --- | --- |
+| batch / collection / canonical 发布消费 | app_state data / usage_events / event_provenance / observations |
+| rebuild / replacement 正式切换 | ledger_generations / sessions 活跃指针及 data |
+| source_management 暂停、恢复、路径与能力 | sources 全部实际字段变化 |
+| source_scan 开始、确认、完成、中断 | source_scan_state / source_scan_files / source_files / file_generations |
+| diagnostics recheck / 诊断写入 | diagnostics / pending_usage |
+| registration / 项目别名及会话显示关系 | projects / sessions / session_aliases / file_session_bindings |
+| context 更新 | context_snapshots |
+| pricing / model alias / offline catalog | app_state price |
+| 通知接入保存 | notify_integrations；账户设置继续沿用 settings 与 quota 事件 |
+| 纯派生 rollup / valuation 填充 | 不推进 view，结果仍遵循原权威规则 |
+
+候选 spool 不直接推进消费版本；保守 metadata 失效仍查询原活跃账本。每个触发器 UPDATE 使用字段实际变化判断，同值写入不推进。数据库身份为持久随机 128-bit ID，版本命令仅主窗口权限；mini 权限未扩展。轮询失败不撤销缓存，迟到旧版本不回退。

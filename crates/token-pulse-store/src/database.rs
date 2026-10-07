@@ -26,6 +26,7 @@ pub struct SourceRecord {
     pub created_at_ms: i64,
 }
 type Task = Box<dyn FnOnce(&mut Connection) + Send>;
+type UsageListener = Arc<dyn Fn(token_pulse_core::query::UsageRevision) + Send + Sync>;
 enum Message {
     Run(Task),
     Shutdown,
@@ -36,6 +37,7 @@ struct Inner {
     readers: ReaderPool,
     path: PathBuf,
     leases: crate::leases::LeaseService,
+    usage_listener: Mutex<Option<UsageListener>>,
 }
 impl Drop for Inner {
     fn drop(&mut self) {
@@ -193,6 +195,7 @@ impl Database {
                     available: Condvar::new(),
                 },
                 leases: lease_service(&path)?,
+                usage_listener: Mutex::new(None),
                 path,
             }),
         })
@@ -203,6 +206,12 @@ impl Database {
     pub fn leases(&self) -> &crate::leases::LeaseService {
         &self.inner.leases
     }
+    pub fn on_usage_changed(&self, listener: UsageListener) {
+        if let Ok(mut slot) = self.inner.usage_listener.lock() { *slot = Some(listener); }
+    }
+    pub fn usage_revision(&self) -> StoreResult<token_pulse_core::query::UsageRevision> {
+        self.snapshot(|tx, _| read_usage_revision(tx))
+    }
     pub(crate) fn write<T: Send + 'static>(
         &self,
         operation: impl FnOnce(&mut Connection) -> StoreResult<T> + Send + 'static,
@@ -211,10 +220,21 @@ impl Database {
         self.inner
             .sender
             .send(Message::Run(Box::new(move |conn| {
-                let _ = sender.send(operation(conn));
+                let before = read_usage_revision(conn).ok();
+                let result = operation(conn);
+                let after = read_usage_revision(conn).ok();
+                let changed = after.filter(|revision| before.as_ref() != Some(revision));
+                let _ = sender.send((result, changed));
             })))
             .map_err(|_| ErrorCode::DbWriteFailed)?;
-        receiver.recv().map_err(|_| ErrorCode::DbWriteFailed)?
+        let (result, changed) = receiver.recv().map_err(|_| ErrorCode::DbWriteFailed)?;
+        // Called after the transaction and writer operation have returned, on the
+        // caller thread. Never invoke UI callbacks while holding a connection.
+        if let Some(revision) = changed {
+            let listener = self.inner.usage_listener.lock().ok().and_then(|slot| slot.clone());
+            if let Some(listener) = listener { listener(revision); }
+        }
+        result
     }
     /// Callback runs inside one read transaction; revision is read first to pin the snapshot.
     pub fn snapshot<T>(
@@ -246,6 +266,10 @@ impl Database {
             Ok(())
         })
     }
+}
+pub(crate) fn read_usage_revision(conn: &Connection) -> StoreResult<token_pulse_core::query::UsageRevision> {
+    let (database_id, data, price, view): (String, i64, i64, i64) = conn.query_row("SELECT database_instance_id,data_revision,price_revision,usage_view_revision FROM app_state WHERE singleton=1", [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
+    Ok(token_pulse_core::query::UsageRevision { database_id, data_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(data.into())?, price_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(price.into())?, usage_view_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(view.into())? })
 }
 pub(crate) fn configure(conn: &Connection) -> StoreResult<()> {
     conn.busy_timeout(Duration::from_secs(5))?;

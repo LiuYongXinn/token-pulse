@@ -1,13 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
 
-type QA = { __navigationCacheQA: { reads: () => string[]; concurrency: () => number; inFlight: () => number; resetConcurrency: () => void; hold: () => void; release: () => void; fail: () => void; total: (value: string) => void } };
+type QA = { __navigationCacheQA: { reads: () => string[]; concurrency: () => number; inFlight: () => number; resetConcurrency: () => void; hold: () => void; release: () => void; fail: () => void; total: (value: string) => void; statusFail: () => void } };
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, info) => {
+  const cold = info.title.includes('unwarmed');
   await installSyntheticCalendar(page);
-  await page.addInitScript(() => {
+  await page.addInitScript(({ cold }) => {
     const reads: string[] = [], pending: (() => void)[] = [];
-    let hold = false, fail = false, serial = 0;
+    let hold = cold, fail = false, serial = 0, version = 1, statusFail = false;
     let inFlight = 0, maximum = 0;
     const unknown = { value: null, covered_total_tokens: '0', complete: false };
     const summary = { total_tokens: '777', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, cache_write_input: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
@@ -15,12 +16,14 @@ test.beforeEach(async ({ page }) => {
     const coverage = { state: 'partial', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     Object.assign(window, {
       isTauri: true,
-      __navigationCacheQA: { reads: () => [...reads], concurrency: () => maximum, inFlight: () => inFlight, resetConcurrency: () => { maximum = inFlight; }, hold: () => { hold = true; }, release: () => { hold = false; for (const resolve of pending.splice(0)) resolve(); }, fail: () => { fail = true; }, total: (value: string) => { summary.total_tokens = value; } },
+      __navigationCacheQA: { reads: () => [...reads], concurrency: () => maximum, inFlight: () => inFlight, resetConcurrency: () => { maximum = inFlight; }, hold: () => { hold = true; }, release: () => { hold = false; for (const resolve of pending.splice(0)) resolve(); }, fail: () => { fail = true; }, total: (value: string) => { summary.total_tokens = value; ++version; }, statusFail: () => { statusFail = true; } },
       __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
       __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
         const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: structuredClone(data) });
         if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
+        if (command === 'get_usage_revision') return response({ database_id: 'a'.repeat(32), data_revision: String(version), price_revision: '1', usage_view_revision: String(version) });
+        if (command === 'get_app_status' && statusFail) throw new Error('Synthetic status disconnected');
         if (command === 'get_app_status') return response({ version: 'synthetic', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'synthetic', root_path: 'Synthetic Source', enabled: true, removed: false }] });
         if (command === 'get_account_quota') return response({ connection_epoch: 'synthetic', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], windows: [], fetched_at_ms: null, last_attempt_at_ms: null, error_code: null });
@@ -42,48 +45,39 @@ test.beforeEach(async ({ page }) => {
         throw new Error(`Unexpected synthetic command ${command}`);
       } },
     });
-  });
+  }, { cold });
   await page.clock.install();
   await page.goto('/');
+  if (cold) { await expect(page.getByRole('heading', { name: 'Token 分解' })).toBeVisible(); return; }
   await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
   await expect.poll(async () => page.evaluate(() => new Set((window as unknown as QA).__navigationCacheQA.reads()).size)).toBe(5);
-  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBeLessThanOrEqual(3);
   await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
 });
 
-test('a slow refresh queues warming reads and gives the newly selected page priority', async ({ page }) => {
+test('a slow refresh retains cached content and dispatches foreground on independent resources', async ({ page }) => {
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.resetConcurrency());
   const before = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length);
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
   await page.getByRole('button', { name: '刷新', exact: true }).click();
-  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBe(before + 1);
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
-  // Simulate a backend read longer than the database reader's five-second wait.
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().slice(-3))).toContain('models');
   await page.clock.runFor(6_000);
-  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBe(before + 1);
   await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBeLessThanOrEqual(3);
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
-  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBe(before + 5);
-  const reads = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads());
-  expect(reads.slice(before, before + 2)).toEqual(['get_dashboard_bundle', 'models']);
-  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.concurrency())).toBe(1);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBeGreaterThanOrEqual(before + 5);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('offscreen pages refresh on the background timer while an active paginated snapshot stays fixed', async ({ page }) => {
-  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
-  const before = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads());
+test('lightweight unchanged revision checks avoid heavy reads and changed versions refresh pages', async ({ page }) => {
+  const before = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length);
+  await page.clock.runFor(30_100);
+  expect(await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBe(before);
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.total('888'));
-  // Serialized warming can finish on different ticks. Advancing to the second
-  // timer guarantees every offscreen page is at least ten seconds old.
-  await page.clock.runFor(20_100);
-  await expect.poll(async () => page.evaluate(count => {
-    const reads = (window as unknown as QA).__navigationCacheQA.reads().slice(count);
-    return new Set(reads).size;
-  }, before.length)).toBe(4);
-  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
-  expect((await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads())).filter(read => read === 'query_sessions').length).toBe(before.filter(read => read === 'query_sessions').length);
-  for (const name of ['模型', '项目', '明细', '总览']) {
+  await page.clock.runFor(30_300);
+  await expect.poll(async () => page.evaluate(count => new Set((window as unknown as QA).__navigationCacheQA.reads().slice(count)).size, before)).toBe(5);
+  for (const name of ['模型', '项目', '会话', '明细', '总览']) {
     await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name, exact: true }).click();
     await expect(page.getByLabel('888 Token', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: /正在读取/ })).toHaveCount(0);
@@ -119,5 +113,31 @@ test('delayed and failed same-scope refreshes retain content while a new date cl
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
   await page.getByLabel('日期范围').selectOption('last7');
   await expect(page.getByLabel('777 Token', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: '正在读取明细快照' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '明细用量' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /正在读取/ })).toHaveCount(0);
+});
+
+test('unwarmed pages show complete structure while six second reads block and foreground promotes', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: '主导航' });
+  for (const name of ['模型', '项目', '会话', '明细', '总览']) {
+    await nav.getByRole('button', { name, exact: true }).click();
+    expect(await page.evaluate(() => new Promise<boolean>(resolve => requestAnimationFrame(() => resolve(!document.querySelector('main')!.innerText.includes('正在读取') && document.querySelector('main')!.innerText.includes('—')))))).toBe(true);
+    await expect(page.getByLabel('777 Token', { exact: true })).toHaveCount(0);
+  }
+  await page.clock.runFor(6000);
+  await expect(page.getByRole('heading', { name: 'Token 分解' })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+});
+
+test('visited date scopes restore their own snapshot on the first frame and status failures retain it', async ({ page }) => {
+  await page.getByLabel('日期范围').selectOption('last7');
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
+  await page.getByLabel('日期范围').selectOption('today');
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.statusFail());
+  await page.clock.runFor(2100);
+  await expect(page.getByRole('alert')).toContainText('Synthetic status disconnected');
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
 });

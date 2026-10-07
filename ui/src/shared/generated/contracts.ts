@@ -128,6 +128,8 @@ export type AppStatus = { version: string, development: boolean, data_directory:
 
 export type SnapshotMeta = { snapshot_id: string, data_revision: DecimalInt, price_revision: DecimalInt, generated_at_ms: EpochMs, parser_versions: Array<string>, accounting_versions: Array<string>, display_timezone: string, };
 
+export type UsageRevision = { database_id: string, data_revision: DecimalInt, price_revision: DecimalInt, usage_view_revision: DecimalInt, };
+
 export type DateRange = { start_ms: EpochMs, end_ms: EpochMs, timezone: string, };
 
 export type Grain = "hour" | "day" | "month";

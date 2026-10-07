@@ -21,6 +21,7 @@ export function promoteUsageQueries() {
   }
   while (running.size < 3) {
     const eligible = (task: Task) => {
+      if (!task.foreground() && typeof document !== 'undefined' && document.hidden) return false;
       const pool = [...running].filter(active => active.resource === task.resource);
       // One lease is reserved for facets/details/other windows. Foreground normal
       // reads can use the second reader even if a background computation blocks.

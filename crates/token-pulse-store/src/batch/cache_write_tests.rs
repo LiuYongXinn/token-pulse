@@ -227,7 +227,7 @@ fn old_schema_upgrade_keeps_unknown_writes_and_sql_rejects_overlapping_input_cat
     let (dir, db) = setup();
     db.commit(fixture()).unwrap();
     // Own isolated prior schema, without the additive column; no real database is used.
-    db.write(|conn| { conn.execute_batch("DROP TABLE conditional_price_rules; ALTER TABLE price_rules DROP COLUMN request_conditional; ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; ALTER TABLE usage_events DROP COLUMN cache_write_input_tokens; DELETE FROM schema_migrations WHERE version>=11; UPDATE app_state SET schema_version=10 WHERE singleton=1; PRAGMA user_version=10;")?; Ok(()) }).unwrap();
+    db.write(|conn| { crate::migration::remove_usage_revision_fixture(conn)?; conn.execute_batch("DROP TABLE conditional_price_rules; ALTER TABLE price_rules DROP COLUMN request_conditional; ALTER TABLE price_rules DROP COLUMN cache_write_rate_atoms; ALTER TABLE usage_events DROP COLUMN cache_write_input_tokens; DELETE FROM schema_migrations WHERE version>=11; UPDATE app_state SET schema_version=10 WHERE singleton=1; PRAGMA user_version=10;")?; Ok(()) }).unwrap();
     drop(db);
     let db = crate::Database::open(dir.path()).unwrap();
     let totals = db.usage_totals(&filter()).unwrap();

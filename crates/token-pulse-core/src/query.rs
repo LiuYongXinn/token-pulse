@@ -25,6 +25,16 @@ pub use events::{
 };
 pub use turns::{TurnRow, TurnsPage, TurnsQuery, TurnsRequest};
 
+/// Anonymous version vector; no source labels or event content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(deny_unknown_fields)]
+pub struct UsageRevision {
+    pub database_id: String,
+    pub data_revision: crate::numeric::DecimalInt,
+    pub price_revision: crate::numeric::DecimalInt,
+    pub usage_view_revision: crate::numeric::DecimalInt,
+}
+
 pub fn model_key(provider: Option<&str>, model: Option<&str>) -> Option<String> {
     model.map(|name| {
         // JSON encodes null and component boundaries without separator ambiguity.

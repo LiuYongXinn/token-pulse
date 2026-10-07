@@ -20,7 +20,7 @@ import type { DisplaySettingsSnapshot, TimezoneMutation, SettingsChanged } from 
 import type { UsageEventsPage, UsageEventsRequest } from './generated/contracts';
 export type { AppStatus } from './generated/contracts';
 
-const plainCommands = new Set(['get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request', 'get_main_navigation']);
+const plainCommands = new Set(['get_usage_revision', 'get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request', 'get_main_navigation']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
 const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
@@ -73,6 +73,12 @@ export async function onDisplayPolicyChanged(): Promise<() => void> {
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
+export function getUsageRevision(): Promise<import('./generated/contracts').UsageRevision> { return request('get_usage_revision'); }
+export async function onUsageChanged(refresh: (revision: import('./generated/contracts').UsageRevision) => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const stop = await listen<import('./generated/contracts').UsageRevision>('usage_changed', event => refresh(event.payload));
+  return () => { void Promise.resolve(stop()).catch(() => {}); };
+}
 export function getUpdateStatus(): Promise<UpdateSnapshot> { return request('get_update_status'); }
 export function checkForUpdates(): Promise<UpdateSnapshot> { return request('check_for_updates'); }
 export function downloadUpdate(action: UpdateActionRequest): Promise<UpdateSnapshot> { return request('download_update', { request: action }); }
@@ -245,3 +251,4 @@ export async function onMainNavigationChanged(refresh: () => void): Promise<() =
   const stop = await listen('main_navigation_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
+

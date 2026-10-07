@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { timeNavigation } from '../shared/query-timing';
+import { useUsageQueryController } from './usage-query-controller';
 import { useAppTheme } from '../shared/useAppTheme';
 import { getAppStatus, onDisplayPolicyChanged, runtimeError, windowAction } from '../shared/runtime';
 import { useSourcesSnapshot } from './main-state-cache';
@@ -41,6 +42,7 @@ const pages = [
 type Page = typeof pages[number][0];
 
 export function App() {
+  useUsageQueryController();
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
   const [page, setPage] = useState<Page>('overview');
   const [statusCache, setStatus] = useState<{ value: AppStatus; epoch: number } | null>(null);

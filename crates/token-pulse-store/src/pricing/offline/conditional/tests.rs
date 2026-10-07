@@ -147,7 +147,7 @@ fn schema_thirteen_boot_materialization_keeps_original_revisions_and_read_snapsh
         .unwrap();
     // Model an actual old v13 publication: it has the catalog and 37 flat rules only.
     // Remove the child rows first with foreign keys kept enabled.
-    db.write(|conn| {conn.execute_batch("CREATE TEMP TABLE old_quote_ids AS SELECT rule_id FROM conditional_price_rules; DELETE FROM conditional_price_rules; DELETE FROM price_rules WHERE rule_id IN (SELECT rule_id FROM old_quote_ids); DROP TABLE old_quote_ids; DROP TABLE conditional_price_rules; ALTER TABLE price_rules DROP COLUMN request_conditional; DELETE FROM schema_migrations WHERE version>=14; UPDATE app_state SET schema_version=13; PRAGMA user_version=13;")?;Ok(())}).unwrap();
+    db.write(|conn| { crate::migration::remove_usage_revision_fixture(conn)?;conn.execute_batch("CREATE TEMP TABLE old_quote_ids AS SELECT rule_id FROM conditional_price_rules; DELETE FROM conditional_price_rules; DELETE FROM price_rules WHERE rule_id IN (SELECT rule_id FROM old_quote_ids); DROP TABLE old_quote_ids; DROP TABLE conditional_price_rules; ALTER TABLE price_rules DROP COLUMN request_conditional; DELETE FROM schema_migrations WHERE version>=14; UPDATE app_state SET schema_version=13; PRAGMA user_version=13;")?;Ok(())}).unwrap();
     drop(db);
     let db = Database::open(directory.path()).unwrap();
     assert_eq!(counts(&db), (37, 0, 1));

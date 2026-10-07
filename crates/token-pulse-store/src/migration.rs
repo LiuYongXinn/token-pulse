@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-pub const SCHEMA_VERSION: i64 = 14;
+pub const SCHEMA_VERSION: i64 = 15;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_initial.sql")),
     (
@@ -48,6 +48,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         14,
         include_str!("../migrations/0014_conditional_price_rules.sql"),
     ),
+    (15, include_str!("../migrations/0015_usage_view_revision.sql")),
 ];
 static BACKUP_SERIAL: AtomicU64 = AtomicU64::new(0);
 fn checksum(value: &str) -> String {
@@ -232,5 +233,14 @@ fn migrate_with_hook(
     Ok(())
 }
 
+#[cfg(test)]
+pub(crate) fn remove_usage_revision_fixture(conn: &Connection) -> StoreResult<()> {
+    // Historic fixtures must remove the current additive schema before downgrading.
+    let names = conn.prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'usage_view_%'")?
+        .query_map([], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
+    for name in names { conn.execute_batch(&format!("DROP TRIGGER \"{name}\""))?; }
+    conn.execute_batch("ALTER TABLE app_state DROP COLUMN usage_view_revision; ALTER TABLE app_state DROP COLUMN database_instance_id; DELETE FROM schema_migrations WHERE version=15;")?;
+    Ok(())
+}
 #[cfg(test)]
 mod tests;
