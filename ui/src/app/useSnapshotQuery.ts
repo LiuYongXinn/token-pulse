@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { runtimeError } from '../shared/runtime';
 import { displayPolicy } from '../shared/display-policy';
-import { scheduleUsageQuery } from './usage-query-scheduler';
+import { promoteUsageQueries, scheduleUsageQuery } from './usage-query-scheduler';
 import { usageQueryKey } from './usage-query-key';
 import { usageQueryCache } from './usage-query-cache';
 
@@ -25,6 +25,7 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
     return value;
   }, runtimeError), [key, read]);
   const previousRefresh = useRef(refreshRevision);
+  useEffect(() => { promoteUsageQueries(); }, [foreground]);
   useEffect(() => {
     if (previousRefresh.current !== refreshRevision) { previousRefresh.current = refreshRevision; usageQueryCache.invalidate(key); }
     if (!policy.pending) void refresh();

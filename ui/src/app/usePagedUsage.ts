@@ -58,7 +58,7 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
       if (offscreen.current) await release(controller);
     } catch (error) { await release(controller); controller.error = runtimeError(error); }
     finally { controller.readAt = Date.now(); controller.busy = false; display(controller, resultKey); }
-  }, () => !controller.disposed && !offscreen.current, () => !controller.disposed);
+  }, () => !controller.disposed && !offscreen.current, () => !controller.disposed, 'lease');
   useEffect(() => {
     const controller: Controller<Query, Page> = { query, disposed: false, busy: true, cursor: null, pages: [], index: 0, firstNumber: 1, error: null, readAt: 0, needsRenewal: false };
     current.current = controller; display(controller, key); enqueue(() => read(controller, key));
