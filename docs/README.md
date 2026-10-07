@@ -13,7 +13,8 @@
 - [Windows 任务栏显示模式](design/taskbar-display.md)
 - [任务栏原生宿主协议](design/taskbar-host-protocol.md)
 - [TokenPulse UI 设计](design/token-pulse-ui.md)
-- [UI 方向提案](design/ui-directions.md)：黑白银灰的银雾、碳素、纸墨三版，包含按钮状态设计板、并排对比、可点击原型和小窗预览，待选择后实施。
+- [UI 方向提案](design/ui-directions.md)：黑白银灰的银雾、碳素、纸墨三版选型记录，已选定银雾。
+- [银雾完整 UI 设计与实施](design/silver-mist-ui.md)：已应用到正式界面的七页主窗、五个设置分区、两种小窗、按钮与应用图标，包含 23 个界面预览和验证记录。
 
 ## 开发与维护
 

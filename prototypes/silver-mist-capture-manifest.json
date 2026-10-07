@@ -1,0 +1,143 @@
+{
+  "synthetic": true,
+  "captures": [
+    {
+      "id": "overview",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "overview-960",
+      "width": 960,
+      "height": 680,
+      "documentWidth": 960
+    },
+    {
+      "id": "overview-390",
+      "width": 390,
+      "height": 844,
+      "documentWidth": 390
+    },
+    {
+      "id": "overview-dark",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "models",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "projects",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "sessions",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "session-detail",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "events",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "event-evidence",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "diagnostics",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "sources",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "display",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "taskbar",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "prices",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "price-editor",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "updates",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "display-dark",
+      "width": 1440,
+      "height": 1000,
+      "documentWidth": 1440
+    },
+    {
+      "id": "mini-compact",
+      "width": 280,
+      "height": 220,
+      "documentWidth": 280
+    },
+    {
+      "id": "mini-expanded",
+      "width": 360,
+      "height": 380,
+      "documentWidth": 360
+    },
+    {
+      "id": "mini-scope",
+      "width": 360,
+      "height": 380,
+      "documentWidth": 360
+    },
+    {
+      "id": "mini-dark",
+      "width": 280,
+      "height": 220,
+      "documentWidth": 280
+    },
+    {
+      "id": "empty",
+      "width": 1280,
+      "height": 860,
+      "documentWidth": 1280
+    }
+  ]
+}
