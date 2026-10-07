@@ -366,6 +366,10 @@ pub fn run() {
                     mini_smoke::start_placement(app.handle().clone());
                     return Ok(());
                 }
+                if std::env::args().any(|arg| arg == "--native-mini-visibility-smoke") {
+                    mini_smoke::start_visibility(app.handle().clone());
+                    return Ok(());
+                }
                 smoke::start(app.handle().clone());
             }
             Ok(())

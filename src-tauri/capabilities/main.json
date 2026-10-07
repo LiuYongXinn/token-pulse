@@ -37,6 +37,7 @@
     "allow-get-mini-usage",
     "allow-set-mini-scope",
     "allow-perform-window-action",
+    "allow-get-mini-visibility",
     "allow-get-sources",
     "allow-query-diagnostics",
     "allow-choose-source-directory",

@@ -53,6 +53,7 @@ fn main() {
             "get_mini_usage",
             "set_mini_scope",
             "perform_window_action",
+            "get_mini_visibility",
             "mini_window_action",
             "get_sources",
             "query_diagnostics",

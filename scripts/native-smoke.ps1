@@ -1,4 +1,4 @@
-param([switch]$SecondaryScreen, [switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
+param([switch]$SecondaryScreen, [switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs, [switch]$MiniVisibility)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
@@ -8,18 +8,19 @@ if (($PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbar
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"
 }
-if (-not ($Notify -or $Updates -or $SourceDialogs -or $NotifyDialogs -or $TaskbarExplorerRestart -or $PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume)) {
+if (-not ($MiniVisibility -or $Notify -or $Updates -or $SourceDialogs -or $NotifyDialogs -or $TaskbarExplorerRestart -or $PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume)) {
     & cargo build -p token-pulse-quota --features test-fixture --bin quota-fixture
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 & cargo build -p token-pulse-desktop --features custom-protocol
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-if (-not ($Notify -or $Updates -or $SourceDialogs -or $AccountDialogs -or $NotifyDialogs -or $PowerMessages -or $PowerResume)) {
+if (-not ($MiniVisibility -or $Notify -or $Updates -or $SourceDialogs -or $AccountDialogs -or $NotifyDialogs -or $PowerMessages -or $PowerResume)) {
     & cargo build -p token-pulse-taskbar --bin token-pulse-taskbar-host
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 $probeArgs = @('--native-smoke')
 if ($SecondaryScreen) { $probeArgs += '--native-secondary-screen' }
+if ($MiniVisibility) { $probeArgs += '--native-mini-visibility-smoke' }
 if ($Taskbar) { $probeArgs += '--native-taskbar-smoke' }
 if ($TaskbarActions) { $probeArgs += '--native-taskbar-actions-smoke' }
 if ($TaskbarExplorerRestart) { $probeArgs += '--native-taskbar-explorer-restart-smoke' }
