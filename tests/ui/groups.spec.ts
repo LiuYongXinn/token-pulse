@@ -41,6 +41,31 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: '模型', exact: true }).click();
 });
 
+test('model and project share charts stay within their containers in narrow windows', async ({ page }) => {
+  await page.getByLabel('日期范围').selectOption('last30');
+  for (const width of [1280, 960, 375]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.getByRole('button', { name: '模型', exact: true }).click();
+    await expect(page.locator('.group-share')).toHaveCount(3);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (width !== 1280) {
+      const tableScroll = page.locator('.group-table-wrap');
+      expect(await tableScroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+      await tableScroll.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+      expect(await tableScroll.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.scrollX)).toBe(0);
+    }
+    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await expect(page.locator('.project-row')).toHaveCount(3);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const charts = await page.locator('.project-row .group-share').evaluateAll(elements => elements.map(el => ({
+      right: el.getBoundingClientRect().right,
+      containerRight: el.closest('.project-row')!.getBoundingClientRect().right,
+    })));
+    for (const chart of charts) expect(chart.right).toBeLessThanOrEqual(chart.containerRight);
+  }
+});
+
 test('model table keeps precise large tokens, mixed currencies, true zero, unknown ratios and shared source filters', async ({ page }) => {
   await expect(page.getByLabel('9,007,199,254,741,033 Token', { exact: true })).toBeVisible();
   await expect(page.locator('.group-stat-strip').getByText('USD 9.01', { exact: true })).toBeVisible();

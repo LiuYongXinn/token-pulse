@@ -105,6 +105,78 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
+for (const width of [1920, 1280, 960, 375]) {
+  test(`dense charts scroll inside their cards at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 860 });
+    await page.getByLabel('日期范围').selectOption('last30');
+    const bars = page.locator('.trend-bin');
+    await expect(bars).toHaveCount(720);
+    await page.evaluate(value => (window as unknown as { __setSyntheticQuota(v: unknown): void }).__setSyntheticQuota(value), syntheticQuota());
+    await expect(page.getByRole('region', { name: '账户额度总览' })).toContainText('周额度剩余 14%');
+    const trendScroll = page.locator('.trend-panel .chart-scroll');
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      expect(await trendScroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+      const bounds = await page.evaluate(() => ({
+        trend: document.querySelector('.trend-panel')!.getBoundingClientRect().right,
+        activity: document.querySelector('.activity-panel')!.getBoundingClientRect().right,
+        left: document.querySelector('.overview-left')!.getBoundingClientRect().right,
+      }));
+      expect(bounds.trend).toBeLessThanOrEqual(bounds.left);
+      expect(bounds.activity).toBeLessThanOrEqual(bounds.left);
+      const charts = await page.locator('.breakdown-bar, .quota-period progress').evaluateAll(elements => elements.map(el => ({
+        left: el.getBoundingClientRect().left,
+        right: el.getBoundingClientRect().right,
+        containerRight: el.closest('section')!.getBoundingClientRect().right,
+      })));
+      expect(charts.length).toBeGreaterThan(1);
+      for (const chart of charts) {
+        expect(chart.left).toBeGreaterThanOrEqual(0);
+        expect(chart.right).toBeLessThanOrEqual(chart.containerRight);
+      }
+    }
+    // Keyboard focus must reveal the last bucket without moving the whole page sideways.
+    await bars.last().focus();
+    await expect(bars.last()).toBeInViewport();
+    expect(await trendScroll.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollX)).toBe(0);
+    await bars.last().click();
+    await expect(page.locator('.trend-panel .chart-caption')).toContainText('0 Token');
+    const axisEnd = page.locator('.trend-axis span').last();
+    await axisEnd.scrollIntoViewIfNeeded();
+    await expect(axisEnd).toBeInViewport();
+    await page.screenshot({ path: `test-results/chart-scroll-${width}.png`, fullPage: true });
+
+    const activityScroll = page.locator('.activity-panel .chart-scroll');
+    if (width === 375) {
+      expect(await activityScroll.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+      await activityScroll.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => activityScroll.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+    }
+    await page.locator('.activity-day').last().focus();
+    await expect(page.locator('.activity-day').last()).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    for (const [grain, label] of [['day', '日'], ['month', '月']]) {
+      await page.getByRole('group', { name: '时间粒度', exact: true }).getByRole('button', { name: label, exact: true }).click();
+      await expect.poll(() => page.evaluate(() => (window as unknown as { __lastDashboardRequest: () => { grain: string } }).__lastDashboardRequest().grain)).toBe(grain);
+      if (grain === 'day') await expect(bars).toHaveCount(30);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      if (width !== 375) expect(await trendScroll.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await page.getByLabel('日期范围').selectOption('today');
+    await page.getByRole('group', { name: '时间粒度', exact: true }).getByRole('button', { name: '小时', exact: true }).click();
+    await expect(bars).toHaveCount(24);
+    expect(await trendScroll.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await trendScroll.evaluate(el => el.scrollLeft)).toBe(0);
+    await page.getByLabel('日期范围').selectOption('last7');
+    await expect(bars).toHaveCount(168);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}
+
 test('overview preserves prototype layout, known breakdown and real unknown states under shared filters', async ({ page }) => {
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   await expect(page.getByText('$0.87', { exact: true })).toBeVisible();

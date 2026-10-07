@@ -7,6 +7,7 @@ import { useDashboard } from './useDashboard';
 import { Cost, reasonNames, when } from './usage-display';
 import { AccountQuotaOverview } from '../shared/AccountQuota';
 import { PendingOverview } from './PendingStatistics';
+import './overview-charts.css';
 
 function Measure({ label, measure, secondary = false }: { label: string; measure: TokenMeasure; secondary?: boolean }) { return <div className={`measure ${secondary ? 'breakdown-support' : ''}`}><dt>{label}</dt><dd>{fullTokens(measure.value)}</dd></div>; }
 
@@ -15,25 +16,25 @@ function Trend({ buckets }: { buckets: UsageSeriesBucket[] }) {
   let maximum = 0n;
   for (const bucket of buckets) { const value = BigInt(bucket.totals.total_tokens); if (value > maximum) maximum = value; }
   const bucket = selected === null ? null : buckets[selected];
-  return <><div className="trend-bars" role="group" aria-label="各时段 Token"><div className="trend-grid" aria-hidden="true" />{buckets.map((bucket, index) => {
+  return <><div className="chart-scroll" role="region" aria-label="用量趋势滚动区域" tabIndex={0}><div className="trend-plot" style={{ '--trend-bucket-count': buckets.length } as CSSProperties}><div className="trend-bars" role="group" aria-label="各时段 Token"><div className="trend-grid" aria-hidden="true" />{buckets.map((bucket, index) => {
     const value = BigInt(bucket.totals.total_tokens);
     const height = maximum === 0n ? 0 : Number(value * 10000n / maximum) / 100;
     const parts = [bucket.totals.output_total, bucket.totals.cached_input, bucket.totals.noncached_input];
     const stacked = value > 0n && parts.every(part => part.complete && part.value !== null) && parts.reduce((sum, part) => sum + BigInt(part.value ?? '0'), 0n) === value;
     const label = `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token`;
     return <button key={bucket.start_ms} className={`trend-bin ${selected === index ? 'selected' : ''}`} aria-label={label} title={label} onClick={() => setSelected(index)} onFocus={() => setSelected(index)} style={{ '--bar-height': `${height}%` } as CSSProperties}>{stacked ? <span className="trend-stack" aria-hidden="true">{parts.map((part, i) => <i key={i} className={['output', 'cached', 'input'][i]} style={{ height: `${Number(BigInt(part.value!) * 10000n / value) / 100}%` }} />)}</span> : <span />}</button>;
-  })}</div><div className="trend-axis"><span>{buckets[0]?.display_label}</span><span>{buckets.at(-1)?.display_label}</span></div><div className="trend-legend" aria-hidden="true"><span><i />非缓存输入</span><span><i className="cached" />缓存输入</span><span><i className="output" />输出</span></div>{(bucket || maximum === 0n) && <p className="chart-caption" aria-live="polite">{bucket ? `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token` : maximum === 0n ? '当前范围暂无用量' : null}</p>}</>;
+  })}</div><div className="trend-axis"><span>{buckets[0]?.display_label}</span><span>{buckets.at(-1)?.display_label}</span></div></div></div><div className="trend-legend" aria-hidden="true"><span><i />非缓存输入</span><span><i className="cached" />缓存输入</span><span><i className="output" />输出</span></div>{(bucket || maximum === 0n) && <p className="chart-caption" aria-live="polite">{bucket ? `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token` : maximum === 0n ? '当前范围暂无用量' : null}</p>}</>;
 }
 function Heatmap({ buckets, timezone, onDay }: { buckets: UsageSeriesBucket[]; timezone: string; onDay: (date: string) => void }) {
   const [selected, setSelected] = useState<number | null>(null);
   let max = 0n; for (const b of buckets) { const n = BigInt(b.totals.total_tokens); if (n > max) max = n; }
   const chosen = selected === null ? null : buckets[selected];
-  return <><div className="activity-grid" role="group" aria-label="近 26 周每日活动">{buckets.map((bucket, index) => {
+  return <><div className="chart-scroll" role="region" aria-label="近期活动滚动区域" tabIndex={0}><div className="activity-grid" role="group" aria-label="近 26 周每日活动" style={{ '--activity-week-count': Math.ceil(buckets.length / 7) } as CSSProperties}>{buckets.map((bucket, index) => {
     const amount = BigInt(bucket.totals.total_tokens);
     const level = amount === 0n ? 0 : Number((amount * 3n + max - 1n) / max);
     const label = `${bucket.display_label} · ${fullTokens(bucket.totals.total_tokens)} Token`;
     return <button key={bucket.start_ms} className={`activity-day level-${level}`} title={label} aria-label={label} onClick={() => { setSelected(index); onDay(calendarDateLabel(bucket.start_ms, timezone)); }} onFocus={() => setSelected(index)} onMouseEnter={() => setSelected(index)} />;
-  })}</div>{chosen && <p className="chart-caption" aria-live="polite">{`${chosen.display_label} · ${fullTokens(chosen.totals.total_tokens)} Token`}</p>}</>;
+  })}</div></div>{chosen && <p className="chart-caption" aria-live="polite">{`${chosen.display_label} · ${fullTokens(chosen.totals.total_tokens)} Token`}</p>}</>;
 }
 
 export function OverviewPage({ request, refreshRevision, sources, accountTimezone, onSources, onSessions, onGrain, onDay, active = true }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; accountTimezone: string | null; onSources: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void; active?: boolean }) {

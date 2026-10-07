@@ -1,0 +1,21 @@
+/* Dense charts keep their minimum cell widths inside the card's scroll viewport. */
+.chart-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 6px;
+}
+
+.trend-plot {
+  min-width: calc(var(--trend-bucket-count) * 12px);
+}
+
+.trend-panel .trend-bin {
+  min-width: 6px;
+}
+
+.activity-panel .activity-grid {
+  min-width: calc(var(--activity-week-count) * 12px);
+  grid-auto-columns: minmax(8px, 1fr);
+}
