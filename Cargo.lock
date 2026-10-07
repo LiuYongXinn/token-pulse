@@ -4417,7 +4417,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "token-pulse-collector"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-core"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4447,7 +4447,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-desktop"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 7.0.0",
@@ -4475,7 +4475,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-integration"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4490,7 +4490,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-quota"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "serde_json",
  "sha2",
@@ -4501,7 +4501,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-store"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.4.3",
@@ -4517,7 +4517,7 @@ dependencies = [
 
 [[package]]
 name = "token-pulse-taskbar"
-version = "0.1.11"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
