@@ -2700,3 +2700,10 @@ Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROU
 六项 integrity 门禁 / 损坏 / 提交隐私结果 / 迟到分页回归、core-store-collector-desktop strict all-target Clippy、release check 通过，副屏 debug 来源重读 / 精确输入 / 诊断及隐私 / 离线价格回归再次通过。日志 millisecond-background-integrity-tests.log / millisecond-background-clippy.log / millisecond-background-release-check.log / millisecond-background-native-*.log。
 
 此前生产参数后端的无负载 first 回执：7 / 30 天 720.2 / 1,284.2ms、更新 741.4ms，启动 2,742.6ms；随后 restart 启动 929.7ms，说明系统缓存状态影响明显。分别保存 millisecond-production-backend-first.json / restart.json，后端 assertions=false，100 次阻塞切换和 DTO 等价检查通过；50ms 匿名焦点采样分别 270 / 125 次，自有应用成为前台均为 0。最终带后台资源优先级的复测另行追加，不把前一轮指标当作修复后的结果。
+
+
+## 毫秒级复查 I18：先固定事实范围，再读取批量计价
+
+实际执行计划显示批量读取从候选 valuation set 开始，再读取事件并判断活跃账本与日期，范围外和退役账本也产生探测。新 SQL 先在同一事务将完整筛选下的 event / ledger 固定为 MATERIALIZED selected，将每账本至多两个完整合格集合绑定为 wanted；先遍历小型 wanted，再通过 selected 的账本临时索引及 event_valuations / valuation_cache_inputs 主键读取。页级点读取不变，候选上限、64 MiB 整体超限回退、指纹及冲突验证保持。没有新增数据库迁移或跨版本临时映射。
+
+真实副本单独 SQL 比较 11,360 行全部缓存字段相等：旧执行计划约 350.4ms，固定范围后约 167.0ms（Python SQLite 3.49.1，系统缓存未控制，不能替代真实 WebView 的端到端验收）。新增确定性 VM 回归：两千个范围外缓存事件仍只取得一个对应范围事件，遍历工作量小于 1,000 VM steps，精确费用与点查询相等。24 项 valuation 回归通过；完整 core-store-collector 570 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 隐私 / 离线价格通过。最终原生优化构建使用 bundled SQLite 3.53.2，其完整未预热回执随后追加。

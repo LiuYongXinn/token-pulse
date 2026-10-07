@@ -148,29 +148,33 @@ impl<'a> CacheReader<'a> {
         limit: usize,
     ) -> StoreResult<()> {
         self.prefetched = None;
-        let sets: Vec<&str> = self
+        let sets: Vec<(&str, &str)> = self
             .candidates
-            .values()
-            .flatten()
-            .map(String::as_str)
+            .iter()
+            .flat_map(|(ledger, sets)| sets.iter().map(move |set| (ledger.as_str(), set.as_str())))
             .collect();
         if sets.is_empty() {
             return Ok(());
         }
         let started = std::time::Instant::now();
-        let placeholders = std::iter::repeat_n("?", sets.len())
+        let placeholders = std::iter::repeat_n("(?,?)", sets.len())
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
-            "SELECT ev.event_id,ev.valuation_set_id,ci.input_sha256,ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM {} JOIN event_valuations ev ON ev.event_id=e.event_id JOIN valuation_cache_inputs ci ON ci.valuation_set_id=ev.valuation_set_id AND ci.event_id=ev.event_id WHERE ({}) AND ev.valuation_set_id IN ({placeholders})",
+            "WITH selected AS MATERIALIZED (SELECT e.event_id,e.ledger_id FROM {} WHERE {}), wanted(ledger_id,valuation_set_id) AS MATERIALIZED (VALUES {placeholders}) SELECT ev.event_id,ev.valuation_set_id,ci.input_sha256,ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM wanted w CROSS JOIN selected e ON e.ledger_id=w.ledger_id CROSS JOIN event_valuations ev ON ev.valuation_set_id=w.valuation_set_id AND ev.event_id=e.event_id CROSS JOIN valuation_cache_inputs ci ON ci.valuation_set_id=ev.valuation_set_id AND ci.event_id=ev.event_id",
             crate::query::FROM,
             scope.sql
         );
         let mut statement = tx.prepare(&sql)?;
-        let values = scope.values.iter().cloned().chain(
-            sets.into_iter()
-                .map(|s| rusqlite::types::Value::Text(s.into())),
-        );
+        // Pin the actual fact range before probing immutable cache rows. Starting at
+        // all candidate sets scans retired ledgers and out-of-range history first.
+        let values = scope
+            .values
+            .iter()
+            .cloned()
+            .chain(sets.into_iter().flat_map(|(ledger, set)| {
+                [ledger, set].map(|s| rusqlite::types::Value::Text(s.into()))
+            }));
         let mut rows = statement.query(rusqlite::params_from_iter(values))?;
         let mut values: std::collections::HashMap<String, Vec<CachedEstimate>> = Default::default();
         let mut bytes = 0usize;

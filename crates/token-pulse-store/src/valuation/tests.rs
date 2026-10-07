@@ -118,6 +118,68 @@ fn summary_cost(db: &Database) -> String {
 }
 
 #[test]
+fn aggregate_prefetch_does_not_visit_cached_events_outside_the_fact_range() {
+    let (_directory, db) = priced();
+    db.write(|conn| {
+        let tx = conn.transaction()?;
+        tx.execute_batch("WITH RECURSIVE n(v) AS (VALUES(0) UNION ALL SELECT v+1 FROM n WHERE v<1999)
+          INSERT INTO observations(observation_id,file_generation_id,byte_offset,byte_end,session_key,kind,observed_at_ms,model,normalized_json,payload_fingerprint,format_version)
+          SELECT 'outside-'||v,'generation',10000+v*100,10100+v*100,'session','usage',10000+v,'M','{\"kind\":\"usage\",\"effective_metadata\":{\"provider\":\"P\",\"model\":\"M\"}}','outside-'||v,'fixture' FROM n;
+          INSERT INTO usage_events(event_id,ledger_id,origin_observation_id,occurred_at_ms,episode_id,model,source_total_tokens,total_tokens,calculation_method,quality_json)
+          SELECT observation_id,'ledger',observation_id,observed_at_ms,'episode',model,1,1,'fixture','[\"confirmed\"]' FROM observations WHERE observation_id LIKE 'outside-%';
+          INSERT INTO event_provenance SELECT event_id,origin_observation_id,'origin' FROM usage_events WHERE event_id LIKE 'outside-%';
+          UPDATE app_state SET data_revision=data_revision+1;")?;
+        tx.commit()?;
+        Ok(())
+    }).unwrap();
+    db.build_event_valuation("ledger", &PriceBasis::EventTime {}, 2)
+        .unwrap();
+    db.snapshot(|tx, revision| {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let mut reader = CacheReader::new(
+            tx,
+            &DecimalInt::from_nonnegative(revision.price.into())?,
+            &PriceBasis::EventTime {},
+        )?;
+        let steps = Arc::new(AtomicUsize::new(0));
+        let measured = steps.clone();
+        tx.progress_handler(
+            1,
+            Some(move || {
+                measured.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )?;
+        reader.prefetch(tx, &crate::query::predicate(&filter())?)?;
+        tx.progress_handler(0, None::<fn() -> bool>)?;
+        assert_eq!(reader.prefetched.as_ref().unwrap().len(), 1);
+        assert!(
+            steps.load(Ordering::Relaxed) < 1000,
+            "out-of-range cache rows were traversed: {}",
+            steps.load(Ordering::Relaxed)
+        );
+        let input: String = tx.query_row(
+            "SELECT input_sha256 FROM valuation_cache_inputs WHERE event_id='event' LIMIT 1",
+            [],
+            |r| r.get(0),
+        )?;
+        assert_eq!(
+            reader.lookup("event", &input, "ledger")?,
+            lookup(
+                tx,
+                "event",
+                &input,
+                &DecimalInt::from_nonnegative(revision.price.into())?,
+                &PriceBasis::EventTime {}
+            )?
+        );
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(summary_cost(&db), "0.000000000000900");
+}
+
+#[test]
 fn assumed_reference_survives_cache_revalue_history_and_reopen_without_token_changes() {
     use token_pulse_core::pricing::{PriceMatchBasis, offline::OfflinePriceCatalog};
     let (directory, db) = setup();
