@@ -181,19 +181,12 @@ fn date(window: Option<&QuotaWindow>, view: &TaskbarView, now: i64) -> String {
         })
         .unwrap_or_else(|| "周重置 时间无效".into())
 }
-fn costs(view: &TaskbarView, full: bool) -> Span {
+fn costs(view: &TaskbarView) -> Span {
     if view.privacy {
         return span("••••", Tone::Muted);
     }
     if view.costs.is_empty() {
-        return span(
-            if view.unpriced_tokens.value() > 0 {
-                "未计价"
-            } else {
-                "费用 —"
-            },
-            Tone::Muted,
-        );
+        return span("—", Tone::Muted);
     }
     let text = view
         .costs
@@ -201,15 +194,7 @@ fn costs(view: &TaskbarView, full: bool) -> Span {
         .map(|cost| format!("{} {}", cost.currency, money(cost.estimated_cost.as_ref())))
         .collect::<Vec<_>>()
         .join(" / ");
-    let partial = view.unpriced_tokens.value() > 0;
-    span(
-        if full {
-            format!("{text} 估算{}", if partial { " · 部分未计价" } else { "" })
-        } else {
-            format!("{text}{}", if partial { "*" } else { "" })
-        },
-        Tone::Cost,
-    )
+    span(text, Tone::Cost)
 }
 /// Unknown and ambiguous quota windows stay unknown; ids/order do not define a weekly role.
 pub fn rows(
@@ -229,7 +214,7 @@ pub fn rows(
         ));
     }
     if prefs.show_costs {
-        first.push(costs(view, density == Density::Full));
+        first.push(costs(view));
     }
     if prefs.show_quota {
         if view.privacy {

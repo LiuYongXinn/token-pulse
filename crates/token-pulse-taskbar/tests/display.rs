@@ -58,7 +58,7 @@ fn actual_periods_estimate_and_timezone_match_independent_expected_text() {
             .unwrap()
         ),
         vec![
-            vec!["Token 683.1K", "USD 0.57 估算"],
+            vec!["Token 683.1K", "USD 0.57"],
             vec!["5h 72%", "周 38%", "周重置 10/04 10:25"]
         ]
     );
@@ -105,7 +105,7 @@ fn null_zero_stale_and_ambiguous_roles_remain_distinct() {
     quota.windows[1].remaining_percent = Some(0.0);
     let output = rows(&view, DisplayPreferences::default(), Density::Full, 0).unwrap();
     assert_eq!(output[0][0].text, "Token —");
-    assert_eq!(output[0][1].text, "费用 —");
+    assert_eq!(output[0][1].text, "—");
     assert_eq!(output[1][1].text, "周 0%");
     assert_eq!(output[1][1].tone, Tone::Warning);
     assert_eq!(output[1][2].text, "更新失败");
@@ -125,7 +125,7 @@ fn null_zero_stale_and_ambiguous_roles_remain_distinct() {
     view.unpriced_tokens = DecimalInt::parse("3").unwrap();
     assert_eq!(
         texts(rows(&view, DisplayPreferences::default(), Density::Full, 0).unwrap())[0][1],
-        "未计价"
+        "—"
     );
 }
 #[test]
