@@ -48,7 +48,7 @@ fn verify_selection(
     match selection {
         SelectedPrice::Rule(_) | SelectedPrice::OfflineStandardReference { .. }
             if flag == 0 && identity.is_none() => {}
-        SelectedPrice::Request(reference)
+        SelectedPrice::Request(reference) | SelectedPrice::AssumedRequest { reference, .. }
             if flag == 1
                 && identity
                     == Some((

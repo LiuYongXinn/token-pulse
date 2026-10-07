@@ -124,6 +124,90 @@ fn atoms(outcome: &PriceOutcome) -> i128 {
 }
 
 #[test]
+fn default_reference_discloses_assumptions_and_preserves_unknown_usage() {
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&catalog())
+        .unwrap();
+    let o = observation(500000, Some(100), None);
+    let event = event(o.last.unwrap());
+    let evaluated = engine.evaluate_with_request(&event, &PriceBasis::EventTime {}, None);
+    // Short reference: (499900*1 + 100*2 + 17*5) * 1e9 atoms.
+    assert_eq!(atoms(&evaluated.outcome), 500_185_000_000_000);
+    assert_eq!(event.usage.cache_write_input, None);
+    let matched = evaluated.matched_price(&evaluated.outcome).unwrap();
+    assert!(matches!(
+        matched.basis,
+        PriceMatchBasis::OfflineAssumedReference {
+            context: OfflineContextBand::Short,
+            context_assumed: true,
+            cache_write_assumed_zero: true,
+            ..
+        }
+    ));
+    assert!(
+        !serde_json::to_string(&matched)
+            .unwrap()
+            .contains("actual_tier")
+    );
+
+    let bound =
+        engine.evaluate_with_request(&event, &PriceBasis::EventTime {}, Some(evidence(&o, None)));
+    // Long reference: (499900*7 + 100*11 + 17*17) * 1e9 atoms.
+    assert_eq!(atoms(&bound.outcome), 3_500_689_000_000_000);
+    assert!(matches!(
+        bound.matched_price(&bound.outcome).unwrap().basis,
+        PriceMatchBasis::OfflineAssumedReference {
+            context: OfflineContextBand::Long,
+            context_assumed: false,
+            cache_write_assumed_zero: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn assumed_standard_respects_context_boundary_without_using_cumulative_consumption() {
+    let engine = PriceCatalog::new(vec![], vec![], n(4))
+        .unwrap()
+        .with_offline_reference(&catalog())
+        .unwrap();
+    for (input, band, expected) in [
+        (272000, OfflineContextBand::Short, 272_235_000_000_000),
+        (272001, OfflineContextBand::Long, 1_904_846_000_000_000),
+    ] {
+        let o = observation(input, Some(100), Some(25));
+        let e = event(o.last.unwrap());
+        let result =
+            engine.evaluate_with_request(&e, &PriceBasis::EventTime {}, Some(evidence(&o, None)));
+        assert_eq!(atoms(&result.outcome), expected);
+        assert!(
+            matches!(result.matched_price(&result.outcome).unwrap().basis,
+            PriceMatchBasis::OfflineAssumedReference { context, context_assumed: false, cache_write_assumed_zero: false, .. } if context == band)
+        );
+    }
+    let o = observation(272001, Some(100), Some(25));
+    let e = event(UsageVector {
+        input_total: Some(50),
+        cached_input: Some(10),
+        cache_write_input: Some(5),
+        reported_total: Some(67),
+        ..o.last.unwrap()
+    });
+    let result =
+        engine.evaluate_with_request(&e, &PriceBasis::EventTime {}, Some(evidence(&o, None)));
+    assert_eq!(atoms(&result.outcome), 155_000_000_000);
+    assert!(matches!(
+        result.matched_price(&result.outcome).unwrap().basis,
+        PriceMatchBasis::OfflineAssumedReference {
+            context: OfflineContextBand::Short,
+            context_assumed: true,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn configured_engine_prices_each_full_request_and_accumulates_mixed_bands() {
     let engine = PriceCatalog::new(vec![], vec![], n(4))
         .unwrap()
@@ -273,7 +357,7 @@ fn configured_engine_keeps_aliases_explicit_rule_precedence_and_source_ambiguity
 }
 
 #[test]
-fn configured_engine_requires_conditions_and_respects_historical_basis() {
+fn configured_engine_estimates_unknown_mode_but_requires_confirmed_mode_quotes() {
     let mut reference = catalog();
     reference.entries.retain(|entry| {
         !(entry.tier == OfflinePriceTier::Fast && entry.context == OfflineContextBand::Long)
@@ -284,18 +368,28 @@ fn configured_engine_requires_conditions_and_respects_historical_basis() {
         .unwrap();
     let o = observation(272001, Some(100), Some(25));
     let original = event(o.last.unwrap());
-    for proof in [
-        None,
-        Some(evidence(&o, None)),
-        Some(evidence(&o, Some(OfflinePriceTier::Fast))),
-    ] {
-        assert!(matches!(
-            engine.estimate_with_request(&original, &PriceBasis::EventTime {}, proof),
-            PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            }
-        ));
-    }
+    assert_eq!(
+        atoms(&engine.estimate_with_request(&original, &PriceBasis::EventTime {}, None)),
+        272_236_000_000_000
+    );
+    assert_eq!(
+        atoms(&engine.estimate_with_request(
+            &original,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, None))
+        )),
+        1_904_846_000_000_000
+    );
+    assert!(matches!(
+        engine.estimate_with_request(
+            &original,
+            &PriceBasis::EventTime {},
+            Some(evidence(&o, Some(OfflinePriceTier::Fast)))
+        ),
+        PriceOutcome::Unpriced {
+            reason: UnpricedCode::IncompletePricingConditions
+        }
+    ));
     let partial = PricingEvent {
         usage: UsageVector {
             reported_total: None,
@@ -521,9 +615,7 @@ fn conditional_catalog_history_uses_estimation_time_and_keeps_captured_revisions
     }
     assert!(matches!(
         engine.estimate(&original, &PriceBasis::EventTime {}),
-        PriceOutcome::Unpriced {
-            reason: UnpricedCode::IncompletePricingConditions
-        }
+        PriceOutcome::Priced { .. }
     ));
     assert!(matches!(
         engine.estimate_with_request(
@@ -1001,9 +1093,7 @@ fn catalog_facts_explain_unpriced_conditions_without_overriding_custom_rules_or_
         };
         assert!(matches!(
             prices.estimate(&known, &PriceBasis::EventTime {}),
-            PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            }
+            PriceOutcome::Priced { .. }
         ));
     }
     let earlier = PricingEvent {
@@ -1023,9 +1113,7 @@ fn catalog_facts_explain_unpriced_conditions_without_overriding_custom_rules_or_
                 specified_at_ms: time(1000)
             }
         ),
-        PriceOutcome::Unpriced {
-            reason: UnpricedCode::IncompletePricingConditions
-        }
+        PriceOutcome::Priced { .. }
     ));
     let absent = PricingEvent {
         model: Some("synthetic-absent"),

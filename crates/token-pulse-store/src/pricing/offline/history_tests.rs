@@ -215,9 +215,7 @@ fn fixed_database_catalogs_select_old_or_new_conditions_without_fallback_or_toke
         ));
         assert!(matches!(
             estimate(&catalog, &observation, "gpt-6.1-sol", at + 500, None, None),
-            PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            }
+            PriceOutcome::Priced { .. }
         ));
         Ok(())
     })

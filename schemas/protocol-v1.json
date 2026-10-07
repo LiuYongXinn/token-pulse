@@ -5170,6 +5170,42 @@
             },
             {
               "additionalProperties": false,
+              "description": "Standard is assumed; flags disclose missing context/write quantities.",
+              "properties": {
+                "cache_write_assumed_zero": {
+                  "type": "boolean"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "context_assumed": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "offline_assumed_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "context",
+                "context_assumed",
+                "cache_write_assumed_zero",
+                "reference_basis"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
               "properties": {
                 "actual_tier": {
                   "$ref": "#/$defs/OfflinePriceTier"
@@ -8501,6 +8537,42 @@
           },
           "required": [
             "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Standard is assumed; flags disclose missing context/write quantities.",
+          "properties": {
+            "cache_write_assumed_zero": {
+              "type": "boolean"
+            },
+            "catalog_id": {
+              "maxLength": 96,
+              "minLength": 1,
+              "type": "string"
+            },
+            "context": {
+              "$ref": "#/$defs/OfflineContextBand"
+            },
+            "context_assumed": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "offline_assumed_reference",
+              "type": "string"
+            },
+            "reference_basis": {
+              "$ref": "#/$defs/OfflineReferenceBasis"
+            }
+          },
+          "required": [
+            "kind",
+            "catalog_id",
+            "context",
+            "context_assumed",
+            "cache_write_assumed_zero",
+            "reference_basis"
           ],
           "type": "object"
         },
@@ -16461,6 +16533,42 @@
             },
             {
               "additionalProperties": false,
+              "description": "Standard is assumed; flags disclose missing context/write quantities.",
+              "properties": {
+                "cache_write_assumed_zero": {
+                  "type": "boolean"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "context_assumed": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "offline_assumed_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "context",
+                "context_assumed",
+                "cache_write_assumed_zero",
+                "reference_basis"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
               "properties": {
                 "actual_tier": {
                   "$ref": "#/$defs/OfflinePriceTier"
@@ -17084,6 +17192,42 @@
               },
               "required": [
                 "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Standard is assumed; flags disclose missing context/write quantities.",
+              "properties": {
+                "cache_write_assumed_zero": {
+                  "type": "boolean"
+                },
+                "catalog_id": {
+                  "maxLength": 96,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "context": {
+                  "$ref": "#/$defs/OfflineContextBand"
+                },
+                "context_assumed": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "const": "offline_assumed_reference",
+                  "type": "string"
+                },
+                "reference_basis": {
+                  "$ref": "#/$defs/OfflineReferenceBasis"
+                }
+              },
+              "required": [
+                "kind",
+                "catalog_id",
+                "context",
+                "context_assumed",
+                "cache_write_assumed_zero",
+                "reference_basis"
               ],
               "type": "object"
             },

@@ -9,5 +9,5 @@ export function whenFull(time: number, timezone: string) { return new Intl.DateT
 export function Cost({ pricing }: { pricing: PricingSummary }) {
   if (pricing.redacted) return <strong className="cost-number">已隐藏</strong>;
   if (!pricing.currencies.length) return <strong className="cost-number unavailable">未计价</strong>;
-  return <div className="currency-list">{pricing.currencies.map(currency => <strong className="cost-number" key={currency.currency} title={currency.estimated_cost === null ? '金额未知' : `${currency.currency} ${currency.estimated_cost}（精确估算）`}>{currency.estimated_cost === null ? '—' : `${pricing.currencies.length === 1 && currency.currency === 'USD' ? '$' : `${currency.currency} `}${money(currency.estimated_cost)}`}</strong>)}</div>;
+  return <div className="currency-list">{pricing.currencies.map(currency => <strong className="cost-number" key={currency.currency} title={currency.estimated_cost === null ? '金额未知' : `${currency.currency} ${currency.estimated_cost}（参考估算；实际模式未知时默认 Standard，缺请求证据时暂用短上下文档）`}>{currency.estimated_cost === null ? '—' : `${pricing.currencies.length === 1 && currency.currency === 'USD' ? '$' : `${currency.currency} `}${money(currency.estimated_cost)}`}</strong>)}</div>;
 }

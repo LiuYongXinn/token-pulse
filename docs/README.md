@@ -2,7 +2,13 @@
 
 本索引链接当前已收录的文档；完成情况与验证限制以交付记录为准。
 
+## 需求
+
+- [默认参考费用估算](requirements/reference-estimates.md)：实际模式未知时继续估算，说明默认价格与缺失条件的假设。
+
 ## 设计
+
+- [默认参考费用估算设计](design/reference-estimates.md)：Standard 默认估算、请求档位、未知写入假设、公开依据与缓存 v7。
 
 - [账户额度显示设计](design/account-quota.md)
 - [采集与核算详细设计](design/collection-accounting.md)

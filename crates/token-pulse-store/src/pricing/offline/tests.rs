@@ -88,12 +88,10 @@ fn install_reopen_and_same_content_are_idempotent_without_changing_consumption()
             )),
             "220500000000"
         );
-        assert!(matches!(
-            quote(catalog_at(tx, 1)?, "gpt-6.1-sol", at, None),
-            PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            }
-        ));
+        assert_eq!(
+            atoms(quote(catalog_at(tx, 1)?, "gpt-6.1-sol", at, None)),
+            "186000000000"
+        );
         Ok(())
     })
     .unwrap();

@@ -175,12 +175,13 @@ fn missing_modes_and_unknown_quantities_have_distinct_selection_results() {
             &PriceBasis::EventTime {},
             Some(proof(&observed, None)),
         )?;
-        assert!(unknown.selection.is_none());
-        assert!(unknown.matched_price(&unknown.outcome).is_none());
+        assert_eq!(atoms(&unknown.outcome), 210_000_000_000);
         assert!(matches!(
-            unknown.outcome,
-            PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
+            unknown.matched_price(&unknown.outcome).unwrap().basis,
+            token_pulse_core::pricing::PriceMatchBasis::OfflineAssumedReference {
+                context_assumed: false,
+                cache_write_assumed_zero: true,
+                ..
             }
         ));
         let known = evaluate(
@@ -352,8 +353,15 @@ fn production_query_and_background_do_not_turn_request_or_configuration_into_act
             db.build_event_valuation("ledger", &basis, 4000).unwrap();
         }
         let summary = db.pricing_summary(&filter, &basis).unwrap();
-        assert!(summary.currencies.is_empty());
-        assert_eq!(summary.reasons[0].code, "incomplete_pricing_conditions");
-        assert_eq!(summary.unpriced_total_tokens, before);
+        assert_eq!(
+            summary.currencies[0]
+                .estimated_cost
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "0.000250000000000"
+        );
+        assert!(summary.reasons.is_empty());
+        assert_eq!(summary.priced_total_tokens, before);
     }
 }

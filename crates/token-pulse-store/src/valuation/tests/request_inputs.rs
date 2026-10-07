@@ -209,8 +209,8 @@ fn new_request_evidence_misses_old_cache_and_publishes_identical_summary_and_pag
 }
 
 #[test]
-fn v4_and_v5_ready_sets_cannot_supply_current_input_and_legacy_rows_are_retained() {
-    for legacy_version in [4, 5] {
+fn v4_through_v6_ready_sets_cannot_supply_current_input_and_legacy_rows_are_retained() {
+    for legacy_version in [4, 5, 6] {
         let (_dir, db) = priced();
         let built = db
             .build_event_valuation("ledger", &PriceBasis::EventTime {}, 3)

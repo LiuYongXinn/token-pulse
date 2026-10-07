@@ -28,6 +28,11 @@ function MatchedPriceExplanation({ row }: { row: UsageEventRow }) {
     case 'offline_standard_reference':
       label = '离线 Standard 平价参考';
       note = '请求实际模式未知。使用全球 API 文本参考价，不代表账户订阅账单或独立工具费用。'; break;
+    case 'offline_assumed_reference': {
+      const bands = { all: '不分上下文档位', short: '短上下文', long: '长上下文' };
+      label = `Standard 参考估算 · ${bands[basis.context]}${basis.context_assumed ? '（假设）' : ''}`;
+      note = `实际处理模式未知，按 Standard 全球 API 文本价格估算。${basis.context_assumed ? '缺少可靠单次请求输入，暂用短上下文档；累计用量不作为请求长度。' : ''}${basis.cache_write_assumed_zero ? '缓存写入量未知，估算暂按 0；原始用量仍保留未知。' : ''}地区、订阅账单及独立工具费用未包含。`; break;
+    }
     case 'offline_request_reference': {
       const tiers = { standard: 'Standard', fast: 'Fast', batch: 'Batch', flex: 'Flex', ultrafast: 'Ultrafast' };
       const bands = { all: '不分上下文档位', short: '短上下文', long: '长上下文' };

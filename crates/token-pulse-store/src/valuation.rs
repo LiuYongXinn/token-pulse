@@ -14,7 +14,7 @@ use token_pulse_core::{
 };
 
 /// Increment when the price algorithm or the fingerprint's interpretation changes.
-pub const CACHE_VERSION: i64 = 6;
+pub const CACHE_VERSION: i64 = 7;
 const BATCH_ROWS: usize = 500;
 
 pub(crate) fn fingerprint(

@@ -15,6 +15,15 @@ pub enum PriceMatchBasis {
         reference_basis: OfflineReferenceBasis,
     },
     OfflineRule {},
+    /// Standard is assumed; flags disclose missing context/write quantities.
+    OfflineAssumedReference {
+        #[schemars(length(min = 1, max = 96))]
+        catalog_id: String,
+        context: OfflineContextBand,
+        context_assumed: bool,
+        cache_write_assumed_zero: bool,
+        reference_basis: OfflineReferenceBasis,
+    },
     OfflineRequestReference {
         #[schemars(length(min = 1, max = 96))]
         catalog_id: String,
@@ -77,6 +86,17 @@ impl PriceEvaluation {
                 catalog_id: reference.catalog_id.clone(),
                 actual_tier: reference.tier,
                 context: reference.context,
+                reference_basis: reference.basis,
+            },
+            SelectedPrice::AssumedRequest {
+                reference,
+                context_assumed,
+                cache_write_assumed_zero,
+            } => PriceMatchBasis::OfflineAssumedReference {
+                catalog_id: reference.catalog_id.clone(),
+                context: reference.context,
+                context_assumed: *context_assumed,
+                cache_write_assumed_zero: *cache_write_assumed_zero,
                 reference_basis: reference.basis,
             },
         };

@@ -266,7 +266,7 @@ fn verify_request_input(app: &tauri::AppHandle) -> Result<(), String> {
       const filter={range,sources:{kind:'ids',ids:['native-request-input'],include_unknown:false},models:{kind:'all'},projects:{kind:'all'},sessions:{kind:'all'}};
       const result=await invoke('query_usage_events',{requestId:'native-request-input-projection',request:{query:{filter,price_basis:{mode:'event_time'},sort:'time_desc',page_size:50},cursor:null}});
       const event=result.data.events[0];
-      if(result.data.events.length!==1 || event.request_input?.input_tokens!=='272001' || event.request_input.binding!=='full_request' || event.total_tokens!=='272011' || event.price.status!=='unpriced' || event.price.reason!=='incomplete_pricing_conditions')throw Error('NATIVE_REQUEST_INPUT_PROJECTION');
+      if(result.data.events.length!==1 || event.request_input?.input_tokens!=='272001' || event.request_input.binding!=='full_request' || event.total_tokens!=='272011' || event.price.status!=='priced' || event.matched_price?.basis.kind!=='offline_assumed_reference' || event.matched_price.basis.context!=='long' || event.matched_price.basis.context_assumed || event.matched_price.basis.cache_write_assumed_zero)throw Error('NATIVE_REQUEST_INPUT_PROJECTION');
       if(JSON.stringify(result.data).includes('private-response-fixture'))throw Error('NATIVE_REQUEST_INPUT_ID_LEAK');
       [...document.querySelectorAll('.sidebar nav button')].find(b=>b.textContent==='明细').click();
       [...document.querySelectorAll('button')].find(b=>b.textContent==='改用主窗口日期')?.click();
@@ -277,7 +277,7 @@ fn verify_request_input(app: &tauri::AppHandle) -> Result<(), String> {
       [...document.querySelectorAll('.event-table button')].find(b=>b.textContent==='查看依据').click();
       await wait(()=>document.querySelector('.event-evidence')?.textContent.includes('272,001 Token'));
       const evidence=document.querySelector('.event-evidence');
-      if(!evidence.textContent.includes('对应完整请求用量') || !evidence.textContent.includes('尚未采集，不能据此确认完整计费') || !evidence.textContent.includes('计费条件尚未完整确认'))throw Error('NATIVE_REQUEST_INPUT_UI');
+      if(!evidence.textContent.includes('对应完整请求用量') || !evidence.textContent.includes('尚未采集，不能据此确认完整计费') || !evidence.textContent.includes('Standard 参考估算 · 长上下文'))throw Error('NATIVE_REQUEST_INPUT_UI');
     "#,
         Duration::from_secs(15),
     )?;

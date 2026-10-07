@@ -71,8 +71,8 @@ fn summary_cost(db: &Database) -> String {
 }
 
 #[test]
-fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without_token_changes() {
-    use token_pulse_core::pricing::{UnpricedCode, offline::OfflinePriceCatalog};
+fn assumed_reference_survives_cache_revalue_history_and_reopen_without_token_changes() {
+    use token_pulse_core::pricing::{PriceMatchBasis, offline::OfflinePriceCatalog};
     let (directory, db) = setup();
     db.commit(fixture()).unwrap();
     let reference = OfflinePriceCatalog::bundled().unwrap();
@@ -106,20 +106,23 @@ fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without
     let first = db
         .query_usage_events("main", &query, EpochMs::new(at + 2).unwrap())
         .unwrap();
-    assert_eq!(first.pricing.unpriced_total_tokens.as_str(), "111");
+    assert_eq!(first.pricing.priced_total_tokens.as_str(), "110");
+    assert_eq!(first.pricing.unpriced_total_tokens.as_str(), "1");
+    assert_eq!(first.pricing.reasons[0].code, "insufficient_usage");
     assert_eq!(
-        first.pricing.reasons[0].code,
-        "incomplete_pricing_conditions"
+        first.pricing.currencies[0]
+            .estimated_cost
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "0.000186000000000"
     );
-    assert!(first.pricing.currencies.is_empty());
     db.build_event_valuation("ledger", &PriceBasis::EventTime {}, at + 3)
         .unwrap();
     db.snapshot(|tx, _| {
         assert!(matches!(
             cached(tx, 1, &PriceBasis::EventTime {})?,
-            Some(PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            })
+            Some(PriceOutcome::Priced { .. })
         ));
         Ok(())
     })
@@ -143,11 +146,19 @@ fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without
         .unwrap();
     assert_eq!(second.meta.price_revision, first.meta.price_revision);
     assert_eq!(second.events[0].event_id, "event");
+    assert_eq!(cost(second.events[0].price.clone()), "186000000000");
+    assert!(matches!(
+        second.events[0].matched_price.as_ref().unwrap().basis,
+        PriceMatchBasis::OfflineAssumedReference {
+            context_assumed: true,
+            cache_write_assumed_zero: true,
+            ..
+        }
+    ));
+    assert!(second.events[0].usage.cache_write_input.is_none());
     assert!(matches!(
         second.events[0].price,
-        PriceOutcome::Unpriced {
-            reason: UnpricedCode::IncompletePricingConditions
-        }
+        PriceOutcome::Priced { .. }
     ));
     let fresh = db
         .query_usage_events(
@@ -165,7 +176,7 @@ fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without
     let event = fresh.events.iter().find(|e| e.event_id == "event").unwrap();
     assert_eq!(cost(event.price.clone()), "900");
     assert_eq!(fresh.summary.total_tokens.as_str(), "111");
-    db.snapshot(|tx,r| { assert!(matches!(cached(tx,1,&PriceBasis::EventTime {})?,Some(PriceOutcome::Unpriced { reason:UnpricedCode::IncompletePricingConditions }))); assert_eq!(cost(cached(tx,2,&PriceBasis::EventTime {})?.unwrap()),"900");
+    db.snapshot(|tx,r| { assert!(matches!(cached(tx,1,&PriceBasis::EventTime {})?,Some(PriceOutcome::Priced { .. }))); assert_eq!(cost(cached(tx,2,&PriceBasis::EventTime {})?.unwrap()),"900");
         assert_eq!((r.data,tx.query_row("SELECT committed_offset,checkpoint_revision FROM file_generations WHERE file_generation_id='generation'",[],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,i64>(1)?)))?),before); Ok(()) }).unwrap();
     drop(db);
     let db = Database::open(directory.path()).unwrap();
@@ -176,9 +187,7 @@ fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without
     db.snapshot(|tx, _| {
         assert!(matches!(
             cached(tx, 1, &PriceBasis::EventTime {})?,
-            Some(PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            })
+            Some(PriceOutcome::Priced { .. })
         ));
         assert_eq!(
             cost(cached(tx, 2, &PriceBasis::EventTime {})?.unwrap()),
@@ -190,8 +199,8 @@ fn conditional_unpriced_reason_survives_cache_revalue_history_and_reopen_without
 }
 
 #[test]
-fn historical_condition_reason_excludes_v3_cache_and_rebuilds_without_changing_consumption() {
-    use token_pulse_core::pricing::{UnpricedCode, offline::OfflinePriceCatalog};
+fn historical_reference_excludes_v3_cache_and_rebuilds_without_changing_consumption() {
+    use token_pulse_core::pricing::offline::OfflinePriceCatalog;
     let (directory, db) = setup();
     db.commit(fixture()).unwrap();
     let old = OfflinePriceCatalog::bundled().unwrap();
@@ -237,14 +246,22 @@ fn historical_condition_reason_excludes_v3_cache_and_rebuilds_without_changing_c
     let summary = db
         .pricing_summary(&range, &PriceBasis::EventTime {})
         .unwrap();
-    assert_eq!(summary.reasons[0].code, "incomplete_pricing_conditions");
-    assert_eq!(summary.unpriced_total_tokens.as_str(), "110");
+    assert!(summary.reasons.is_empty());
+    assert_eq!(summary.priced_total_tokens.as_str(), "110");
+    assert_eq!(
+        summary.currencies[0]
+            .estimated_cost
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "0.000186000000000"
+    );
     let result = db
         .build_event_valuation("ledger", &PriceBasis::EventTime {}, at + 1200)
         .unwrap();
     assert!(!result.already_ready);
     db.snapshot(|tx,r| {
-        assert!(matches!(cached(tx,2,&PriceBasis::EventTime {})?,Some(PriceOutcome::Unpriced {reason:UnpricedCode::IncompletePricingConditions})));
+        assert!(matches!(cached(tx,2,&PriceBasis::EventTime {})?,Some(PriceOutcome::Priced { .. })));
         assert_eq!(tx.query_row("SELECT COUNT(*) FROM valuation_cache_sets WHERE cache_version=3",[],|row|row.get::<_,i64>(0))?,1);
         assert_eq!(tx.query_row("SELECT COUNT(*) FROM valuation_cache_sets WHERE cache_version=?1",[CACHE_VERSION],|row|row.get::<_,i64>(0))?,1);
         assert_eq!((r.data,
@@ -258,9 +275,7 @@ fn historical_condition_reason_excludes_v3_cache_and_rebuilds_without_changing_c
     db.snapshot(|tx, _| {
         assert!(matches!(
             cached(tx, 2, &PriceBasis::EventTime {})?,
-            Some(PriceOutcome::Unpriced {
-                reason: UnpricedCode::IncompletePricingConditions
-            })
+            Some(PriceOutcome::Priced { .. })
         ));
         Ok(())
     })

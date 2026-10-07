@@ -35,6 +35,43 @@ pub struct SelectedRequestReference {
     pub basis: OfflineReferenceBasis,
 }
 impl OfflinePriceCatalog {
+    /// A usable estimate when the source cannot confirm service mode. Keep every
+    /// assumption separate from response evidence and never alter retained usage.
+    pub(crate) fn select_standard_estimate(
+        &self,
+        event: &PricingEvent<'_>,
+        evidence: Option<RequestPriceEvidence<'_>>,
+        revision: DecimalInt,
+        created_at: EpochMs,
+    ) -> Result<(SelectedRequestReference, bool), RequestPriceSelectionError> {
+        let input = evidence.and_then(|proof| {
+            proof
+                .response
+                .project_input(proof.context, event.usage)
+                .filter(|input| input.binding == RequestConsumptionBinding::FullRequest)
+        });
+        let band = if input.as_ref().is_some_and(|input| {
+            input.input_tokens.value() > i128::from(self.short_context_max_input)
+        }) {
+            OfflineContextBand::Long
+        } else {
+            OfflineContextBand::Short
+        };
+        let entry = self
+            .entries
+            .iter()
+            .find(|entry| {
+                Some(entry.model_exact.as_str()) == event.model
+                    && entry.tier == OfflinePriceTier::Standard
+                    && (entry.context == OfflineContextBand::All || entry.context == band)
+            })
+            .ok_or(RequestPriceSelectionError::MissingQuote)?;
+        let context_assumed = input.is_none() && entry.context != OfflineContextBand::All;
+        Ok((
+            self.reference_for_entry(entry, revision, created_at)?,
+            context_assumed,
+        ))
+    }
     /// One full request selects one band for all four rates, including its whole output.
     /// Historical evaluation uses the returned immutable rule with the existing PriceCatalog.
     pub fn select_request_reference(

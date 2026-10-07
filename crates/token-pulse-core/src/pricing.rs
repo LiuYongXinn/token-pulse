@@ -345,6 +345,11 @@ pub enum SelectedPrice {
         reference_basis: offline::OfflineReferenceBasis,
     },
     Request(offline::SelectedRequestReference),
+    AssumedRequest {
+        reference: offline::SelectedRequestReference,
+        context_assumed: bool,
+        cache_write_assumed_zero: bool,
+    },
 }
 impl SelectedPrice {
     pub fn rule(&self) -> &PriceRule {
@@ -352,6 +357,7 @@ impl SelectedPrice {
             Self::Rule(rule) => rule,
             Self::OfflineStandardReference { rule, .. } => rule,
             Self::Request(reference) => &reference.rule,
+            Self::AssumedRequest { reference, .. } => &reference.rule,
         }
     }
 }
@@ -464,7 +470,7 @@ impl PriceCatalog {
     pub fn estimate(&self, event: &PricingEvent<'_>, basis: &PriceBasis) -> PriceOutcome {
         self.estimate_with_request(event, basis, None)
     }
-    /// Request evidence never overrides explicit rules or supplies a default actual mode.
+    /// Explicit rules win; unknown mode uses a separately labelled Standard estimate.
     /// Store callers must retain the chosen conditional rule before caching its identity.
     pub fn estimate_with_request(
         &self,
@@ -565,8 +571,42 @@ impl PriceCatalog {
             };
         }
         let Some(rule) = winner else {
-            if at_time.is_some_and(|reference| reference.has_conditional_model(canonical)) {
-                return PriceEvaluation::unpriced(UnpricedCode::IncompletePricingConditions);
+            if let Some(reference) =
+                at_time.filter(|reference| reference.has_conditional_model(canonical))
+            {
+                let canonical_event = PricingEvent {
+                    model: Some(canonical),
+                    ..*event
+                };
+                let publication = &reference.publication;
+                return match publication.catalog.select_standard_estimate(
+                    &canonical_event,
+                    evidence,
+                    publication.introduced_revision.clone(),
+                    publication.installed_at_ms,
+                ) {
+                    Ok((reference, context_assumed)) => {
+                        let cache_write_assumed_zero = event.usage.cache_write_input.is_none()
+                            && reference.rule.cache_write_rate_atoms.is_some();
+                        let usage = UsageVector {
+                            cache_write_input: if cache_write_assumed_zero {
+                                Some(0)
+                            } else {
+                                event.usage.cache_write_input
+                            },
+                            ..event.usage
+                        };
+                        PriceEvaluation::selected(
+                            usage,
+                            SelectedPrice::AssumedRequest {
+                                reference,
+                                context_assumed,
+                                cache_write_assumed_zero,
+                            },
+                        )
+                    }
+                    Err(_) => PriceEvaluation::unpriced(UnpricedCode::IncompletePricingConditions),
+                };
             }
             return PriceEvaluation::unpriced(UnpricedCode::MissingRule);
         };

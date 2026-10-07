@@ -320,7 +320,7 @@ export type PriceOutcome = { "status": "redacted", } | { "status": "priced", rul
 
 export type MatchedPrice = { rule_id: string, model_exact: string, introduced_revision: DecimalInt, basis: PriceMatchBasis, };
 
-export type PriceMatchBasis = { "kind": "custom_rule", source_specific: boolean, } | { "kind": "offline_standard_reference", catalog_id: string, reference_basis: OfflineReferenceBasis, } | { "kind": "offline_rule", } | { "kind": "offline_request_reference", catalog_id: string, actual_tier: OfflinePriceTier, context: OfflineContextBand, reference_basis: OfflineReferenceBasis, };
+export type PriceMatchBasis = { "kind": "custom_rule", source_specific: boolean, } | { "kind": "offline_standard_reference", catalog_id: string, reference_basis: OfflineReferenceBasis, } | { "kind": "offline_rule", } | { "kind": "offline_assumed_reference", catalog_id: string, context: OfflineContextBand, context_assumed: boolean, cache_write_assumed_zero: boolean, reference_basis: OfflineReferenceBasis, } | { "kind": "offline_request_reference", catalog_id: string, actual_tier: OfflinePriceTier, context: OfflineContextBand, reference_basis: OfflineReferenceBasis, };
 
 export type CoverageState = "complete" | "partial" | "unknown";
 

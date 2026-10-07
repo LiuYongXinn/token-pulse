@@ -123,6 +123,9 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, response_id: 'private' } }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, introduced_revision: 9007199254740993 } }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...matched, basis: { ...matched.basis, actual_tier: 'fast' } } }] })).toBe(false);
+  const assumed = { ...matched, basis: { kind: 'offline_assumed_reference', catalog_id: 'openai-text-fixture', context: 'short', context_assumed: true, cache_write_assumed_zero: true, reference_basis: 'global_api_reference' } };
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: assumed }] })).toBe(true);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, matched_price: { ...assumed, basis: { ...assumed.basis, actual_tier: 'standard' } } }] })).toBe(false);
 
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '272001', binding: 'full_request' } }] })).toBe(true);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '0', binding: 'different_consumption' } }] })).toBe(true);
