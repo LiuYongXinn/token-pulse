@@ -20,3 +20,14 @@ TokenPulse 是独立运行的 Codex 本地用量统计桌面工具，包含桌�
 当前验证范围为 Windows 10；开发环境、构建命令和具体限制见[本地开发说明](docs/development/local-development.md)及[交付记录](docs/development/delivery-status.md)。
 
 全部已收录文档见[文档索引](docs/README.md)。
+
+## 文档
+
+- [详细开发设计（实施总入口）](docs/design/development-design.md)：统一需求与 UI，包含架构、数据、采集核算、接口与开发验收计划。
+- [文档索引](docs/README.md)
+- [完整设计方案](docs/design/token-pulse-design.md)：产品行为、采集与统计规则、架构、数据模型、窗口交互、部署和验收条件。
+- [UI 设计与交互原型](docs/design/token-pulse-ui.md)：主窗口、悬浮窗与任务栏模式的视觉、布局及状态设计；可直接用浏览器打开 [HTML 原型](prototypes/token-pulse-ui.html)。
+
+- [Windows 任务栏显示设计](docs/design/taskbar-display.md)：常驻读数、交互、原生嵌入与系统适配规则。
+
+方案中的参考代码使用绝对路径定位到原项目 `E:/Documents/Code/jetbrains-cc-gui` 及本机 TokenTracker 源码，具体路径与定位方法见方案第 23 节。

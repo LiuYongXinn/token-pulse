@@ -20,11 +20,21 @@ mod theme_tests {
     #[test]
     fn new_preferences_use_silver_mist_without_replacing_saved_themes() {
         assert_eq!(DisplayPreferences::default().theme, AppTheme::Light);
-        for (saved, expected) in [("dark", AppTheme::Dark), ("light", AppTheme::Light), ("system", AppTheme::System)] {
-            let preferences: DisplayPreferences = serde_json::from_str(&format!(r#"{{"display_timezone":"Asia/Shanghai","privacy":true,"theme":"{saved}"}}"#)).unwrap();
+        for (saved, expected) in [
+            ("dark", AppTheme::Dark),
+            ("light", AppTheme::Light),
+            ("system", AppTheme::System),
+        ] {
+            let preferences: DisplayPreferences = serde_json::from_str(&format!(
+                r#"{{"display_timezone":"Asia/Shanghai","privacy":true,"theme":"{saved}"}}"#
+            ))
+            .unwrap();
             assert_eq!(preferences.theme, expected);
             assert!(preferences.privacy);
-            assert_eq!(preferences.display_timezone.as_deref(), Some("Asia/Shanghai"));
+            assert_eq!(
+                preferences.display_timezone.as_deref(),
+                Some("Asia/Shanghai")
+            );
         }
     }
 }
