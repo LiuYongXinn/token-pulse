@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DashboardRequest, SessionRow, SessionSort } from '../shared/generated/contracts';
 import { compactTokens, fullTokens } from '../shared/format';
 import { Cost, coverageNames, when } from './usage-display';
@@ -6,16 +6,18 @@ import { useSessions } from './useSessions';
 import { SessionDrawer } from './SessionDrawer';
 import './sessions.css';
 
-export function SessionsPage({ request, refreshRevision, onSessionScope }: { request: DashboardRequest; refreshRevision: number; onSessionScope: (key: string, name: string) => void }) {
+export function SessionsPage({ request, refreshRevision, onSessionScope, active = true }: { request: DashboardRequest; refreshRevision: number; onSessionScope: (key: string, name: string) => void; active?: boolean }) {
   const [sort, setSort] = useState<SessionSort>('latest_desc');
   const [size, setSize] = useState(50);
   const query = { filter: request.filter, price_basis: request.price_basis, sort, page_size: size };
-  const pager = useSessions(query, refreshRevision);
+  const pager = useSessions(query, refreshRevision, !active);
   const [selected, setSelected] = useState<{ row: SessionRow; key: string } | null>(null);
+  useEffect(() => { if (!active) setSelected(null); }, [active]);
   const scopeKey = JSON.stringify([query, refreshRevision, pager.page?.meta.snapshot_id]);
   const page = pager.page;
   const timezone = page?.meta.display_timezone ?? request.filter.range.timezone;
   const pages = page ? (BigInt(page.summary.session_count) + BigInt(size) - 1n) / BigInt(size) : null;
+  if (!active) return null;
   return <>
     <div className="session-toolbar"><div><label>排序 <select aria-label="会话排序" value={sort} onChange={e => setSort(e.target.value as SessionSort)}><option value="latest_desc">最近活跃</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="会话每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button onClick={pager.reload} disabled={pager.loading}>重新查询</button></div>
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留已读取的同一快照；重新查询将替换全部页面。</span>}</div>}

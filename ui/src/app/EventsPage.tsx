@@ -50,15 +50,16 @@ function RequestInput({ evidence, matched, hidden }: { evidence: RequestInputEvi
   const tiers = { standard: 'Standard', fast: 'Fast', batch: 'Batch', flex: 'Flex', ultrafast: 'Ultrafast' };
   return <><dt>单次请求输入</dt><dd>{evidence ? `${fullTokens(evidence.input_tokens)} Token` : '未知（缺少可核对的响应记录）'}</dd><dt>请求与消费关联</dt><dd>{evidence ? evidence.binding === 'full_request' ? '对应完整请求用量' : '与本笔增量不同，不能据此选档' : '未知'}</dd><dt>实际模式 / 地区</dt><dd>{hidden ? '已隐藏' : actual ? `响应模式 ${tiers[actual]}；地区尚未确认` : '尚未采集，不能据此确认完整计费'}</dd></>;
 }
-export function EventsPage({ request, refreshRevision, onSession }: { request: DashboardRequest; refreshRevision: number; onSession: (key: string, name: string) => void }) {
+export function EventsPage({ request, refreshRevision, onSession, active = true }: { request: DashboardRequest; refreshRevision: number; onSession: (key: string, name: string) => void; active?: boolean }) {
   const [sort, setSort] = useState<UsageEventSort>('time_desc');
   const [size, setSize] = useState(50);
-  const pager = usePagedUsage({ filter: request.filter, price_basis: request.price_basis, sort, page_size: size }, refreshRevision, adapter);
+  const pager = usePagedUsage({ filter: request.filter, price_basis: request.price_basis, sort, page_size: size }, refreshRevision, adapter, !active);
   const [expanded, setExpanded] = useState<string | null>(null);
   const page = pager.page;
   const scope = JSON.stringify([page?.meta.snapshot_id, pager.pageNumber]);
   const timezone = page?.meta.display_timezone ?? request.filter.range.timezone;
   const pages = page ? (BigInt(page.summary.usage_event_count) + BigInt(size) - 1n) / BigInt(size) : 0n;
+  if (!active) return null;
   return <>
     <div className="session-toolbar"><div><label>排序 <select aria-label="明细排序" value={sort} onChange={e => setSort(e.target.value as UsageEventSort)}><option value="time_desc">最近发生</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="明细每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button disabled={pager.loading} onClick={pager.reload}>重新查询</button></div>
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留已读取的同一快照；重新查询将替换全部页面。</span>}</div>}

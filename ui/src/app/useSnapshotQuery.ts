@@ -11,13 +11,16 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
   const lastFilter = useRef<string | null>(null);
   useEffect(() => {
     let active = true;
+    let busy = false;
     const refresh = async () => {
+      if (busy) return;
+      busy = true;
       const serial = ++sequence.current;
       if (lastFilter.current !== filterKey) { setResult(null); setFailure(null); lastFilter.current = filterKey; }
       setLoading(true);
       try { const bundle = await read(request); if (active && serial === sequence.current) { setResult({ key: filterKey, bundle }); setFailure(null); } }
       catch (e) { if (active && serial === sequence.current) setFailure({ key: filterKey, message: runtimeError(e) }); }
-      finally { if (active && serial === sequence.current) setLoading(false); }
+      finally { busy = false; if (active && serial === sequence.current) setLoading(false); }
     };
     void refresh();
     const interval = setInterval(() => { if (!document.hidden) void refresh(); }, 10_000);

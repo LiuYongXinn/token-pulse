@@ -120,16 +120,18 @@ test('expired or mismatched continuations never append fresh data to a frozen ev
   await expect(page.getByRole('alert')).toContainText('查询快照已过期'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
 });
 
-test('price notification replaces the entire event snapshot and navigation cleans up listeners and capabilities', async ({ page }) => {
+test('price notification replaces the whole snapshot and navigation keeps bounded listeners but releases capabilities', async ({ page }) => {
   type Bridge = { __eventListenerCount: () => number; __emitEventPriceChange: () => void; __eventCalls: () => { command: string; request: { kind?: string; query?: { sort: string } } }[] };
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
-  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(1);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);
   await page.evaluate(() => (window as unknown as Bridge).__emitEventPriceChange());
   await expect(page.locator('.event-table>tbody>tr').first().getByText('$18.01', { exact: true })).toBeVisible({ timeout: 3000 });
   await expect(page.locator('.group-footnote')).toContainText('价格修订 4');
   await page.getByLabel('明细排序').selectOption('total_desc'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(0);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);
+  await expect(page.locator('.event-table')).toHaveCount(0);
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__eventCalls())).filter(c => c.command === 'close_query_snapshot' && c.request.kind === 'usage_events').length).toBeGreaterThanOrEqual(3);
   const calls = await page.evaluate(() => (window as unknown as Bridge).__eventCalls());
   expect(calls.filter(c => c.command === 'close_query_snapshot' && c.request.kind === 'usage_events').length).toBeGreaterThanOrEqual(3);
 });

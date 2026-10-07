@@ -174,7 +174,7 @@ test('expired pages preserve the frozen page and explicit requery replaces it wi
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
 });
 
-test('sort and scope changes serialize release, clear obsolete values and clean up late results on navigation', async ({ page }) => {
+test('sort and scope changes serialize release, clear obsolete values and release late offscreen cursors', async ({ page }) => {
   type Calls = { command: string; args: { request?: { kind?: string; query: { sort: string; filter: { sources: unknown } }; request?: { query: { sort: string }; cursor: string }; cursor: string | null } } }[];
   type Bridge = { __syntheticSessionCalls: () => Calls; __deferSyntheticSessions: () => void; __releaseSyntheticSessions: () => void };
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
@@ -195,6 +195,24 @@ test('sort and scope changes serialize release, clear obsolete values and clean 
   await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticSessions());
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls())).filter(c => c.command === 'close_query_snapshot').length).toBeGreaterThanOrEqual(3);
   await expect(page.locator('.session-table')).toHaveCount(0);
+});
+
+test('returning to sessions preserves sort and shows cached rows while renewing a released pagination lease', async ({ page }) => {
+  type Bridge = { __syntheticSessionCalls: () => { command: string }[]; __deferSyntheticSessions: () => void; __releaseSyntheticSessions: () => void };
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.getByLabel('会话排序').selectOption('total_desc');
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeEnabled();
+  const before = await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls().filter(call => call.command === 'close_query_snapshot').length);
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls().filter(call => call.command === 'close_query_snapshot').length)).toBe(before + 1);
+  await page.evaluate(() => (window as unknown as Bridge).__deferSyntheticSessions());
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
+  await expect(page.getByLabel('会话排序')).toHaveValue('total_desc');
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: '正在读取会话快照' })).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticSessions());
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeEnabled();
 });
 
 test('detail refresh replaces its whole bundle, child navigation retains filters, and late responses stay closed', async ({ page }) => {

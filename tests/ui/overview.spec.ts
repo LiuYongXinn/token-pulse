@@ -165,11 +165,11 @@ test('same-filter refresh retains prior values on error and older-filter replies
   await expect(page.getByLabel('683,067 Token', { exact: true })).toHaveCount(0);
 });
 
-test('price notifications refresh whole bundles, recover on visibility and release listeners across scopes', async ({ page }) => {
+test('price notifications refresh whole bundles and warm offscreen views with bounded subscriptions', async ({ page }) => {
   type Bridge = { __syntheticPriceState: () => { reads: number; listeners: number }; __emitSyntheticPriceChange: () => void; __setSyntheticHidden: (v: boolean) => void };
   const state = () => page.evaluate(() => (window as unknown as Bridge).__syntheticPriceState());
   await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await state()).listeners).toBe(1);
+  await expect.poll(async () => (await state()).listeners).toBe(5);
   const before = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await expect(page.getByText('$1.23', { exact: true })).toBeVisible({ timeout: 3000 });
@@ -186,12 +186,15 @@ test('price notifications refresh whole bundles, recover on visibility and relea
   await expect(page.locator('.overview-details')).toContainText('7 / 5');
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await state()).listeners).toBe(1);
+  await expect.poll(async () => (await state()).listeners).toBe(5);
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await expect.poll(async () => (await state()).listeners).toBe(0);
-  const unmountedReads = (await state()).reads;
+  await expect.poll(async () => (await state()).listeners).toBe(5);
+  const offscreenReads = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
-  expect((await state()).reads).toBe(unmountedReads);
+  await expect.poll(async () => (await state()).reads).toBe(offscreenReads + 1);
+  await page.getByRole('button', { name: '总览', exact: true }).click();
+  await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '正在读取统计快照' })).toHaveCount(0);
 });
 
 test('heatmap day updates backend date selection while keeping source, grain and independent history', async ({ page }) => {

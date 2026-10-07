@@ -7,4 +7,4 @@ const adapter: PageAdapter<SessionsQuery, SessionsPage> = {
   close: request => closeQuerySnapshot({ kind: 'sessions', request }),
   keys: page => page.sessions.map(session => session.session_key),
 };
-export function useSessions(query: SessionsQuery, refreshRevision: number) { return usePagedUsage(query, refreshRevision, adapter); }
+export function useSessions(query: SessionsQuery, refreshRevision: number, background = false) { return usePagedUsage(query, refreshRevision, adapter, background); }

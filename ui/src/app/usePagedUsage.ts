@@ -4,24 +4,38 @@ import { onPriceRulesChanged, runtimeError } from '../shared/runtime';
 
 type SnapshotPage = { meta: SnapshotMeta; summary: TokenTotals; pricing: PricingSummary; coverage: Coverage; next_cursor: string | null };
 export type PageAdapter<Query, Page> = { label: string; read: (request: { query: Query; cursor: string | null }) => Promise<Page>; close: (request: { query: Query; cursor: string | null }) => Promise<void>; keys: (page: Page) => string[] };
-type Controller<Query, Page> = { query: Query; disposed: boolean; busy: boolean; cursor: string | null; pages: Page[]; index: number; firstNumber: number; error: string | null };
-type Result<Page> = { key: string; page: Page | null; number: number; previous: boolean; next: boolean; loading: boolean; error: string | null; trimmed: boolean };
+type Controller<Query, Page> = { query: Query; disposed: boolean; busy: boolean; cursor: string | null; pages: Page[]; index: number; firstNumber: number; error: string | null; readAt: number; needsRenewal: boolean };
+type Result<Page> = { key: string; scope: string; page: Page | null; number: number; previous: boolean; next: boolean; loading: boolean; error: string | null; trimmed: boolean };
 const CACHE_PAGES = 10;
 
 /** Read and release serially; cache a bounded set of immutable DTO pages. */
-export function usePagedUsage<Query extends { page_size: number }, Page extends SnapshotPage>(query: Query, refreshRevision: number, adapter: PageAdapter<Query, Page>) {
+export function usePagedUsage<Query extends { page_size: number }, Page extends SnapshotPage>(query: Query, refreshRevision: number, adapter: PageAdapter<Query, Page>, background = false) {
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<Result<Page> | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const current = useRef<Controller<Query, Page> | null>(null);
-  const key = JSON.stringify([adapter.label, query, refreshRevision, revision]);
+  const offscreen = useRef(background);
+  offscreen.current = background;
+  const scope = JSON.stringify([adapter.label, query]);
+  const key = JSON.stringify([scope, refreshRevision, revision]);
   const enqueue = (work: () => Promise<void>) => { tail.current = tail.current.catch(() => {}).then(work); };
   const release = async (controller: Controller<Query, Page>) => {
     const cursor = controller.cursor; controller.cursor = null;
-    if (cursor !== null) await adapter.close({ query: controller.query, cursor }).catch(() => {});
+    if (cursor !== null) { controller.needsRenewal = true; await adapter.close({ query: controller.query, cursor }).catch(() => {}); }
   };
   const display = (controller: Controller<Query, Page>, resultKey: string) => {
-    if (!controller.disposed) setResult({ key: resultKey, page: controller.pages[controller.index] ?? null, number: controller.firstNumber + controller.index, previous: controller.index > 0, next: controller.index < controller.pages.length - 1 || controller.cursor !== null, loading: controller.busy, error: controller.error, trimmed: controller.firstNumber > 1 });
+    if (controller.disposed) return;
+    setResult(previous => {
+      const retained = previous?.scope === scope ? previous : null;
+      return {
+        key: resultKey, scope,
+        page: controller.pages[controller.index] ?? retained?.page ?? null,
+        number: controller.pages.length ? controller.firstNumber + controller.index : retained?.number ?? 1,
+        previous: controller.index > 0,
+        next: controller.index < controller.pages.length - 1 || controller.cursor !== null,
+        loading: controller.busy, error: controller.error, trimmed: controller.firstNumber > 1,
+      };
+    });
   };
   const read = async (controller: Controller<Query, Page>, resultKey: string) => {
     if (controller.disposed) return;
@@ -38,11 +52,14 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
       controller.pages = [...controller.pages, page];
       if (controller.pages.length > CACHE_PAGES) { controller.pages = controller.pages.slice(1); ++controller.firstNumber; }
       controller.index = controller.pages.length - 1; controller.error = null;
+      // Only two SQLite lease actors exist. An offscreen DTO must not hold a
+      // reader that the active page's facets or turn list may need.
+      if (offscreen.current) await release(controller);
     } catch (error) { await release(controller); controller.error = runtimeError(error); }
-    finally { controller.busy = false; display(controller, resultKey); }
+    finally { controller.readAt = Date.now(); controller.busy = false; display(controller, resultKey); }
   };
   useEffect(() => {
-    const controller: Controller<Query, Page> = { query, disposed: false, busy: true, cursor: null, pages: [], index: 0, firstNumber: 1, error: null };
+    const controller: Controller<Query, Page> = { query, disposed: false, busy: true, cursor: null, pages: [], index: 0, firstNumber: 1, error: null, readAt: 0, needsRenewal: false };
     current.current = controller; display(controller, key); enqueue(() => read(controller, key));
     const invalidate = () => { if (!controller.disposed && !document.hidden) setRevision(value => value + 1); };
     let stop: (() => void) | null = null;
@@ -50,12 +67,30 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
     document.addEventListener('visibilitychange', invalidate);
     return () => { controller.disposed = true; controller.pages = []; stop?.(); document.removeEventListener('visibilitychange', invalidate); enqueue(() => release(controller)); };
   }, [key, adapter]);
+  // Warm only the first page offscreen. Browsing a frozen multi-page snapshot
+  // must never jump back to page one because a background timer fired.
+  useEffect(() => {
+    const warm = () => {
+      const controller = current.current;
+      if (!document.hidden && controller && !controller.disposed && !controller.busy && controller.pages.length <= 1 && controller.firstNumber === 1 && Date.now() - controller.readAt >= 10_000) setRevision(value => value + 1);
+    };
+    const controller = current.current;
+    if (!background) {
+      if (controller && !controller.disposed && !controller.busy && controller.needsRenewal) setRevision(value => value + 1);
+      else warm();
+      return;
+    }
+    if (controller && !controller.disposed && !controller.busy) enqueue(() => release(controller));
+    const timer = setInterval(warm, 10_000);
+    return () => clearInterval(timer);
+  }, [background]);
   const previous = () => { const controller = current.current; if (controller && !controller.disposed && !controller.busy && controller.index > 0) { --controller.index; display(controller, key); } };
   const next = () => {
     const controller = current.current; if (!controller || controller.disposed || controller.busy) return;
     if (controller.index < controller.pages.length - 1) { ++controller.index; display(controller, key); }
     else if (controller.cursor !== null) { controller.busy = true; display(controller, key); enqueue(() => read(controller, key)); }
   };
-  const visible = result?.key === key ? result : null;
-  return { page: visible?.page ?? null, pageNumber: visible?.number ?? 1, hasPrevious: visible?.previous ?? false, hasNext: visible?.next ?? false, trimmed: visible?.trimmed ?? false, loading: visible?.loading ?? true, error: visible?.error ?? null, previous, next, reload: () => setRevision(value => value + 1) };
+  const visible = result?.scope === scope ? result : null;
+  const loading = visible?.key !== key || (visible?.loading ?? true);
+  return { page: visible?.page ?? null, pageNumber: visible?.number ?? 1, hasPrevious: !loading && (visible?.previous ?? false), hasNext: !loading && (visible?.next ?? false), trimmed: visible?.trimmed ?? false, loading, error: visible?.error ?? null, previous, next, reload: () => setRevision(value => value + 1) };
 }
