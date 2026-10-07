@@ -82,6 +82,8 @@ pub struct DiagnosticMetadata {
     pub parser_version: Option<String>,
     pub expected_revision: Option<i64>,
     pub actual_revision: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auxiliary_classifier: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

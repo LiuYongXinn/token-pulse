@@ -266,6 +266,70 @@ fn damaged_unknown_or_invalid_fields_diagnose_without_mutating_context() {
 }
 
 #[test]
+fn auxiliary_metadata_preserves_consumption_head_but_unknown_usage_still_diagnoses() {
+    let mut context = ReaderContext {
+        independent_head_available: true,
+        ..Default::default()
+    };
+    for bytes in [
+        br#"{"type":"inter_agent_communication_metadata","payload":{"trigger_turn":true}}"#.as_slice(),
+        br#"{"type":"event_msg","payload":{"type":"thread_settings_applied","thread_settings":{"model":"synthetic"}}}"#,
+        br#"{"type":"event_msg","payload":{"type":"thread_goal_updated","threadId":"thread","goal":null}}"#,
+        br#"{"type":"realtime_item","payload":{"type":"realtime_session_started","id":"event","realtime_session_id":"rt"}}"#,
+        br#"{"type":"realtime_item","payload":{"type":"realtime_session_closed","id":"event","realtime_session_id":"rt","outcome":"complete"}}"#,
+    ] {
+        assert!(token_pulse_core::adapter::is_known_auxiliary_record(bytes));
+        assert!(matches!(adapt(bytes,position(),&mut context),AdaptedRecord::Ignored));
+        assert!(context.independent_head_available);
+    }
+    for bytes in [
+        br#"{"type":"realtime_item","payload":{"type":"usage","total_tokens":100}}"#.as_slice(),
+        br#"{"type":"event_msg","payload":{"type":"thread_settings_applied","thread_settings":{},"info":{"total_tokens":100}}}"#,
+        br#"{"type":"inter_agent_communication_metadata","payload":{"trigger_turn":true,"usage":100}}"#,
+        b"{broken}",
+    ] {
+        assert!(!token_pulse_core::adapter::is_known_auxiliary_record(bytes));
+        assert!(matches!(adapt(bytes,position(),&mut context),AdaptedRecord::Diagnostic(_)));
+    }
+}
+
+#[test]
+fn saved_diagnostic_reads_are_bounded_and_reject_rewrites_or_non_record_positions() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("saved.jsonl");
+    let mut bytes = b"{\"type\":\"world_state\"}\n".to_vec();
+    let large_offset = bytes.len() as u64;
+    bytes.extend(vec![b'x'; 65537]);
+    bytes.push(b'\n');
+    fs::write(&path, &bytes).unwrap();
+    let batch = read_batch(
+        &path,
+        "g",
+        &ReaderCheckpoint::default(),
+        &ReaderLimits::default(),
+    )
+    .unwrap();
+    let cp = checkpoint(&batch);
+    let lines = read_saved_diagnostic_lines(&path, &cp, &[0, large_offset]).unwrap();
+    assert_eq!(
+        lines[0].as_deref(),
+        Some(b"{\"type\":\"world_state\"}".as_slice())
+    );
+    assert!(lines[1].is_none());
+    assert!(matches!(
+        read_saved_diagnostic_lines(&path, &cp, &[1]),
+        Err(ReadError::InvalidGeneration)
+    ));
+    assert!(read_saved_diagnostic_lines(&path, &cp, &vec![0; 65]).is_err());
+    bytes[1] = b'x';
+    fs::write(&path, &bytes).unwrap();
+    assert!(matches!(
+        read_saved_diagnostic_lines(&path, &cp, &[0]),
+        Err(ReadError::InvalidGeneration)
+    ));
+}
+
+#[test]
 fn chunking_changes_neither_normalized_records_nor_effective_context() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("fixture.jsonl");

@@ -149,6 +149,8 @@ fn collect_file_with_hook(
         )
         .map_err(|e| e.code())?;
     }
+    let (diagnostics_changed, diagnostics_more) =
+        recheck_auxiliary_diagnostics(database, path, &saved, observed_at_ms)?;
     let mut context = saved.context;
     if let Some(session) = &context.session_key {
         context.session_key = Some(database.resolve_session(session)?);
@@ -513,12 +515,56 @@ fn collect_file_with_hook(
         })
         .collect();
     write.streams = streams.into_values().collect();
-    let commit = database.commit(write)?;
+    let mut commit = database.commit(write)?;
+    commit.usage_changed |= diagnostics_changed;
     Ok(CollectionReceipt {
         commit,
-        has_more: batch.has_more,
+        has_more: batch.has_more || diagnostics_more,
         file_generation_id: saved.file_generation_id,
     })
+}
+
+fn recheck_auxiliary_diagnostics(
+    database: &Database,
+    path: &Path,
+    saved: &token_pulse_store::collection::FileCheckpoint,
+    at: i64,
+) -> StoreResult<(bool, bool)> {
+    let (positions, more) = database
+        .auxiliary_diagnostic_positions(&saved.file_generation_id, saved.committed_offset)?;
+    if positions.is_empty() {
+        return Ok((false, false));
+    }
+    let checkpoint = ReaderCheckpoint {
+        file_identity: saved.file_identity.clone(),
+        observed_size: Some(saved.observed_size as u64),
+        committed_offset: saved.committed_offset as u64,
+        anchors: saved.anchors.clone(),
+        ..Default::default()
+    };
+    let lines = reader::read_saved_diagnostic_lines(
+        path,
+        &checkpoint,
+        &positions.iter().map(|p| p.byte_offset).collect::<Vec<_>>(),
+    )
+    .map_err(|e| e.code())?;
+    let rechecked = positions
+        .into_iter()
+        .zip(lines)
+        .map(|(p, bytes)| {
+            (
+                p.diagnostic_id,
+                bytes.is_some_and(|b| token_pulse_core::adapter::is_known_auxiliary_record(&b)),
+            )
+        })
+        .collect();
+    let (_, changed) = database.publish_auxiliary_diagnostic_recheck(
+        saved.file_generation_id.clone(),
+        saved.checkpoint_revision,
+        rechecked,
+        at,
+    )?;
+    Ok((changed, more))
 }
 
 fn validate_source_file(root: &Path, path: &Path) -> StoreResult<()> {

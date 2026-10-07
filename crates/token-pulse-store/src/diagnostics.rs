@@ -1,4 +1,5 @@
 //! Read current saved problems in one real snapshot; never open source files.
+mod recheck;
 use crate::{Database, ErrorCode, StoreResult};
 use rusqlite::{OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};

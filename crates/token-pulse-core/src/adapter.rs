@@ -21,6 +21,66 @@ fn diagnostic(position: PhysicalPosition, code: ErrorCode, reason: &'static str)
     })
 }
 
+pub const AUXILIARY_CLASSIFIER_VERSION: &str = "codex-auxiliary-v1";
+
+/// Only these reviewed metadata shapes can resolve an older unsupported-record diagnostic.
+/// Unknown records and usage-bearing realtime events still require interpretation.
+pub fn is_known_auxiliary_record(bytes: &[u8]) -> bool {
+    serde_json::from_slice::<Value>(bytes)
+        .ok()
+        .and_then(|v| v.as_object().map(known_auxiliary))
+        .unwrap_or(false)
+}
+fn known_auxiliary(root: &Map<String, Value>) -> bool {
+    if root
+        .keys()
+        .any(|k| !["type", "payload", "timestamp", "ordinal"].contains(&k.as_str()))
+    {
+        return false;
+    }
+    let Some(payload) = root.get("payload").and_then(Value::as_object) else {
+        return false;
+    };
+    let keys = |allowed: &[&str]| payload.keys().all(|k| allowed.contains(&k.as_str()));
+    let optional_id = |key: &str| {
+        payload
+            .get(key)
+            .is_none_or(|v| v.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 256))
+    };
+    match (
+        root.get("type").and_then(Value::as_str),
+        payload.get("type").and_then(Value::as_str),
+    ) {
+        (Some("inter_agent_communication_metadata"), None) => {
+            keys(&["trigger_turn"]) && payload.get("trigger_turn").is_some_and(Value::is_boolean)
+        }
+        (Some("event_msg"), Some("thread_settings_applied")) => {
+            keys(&["type", "thread_id", "thread_settings", "settings"])
+                && optional_id("thread_id")
+                && payload
+                    .get("thread_settings")
+                    .or_else(|| payload.get("settings"))
+                    .is_some_and(Value::is_object)
+        }
+        (Some("event_msg"), Some("thread_goal_updated")) => {
+            keys(&["type", "threadId", "goal"])
+                && optional_id("threadId")
+                && payload
+                    .get("goal")
+                    .is_some_and(|v| v.is_object() || v.is_null())
+        }
+        (Some("realtime_item"), Some("realtime_session_started" | "realtime_session_closed")) => {
+            keys(&["type", "id", "realtime_session_id", "outcome"])
+                && payload.contains_key("id")
+                && payload.contains_key("realtime_session_id")
+                && optional_id("id")
+                && optional_id("realtime_session_id")
+                && payload.get("outcome").is_none_or(Value::is_string)
+        }
+        _ => false,
+    }
+}
+
 pub fn adapt(
     bytes: &[u8],
     position: PhysicalPosition,
@@ -52,6 +112,9 @@ pub fn adapt(
             "missing_record_type",
         );
     };
+    if known_auxiliary(root) {
+        return AdaptedRecord::Ignored;
+    }
     let time = match timestamp(root.get("timestamp")) {
         Ok(t) => t,
         Err(_) => return diagnostic(position, ErrorCode::UnsupportedFormat, "invalid_timestamp"),

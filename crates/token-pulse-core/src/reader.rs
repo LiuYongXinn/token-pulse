@@ -74,6 +74,103 @@ impl ReadError {
     }
 }
 
+/// Re-read at most 64 saved diagnostic positions, with a 64 KiB limit per record.
+/// Covering anchors are verified before and after the read; a rewrite cannot
+/// turn an older diagnostic into a successful classification of new bytes.
+pub fn read_saved_diagnostic_lines(
+    path: &Path,
+    checkpoint: &ReaderCheckpoint,
+    offsets: &[u64],
+) -> Result<Vec<Option<Vec<u8>>>, ReadError> {
+    const RECORD_BYTES: u64 = 64 * 1024;
+    if offsets.len() > 64
+        || offsets.iter().any(|&o| o >= checkpoint.committed_offset)
+        || checkpoint.file_identity.is_none()
+        || !path
+            .extension()
+            .is_some_and(|s| s.eq_ignore_ascii_case("jsonl"))
+    {
+        return Err(ReadError::InvalidLimits);
+    }
+    let mut file = open_read_only(path)?;
+    let metadata = file.metadata().map_err(|_| ReadError::Io)?;
+    if checkpoint.file_identity.as_ref() != Some(&file_identity(&file, &metadata)?)
+        || metadata.len() < checkpoint.committed_offset
+        || checkpoint.observed_size.is_some_and(|n| metadata.len() < n)
+    {
+        return Err(ReadError::InvalidGeneration);
+    }
+    let mut selected = std::collections::BTreeSet::new();
+    for &offset in offsets {
+        let end = offset
+            .saturating_add(RECORD_BYTES + 1)
+            .min(checkpoint.committed_offset);
+        let mut covered = offset;
+        for (index, anchor) in checkpoint.anchors.iter().enumerate() {
+            let anchor_end = anchor
+                .byte_offset
+                .checked_add(u64::from(anchor.byte_length))
+                .ok_or(ReadError::InvalidGeneration)?;
+            if anchor_end > checkpoint.committed_offset {
+                return Err(ReadError::InvalidGeneration);
+            }
+            if anchor.byte_offset < end && anchor_end > offset {
+                selected.insert(index);
+                if anchor.byte_offset <= covered {
+                    covered = covered.max(anchor_end);
+                }
+            }
+        }
+        if covered < end {
+            return Err(ReadError::InvalidGeneration);
+        }
+    }
+    let verify = |file: &mut File| -> Result<(), ReadError> {
+        for &index in &selected {
+            let a = &checkpoint.anchors[index];
+            if hash_range(file, a.byte_offset, u64::from(a.byte_length))? != a.sha256 {
+                return Err(ReadError::InvalidGeneration);
+            }
+        }
+        Ok(())
+    };
+    verify(&mut file)?;
+    let mut lines = Vec::with_capacity(offsets.len());
+    for &offset in offsets {
+        if offset > 0 {
+            file.seek(SeekFrom::Start(offset - 1))
+                .map_err(|_| ReadError::Io)?;
+            let mut previous = [0];
+            file.read_exact(&mut previous).map_err(|_| ReadError::Io)?;
+            if previous[0] != b'\n' {
+                return Err(ReadError::InvalidGeneration);
+            }
+        }
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|_| ReadError::Io)?;
+        let mut bytes = Vec::new();
+        (&mut file)
+            .take((checkpoint.committed_offset - offset).min(RECORD_BYTES + 1))
+            .read_to_end(&mut bytes)
+            .map_err(|_| ReadError::Io)?;
+        lines.push(
+            bytes
+                .iter()
+                .position(|&b| b == b'\n')
+                .filter(|&n| n <= RECORD_BYTES as usize)
+                .map(|n| {
+                    bytes.truncate(n);
+                    if bytes.last() == Some(&b'\r') {
+                        bytes.pop();
+                    }
+                    bytes
+                }),
+        );
+    }
+    verify(&mut file)?;
+    Ok(lines)
+}
+
 pub fn read_batch(
     path: &Path,
     generation: &str,
