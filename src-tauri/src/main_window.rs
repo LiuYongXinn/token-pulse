@@ -207,7 +207,16 @@ pub(super) fn initialize(app: &tauri::AppHandle) {
         eprintln!("NATIVE_SECONDARY_PLACEMENT_FAILED");
         return;
     }
-    if window.show().is_err() {
+    #[cfg(all(debug_assertions, windows))]
+    let shown = if super::navigation_smoke::secondary_probe() {
+        // initialize runs on the native main thread; do not dispatch and wait on itself.
+        super::mini_window::nonactivating_show_owned(&window)
+    } else {
+        window.show().map_err(|e| e.to_string())
+    };
+    #[cfg(not(all(debug_assertions, windows)))]
+    let shown = window.show();
+    if shown.is_err() {
         eprintln!("MAIN_WINDOW_SHOW_FAILED");
     }
     if remember(&window).is_err() {

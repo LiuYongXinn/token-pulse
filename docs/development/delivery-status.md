@@ -2684,3 +2684,10 @@ Schema 18 独立追加 pending ledger / kind / observation 索引，保持已发
 当前全量 core-store-collector 569 passed / 1 ignored，桌面 strict all-target Clippy 通过；前端 54 单元 / 110 Playwright、typecheck、Vite build、契约校验通过。副屏真实 17→18 迁移回执 millisecond-ledger-migration-first.json 通过，但同时有编译负载：备份、迁移与启动 212,807.1ms；7 / 30 天 1,663.2 / 3,218.0ms，会话 191.6ms、详情 61.3ms、来源更新 692.6ms。一次性维护成本和有负载测量分别保留，不当作最终无负载性能。
 
 补充每张关键表匿名启动耗时，以及后端 debug assertions 编译标志。后续优化测量使用 release 优化后端，桌面与 taskbar 单独保留 debug 原生探针；与全 crate debug assertions 的旧回执明确区分。最终回执另行追加，尚未用开发构建或局部指标宣称全部路径达到毫秒级。
+
+
+## 毫秒级复查 I16：副屏测试显示不激活窗口
+
+用户要求操作不影响主屏。原生副屏模式在创建主窗口前关闭自动 focus，在主线程复用既有 nonactivating_show_owned 逻辑显示主窗口；小窗通过主线程分发复用相同逻辑。该逻辑临时使用 NOACTIVATE 样式及只针对当前自有窗口的 CBT 激活拦截，仍让 Tauri 正常记录可见性。移除导航探针的重复 show / unminimize，避免二次激活。正常打开与任务栏操作保持原有行为。
+
+当前 debug 原生 NATIVE_DIAGNOSTIC_POSITIONS_OK / NATIVE_SOURCE_REREAD_OK / NATIVE_REQUEST_INPUT_OK / NATIVE_OFFLINE_PRICES_OK 均通过，桌面 30 passed / 3 需外部更新器验收的 ignored；strict all-target Clippy 与 release check 通过。原生退出仍有既有 Chrome_WidgetWin_0 1412 日志，未宣称修复。增加生产参数后端实际编译断言标志，用于核对回执构建来源。最终导航、恢复及匿名焦点采样继续验证。

@@ -103,10 +103,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("probe remained on primary monitor".into());
     }
     let secondary_screen = serde_json::json!({ "secondary": true, "scale": monitor.scale_factor(), "width": monitor.size().width, "height": monitor.size().height });
-    window.show().map_err(|_| "probe window show")?;
-    window.unminimize().map_err(|_| "probe window restore")?;
-
-    if !window.is_visible().unwrap_or(false) {
+    if !window.is_visible().unwrap_or(false) || window.is_minimized().unwrap_or(true) {
         return Err("probe window must be visible".into());
     }
     let update_only = std::env::args().any(|arg| arg == "--native-navigation-update");
@@ -189,7 +186,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
     } else {
         benchmark(database, &request)?
     };
-    let report = serde_json::json!({ "format": 1, "input": "programmatic DOM click in visible Windows WebView2", "database_startup_ms": database_startup_ms, "screen": secondary_screen, "counts": counts, "ui": ui, "blocked_refresh_passed": true, "backend": timings, "baseline": baseline, "ancillary": ancillary, "mini": mini_queries, "summary_cache": database.summary_cache_stats(), "build": "debug custom-protocol" });
+    let report = serde_json::json!({ "format": 1, "input": "programmatic DOM click in visible Windows WebView2", "database_startup_ms": database_startup_ms, "screen": secondary_screen, "counts": counts, "ui": ui, "blocked_refresh_passed": true, "backend": timings, "baseline": baseline, "ancillary": ancillary, "mini": mini_queries, "summary_cache": database.summary_cache_stats(), "build": "debug custom-protocol", "backend_debug_assertions": token_pulse_store::query_timing::build_debug_assertions_enabled() });
     let phase = if update_only {
         "update"
     } else if std::env::args().any(|arg| arg == "--native-navigation-restart") {

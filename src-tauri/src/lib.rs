@@ -388,6 +388,8 @@ pub fn run() {
         context.config_mut().product_name = Some("TokenPulse Dev".into());
         for window in &mut context.config_mut().app.windows {
             window.title = "TokenPulse · 开发版".into();
+            #[cfg(windows)]
+            if navigation_smoke::secondary_probe() { window.focus = false; }
         }
         context
     };

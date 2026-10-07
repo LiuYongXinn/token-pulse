@@ -151,6 +151,13 @@ fn show_internal(
         })
         .map_err(|e| e.to_string())?;
     } else {
+        #[cfg(all(debug_assertions, windows))]
+        if secondary_probe {
+            show_probe_without_activation(&window)?;
+        } else {
+            window.show().map_err(|e| e.to_string())?;
+        }
+        #[cfg(not(all(debug_assertions, windows)))]
         window.show().map_err(|e| e.to_string())?;
     }
     // The native frame can finish changing while a hidden WebView is being created.
@@ -242,7 +249,7 @@ unsafe extern "system" fn prevent_fallback_activation(
     unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
 }
 #[cfg(windows)]
-fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
+pub(super) fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
     use windows_sys::Win32::{
         Foundation::{GetLastError, SetLastError},
         UI::{Shell::*, WindowsAndMessaging::*},
@@ -310,6 +317,20 @@ fn nonactivating_show_owned(window: &WebviewWindow) -> Result<(), String> {
     } else {
         Err("WINDOW_STATE_UNAVAILABLE".into())
     }
+}
+#[cfg(all(debug_assertions, windows))]
+fn show_probe_without_activation(window: &WebviewWindow) -> Result<(), String> {
+    let target = window.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    window
+        .app_handle()
+        .run_on_main_thread(move || {
+            let _ = sender.send(nonactivating_show_owned(&target));
+        })
+        .map_err(|e| e.to_string())?;
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|_| "WINDOW_STATE_UNAVAILABLE".to_owned())?
 }
 #[cfg(not(windows))]
 fn show_without_activation(
