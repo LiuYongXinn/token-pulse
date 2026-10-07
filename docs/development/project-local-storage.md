@@ -15,6 +15,8 @@ TokenPulse 的可写数据集中在项目目录内。当前仓库位于 `E:\Docu
 | `.local/cache/npm/legacy/` | 迁入的历史 npm 缓存，避免覆盖当前缓存索引与日志 |
 | `.local/cache/playwright/` | Playwright 浏览器 |
 | `.local/cache/python/` | 项目子进程的 Python 字节码缓存 |
+| `.local/cache/idea/IntelliJIdea2025.3/system/` | 本机 IDEA 索引、缓存、本地历史及日志 |
+| `.local/config/idea/IntelliJIdea2025.3/` | 本机 IDEA 配置、项目任务上下文及用户插件，保留原有权限 |
 | `.local/secrets/release-signing/` | 当前用户权限保护的本地发布签名材料 |
 | `target/.tauri/` | NSIS 等安装器构建工具，Tauri 原生支持的项目内缓存 |
 
@@ -63,3 +65,11 @@ pwsh -NoProfile -File scripts/refresh-local-app.ps1
 刷新脚本要求已有正式数据库和迁入的 `uninstall.exe`，按 Tauri 规则保留原安装类型标记，并验证程序其他字节与编译结果完全一致。脚本同步当前用户的安装登记、原有快捷方式，以及仍属于 TokenPulse 的 Codex 通知命令和恢复记录；用户自行更改的通知命令不覆盖。旧验收记录内的历史绝对路径保留原文。
 
 本配置约束 TokenPulse 和本项目启动的工具写入。Windows 注册表、安装快捷方式、系统级 WebView2 运行时由 Windows 管理；Codex Home 与源会话日志属于外部数据源，不能作为项目缓存整体移动。
+
+## 本机 IDEA 数据
+
+本机用户已选择将 IntelliJ IDEA 2025.3 的缓存迁入项目。项目任务上下文原本位于 IDEA 配置目录，因此配置、插件和上下文也一起保留并迁入 `.local/config/idea/IntelliJIdea2025.3/`，避免继续写回原 C 盘目录。
+
+正常关闭 IDEA 后，执行 `pwsh -NoProfile -File scripts/migrate-idea-data.ps1`；可先加 `-CopyOnly` 仅复制校验。脚本逐文件验证后清除两个明确的旧目录，保留配置权限，并通过当前用户的 `IDEA_PROPERTIES` 指向项目内的 `idea.properties`。配置中分别设置 `idea.config.path`、`idea.system.path`、`idea.plugins.path`、`idea.log.path` 和 `java.io.tmpdir`，保留其余自定义属性。原有自定义 `IDEA_VM_OPTIONS` 不修改。
+
+该选择影响同一 IDEA 实例打开的其他项目，属于本机用户设置；其他协作者不需要执行。移动仓库后必须同步修改 `IDEA_PROPERTIES` 和上述绝对路径。配置目录含凭据与私有插件状态，随 `.local/` 忽略，不能提交或上传。路径配置使用 [JetBrains 官方支持的目录属性和自定义属性文件](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)。
