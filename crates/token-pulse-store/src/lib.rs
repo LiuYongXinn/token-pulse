@@ -9,6 +9,7 @@ pub mod collection;
 mod database;
 pub mod diagnostics;
 pub mod file_candidate;
+mod integrity;
 pub mod jobs;
 pub mod leases;
 pub mod maintenance;

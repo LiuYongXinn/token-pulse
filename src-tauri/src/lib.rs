@@ -82,12 +82,19 @@ fn get_app_status(
                 }
                 Err(_) => ServiceState::Error,
             },
-            storage: if state.database.is_ok() {
+            storage: if state
+                .database
+                .as_ref()
+                .is_ok_and(|db| db.integrity_error().is_none())
+            {
                 ServiceState::Ready
             } else {
                 ServiceState::Error
             },
-            storage_error: state.database.as_ref().err().map(|e| e.code),
+            storage_error: match &state.database {
+                Ok(db) => db.integrity_error(),
+                Err(e) => Some(e.code),
+            },
             quota: match state
                 .quota
                 .as_ref()
@@ -224,7 +231,7 @@ pub fn run() {
                 {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
             } else {data_directory};
             token_pulse_store::prepare_data_directory(&data_directory)?;
-            let database = token_pulse_store::Database::open(&data_directory).and_then(|database| {
+            let database = token_pulse_store::Database::open_desktop(&data_directory).and_then(|database| {
                 let now = i64::try_from(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|_| ErrorCode::InvalidQuery)?.as_millis()).map_err(|_|ErrorCode::NumericOverflow)?;
                 database.interrupt_unfinished_jobs(now)?;
                 database.interrupt_rollup_builds()?;

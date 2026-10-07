@@ -42,9 +42,12 @@ struct Inner {
     leases: crate::leases::LeaseService,
     usage_listener: Mutex<Option<UsageListener>>,
     summaries: crate::query::summary_cache::SummaryCache,
+    health: crate::integrity::Health,
+    verification: Option<crate::integrity::Verification>,
 }
 impl Drop for Inner {
     fn drop(&mut self) {
+        self.verification.take();
         let _ = self.sender.send(Message::Shutdown);
         if let Some(handle) = self.thread.take() {
             let _ = handle.join();
@@ -103,6 +106,17 @@ impl Database {
             app_data_directory,
             crate::leases::LeaseService::new,
             crate::maintenance::WAL_LIMIT,
+            false,
+        )
+    }
+    /// Current schemas validate authoritative tables before serving and finish
+    /// the whole-file scan on a cancellable worker. Migrations remain synchronous.
+    pub fn open_desktop(app_data_directory: &Path) -> StoreResult<Self> {
+        Self::open_with_lease_service(
+            app_data_directory,
+            crate::leases::LeaseService::new,
+            crate::maintenance::WAL_LIMIT,
+            true,
         )
     }
     #[cfg(test)]
@@ -116,12 +130,14 @@ impl Database {
             path,
             |path| crate::leases::LeaseService::for_testing(path, total, idle, wal),
             wal,
+            false,
         )
     }
     fn open_with_lease_service(
         app_data_directory: &Path,
         lease_service: impl FnOnce(&Path) -> StoreResult<crate::leases::LeaseService>,
         wal_limit: u64,
+        desktop: bool,
     ) -> StoreResult<Self> {
         if !app_data_directory.is_absolute()
             || app_data_directory.to_string_lossy().starts_with("\\\\")
@@ -133,18 +149,24 @@ impl Database {
         let writer_path = path.clone();
         let (sender, receiver) = mpsc::sync_channel::<Message>(64);
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+        let health = crate::integrity::Health::default();
         let handle = thread::Builder::new()
             .name("token-pulse-writer".into())
             .spawn(move || {
-                let opened = (|| -> StoreResult<Connection> {
+                let opened = (|| -> StoreResult<(Connection, bool)> {
                     let mut conn = Connection::open(&writer_path)?;
                     configure(&conn)?;
-                    migration::migrate(&mut conn, &writer_path)?;
-                    Ok(conn)
+                    let deferred = if desktop {
+                        migration::migrate_desktop(&mut conn, &writer_path)?
+                    } else {
+                        migration::migrate(&mut conn, &writer_path)?;
+                        false
+                    };
+                    Ok((conn, deferred))
                 })();
                 match opened {
-                    Ok(mut conn) => {
-                        if ready_sender.send(Ok(())).is_err() {
+                    Ok((mut conn, deferred)) => {
+                        if ready_sender.send(Ok(deferred)).is_err() {
                             return;
                         }
                         let mut maintained = Instant::now();
@@ -173,13 +195,16 @@ impl Database {
                 }
             })
             .map_err(|_| ErrorCode::DbWriteFailed)?;
-        if let Err(e) = ready_receiver
+        let deferred = match ready_receiver
             .recv()
             .map_err(|_| ErrorCode::DbWriteFailed)?
         {
-            let _ = handle.join();
-            return Err(e);
-        }
+            Ok(deferred) => deferred,
+            Err(e) => {
+                let _ = handle.join();
+                return Err(e);
+            }
+        };
         let mut readers = Vec::with_capacity(2);
         for _ in 0..2 {
             let conn = Connection::open_with_flags(
@@ -206,6 +231,16 @@ impl Database {
                 available: Condvar::new(),
             })
         };
+        let mut leases = lease_service(&path)?;
+        leases.set_health(health.clone());
+        let verification = if deferred {
+            Some(crate::integrity::Verification::start(
+                &path,
+                health.clone(),
+            )?)
+        } else {
+            None
+        };
         Ok(Self {
             inner: Arc::new(Inner {
                 sender,
@@ -217,15 +252,20 @@ impl Database {
                 usage_readers: pool(2)?,
                 interactive_readers: pool(2)?,
                 light_readers: pool(1)?,
-                leases: lease_service(&path)?,
+                leases,
                 usage_listener: Mutex::new(None),
                 summaries: Default::default(),
                 path,
+                health,
+                verification,
             }),
         })
     }
     pub fn path(&self) -> &Path {
         &self.inner.path
+    }
+    pub fn integrity_error(&self) -> Option<ErrorCode> {
+        self.inner.health.check().err().map(|e| e.code)
     }
     pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache {
         &self.inner.summaries
@@ -245,12 +285,20 @@ impl Database {
         &self,
         operation: impl FnOnce(&mut Connection) -> StoreResult<T> + Send + 'static,
     ) -> StoreResult<T> {
+        self.inner.health.check()?;
+        let health = self.inner.health.clone();
         let (sender, receiver) = mpsc::sync_channel(1);
         self.inner
             .sender
             .send(Message::Run(Box::new(move |conn| {
                 let before = read_usage_revision(conn).ok();
-                let result = operation(conn);
+                let result = health
+                    .check()
+                    .and_then(|_| operation(conn))
+                    .and_then(|value| {
+                        health.check()?;
+                        Ok(value)
+                    });
                 let after = read_usage_revision(conn).ok();
                 let changed = after.filter(|revision| before.as_ref() != Some(revision));
                 let _ = sender.send((result, changed));
@@ -307,6 +355,7 @@ impl Database {
         wait_stage: &'static str,
         query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
     ) -> StoreResult<T> {
+        self.inner.health.check()?;
         let waited = Instant::now();
         let mut reader = pool.take()?;
         crate::query_timing::record(wait_stage, waited);
@@ -320,6 +369,7 @@ impl Database {
         let result = query(&transaction, revision)?;
         crate::query_timing::record("snapshot_compute", started);
         transaction.commit()?;
+        self.inner.health.check()?;
         Ok(result)
     }
     pub fn add_source(&self, source: SourceRecord) -> StoreResult<()> {

@@ -103,6 +103,7 @@ pub struct LeaseService {
     workers: Vec<Worker>,
     allocation: Mutex<()>,
     signer: CursorSigner,
+    health: crate::integrity::Health,
 }
 impl LeaseService {
     pub(crate) fn new(path: &Path) -> StoreResult<Self> {
@@ -129,6 +130,7 @@ impl LeaseService {
             workers: Vec::with_capacity(2),
             allocation: Mutex::new(()),
             signer: CursorSigner::new()?,
+            health: Default::default(),
         };
         for index in 0..2 {
             let (sender, receiver) = mpsc::sync_channel(8);
@@ -186,7 +188,11 @@ impl LeaseService {
     pub fn signer(&self) -> &CursorSigner {
         &self.signer
     }
+    pub(crate) fn set_health(&mut self, health: crate::integrity::Health) {
+        self.health = health;
+    }
     pub fn open(&self, binding: &QueryBinding) -> StoreResult<LeaseHandle> {
+        self.health.check()?;
         let _allocation = self
             .allocation
             .lock()
@@ -240,21 +246,29 @@ impl LeaseService {
         binding: &QueryBinding,
         query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T> + Send + 'static,
     ) -> StoreResult<T> {
+        self.health.check()?;
+        let health = self.health.clone();
         let worker = self.worker(handle, binding)?;
         let (reply, receive) = mpsc::sync_channel(1);
         let task = Box::new(
             move |context: Result<(&Transaction<'_>, Revision, &Guard), ErrorCode>| {
-                let result = match context {
-                    Ok((tx, revision, guard)) => {
-                        let result = query(tx, revision);
-                        if guard.expired() {
-                            Err(ErrorCode::SnapshotExpired.into())
-                        } else {
-                            result
+                let result =
+                    match context {
+                        Ok((tx, revision, guard)) => {
+                            let result = health.check().and_then(|_| query(tx, revision)).and_then(
+                                |value| {
+                                    health.check()?;
+                                    Ok(value)
+                                },
+                            );
+                            if guard.expired() {
+                                Err(ErrorCode::SnapshotExpired.into())
+                            } else {
+                                result
+                            }
                         }
-                    }
-                    Err(code) => Err(code.into()),
-                };
+                        Err(code) => Err(code.into()),
+                    };
                 let _ = reply.send(result);
             },
         );

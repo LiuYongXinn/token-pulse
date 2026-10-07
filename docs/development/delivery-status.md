@@ -2652,3 +2652,12 @@ schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。�
 计价读取在同一事务集中选出每账本最新两个、完整 price / mode / specified / publication / format 条件匹配的候选集合；8192 个头部硬上限，缺失或不匹配时回退权威引擎。逐事件只探测这两个集合，保留精确整数、未知值、冲突回退和旧事务语义。细分匿名时长涵盖 SQL 行读取、解析及指纹、缓存查找、实时计价和累积。
 
 同一 3 GB / 32,794 事件副本的完整副屏 debug 回执 `millisecond-query-first.json` 通过：会话 IPC 181.3ms、详情 60.3ms，小窗 225.8–316.9ms；近 7 / 30 天首次数据显示仍为 1,638.3 / 2,554.2ms，启动仍 10,215.0ms。完整 DTO 等价比较通过。该模块改善了会话重复覆盖计算，尚不能宣称所有路径都已降到毫秒级；后续继续优化启动并测优化构建。日志 `millisecond-query-tests2.log` / `millisecond-valuation-tests.log` / `millisecond-query-native.log`。
+
+
+## 毫秒级复查 I13：启动检查不阻塞历史缓存全表
+
+新增 open_desktop：仅已是当前 schema 且迁移校验和正确的数据库可以采用分段启动。权威事实、设置与隐私、价格、诊断、持久显示及所有其他表先在同一前台事务检查；只把两张最大的可重建计价明细表 event_valuations / valuation_cache_inputs 纳入后台整库检查。旧 schema、未来 schema、校验和错误及正常 Database::open 保持原同步检查、备份和迁移。用于查询的缓存行继续逐行验证输入指纹、字段、精确数值和重复冲突。
+
+后台检查使用只允许查询的独立连接，可通过 progress handler 和 SQLite interrupt 中断；完成即关闭连接，不持有 Database 引用循环。固定查询 / writer 仍为十连接，检查运行期间另有一个临时连接。检测失败将健康状态置为 DB_CORRUPT，普通读取、写队列及分页前后都受门禁，迟到结果不能发布，get_app_status 显示存储错误。释放租约仍允许清理。测试发现 SQLite 文件只读打开会遗漏 CHECK 约束，改为正常打开应用数据库并开启 query_only 后，损坏约束测试确认被检测且禁止 SQL 写入。
+
+五项真实 SQLite 启动损坏 / 校验和 / 读写分页门禁 / 迟到租约 / 正常结果回归通过，随后 store 全量 308 passed / 1 ignored。副屏探索性 debug 回执的启动从约十秒变为 1,132.4ms，其中关键表检查 1,057.5ms；该轮与优化构建重叠，不能当作无负载最终性能。后台整库校验仍有秒级维护成本，但不再阻塞启动返回。日志 millisecond-integrity-tests3.log / millisecond-store-regression.log / millisecond-coverage-profile-native.log，继续进行查询索引和最终优化构建复测。

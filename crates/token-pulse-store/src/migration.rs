@@ -67,6 +67,19 @@ enum Stage {
 pub fn migrate(connection: &mut Connection, path: &Path) -> StoreResult<()> {
     migrate_with_hook(connection, path, |_| Ok(()))
 }
+/// Only an already current, checksum-verified schema may defer the full scan.
+pub(crate) fn migrate_desktop(connection: &mut Connection, path: &Path) -> StoreResult<bool> {
+    let version: i64 = connection.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    if version != SCHEMA_VERSION {
+        migrate(connection, path)?;
+        return Ok(false);
+    }
+    verify_version(connection, version)?;
+    crate::integrity::critical_check(connection)?;
+    connection.pragma_update(None, "journal_mode", "WAL")?;
+    connection.pragma_update(None, "synchronous", "FULL")?;
+    Ok(true)
+}
 fn verify_version(connection: &Connection, version: i64) -> StoreResult<()> {
     for (number, sql) in MIGRATIONS.iter().filter(|(number, _)| *number <= version) {
         let stored: String = connection
@@ -175,7 +188,9 @@ fn migrate_with_hook(
     if !(0..=SCHEMA_VERSION).contains(&version) {
         return Err(ErrorCode::MigrationFailed.into());
     }
+    let started = Instant::now();
     let integrity: String = connection.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
+    crate::query_timing::record("startup_quick_check", started);
     if integrity != "ok" {
         return Err(ErrorCode::DbCorrupt.into());
     }
