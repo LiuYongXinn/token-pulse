@@ -91,6 +91,12 @@ fn decode(row: &Row<'_>, offset: usize) -> rusqlite::Result<Option<PriceOutcome>
 pub(crate) struct CacheReader<'a> {
     statement: Option<Statement<'a>>,
     candidates: std::collections::BTreeMap<String, Vec<String>>,
+    prefetched: Option<std::collections::HashMap<String, Vec<CachedEstimate>>>,
+}
+struct CachedEstimate {
+    set: String,
+    input: String,
+    outcome: Option<PriceOutcome>,
 }
 impl<'a> CacheReader<'a> {
     pub fn new(
@@ -123,7 +129,85 @@ impl<'a> CacheReader<'a> {
         Ok(Self {
             statement,
             candidates,
+            prefetched: None,
         })
+    }
+    /// Amortize point reads during a full aggregate, with a strict transient bound.
+    /// Page/detail readers keep their point lookup; no cache spans a transaction.
+    pub(crate) fn prefetch(
+        &mut self,
+        tx: &Transaction<'_>,
+        scope: &crate::query::Predicate,
+    ) -> StoreResult<()> {
+        self.prefetch_bounded(tx, scope, 64 * 1024 * 1024)
+    }
+    fn prefetch_bounded(
+        &mut self,
+        tx: &Transaction<'_>,
+        scope: &crate::query::Predicate,
+        limit: usize,
+    ) -> StoreResult<()> {
+        self.prefetched = None;
+        let sets: Vec<&str> = self
+            .candidates
+            .values()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        if sets.is_empty() {
+            return Ok(());
+        }
+        let started = std::time::Instant::now();
+        let placeholders = std::iter::repeat_n("?", sets.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT ev.event_id,ev.valuation_set_id,ci.input_sha256,ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM {} JOIN event_valuations ev ON ev.event_id=e.event_id JOIN valuation_cache_inputs ci ON ci.valuation_set_id=ev.valuation_set_id AND ci.event_id=ev.event_id WHERE ({}) AND ev.valuation_set_id IN ({placeholders})",
+            crate::query::FROM,
+            scope.sql
+        );
+        let mut statement = tx.prepare(&sql)?;
+        let values = scope.values.iter().cloned().chain(
+            sets.into_iter()
+                .map(|s| rusqlite::types::Value::Text(s.into())),
+        );
+        let mut rows = statement.query(rusqlite::params_from_iter(values))?;
+        let mut values: std::collections::HashMap<String, Vec<CachedEstimate>> = Default::default();
+        let mut bytes = 0usize;
+        while let Some(row) = rows.next()? {
+            let event: String = row.get(0)?;
+            let set: String = row.get(1)?;
+            let input: String = row.get(2)?;
+            let outcome = decode(row, 3)?;
+            // Includes map/vector allocations and decoded strings with conservative slack.
+            let cost_bytes = match &outcome {
+                Some(PriceOutcome::Priced {
+                    rule_id,
+                    currency,
+                    cost_atoms,
+                    estimated_cost,
+                }) => {
+                    rule_id.len()
+                        + currency.len()
+                        + cost_atoms.as_str().len()
+                        + estimated_cost.as_str().len()
+                }
+                _ => 0,
+            };
+            bytes = bytes.saturating_add(512 + event.len() + set.len() + input.len() + cost_bytes);
+            if bytes > limit {
+                crate::query_timing::record("pricing_prefetch_overflow", started);
+                return Ok(()); // Discard the entire partial map; point queries remain exact.
+            }
+            values.entry(event).or_default().push(CachedEstimate {
+                set,
+                input,
+                outcome,
+            });
+        }
+        self.prefetched = Some(values);
+        crate::query_timing::record("pricing_prefetch", started);
+        Ok(())
     }
     pub fn lookup(
         &mut self,
@@ -134,6 +218,24 @@ impl<'a> CacheReader<'a> {
         let Some(sets) = self.candidates.get(ledger) else {
             return Ok(None);
         };
+        if let Some(prefetched) = &self.prefetched {
+            let Some(records) = prefetched.get(event) else {
+                return Ok(None);
+            };
+            let mut result: Option<PriceOutcome> = None;
+            for set in sets {
+                if let Some(record) = records.iter().find(|r| &r.set == set && r.input == input) {
+                    let Some(outcome) = &record.outcome else {
+                        return Ok(None);
+                    };
+                    if result.as_ref().is_some_and(|old| old != outcome) {
+                        return Ok(None);
+                    }
+                    result = Some(outcome.clone());
+                }
+            }
+            return Ok(result);
+        }
         let Some(statement) = self.statement.as_mut() else {
             return Ok(None);
         };
@@ -148,7 +250,7 @@ impl<'a> CacheReader<'a> {
             let Some(other) = decode(second, 0)? else {
                 return Ok(None);
             };
-            if serde_json::to_value(&outcome)? != serde_json::to_value(&other)? {
+            if outcome != other {
                 return Ok(None);
             }
         }

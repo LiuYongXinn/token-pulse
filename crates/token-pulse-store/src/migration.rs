@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 17;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_initial.sql")),
     (
@@ -53,6 +53,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("../migrations/0015_usage_view_revision.sql"),
     ),
     (16, include_str!("../migrations/0016_display_cache.sql")),
+    (
+        17,
+        include_str!("../migrations/0017_pending_range_indexes.sql"),
+    ),
 ];
 static BACKUP_SERIAL: AtomicU64 = AtomicU64::new(0);
 fn checksum(value: &str) -> String {
@@ -254,6 +258,7 @@ fn migrate_with_hook(
 
 #[cfg(test)]
 pub(crate) fn remove_usage_revision_fixture(conn: &Connection) -> StoreResult<()> {
+    conn.execute_batch("DROP INDEX IF EXISTS observation_usage_time; DROP INDEX IF EXISTS pending_observation_lookup; DROP INDEX IF EXISTS session_active_ledger_read; DELETE FROM schema_migrations WHERE version=17;")?;
     conn.execute_batch("DROP TRIGGER IF EXISTS clear_private_usage_cache_insert; DROP TRIGGER IF EXISTS clear_private_usage_cache_update; DROP TABLE IF EXISTS usage_display_cache; DELETE FROM schema_migrations WHERE version=16;")?;
     // Historic fixtures must remove the current additive schema before downgrading.
     let names = conn

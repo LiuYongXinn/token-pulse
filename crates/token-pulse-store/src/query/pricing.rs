@@ -69,6 +69,9 @@ fn visit_where(
     } else {
         None
     };
+    if let Some(cache) = &mut cache {
+        cache.prefetch(tx, &p)?;
+    }
     // The global source registry is bounded at 32. LIMIT 33 detects violation;
     // it never silently drops a source from rule matching. Mirrors are DISTINCT.
     let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY LIMIT 33))";

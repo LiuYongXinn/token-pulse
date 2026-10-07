@@ -308,7 +308,7 @@ impl UnpricedCode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PriceOutcome {
     /// Transport-only display state; the price engine never creates this outcome.

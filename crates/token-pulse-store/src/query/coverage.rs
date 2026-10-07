@@ -60,16 +60,22 @@ fn pending_predicate(filter: &UsageFilter) -> StoreResult<Predicate> {
     Ok(p)
 }
 
+fn pending_from(_filter: &UsageFilter) -> &'static str {
+    "observations o INDEXED BY observation_usage_time CROSS JOIN pending_usage p INDEXED BY pending_observation_lookup ON p.observation_id=o.observation_id CROSS JOIN sessions s INDEXED BY session_active_ledger_read ON s.active_ledger_id=p.ledger_id"
+}
 type PendingCounts = (i64, i64, Option<String>, i64);
 fn pending_counts(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<PendingCounts> {
+    let started = std::time::Instant::now();
     let p = pending_predicate(filter)?;
     let sql = format!(
-        "WITH selected AS MATERIALIZED (SELECT p.observation_id,p.kind,p.vector_json FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')) SELECT COUNT(DISTINCT CASE WHEN kind='pending' THEN observation_id END),COUNT(DISTINCT CASE WHEN kind='unattributed' THEN observation_id END),(SELECT sum_token_decimal(usage_vector_total(vector_json)) FROM selected WHERE kind='unattributed'),COUNT(CASE WHEN kind='unattributed' AND usage_vector_total(vector_json) IS NULL THEN 1 END) FROM selected",
+        "WITH selected AS MATERIALIZED (SELECT p.observation_id,p.kind,p.vector_json FROM {} JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')) SELECT COUNT(DISTINCT CASE WHEN kind='pending' THEN observation_id END),COUNT(DISTINCT CASE WHEN kind='unattributed' THEN observation_id END),(SELECT sum_token_decimal(usage_vector_total(vector_json)) FROM selected WHERE kind='unattributed'),COUNT(CASE WHEN kind='unattributed' AND usage_vector_total(vector_json) IS NULL THEN 1 END) FROM selected",
+        pending_from(filter),
         p.sql
     );
     let counts: PendingCounts = tx.query_row(&sql, params_from_iter(p.values), |r| {
         Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
     })?;
+    crate::query_timing::record("coverage_pending", started);
     Ok(counts)
 }
 /// Reuse only source-wide health in the SAME transaction and source selection.
@@ -129,6 +135,7 @@ pub fn coverage(
 ) -> StoreResult<Coverage> {
     let (pending, unattributed, known_total, missing) = pending_counts(tx, filter)?;
     let source = source_selection(filter, "sf.source_id");
+    let files_started = std::time::Instant::now();
     let scan_source = source_selection(filter, "e.source_id");
     let mut values = source.values;
     values.extend(scan_source.values);
@@ -140,6 +147,8 @@ pub fn coverage(
     // A file with unknown time/identity can belong to the selected date/session.
     // Whole-source health gaps must not disappear behind a model/date filter.
     let source = source_selection(filter, "s.source_id");
+    crate::query_timing::record("coverage_files", files_started);
+    let sources_started = std::time::Instant::now();
     let mut statement=tx.prepare(&format!("SELECT s.source_id,s.enabled,s.readability,s.last_success_at_ms,ss.state,ss.source_root=s.root_path,ss.discovery_complete,ss.invalidated,ss.issue_code,EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({BAD_ENTRY})),EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations readg ON readg.file_generation_id=f.current_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({UNREAD_ENTRY})) FROM sources s LEFT JOIN source_scan_state ss USING(source_id) WHERE {} ORDER BY s.source_id COLLATE BINARY",source.sql))?;
     let mut rows = statement.query(params_from_iter(source.values))?;
     let mut source_issues = Vec::new();
@@ -213,6 +222,8 @@ pub fn coverage(
     }
     drop(rows);
     drop(statement);
+    crate::query_timing::record("coverage_sources", sources_started);
+    let formats_started = std::time::Instant::now();
     let source = source_selection(filter, "COALESCE(d.source_id,df.source_id)");
     let mut statement=tx.prepare(&format!("SELECT COALESCE(json_extract(d.metadata_json,'$.parser_version'),'unknown') AS format,sum_token_decimal(d.occurrences) FROM diagnostics d LEFT JOIN file_generations dg ON dg.file_generation_id=d.file_generation_id LEFT JOIN source_files df ON df.file_id=dg.file_id WHERE {} AND d.code='UNSUPPORTED_FORMAT' AND d.resolved_at_ms IS NULL AND (d.file_generation_id IS NULL OR (dg.state='current' AND df.current_generation_id=dg.file_generation_id AND (d.source_id IS NULL OR d.source_id=df.source_id))) GROUP BY format ORDER BY format COLLATE BINARY",source.sql))?;
     let mut rows = statement.query(params_from_iter(source.values))?;
@@ -235,6 +246,7 @@ pub fn coverage(
     } else {
         CoverageState::Unknown
     };
+    crate::query_timing::record("coverage_formats", formats_started);
     Ok(Coverage {
         state,
         pending_observation_count: DecimalInt::from_nonnegative(pending.into())?,
@@ -335,7 +347,7 @@ pub(super) fn series_coverage_from(
     let base = common;
     let common_gap = common_gap(base);
     let p = pending_predicate(filter)?;
-    let mut statement=tx.prepare(&format!("SELECT DISTINCT p.observation_id,p.kind,o.observed_at_ms,CASE WHEN p.kind='unattributed' THEN usage_vector_total(p.vector_json) END FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')",p.sql))?;
+    let mut statement=tx.prepare(&format!("SELECT DISTINCT p.observation_id,p.kind,o.observed_at_ms,CASE WHEN p.kind='unattributed' THEN usage_vector_total(p.vector_json) END FROM {} JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')",pending_from(filter),p.sql))?;
     let mut rows = statement.query(params_from_iter(p.values))?;
     let mut gaps = vec![BucketGaps::default(); buckets.len()];
     let mut unknown_time = BucketGaps::default();

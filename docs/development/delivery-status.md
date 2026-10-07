@@ -2664,3 +2664,14 @@ schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。�
 
 
 启动门禁追加回归：已经接受且成功提交的隐私写入，若随后后台发现损坏，仍返回真实提交成功，以便调用者发布新隐私策略；仅封锁后续新写入。读取与分页仍在返回前拒绝迟到结果。六项 integrity 回归通过（millisecond-integrity-commit-tests.log）。避免把已提交事务改报失败而遗漏策略更新。
+
+
+## 毫秒级复查 I14：日期索引与同事务批量计价
+
+Schema 17 增加 observation 时间 / 小型覆盖字段索引、pending observation 索引、session active-ledger 索引，待核对查询先通过真实日期选择 observation，包含 NULL 时间，再验证活跃账本和其他维度。确定性 SQLite VM 回归证明 2,000 条范围外 pending 不会被遍历，仍保留未知时间 / 金额。
+
+公共汇总对同一事务、当前范围中的最新两个完整合格计价集合批量读取，减少逐事件 IPC 内 SQL 查找；指纹、账本、字段与重复冲突仍检查，临时映射硬上限 64 MiB，超限完整丢弃并使用原点查询。分页 / 明细点读取继续按需查询，跨事务不复用这个临时映射。PriceOutcome 使用字段精确比较，避免重复 JSON 编解码。新增批量 / 点读取相等、错误指纹 / 账本及部分超限回退测试。
+
+全量 core-store-collector 569 passed / 1 ignored，store 310 passed / 1 ignored；前端 54 单元通过，typecheck / Vite build / 生成契约校验 / core-store-collector-desktop strict Clippy 通过。无其他测试负载的原生优化构建阶段回执 millisecond-perf-before-adaptive-first.json：7 天 732.6ms、30 天仍 1,547.9ms，更新 740.5ms；状态 / 来源 / 候选 / 总览 / 模型 / 项目 / 会话 / 详情 / 明细分别 2.0 / 3.3 / 36.2 / 462.6 / 286.1 / 47.5 / 223.6 / 78.6 / 23.6ms，小窗 191.9–353.9ms。该构建所有 crate 开启 debug assertions，不能称为已安装生产构建。启动 3,063.1ms，后台完整检查尚未完成，继续排查。
+
+真实副本 16→17 首次备份、迁移及启动 176,074.7ms（并发构建期间），独立记录，不混入日常启动性能。备份与匿名回执保留。原生负载回归发现固定日期优先会让某些会话范围扫描过大，后续使用独立账本索引修正并再次验证，不以本阶段结果宣称全部秒级路径已经消除。

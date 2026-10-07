@@ -6,6 +6,45 @@ use crate::{
 use rusqlite::params;
 use token_pulse_core::domain::UsageVector;
 
+#[test]
+fn pending_date_indexes_avoid_visiting_unrelated_records_and_preserve_unknown_time() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let (_directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    pending(&db, "within", Some(2000), "pending", None);
+    pending(&db, "unknown", None, "unattributed", None);
+    db.write(|conn| {
+        conn.execute_batch("WITH RECURSIVE rows(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM rows WHERE n<2000) INSERT INTO observations(observation_id,file_generation_id,byte_offset,byte_end,session_key,kind,observed_at_ms,normalized_json,payload_fingerprint,format_version) SELECT 'old-'||n,'generation',1000+n*100,1100+n*100,'session','usage',9000,'{}','old-'||n,'fixture' FROM rows; INSERT INTO pending_usage SELECT observation_id,'ledger',observation_id,'pending','fixture',NULL,'{}' FROM observations WHERE observation_id LIKE 'old-%';")?;
+        Ok(())
+    }).unwrap();
+    db.snapshot(|tx, _| {
+        let steps = Arc::new(AtomicUsize::new(0));
+        let counted = steps.clone();
+        tx.progress_handler(
+            1,
+            Some(move || {
+                counted.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )?;
+        let counts = pending_counts(tx, &filter())?;
+        tx.progress_handler(0, None::<fn() -> bool>)?;
+        assert_eq!(counts.0, 1);
+        assert_eq!(counts.1, 1);
+        assert!(counts.2.is_none()); // Unknown amount must stay unknown.
+        assert_eq!(counts.3, 1);
+        assert!(
+            steps.load(Ordering::Relaxed) < 1000,
+            "unrelated rows must not be visited"
+        );
+        Ok(())
+    })
+    .unwrap();
+}
+
 pub(super) fn pending(
     db: &Database,
     id: &str,

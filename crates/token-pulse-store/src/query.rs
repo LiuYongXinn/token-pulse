@@ -29,7 +29,7 @@ pub struct BucketTotals {
 
 const MODEL_KEY: &str =
     "usage_model_key(json_extract(o.normalized_json,'$.effective_metadata.provider'),e.model)";
-const FROM: &str =
+pub(crate) const FROM: &str =
     "active_usage_events e JOIN observations o ON o.observation_id=e.origin_observation_id";
 const VECTOR_SUM: &str = "sum_published_usage_vector(e.input_tokens_total,e.cached_input_tokens,e.output_tokens_total,e.reasoning_output_tokens,e.total_tokens,(SELECT accounting_version FROM ledger_generations WHERE ledger_id=e.ledger_id),e.cache_write_input_tokens)";
 

@@ -59,6 +59,53 @@ fn cost(outcome: PriceOutcome) -> String {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn aggregate_prefetch_equals_point_lookup_and_discards_a_partial_overflow() {
+    let (_directory, db) = priced();
+    let basis = PriceBasis::EventTime {};
+    db.build_event_valuation("ledger", &basis, 2).unwrap();
+    db.snapshot(|tx, revision| {
+        let catalog = crate::pricing::catalog_at(tx, revision.price)?;
+        let scope = crate::query::predicate(&filter())?;
+        let mut prefetched = CacheReader::new(tx, &catalog.revision, &basis)?;
+        prefetched.prefetch(tx, &scope)?;
+        assert!(prefetched.prefetched.is_some());
+        let mut overflow = CacheReader::new(tx, &catalog.revision, &basis)?;
+        overflow.prefetch_bounded(tx, &scope, 1)?;
+        assert!(overflow.prefetched.is_none());
+        crate::query::pricing::visit_ledger_uncached(tx, "ledger", &basis, &catalog, |event| {
+            let exact = lookup(
+                tx,
+                &event.event_id,
+                &event.cache_fingerprint,
+                &catalog.revision,
+                &basis,
+            )?;
+            assert_eq!(
+                prefetched.lookup(&event.event_id, &event.cache_fingerprint, &event.ledger_id)?,
+                exact
+            );
+            assert_eq!(
+                overflow.lookup(&event.event_id, &event.cache_fingerprint, &event.ledger_id)?,
+                exact
+            );
+            assert!(
+                prefetched
+                    .lookup(&event.event_id, "wrong-fingerprint", &event.ledger_id)?
+                    .is_none()
+            );
+            assert!(
+                prefetched
+                    .lookup(&event.event_id, &event.cache_fingerprint, "other-ledger")?
+                    .is_none()
+            );
+            Ok(())
+        })?;
+        Ok(())
+    })
+    .unwrap();
+}
 fn summary_cost(db: &Database) -> String {
     db.pricing_summary(&filter(), &PriceBasis::EventTime {})
         .unwrap()
