@@ -11,7 +11,8 @@ execFileSync('cargo', ['test', '-p', 'token-pulse-taskbar', 'project_font_visual
   stdio: 'inherit', env: { ...process.env, TOKENPULSE_FONT_VISUAL_DIR: directory },
 });
 const native = readFileSync(resolve(directory, 'native-font-reference.bmp')).toString('base64');
-const css = readFileSync('ui/src/shared/silver-mist.css', 'utf8');
+const css = ['ui/src/shared/theme.css', 'ui/src/shared/silver-mist.css']
+  .map(path => readFileSync(path, 'utf8')).join('\n');
 const samples = ['TokenPulse · 用量详情', '统计范围 已计价部分估算 输入', '全部来源 · 今日 Asia/Shanghai', '263.6M Token $55.93 89%'];
 const browser = await chromium.launch({ headless: true });
 try {

@@ -893,8 +893,8 @@ fn detail_metrics_use_data_glyphs_and_switch_back_to_body_without_changing_the_d
             unsafe { GetCurrentObject(body.dc.0, OBJ_FONT as u32) },
             previous
         );
-        // Independently draw the intended fonts through TextOutW, rather than
-        // accepting a logical face name as proof that the right glyphs were painted.
+        // Draw each font explicitly to verify the plan routes numeric spans to
+        // the data face and preserves the caller's GDI font across both faces.
         let expected = body
             .bitmap_with(width, height, |dc| unsafe {
                 let brush = Object(CreateSolidBrush(palette.background));
