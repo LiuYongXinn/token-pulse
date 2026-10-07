@@ -44,9 +44,10 @@ fn series_with_coverage(
     tx: &Transaction<'_>,
     filter: &UsageFilter,
     grain: Grain,
+    common: &token_pulse_core::protocol::Coverage,
 ) -> StoreResult<Vec<UsageSeriesBucket>> {
     let buckets = series(tx, filter, grain)?;
-    let gaps = coverage::series_coverage(tx, filter, &buckets)?;
+    let gaps = coverage::series_coverage_from(tx, filter, &buckets, common)?;
     Ok(buckets
         .into_iter()
         .zip(gaps)
@@ -117,11 +118,11 @@ fn assemble(
     validate_request_id(snapshot_id)?;
     let summary = common.totals.clone();
     let coverage = common.coverage.clone();
-    let series = series_with_coverage(tx, &request.filter, request.grain)?;
+    let series = series_with_coverage(tx, &request.filter, request.grain, &common.coverage)?;
     let mut heatmap_filter = request.filter.clone();
     heatmap_filter.range = request.heatmap_range.clone();
     let heatmap_started = std::time::Instant::now();
-    let heatmap = series_with_coverage(tx, &heatmap_filter, Grain::Day)?;
+    let heatmap = series_with_coverage(tx, &heatmap_filter, Grain::Day, &common.coverage)?;
     crate::query_timing::record("heatmap_compute", heatmap_started);
     let mut recent_sessions = recent_sessions(tx, &request.filter, &request.price_basis)?;
     let pricing = common.pricing.clone();

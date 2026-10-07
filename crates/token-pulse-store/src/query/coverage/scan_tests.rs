@@ -29,6 +29,82 @@ fn ready(db: &Database) {
     .unwrap();
     db.finish_source_scan(h, None, 3).unwrap();
 }
+
+#[test]
+fn reused_source_health_matches_independent_coverage_for_each_narrowed_scope() {
+    let (_d, db) = setup();
+    db.commit(fixture()).unwrap();
+    super::tests::pending(&db, "pending", Some(2000), "pending", None);
+    super::tests::pending(&db, "unknown", None, "unattributed", None);
+    for health in ["missing", "ready", "paused", "unreadable", "interrupted"] {
+        db.write(|conn| {
+            conn.execute("UPDATE sources SET enabled=1", [])?;
+            Ok(())
+        })
+        .unwrap();
+        ready(&db);
+        db.write(move |conn| {
+            match health {
+                "missing" => {
+                    conn.execute("DELETE FROM source_scan_state", [])?;
+                }
+                "paused" => {
+                    conn.execute("UPDATE sources SET enabled=0", [])?;
+                }
+                "unreadable" => {
+                    conn.execute("UPDATE sources SET readability='unreadable'", [])?;
+                }
+                "interrupted" => {
+                    conn.execute("UPDATE source_scan_state SET state='interrupted'", [])?;
+                }
+                _ => {
+                    conn.execute("UPDATE sources SET enabled=1", [])?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        for sources in [
+            DimensionSelection::All {},
+            ids(&["source"], false),
+            ids(&[], true),
+        ] {
+            let mut broad = filter();
+            broad.sources = sources;
+            db.snapshot(|tx, _| {
+                let common = coverage(tx, &broad, &super::super::empty_totals())?;
+                for dimension in ["model", "project", "session", "date"] {
+                    let mut narrowed = broad.clone();
+                    match dimension {
+                        "model" => narrowed.models = ids(&[], false),
+                        "project" => narrowed.projects = ids(&[], false),
+                        "session" => narrowed.sessions = ids(&[], true),
+                        _ => narrowed.range.start_ms = EpochMs::new(4000)?,
+                    }
+                    let totals = super::super::totals(tx, &narrowed)?;
+                    assert_eq!(
+                        serde_json::to_value(narrowed_coverage(tx, &narrowed, &totals, &common)?)
+                            .unwrap(),
+                        serde_json::to_value(coverage(tx, &narrowed, &totals)?).unwrap(),
+                        "{health}/{dimension}"
+                    );
+                }
+                // A later source revision must not enter this pinned read snapshot.
+                db.write(|conn| {
+                    conn.execute("UPDATE sources SET readability='unreadable'", [])?;
+                    Ok(())
+                })?;
+                let totals = super::super::totals(tx, &broad)?;
+                assert_eq!(
+                    serde_json::to_value(narrowed_coverage(tx, &broad, &totals, &common)?).unwrap(),
+                    serde_json::to_value(coverage(tx, &broad, &totals)?).unwrap()
+                );
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+}
 #[test]
 fn full_proof_can_complete_without_confusing_breakdown_or_empty_source_selection() {
     let (_d, db) = setup();

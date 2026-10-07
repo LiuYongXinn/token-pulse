@@ -785,6 +785,7 @@ fn event_lookup_work_does_not_grow_with_unrelated_ready_history() {
         }
         tx.commit()?; Ok(())
     }).unwrap();
+    assert_eq!(summary_cost(&db), "0.000000000000900");
     db.snapshot(|tx, revision| {
         let fingerprint: String = tx.query_row(
             "SELECT input_sha256 FROM valuation_cache_inputs WHERE event_id='event' LIMIT 1",
@@ -796,12 +797,12 @@ fn event_lookup_work_does_not_grow_with_unrelated_ready_history() {
             &DecimalInt::from_nonnegative(revision.price.into())?,
             &PriceBasis::EventTime {},
         )?;
-        assert_eq!(cost(reader.lookup("event", &fingerprint)?.unwrap()), "900");
+        assert!(reader.lookup("event", &fingerprint, "ledger")?.is_none());
         // SQLite VM work is deterministic; a wall-clock threshold would be flaky.
         // Starting at all 1,001 ready sets violates this bound by several orders of magnitude.
         let statement = reader.statement.as_ref().unwrap();
         assert!(statement.get_status(rusqlite::StatementStatus::VmStep) < 500);
-        assert!(reader.lookup("event", &"0".repeat(64))?.is_none());
+        assert!(reader.lookup("event", &"0".repeat(64), "ledger")?.is_none());
         Ok(())
     })
     .unwrap();

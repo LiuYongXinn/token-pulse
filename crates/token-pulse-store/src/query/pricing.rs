@@ -84,7 +84,13 @@ fn visit_where(
     );
     let mut statement = tx.prepare(&sql)?;
     let mut rows = statement.query(params_from_iter(p.values))?;
-    while let Some(row) = rows.next()? {
+    let mut durations = [std::time::Duration::ZERO; 5];
+    loop {
+        let step = std::time::Instant::now();
+        let row = rows.next()?;
+        durations[0] += step.elapsed();
+        let Some(row) = row else { break };
+        let decode = std::time::Instant::now();
         let provider: Option<String> = row.get(3).map_err(|_| ErrorCode::DbCorrupt)?;
         let model: Option<String> = row.get(4).map_err(|_| ErrorCode::DbCorrupt)?;
         let occurred_at_ms = EpochMs::new(row.get(6)?).map_err(|_| ErrorCode::DbCorrupt)?;
@@ -133,11 +139,15 @@ fn visit_where(
             event.usage,
         );
         let cache_fingerprint = crate::valuation::fingerprint(&event, &version, request.as_ref())?;
+        durations[1] += decode.elapsed();
+        let lookup = std::time::Instant::now();
         let cached = if let Some(cache) = &mut cache {
-            cache.lookup(&event_id, &cache_fingerprint)?
+            cache.lookup(&event_id, &cache_fingerprint, &row.get::<_, String>(1)?)?
         } else {
             None
         };
+        durations[2] += lookup.elapsed();
+        let evaluate = std::time::Instant::now();
         let outcome = match cached {
             Some(outcome) => outcome,
             None => {
@@ -151,6 +161,8 @@ fn visit_where(
                 .outcome
             }
         };
+        durations[3] += evaluate.elapsed();
+        let consumed = std::time::Instant::now();
         consume(PricedEvent {
             event_id,
             ledger_id: row.get(1)?,
@@ -164,6 +176,19 @@ fn visit_where(
             outcome,
             cache_fingerprint,
         })?;
+        durations[4] += consumed.elapsed();
+    }
+    for (stage, duration) in [
+        "pricing_sql",
+        "pricing_decode",
+        "pricing_lookup",
+        "pricing_evaluate",
+        "pricing_accumulate",
+    ]
+    .into_iter()
+    .zip(durations)
+    {
+        crate::query_timing::record_duration(stage, duration);
     }
     Ok(())
 }

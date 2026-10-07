@@ -91,7 +91,7 @@ fn assemble(
             GroupDimension::Models => scope.models = selection,
             GroupDimension::Projects => scope.projects = selection,
         }
-        let coverage = coverage::coverage(tx, &scope, &group.totals)?;
+        let coverage = coverage::narrowed_coverage(tx, &scope, &group.totals, &common.coverage)?;
         output.push(PricedUsageGroup {
             key: group.key,
             display_name: group.display_name,

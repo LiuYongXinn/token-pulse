@@ -101,7 +101,7 @@ fn rows(
             parent_display_name: row.get(7)?,
             parent_provider_id: row.get(8)?,
             child_count: DecimalInt::from_nonnegative(i128::from(row.get::<_, i64>(9)?))?,
-            coverage: coverage::coverage(
+            coverage: coverage::narrowed_coverage(
                 tx,
                 &token_pulse_core::protocol::UsageFilter {
                     sessions: DimensionSelection::Ids {
@@ -111,6 +111,7 @@ fn rows(
                     ..filter.clone()
                 },
                 &summary,
+                &common.coverage,
             )?,
             summary,
             pricing: PricingAccumulator::new(query.price_basis.clone()).summary(false)?,

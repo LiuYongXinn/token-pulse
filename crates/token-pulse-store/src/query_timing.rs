@@ -7,13 +7,16 @@ pub struct QueryTiming {
 }
 static TIMINGS: Mutex<VecDeque<QueryTiming>> = Mutex::new(VecDeque::new());
 pub(crate) fn record(stage: &'static str, started: Instant) {
+    record_duration(stage, started.elapsed());
+}
+pub(crate) fn record_duration(stage: &'static str, duration: std::time::Duration) {
     if let Ok(mut timings) = TIMINGS.lock() {
         if timings.len() >= 2048 {
             timings.pop_front();
         }
         timings.push_back(QueryTiming {
             stage,
-            milliseconds: started.elapsed().as_secs_f64() * 1000.0,
+            milliseconds: duration.as_secs_f64() * 1000.0,
         });
     }
 }

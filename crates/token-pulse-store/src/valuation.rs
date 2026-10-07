@@ -90,9 +90,7 @@ fn decode(row: &Row<'_>, offset: usize) -> rusqlite::Result<Option<PriceOutcome>
 /// Invalid derived values or contradictory duplicate estimates fall back to the live engine.
 pub(crate) struct CacheReader<'a> {
     statement: Option<Statement<'a>>,
-    revision: i64,
-    mode: &'static str,
-    specified: Option<i64>,
+    candidates: std::collections::BTreeMap<String, Vec<String>>,
 }
 impl<'a> CacheReader<'a> {
     pub fn new(
@@ -102,35 +100,44 @@ impl<'a> CacheReader<'a> {
     ) -> StoreResult<Self> {
         let revision = i64::try_from(revision.value()).map_err(|_| ErrorCode::NumericOverflow)?;
         let (mode, specified) = basis_fields(basis);
-        // Without a matching ready set, do one bounded check and price events directly.
-        let available:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM valuation_sets vs JOIN valuation_cache_sets cs USING(valuation_set_id) WHERE vs.price_revision=?1 AND vs.mode=?2 AND vs.specified_at_ms IS ?3 AND vs.state='ready' AND cs.cache_version=?4 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL)",params![revision,mode,specified,CACHE_VERSION],|r|r.get(0))?;
-        // Pin the selective event+fingerprint index first. Starting from every ready
-        // historical set causes thousands of irrelevant probes per event as history grows.
-        // CROSS JOIN preserves this order; all version/publication and duplicate checks remain.
-        let statement = if available {
-            Some(tx.prepare("SELECT ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM valuation_cache_inputs ci INDEXED BY valuation_cache_input_lookup CROSS JOIN event_valuations ev ON ev.valuation_set_id=ci.valuation_set_id AND ev.event_id=ci.event_id CROSS JOIN valuation_sets vs ON vs.valuation_set_id=ev.valuation_set_id CROSS JOIN valuation_cache_sets cs ON cs.valuation_set_id=vs.valuation_set_id WHERE ci.event_id=?1 AND ci.input_sha256=?2 AND vs.price_revision=?3 AND vs.mode=?4 AND vs.specified_at_ms IS ?5 AND vs.state='ready' AND cs.cache_version=?6 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL ORDER BY vs.created_at_ms DESC,vs.valuation_set_id LIMIT 2")?)
-        } else {
+        // Immutable header eligibility is shared by every event in this pinned transaction.
+        // Keep only the two newest eligible sets per ledger. Missing/fingerprint-mismatched
+        // estimates fall back to the exact engine; older caches are optional acceleration.
+        let mut headers = tx.prepare("WITH eligible AS (SELECT cs.ledger_id,vs.valuation_set_id,ROW_NUMBER() OVER(PARTITION BY cs.ledger_id ORDER BY vs.created_at_ms DESC,vs.valuation_set_id) AS position FROM valuation_sets vs JOIN valuation_cache_sets cs USING(valuation_set_id) WHERE vs.price_revision=?1 AND vs.mode=?2 AND vs.specified_at_ms IS ?3 AND vs.state='ready' AND cs.cache_version=?4 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL) SELECT ledger_id,valuation_set_id FROM eligible WHERE position<=2 ORDER BY ledger_id,position LIMIT 8193")?;
+        let mut rows = headers.query(params![revision, mode, specified, CACHE_VERSION])?;
+        let mut candidates: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        let mut count = 0;
+        while let Some(row) = rows.next()? {
+            count += 1;
+            if count > 8192 {
+                candidates.clear();
+                break;
+            }
+            candidates.entry(row.get(0)?).or_default().push(row.get(1)?);
+        }
+        let statement = if candidates.is_empty() {
             None
+        } else {
+            Some(tx.prepare("SELECT ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM event_valuations ev JOIN valuation_cache_inputs ci ON ci.valuation_set_id=ev.valuation_set_id AND ci.event_id=ev.event_id WHERE ev.event_id=?1 AND ci.input_sha256=?2 AND ev.valuation_set_id IN (?3,?4) ORDER BY CASE WHEN ev.valuation_set_id=?3 THEN 0 ELSE 1 END LIMIT 2")?)
         };
         Ok(Self {
             statement,
-            revision,
-            mode,
-            specified,
+            candidates,
         })
     }
-    pub fn lookup(&mut self, event: &str, input: &str) -> StoreResult<Option<PriceOutcome>> {
+    pub fn lookup(
+        &mut self,
+        event: &str,
+        input: &str,
+        ledger: &str,
+    ) -> StoreResult<Option<PriceOutcome>> {
+        let Some(sets) = self.candidates.get(ledger) else {
+            return Ok(None);
+        };
         let Some(statement) = self.statement.as_mut() else {
             return Ok(None);
         };
-        let mut rows = statement.query(params![
-            event,
-            input,
-            self.revision,
-            self.mode,
-            self.specified,
-            CACHE_VERSION
-        ])?;
+        let mut rows = statement.query(params![event, input, &sets[0], sets.get(1)])?;
         let Some(first) = rows.next()? else {
             return Ok(None);
         };
@@ -157,7 +164,15 @@ fn lookup(
     revision: &DecimalInt,
     basis: &PriceBasis,
 ) -> StoreResult<Option<PriceOutcome>> {
-    CacheReader::new(tx, revision, basis)?.lookup(event, input)
+    CacheReader::new(tx, revision, basis)?.lookup(
+        event,
+        input,
+        &tx.query_row(
+            "SELECT ledger_id FROM usage_events WHERE event_id=?1",
+            [event],
+            |r| r.get::<_, String>(0),
+        )?,
+    )
 }
 
 #[derive(Debug)]

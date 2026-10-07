@@ -60,20 +60,74 @@ fn pending_predicate(filter: &UsageFilter) -> StoreResult<Predicate> {
     Ok(p)
 }
 
-pub fn coverage(
-    tx: &Transaction<'_>,
-    filter: &UsageFilter,
-    totals: &TokenTotals,
-) -> StoreResult<Coverage> {
+type PendingCounts = (i64, i64, Option<String>, i64);
+fn pending_counts(tx: &Transaction<'_>, filter: &UsageFilter) -> StoreResult<PendingCounts> {
     let p = pending_predicate(filter)?;
     let sql = format!(
         "WITH selected AS MATERIALIZED (SELECT p.observation_id,p.kind,p.vector_json FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')) SELECT COUNT(DISTINCT CASE WHEN kind='pending' THEN observation_id END),COUNT(DISTINCT CASE WHEN kind='unattributed' THEN observation_id END),(SELECT sum_token_decimal(usage_vector_total(vector_json)) FROM selected WHERE kind='unattributed'),COUNT(CASE WHEN kind='unattributed' AND usage_vector_total(vector_json) IS NULL THEN 1 END) FROM selected",
         p.sql
     );
-    let (pending, unattributed, known_total, missing): (i64, i64, Option<String>, i64) = tx
-        .query_row(&sql, params_from_iter(p.values), |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-        })?;
+    let counts: PendingCounts = tx.query_row(&sql, params_from_iter(p.values), |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    })?;
+    Ok(counts)
+}
+/// Reuse only source-wide health in the SAME transaction and source selection.
+/// Pending/unattributed counts remain specific to the narrowed dimensions/range.
+pub(super) fn narrowed_coverage(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    totals: &TokenTotals,
+    common: &Coverage,
+) -> StoreResult<Coverage> {
+    let (pending, unattributed, known_total, missing) = pending_counts(tx, filter)?;
+    let mut result = common.clone();
+    result.pending_observation_count = DecimalInt::from_nonnegative(pending.into())?;
+    result.unattributed_observation_count = DecimalInt::from_nonnegative(unattributed.into())?;
+    result.unattributed_total_tokens = if missing == 0 {
+        known_total.map(|n| DecimalInt::parse(&n)).transpose()?
+    } else {
+        None
+    };
+    result.state = if common_gap(common) || pending > 0 || unattributed > 0 {
+        CoverageState::Partial
+    } else if common.source_issues.is_empty() && !matches!(common.state, CoverageState::Unknown) {
+        CoverageState::Complete
+    } else {
+        CoverageState::Unknown
+    };
+    result.breakdown_complete = [
+        &totals.input_total,
+        &totals.cached_input,
+        &totals.noncached_input,
+        &totals.output_total,
+        &totals.reasoning_output,
+        &totals.cache_write_input,
+    ]
+    .iter()
+    .all(|m| m.complete);
+    Ok(result)
+}
+fn common_gap(base: &Coverage) -> bool {
+    base.pending_file_count.value() > 0
+        || !base.format_issues.is_empty()
+        || base.source_issues.iter().any(|s| {
+            matches!(
+                s.code.as_str(),
+                "source_paused"
+                    | "source_unreadable"
+                    | "source_partially_readable"
+                    | "source_scan_incomplete"
+                    | "source_scan_pending"
+            )
+        })
+}
+pub fn coverage(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    totals: &TokenTotals,
+) -> StoreResult<Coverage> {
+    let (pending, unattributed, known_total, missing) = pending_counts(tx, filter)?;
     let source = source_selection(filter, "sf.source_id");
     let scan_source = source_selection(filter, "e.source_id");
     let mut values = source.values;
@@ -258,6 +312,15 @@ pub fn series_coverage(
     filter: &UsageFilter,
     buckets: &[super::BucketTotals],
 ) -> StoreResult<Vec<Coverage>> {
+    let base = coverage(tx, filter, &super::empty_totals())?;
+    series_coverage_from(tx, filter, buckets, &base)
+}
+pub(super) fn series_coverage_from(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    buckets: &[super::BucketTotals],
+    common: &Coverage,
+) -> StoreResult<Vec<Coverage>> {
     if buckets.is_empty()
         || buckets.len() > token_pulse_core::calendar::MAX_BUCKETS
         || buckets[0].bucket.start_ms != filter.range.start_ms
@@ -269,19 +332,8 @@ pub fn series_coverage(
     {
         return Err(ErrorCode::InvalidQuery.into());
     }
-    let base = coverage(tx, filter, &super::empty_totals())?;
-    let common_gap = base.pending_file_count.value() > 0
-        || !base.format_issues.is_empty()
-        || base.source_issues.iter().any(|s| {
-            matches!(
-                s.code.as_str(),
-                "source_paused"
-                    | "source_unreadable"
-                    | "source_partially_readable"
-                    | "source_scan_incomplete"
-                    | "source_scan_pending"
-            )
-        });
+    let base = common;
+    let common_gap = common_gap(base);
     let p = pending_predicate(filter)?;
     let mut statement=tx.prepare(&format!("SELECT DISTINCT p.observation_id,p.kind,o.observed_at_ms,CASE WHEN p.kind='unattributed' THEN usage_vector_total(p.vector_json) END FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations fg ON fg.file_generation_id=o.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE {} AND p.kind IN ('pending','unattributed')",p.sql))?;
     let mut rows = statement.query(params_from_iter(p.values))?;
