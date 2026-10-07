@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FilterOption, UsageFilter } from '../shared/generated/contracts';
 import { fullTokens } from '../shared/format';
+import { Icon } from '../shared/Icon';
 import { useFilterOptions } from './useFilterOptions';
 import './filters.css';
 
@@ -31,7 +32,7 @@ export function AdvancedFilters({ filter, choices, disabled, onChange }: { filte
   }, [open]);
   const select = (choice: FilterOption | null) => { if (!open) return; onChange(open, choice); setOpen(null); buttons.current[open]?.focus(); };
   return <div className="advanced-filters" ref={root}>
-    {dimensions.map(dimension => <button key={dimension} ref={button => { buttons.current[dimension] = button; }} role="combobox" aria-label={labels[dimension]} aria-expanded={open === dimension} aria-controls={open === dimension ? 'filter-picker' : undefined} aria-haspopup="dialog" className={choices[dimension] ? 'facet-trigger selected' : 'facet-trigger'} disabled={disabled} title={choices[dimension]?.display_name} onClick={() => { setOpen(open === dimension ? null : dimension); setSearch(''); setDebounced({ dimension, text: '' }); }}>{choices[dimension] ? `${labels[dimension]}：${choices[dimension].display_name}` : `全部${labels[dimension]}`}<span aria-hidden="true">⌄</span></button>)}
+    {dimensions.map(dimension => <button key={dimension} ref={button => { buttons.current[dimension] = button; }} role="combobox" aria-label={labels[dimension]} aria-expanded={open === dimension} aria-controls={open === dimension ? 'filter-picker' : undefined} aria-haspopup="dialog" className={choices[dimension] ? 'facet-trigger selected' : 'facet-trigger'} disabled={disabled} title={choices[dimension]?.display_name} onClick={() => { setOpen(open === dimension ? null : dimension); setSearch(''); setDebounced({ dimension, text: '' }); }}><span className="facet-trigger-label">{choices[dimension] ? `${labels[dimension]}：${choices[dimension].display_name}` : `全部${labels[dimension]}`}</span><Icon name="chevronDown" size={14} /></button>)}
     {open && <div className="facet-popup" id="filter-picker" role="dialog" aria-label={`选择${labels[open]}`} onKeyDown={event => {
       const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'));
       const index = options.indexOf(event.target as HTMLButtonElement);

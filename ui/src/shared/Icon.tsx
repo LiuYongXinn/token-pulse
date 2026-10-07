@@ -18,6 +18,7 @@ const paths = {
   collapse: <path d="M9 5v4H5M19 9h-4V5M15 19v-4h4M5 15h4v4" />,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M7 3v4M17 3v4M3 11h18" /></>,
   check: <path d="m5 12 4 4L19 6" />,
+  chevronDown: <path d="m6 9 6 6 6-6" />,
   eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
 } satisfies Record<string, ReactNode>;
 
