@@ -2691,3 +2691,12 @@ Schema 18 独立追加 pending ledger / kind / observation 索引，保持已发
 用户要求操作不影响主屏。原生副屏模式在创建主窗口前关闭自动 focus，在主线程复用既有 nonactivating_show_owned 逻辑显示主窗口；小窗通过主线程分发复用相同逻辑。该逻辑临时使用 NOACTIVATE 样式及只针对当前自有窗口的 CBT 激活拦截，仍让 Tauri 正常记录可见性。移除导航探针的重复 show / unminimize，避免二次激活。正常打开与任务栏操作保持原有行为。
 
 当前 debug 原生 NATIVE_DIAGNOSTIC_POSITIONS_OK / NATIVE_SOURCE_REREAD_OK / NATIVE_REQUEST_INPUT_OK / NATIVE_OFFLINE_PRICES_OK 均通过，桌面 30 passed / 3 需外部更新器验收的 ignored；strict all-target Clippy 与 release check 通过。原生退出仍有既有 Chrome_WidgetWin_0 1412 日志，未宣称修复。增加生产参数后端实际编译断言标志，用于核对回执构建来源。最终导航、恢复及匿名焦点采样继续验证。
+
+
+## 毫秒级复查 I17：后台完整校验降低资源优先级
+
+Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROUND_BEGIN，降低 CPU 与 I/O 调度优先级，避免约 3 GB 的维护扫描和前台查询竞争。它不共享前台连接，不缩减检查，不提高前台或进程优先级，仍可中断和关闭；设置失败只记录固定匿名标识并保留原校验。依据 [Windows SetThreadPriority 官方文档](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority)，单纯降低 CPU priority 不能解决 I/O 竞争，后台线程应使用资源后台模式。非 Windows 不改变行为。
+
+六项 integrity 门禁 / 损坏 / 提交隐私结果 / 迟到分页回归、core-store-collector-desktop strict all-target Clippy、release check 通过，副屏 debug 来源重读 / 精确输入 / 诊断及隐私 / 离线价格回归再次通过。日志 millisecond-background-integrity-tests.log / millisecond-background-clippy.log / millisecond-background-release-check.log / millisecond-background-native-*.log。
+
+此前生产参数后端的无负载 first 回执：7 / 30 天 720.2 / 1,284.2ms、更新 741.4ms，启动 2,742.6ms；随后 restart 启动 929.7ms，说明系统缓存状态影响明显。分别保存 millisecond-production-backend-first.json / restart.json，后端 assertions=false，100 次阻塞切换和 DTO 等价检查通过；50ms 匿名焦点采样分别 270 / 125 次，自有应用成为前台均为 0。最终带后台资源优先级的复测另行追加，不把前一轮指标当作修复后的结果。

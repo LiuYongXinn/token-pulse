@@ -83,6 +83,20 @@ impl Verification {
         let thread = std::thread::Builder::new()
             .name("tokenpulse-integrity".into())
             .spawn(move || {
+                // The whole-file maintenance scan must yield CPU and I/O to user queries.
+                // This is a dedicated worker; its background mode ends with the thread.
+                #[cfg(windows)]
+                {
+                    use windows_sys::Win32::System::Threading::{
+                        GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
+                    };
+                    if unsafe {
+                        SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN)
+                    } == 0
+                    {
+                        eprintln!("INTEGRITY_BACKGROUND_PRIORITY_UNAVAILABLE");
+                    }
+                }
                 if stopping.load(Ordering::Acquire) {
                     return;
                 }

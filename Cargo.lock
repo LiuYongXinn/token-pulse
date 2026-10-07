@@ -4511,6 +4511,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "token-pulse-core",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
