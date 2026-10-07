@@ -130,9 +130,19 @@ impl NativeFont {
         Self::with_height(dpi, None)
     }
     pub(crate) fn for_details(dpi: u32) -> Result<Self, WireError> {
+        Self::with_faces(
+            dpi,
+            &["Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI"],
+        )
+    }
+    pub(crate) fn for_data(dpi: u32) -> Result<Self, WireError> {
+        // Same numeric typeface as --dataFont in ui/src/shared/silver-mist.css.
+        Self::with_faces(dpi, &["Bahnschrift", "Segoe UI"])
+    }
+    fn with_faces(dpi: u32, faces: &[&str]) -> Result<Self, WireError> {
         // Match ui/src/shared/silver-mist.css. GDI can silently substitute a
         // missing face, so check the selected font before accepting a candidate.
-        for face in ["Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI"] {
+        for &face in faces {
             let font = Self::with_typeface(dpi, None, Some(face))?;
             let mut selected = [0u16; 32];
             let length =
@@ -321,7 +331,7 @@ impl NativeFont {
         height: i32,
         palette: Palette,
     ) -> Result<(), WireError> {
-        unsafe { self.paint_mode(dc, plan, width, height, palette, true) }
+        unsafe { self.paint_mode(dc, plan, width, height, palette, true, None) }
     }
     pub(crate) unsafe fn paint_mode(
         &self,
@@ -331,6 +341,7 @@ impl NativeFont {
         height: i32,
         palette: Palette,
         marker: bool,
+        data_font: Option<(&Self, &[usize])>,
     ) -> Result<(), WireError> {
         let saved = unsafe { SaveDC(dc) };
         if saved == 0 {
@@ -372,7 +383,15 @@ impl NativeFont {
                 unsafe {
                     SetBkMode(dc, TRANSPARENT as i32);
                 }
-                for placed in &plan.spans {
+                for (index, placed) in plan.spans.iter().enumerate() {
+                    let face = data_font
+                        .filter(|(_, indices)| indices.binary_search(&index).is_ok())
+                        .map(|(font, _)| font)
+                        .unwrap_or(self);
+                    let selected = unsafe { SelectObject(dc, face.font.0) };
+                    if selected.is_null() || selected as isize == -1 {
+                        return Err(WireError::InvalidState);
+                    }
                     let text: Vec<_> = placed.span.text.encode_utf16().collect();
                     unsafe {
                         SetTextColor(dc, palette.tone(placed.span.tone));
@@ -795,5 +814,87 @@ mod tests {
             unsafe { font.paint(ptr::null_mut(), None, 32, 16, next) },
             Err(WireError::InvalidState)
         );
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn detail_metrics_use_data_glyphs_and_switch_back_to_body_without_changing_the_dc() {
+    use crate::display::{Density, PlacedSpan, Span};
+    use windows_sys::Win32::Graphics::Gdi::{GetCurrentObject, OBJ_FONT};
+    for dpi in [96, 120, 144, 192] {
+        let body = NativeFont::for_details(dpi).unwrap();
+        let data = NativeFont::for_data(dpi).unwrap();
+        let gap = body.height().max(data.height()) + 12;
+        let width = 900;
+        let height = gap * 2;
+        let palette = Palette::for_background(rgb(250, 252, 255));
+        let plan = MeasuredPlan {
+            width,
+            height,
+            density: Density::Full,
+            spans: vec![
+                PlacedSpan {
+                    span: Span {
+                        text: "251.9M Token $53.08 90%".into(),
+                        tone: Tone::Normal,
+                    },
+                    x: 8,
+                    y: 4,
+                    width: 880,
+                },
+                PlacedSpan {
+                    span: Span {
+                        text: "TokenPulse · 用量详情".into(),
+                        tone: Tone::Normal,
+                    },
+                    x: 8,
+                    y: gap,
+                    width: 880,
+                },
+            ],
+        };
+        let previous = unsafe { GetCurrentObject(body.dc.0, OBJ_FONT as u32) };
+        let actual = body
+            .bitmap_with(width, height, |dc| unsafe {
+                body.paint_mode(
+                    dc,
+                    Some(&plan),
+                    width,
+                    height,
+                    palette,
+                    false,
+                    Some((&data, &[0])),
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            unsafe { GetCurrentObject(body.dc.0, OBJ_FONT as u32) },
+            previous
+        );
+        // Independently draw the intended fonts through TextOutW, rather than
+        // accepting a logical face name as proof that the right glyphs were painted.
+        let expected = body
+            .bitmap_with(width, height, |dc| unsafe {
+                let brush = Object(CreateSolidBrush(palette.background));
+                assert!(!brush.0.is_null());
+                assert_ne!(
+                    FillRect(
+                        dc,
+                        &RECT {
+                            left: 0,
+                            top: 0,
+                            right: width,
+                            bottom: height
+                        },
+                        brush.0
+                    ),
+                    0
+                );
+                data.text(dc, 8, 4, &plan.spans[0].span.text, palette.foreground)?;
+                body.text(dc, 8, gap, &plan.spans[1].span.text, palette.foreground)
+            })
+            .unwrap();
+        assert_eq!(actual, expected, "wrong glyphs at {dpi} DPI");
     }
 }

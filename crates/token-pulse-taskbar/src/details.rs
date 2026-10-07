@@ -14,6 +14,8 @@ use token_pulse_core::{
 pub struct DetailRow {
     pub label: String,
     pub value: String,
+    /// Use the shared UI's numeric typeface for metrics, amounts and percentages.
+    pub numeric: bool,
     /// Unrounded value for accessibility when the visible value uses compact units.
     pub accessible_value: Option<String>,
     pub tone: Tone,
@@ -43,6 +45,7 @@ fn row(label: &str, value: impl Into<String>, tone: Tone) -> DetailRow {
     DetailRow {
         label: label.into(),
         value: value.into(),
+        numeric: false,
         accessible_value: None,
         tone,
         remaining_percent: None,
@@ -65,6 +68,7 @@ fn tokens(label: &str, value: Option<&DecimalInt>, tone: Tone) -> DetailRow {
         tone,
     );
     result.accessible_value = Some(integer(value));
+    result.numeric = true;
     result
 }
 fn absolute(value: Option<EpochMs>, timezone: Tz) -> String {
@@ -228,6 +232,7 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
                     .map(|money| money.as_str())
                     .unwrap_or("—（未提供）")
             ));
+            amount.numeric = true;
             rows.push(amount);
         }
         rows.push(tokens(
@@ -289,6 +294,7 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
                             },
                         );
                         remaining.remaining_percent = window.remaining_percent;
+                        remaining.numeric = true;
                         rows.push(remaining);
                         rows.push(row(
                             "重置时间",

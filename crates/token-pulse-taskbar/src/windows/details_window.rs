@@ -197,6 +197,7 @@ struct Bar {
 }
 pub(crate) struct Layout {
     plan: MeasuredPlan,
+    data_indices: Vec<usize>,
     bars: Vec<Bar>,
 }
 impl Layout {
@@ -205,6 +206,7 @@ impl Layout {
         dpi: u32,
         width: i32,
         font: &NativeFont,
+        data_font: &NativeFont,
     ) -> Result<Self, WireError> {
         let pad = pixels(12, dpi);
         let gap = pixels(8, dpi);
@@ -216,6 +218,7 @@ impl Layout {
         }
         let measure = |text: &str| font.width(text);
         let mut spans = vec![];
+        let mut data_indices = vec![];
         let mut bars = vec![];
         let mut y = pad;
         for line in wrap(&content.title, width - pad * 2, &measure)? {
@@ -235,29 +238,55 @@ impl Layout {
         let mut rows: Vec<_> = content.rows.iter().collect();
         rows.sort_by_key(|row| priority(&row.label));
         for row in rows {
+            let value_font = if row.numeric { data_font } else { font };
+            let line_height = font.height().max(value_font.height());
+            // Keep the Chinese quota caption in the body font; only the
+            // percentage uses Bahnschrift, whose CJK fallback differs from the UI.
+            let (prefix, value) = if row.numeric {
+                row.value
+                    .strip_prefix("剩余 ")
+                    .map(|value| ("剩余 ", value))
+                    .unwrap_or(("", row.value.as_str()))
+            } else {
+                ("", row.value.as_str())
+            };
+            let prefix_width = font.width(prefix)?;
+            if !prefix.is_empty() {
+                spans.push(PlacedSpan {
+                    span: Span {
+                        text: prefix.into(),
+                        tone: row.tone,
+                    },
+                    x: value_x,
+                    y,
+                    width: prefix_width,
+                });
+            }
             let labels = wrap(&row.label, label_width, &measure)?;
-            let values = wrap(&row.value, value_width, &measure)?;
+            let values = wrap(value, value_width - prefix_width, &|text| {
+                value_font.width(text)
+            })?;
             let lines = labels.len().max(values.len()).max(1);
-            for (offset, text, x, tone) in labels
+            for (offset, text, x, tone, numeric) in labels
                 .into_iter()
                 .enumerate()
-                .map(|(offset, line)| (offset, line, pad, Tone::Muted))
-                .chain(
-                    values
-                        .into_iter()
-                        .enumerate()
-                        .map(|(offset, line)| (offset, line, value_x, row.tone)),
-                )
+                .map(|(offset, line)| (offset, line, pad, Tone::Muted, false))
+                .chain(values.into_iter().enumerate().map(|(offset, line)| {
+                    (offset, line, value_x + prefix_width, row.tone, row.numeric)
+                }))
             {
-                let measured = font.width(&text)?;
+                let measured = if numeric { data_font } else { font }.width(&text)?;
+                if numeric {
+                    data_indices.push(spans.len());
+                }
                 spans.push(PlacedSpan {
                     span: Span { text, tone },
                     x,
-                    y: y + offset as i32 * font.height(),
+                    y: y + offset as i32 * line_height,
                     width: measured,
                 });
             }
-            y += lines as i32 * font.height();
+            y += lines as i32 * line_height;
             if let Some(percent) = row.remaining_percent {
                 bars.push(Bar {
                     top: y + pixels(3, dpi),
@@ -281,11 +310,13 @@ impl Layout {
                 spans,
             },
             bars,
+            data_indices,
         })
     }
 }
 struct Frame {
     font: NativeFont,
+    data_font: NativeFont,
     layout: Layout,
     palette: Palette,
     dpi: u32,
@@ -296,9 +327,11 @@ impl Frame {
         let model = content(view, now)?;
         let theme = view.details.as_ref().ok_or(WireError::InvalidState)?.theme;
         let font = NativeFont::for_details(dpi)?;
-        let layout = Layout::build(&model, dpi, width, &font)?;
+        let data_font = NativeFont::for_data(dpi)?;
+        let layout = Layout::build(&model, dpi, width, &font, &data_font)?;
         Ok(Self {
             font,
+            data_font,
             layout,
             palette: palette(theme)?,
             dpi,
@@ -323,8 +356,15 @@ impl Frame {
             span.y -= scroll;
         }
         unsafe {
-            self.font
-                .paint_mode(dc, Some(&plan), width, height, self.palette, false)?;
+            self.font.paint_mode(
+                dc,
+                Some(&plan),
+                width,
+                height,
+                self.palette,
+                false,
+                Some((&self.data_font, &self.layout.data_indices)),
+            )?;
         }
         let fill = |area: RECT, color| -> Result<(), WireError> {
             let brush = unsafe { CreateSolidBrush(color) };
@@ -1008,11 +1048,17 @@ mod tests {
         for dpi in [96, 120, 144, 192] {
             let frame =
                 Frame::build(&view, dpi, pixels(340, dpi), view.generated_at_ms.value()).unwrap();
-            for span in &frame.layout.plan.spans {
+            for (index, span) in frame.layout.plan.spans.iter().enumerate() {
+                let font = if frame.layout.data_indices.binary_search(&index).is_ok() {
+                    &frame.data_font
+                } else {
+                    &frame.font
+                };
+                assert_eq!(span.width, font.width(&span.span.text).unwrap());
                 assert!(
                     span.x >= 0 && span.x + span.width <= frame.layout.plan.width - pixels(12, dpi)
                 );
-                assert!(span.y >= 0 && span.y + frame.font.height() <= frame.layout.plan.height);
+                assert!(span.y >= 0 && span.y + font.height() <= frame.layout.plan.height);
             }
             let values: String = frame
                 .layout
