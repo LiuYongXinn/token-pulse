@@ -10,6 +10,8 @@ test.beforeEach(async ({ page }) => {
     let serial = 0, bad: 'expired' | 'mismatch' | null = null, revision = '3', amount = '9.007199254740993', callbackId = 0, eventId = 0;
     const calls: { command: string; request: unknown }[] = [];
     const cursors = new Map<string, { query: string; offset: number; snapshot: string }>();
+    let holdReads = false;
+    const pendingReads: (() => void)[] = [];
     const callbacks = new Map<number,(event: unknown) => void>(); const listeners = new Map<number,{ event: string; handler: number }>();
     const measure = { value: null, covered_total_tokens: '0', complete: false };
     const tokens = (total: string, events = '53') => ({ total_tokens: total, input_total: measure, cached_input: measure, noncached_input: measure, output_total: measure, reasoning_output: measure, cache_write_input: { value: null, covered_total_tokens: '0', complete: false }, session_count: events === '0' ? '0' : '1', usage_event_count: events, reliable_turn_count: null, reliable_turns_complete: false });
@@ -29,6 +31,7 @@ test.beforeEach(async ({ page }) => {
         if (command === 'close_query_snapshot') return response(null);
         if (command === 'query_sessions') { const query = (args.request as { query: Query }).query; return response({ meta: { snapshot_id: 'synthetic-drill', data_revision: '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: [], accounting_versions: [], display_timezone: query.filter.range.timezone }, summary: tokens('0','0'), pricing: price('0'), coverage, sessions: [], next_cursor: null }); }
         if (command === 'query_usage_events') {
+          if (holdReads) await new Promise<void>(resolve => pendingReads.push(resolve));
           const { query, cursor } = args.request as { query: Query; cursor: string | null };
           if (cursor && bad === 'expired') throw { code: 'SNAPSHOT_EXPIRED' };
           const saved = cursor ? cursors.get(cursor) : null;
@@ -47,11 +50,36 @@ test.beforeEach(async ({ page }) => {
           return response({ meta: { snapshot_id: snapshot, data_revision: cursor && bad === 'mismatch' ? '8' : '7', price_revision: revision, generated_at_ms: query.filter.range.start_ms+1000, parser_versions: ['synthetic-parser'], accounting_versions: ['synthetic-accounting'], display_timezone: query.filter.range.timezone }, summary: tokens('9007199254741044'), pricing: summaryPrice, coverage, events: events.slice(offset,offset+query.page_size), next_cursor: next });
         }
         throw new Error(`Unexpected synthetic command ${command}`);
-      } }, __redactEventPrices: () => { redacted = true; }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length,
+      } }, __holdEventReads: () => { holdReads = true; }, __releaseEventReads: () => { holdReads = false; for (const resolve of pendingReads.splice(0)) resolve(); }, __redactEventPrices: () => { redacted = true; }, __eventCalls: () => calls, __badEventPage: (value: typeof bad) => { bad = value; }, __eventListenerCount: () => [...listeners.values()].filter(listener => listener.event === 'price_rules_changed').length,
       __emitEventPriceChange: () => { revision = '4'; amount = '18.014398509481986'; for (const [id,listener] of listeners) if (listener.event === 'price_rules_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { price_revision: revision, all_models: true } }); } });
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '明细', exact: true }).click();
+});
+
+test('slow refresh and foreground return do not keep asking to requery', async ({ page }) => {
+  type Bridge = { __holdEventReads: () => void; __releaseEventReads: () => void; __eventCalls: () => { command: string; request: { kind?: string } }[] };
+  const rows = page.locator('.event-table>tbody>tr');
+  const reload = page.getByRole('button', { name: '重新查询', exact: true });
+  const notice = page.getByRole('status').filter({ hasText: '重新查询' });
+  await expect(rows).toHaveCount(50); await expect(reload).toBeEnabled();
+  await page.evaluate(() => (window as unknown as Bridge).__holdEventReads());
+  await reload.click();
+  await expect(reload).toBeDisabled();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length)).toBeGreaterThan(0);
+  await expect(notice).toHaveCount(0); await expect(rows).toHaveCount(50);
+  await page.evaluate(() => (window as unknown as Bridge).__releaseEventReads());
+  await expect(reload).toBeEnabled(); await expect(notice).toHaveCount(0);
+  const closed = await page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length);
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length)).toBeGreaterThan(closed);
+  await page.evaluate(() => (window as unknown as Bridge).__holdEventReads());
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '明细', exact: true }).click();
+  await expect(reload).toBeDisabled(); await expect(rows).toHaveCount(50); await expect(notice).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as Bridge).__releaseEventReads());
+  await expect(reload).toBeEnabled(); await expect(notice).toHaveCount(0);
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(rows).toHaveCount(3);
 });
 
 test('events retain precise vectors, unknown values, true zero price and stable pagination', async ({ page }) => {

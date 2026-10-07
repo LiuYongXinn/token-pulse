@@ -3,6 +3,70 @@ import { PagedUsage, pagedUsage, clearPagedUsage, type SnapshotPage } from './pa
 const base = { meta: { snapshot_id: 'old' }, summary: {}, pricing: {}, coverage: {} } as SnapshotPage;
 type Page = SnapshotPage & { rows: string[] };
 const flush = async () => { for (let i = 0; i < 20; ++i) await Promise.resolve(); };
+test('slow replacement does not request renewal while retaining the old page', async () => {
+  vi.stubGlobal('document', { hidden: false });
+  let finish: ((page: Page) => void) | undefined;
+  let hold = false;
+  const closes: string[] = [];
+  const controller = new PagedUsage({ page_size: 1 }, { label: 'test', keys: (page: Page) => page.rows,
+    read: async () => hold ? new Promise<Page>(resolve => { finish = resolve; }) : { ...base, rows: ['a'], next_cursor: 'old-cursor' },
+    close: async ({ cursor }) => { if (cursor) closes.push(cursor); } });
+  const stop = controller.attach({}, true); await flush();
+  hold = true; controller.reload(); await flush();
+  expect(closes).toEqual(['old-cursor']);
+  expect(controller.get()).toMatchObject({ loading: true, renewal: false });
+  expect(controller.get().pages[0].rows).toEqual(['a']);
+  finish!({ ...base, rows: ['new'], next_cursor: 'new-cursor' }); await flush();
+  expect(controller.get()).toMatchObject({ loading: false, renewal: false, hasMore: true });
+  controller.next(); await flush();
+  finish!({ ...base, rows: ['next'], next_cursor: null }); await flush();
+  expect(controller.get().pages[1].rows).toEqual(['next']);
+  stop(); controller.dispose(); await flush(); vi.unstubAllGlobals();
+});
+
+test('foreground return automatically renews a released first page', async () => {
+  vi.stubGlobal('document', { hidden: false });
+  const reads: (string | null)[] = [];
+  const controller = new PagedUsage({ page_size: 1 }, { label: 'test', keys: (page: Page) => page.rows,
+    read: async ({ cursor }) => { reads.push(cursor); return { ...base, rows: [cursor ? 'b' : 'a'], next_cursor: cursor ? null : 'cursor' }; }, close: async () => {} });
+  const owner = {}; const stopBackground = controller.attach(owner, false); await flush();
+  expect(controller.get()).toMatchObject({ renewal: true, loading: false });
+  stopBackground(); const stop = controller.attach(owner, true); await flush();
+  expect(reads).toEqual([null, null]);
+  expect(controller.get()).toMatchObject({ renewal: false, loading: false });
+  controller.next(); await flush(); expect(reads).toEqual([null, null, 'cursor']);
+  stop(); controller.dispose(); await flush(); vi.unstubAllGlobals();
+});
+
+test('queued background cleanup cannot release a reattached foreground cursor', async () => {
+  vi.stubGlobal('document', { hidden: false });
+  const closes: string[] = [];
+  const controller = new PagedUsage({ page_size: 1 }, { label: 'test', keys: (page: Page) => page.rows,
+    read: async ({ cursor }) => ({ ...base, rows: [cursor ? 'b' : 'a'], next_cursor: cursor ? null : 'cursor' }),
+    close: async ({ cursor }) => { if (cursor) closes.push(cursor); } });
+  const owner = {}; const leave = controller.attach(owner, true); await flush();
+  leave(); const stop = controller.attach(owner, true); await flush();
+  expect(closes).toEqual([]); expect(controller.get().renewal).toBe(false);
+  controller.next(); await flush(); expect(controller.get().pages[1].rows).toEqual(['b']);
+  stop(); controller.dispose(); await flush(); vi.unstubAllGlobals();
+});
+
+test('expired continuation still requests renewal and preserves the displayed page', async () => {
+  vi.stubGlobal('document', { hidden: false });
+  let now = 1_000;
+  const time = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const read = vi.fn(async () => ({ ...base, rows: ['a'], next_cursor: 'cursor' }));
+  const controller = new PagedUsage({ page_size: 1 }, { label: 'test', keys: (page: Page) => page.rows, read, close: async () => {} });
+  const stop = controller.attach({}, true); await flush();
+  now += 8_000; controller.next(); await flush();
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(controller.get()).toMatchObject({ renewal: true, loading: false, index: 0 });
+  expect(controller.get().pages[0].rows).toEqual(['a']);
+  controller.reload(); await flush();
+  expect(read).toHaveBeenCalledTimes(2); expect(controller.get().renewal).toBe(false);
+  stop(); controller.dispose(); await flush(); time.mockRestore(); vi.unstubAllGlobals();
+});
+
 test('released leases retain pages and position, new data never appends or jumps', async () => {
   vi.stubGlobal('document', { hidden: false });
   const reads: (string | null)[] = [], closes: string[] = [];

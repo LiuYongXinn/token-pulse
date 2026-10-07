@@ -33,15 +33,15 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   attach(owner: object, foreground: boolean) {
     this.owners.set(owner, foreground); this.used = Date.now(); promoteUsageQueries();
     if (!this.value.pages.length && !this.value.loading) this.reload();
-    else if (this.value.updateAvailable && this.value.pages.length === 1 && this.value.firstNumber === 1 && !this.value.loading && !document.hidden) this.reload();
-    if (!this.foreground) this.enqueue(() => this.release());
-    return () => { this.owners.delete(owner); if (!this.foreground) this.enqueue(() => this.release()); };
+    else if ((this.value.updateAvailable || (foreground && this.value.renewal)) && this.value.pages.length === 1 && this.value.firstNumber === 1 && !this.value.loading && !document.hidden) this.reload();
+    if (!this.foreground) this.enqueue(async () => { if (!this.foreground) await this.release(); });
+    return () => { this.owners.delete(owner); if (!this.foreground) this.enqueue(async () => { if (!this.foreground) await this.release(); }); };
   }
   private enqueue(work: () => Promise<void>) { this.tail = this.tail.catch(() => {}).then(work); }
-  private async release() {
+  private async release(renewal = true) {
     const cursor = this.cursor; this.cursor = null;
     if (cursor !== null) {
-      if (!this.disposed) this.publish({ renewal: this.value.hasMore });
+      if (!this.disposed && renewal) this.publish({ renewal: this.value.hasMore });
       await this.adapter.close({ query: this.query, cursor }).catch(() => {});
     }
   }
@@ -55,9 +55,9 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   }
   reload = () => {
     if (this.disposed || this.value.loading) return;
-    this.publish({ loading: true, error: null });
+    this.publish({ loading: true, error: null, renewal: false });
     this.enqueue(async () => {
-      await this.release();
+      await this.release(false);
       if (!this.restorationTried && !this.value.pages.length) {
         this.restorationTried = true;
         const restored = await restoreUsageSnapshot(this.adapter.read, { query: this.query, cursor: null }).catch(() => null);
