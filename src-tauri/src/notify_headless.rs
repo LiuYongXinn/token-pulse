@@ -20,14 +20,8 @@ pub fn run_if_requested() -> Option<i32> {
             notify_registry::{RegistryError, windows::NotifyRegistry},
         };
         let result = (|| {
-            let app_id = if cfg!(debug_assertions) {
-                "com.tokenpulse.desktop.dev"
-            } else {
-                "com.tokenpulse.desktop"
-            };
-            let directory = dirs::data_local_dir()
-                .ok_or(RegistryError::Io)?
-                .join(app_id);
+            let directory = token_pulse_app::local_paths::data_directory()
+                .map_err(|_| RegistryError::Io)?;
             // Explicit debug-native acceptance only; a single validated child name cannot redirect
             // product notifications to another Home or external directory.
             #[cfg(debug_assertions)]

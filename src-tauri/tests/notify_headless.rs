@@ -27,9 +27,8 @@ impl Scene {
     }
     fn with_original(exe: &Path, chain: bool, original: &[String]) -> Self {
         let probe_name = format!("native-notify-{}", uuid::Uuid::new_v4().simple());
-        let directory = dirs::data_local_dir()
+        let directory = token_pulse_app::local_paths::data_directory()
             .unwrap()
-            .join("com.tokenpulse.desktop.dev")
             .join(&probe_name);
         std::fs::create_dir_all(&directory).unwrap();
         let home = tempfile::tempdir().unwrap();

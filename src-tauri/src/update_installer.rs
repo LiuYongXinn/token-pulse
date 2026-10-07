@@ -34,10 +34,14 @@ pub(super) fn launch(bytes: &[u8]) -> Result<(), UpdateIssue> {
     if !portable_executable(bytes) {
         return Err(UpdateIssue::InstallerUnavailable);
     }
+    let temporary = super::local_paths::temporary_directory()
+        .map_err(|_| UpdateIssue::InstallerUnavailable)?;
+    let executable = std::env::current_exe().map_err(|_| UpdateIssue::InstallerUnavailable)?;
+    let installation = executable.parent().ok_or(UpdateIssue::InstallerUnavailable)?;
     let mut file = tempfile::Builder::new()
         .prefix("tokenpulse-verified-update-")
         .suffix(".exe")
-        .tempfile()
+        .tempfile_in(&temporary)
         .map_err(|_| UpdateIssue::InstallerUnavailable)?;
     file.write_all(bytes)
         .and_then(|_| file.flush())
@@ -48,8 +52,12 @@ pub(super) fn launch(bytes: &[u8]) -> Result<(), UpdateIssue> {
     let (handle, path) = file.keep().map_err(|_| UpdateIssue::InstallerUnavailable)?;
     drop(handle);
     let result = Command::new(&path)
+        .env("TEMP", &temporary)
+        .env("TMP", &temporary)
         .args(["/P", "/UPDATE", "/R"])
         .arg(format!("/TOKENPULSE_PARENT={}", std::process::id()))
+        // NSIS requires /D to be the final argument. Keep updates at the current data-drive install.
+        .arg(format!("/D={}", installation.display()))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

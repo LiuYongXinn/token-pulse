@@ -12,6 +12,7 @@ dist/
 build/
 /coverage/
 .cache/
+.local/
 
 # Logs
 *.log
