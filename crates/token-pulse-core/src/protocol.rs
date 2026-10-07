@@ -205,6 +205,10 @@ pub struct Coverage {
     pub unattributed_observation_count: DecimalInt,
     pub unattributed_total_tokens: Option<DecimalInt>,
     pub pending_file_count: DecimalInt,
+    /// Already read files awaiting a fresh scan confirmation, separate from unread bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub verifying_file_count: Option<DecimalInt>,
     pub source_issues: Vec<SourceIssue>,
     pub format_issues: Vec<FormatIssue>,
     pub breakdown_complete: bool,

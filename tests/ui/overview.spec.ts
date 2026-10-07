@@ -69,6 +69,7 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: privacy ? '应用数据目录（已隐藏）' : 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: policyRevision, sources: privacy ? sources.map(s => ({ ...s, root_path: '来源 #' + s.source_id })) : sources });
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
+      if (command === 'get_diagnostics') return response({ data_revision: '7', issues: [], has_more: false });
       if (command === 'get_dashboard_bundle') {
         ++reads; lastDashboardRequest = structuredClone(args.request);
         if (fail) throw new Error('synthetic refresh failure');
@@ -87,7 +88,7 @@ test.beforeEach(async ({ page }) => {
         return response(data);
       }
       throw new Error(`unexpected synthetic command ${command}`);
-    } }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
+    } }, __setSyntheticCoverage: (value: Record<string, unknown>) => { Object.assign(coverage, value); }, __setSyntheticDashboardFailure: (value: boolean) => { fail = value; }, __deferSyntheticDashboard: () => { deferNext = true; }, __releaseSyntheticDashboard: () => { release?.(); release = null; },
     __setSyntheticQuota: (value: Record<string, unknown>) => { quota = structuredClone(value); for (const [id, listener] of listeners) if (listener.event === 'account_quota_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: { connection_epoch: quota.connection_epoch, quota_revision: quota.quota_revision, state: quota.state } }); },
     __lastDashboardRequest: () => lastDashboardRequest,
     __requestSyntheticMiniStats: (all = false, id = 'synthetic-mini-open') => {
@@ -115,7 +116,7 @@ test('overview preserves prototype layout, known breakdown and real unknown stat
   const activity = page.getByRole('group', { name: '近 26 周每日活动' });
   await expect(activity.getByRole('button')).toHaveCount(182);
   await activity.getByRole('button').nth(1).focus();
-  await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-2 · 0 Token · 存在采集或解释缺口');
+  await expect(page.locator('.activity-panel .chart-caption')).toHaveText('synthetic-day-2 · 0 Token · 已统计可信用量，部分记录待核对');
   await activity.getByRole('button').first().click();
   await expect(page.getByLabel('日期范围')).toHaveValue('custom');
   await expect(page.getByTitle('编辑已应用日期')).toBeVisible();
@@ -138,6 +139,24 @@ test('overview preserves prototype layout, known breakdown and real unknown stat
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: /覆盖 0% · 查看依据/ }).click();
   await expect(page.getByRole('tabpanel', { name: '价格规则设置' })).toBeVisible();
+});
+
+test('coverage shows verification progress separately and keeps confirmed totals available', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 680 });
+  await page.evaluate(() => (window as unknown as { __setSyntheticCoverage: (v: Record<string, unknown>) => void }).__setSyntheticCoverage({ state: 'unknown', pending_observation_count: '0', pending_file_count: '0', verifying_file_count: '89', source_issues: [{ source_id: 'synthetic-a', code: 'source_scan_verifying', last_success_ms: 1000 }] }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.locator('.overview-coverage')).toContainText('正在校验来源覆盖 · 待校验文件 89');
+  await expect(page.locator('.overview-coverage')).not.toContainText('待核对用量记录');
+  await expect(page.locator('.overview-coverage')).not.toContainText('待采集文件');
+  await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(960);
+  await page.screenshot({ path: 'test-results/overview-verifying-960.png', fullPage: true });
+  await page.evaluate(() => (window as unknown as { __setSyntheticCoverage: (v: Record<string, unknown>) => void }).__setSyntheticCoverage({ state: 'partial', pending_observation_count: '15', verifying_file_count: '0', source_issues: [] }));
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.locator('.overview-coverage')).toContainText('待核对用量记录 15');
+  await expect(page.locator('.overview-coverage')).not.toContainText('文件 0');
+  await page.getByRole('button', { name: '查看诊断', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '采集诊断', exact: true })).toBeVisible();
 });
 
 test('same-filter refresh retains prior values on error and older-filter replies cannot replace the new scope', async ({ page }) => {

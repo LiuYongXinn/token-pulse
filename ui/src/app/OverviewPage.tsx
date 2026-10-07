@@ -4,7 +4,7 @@ import type { DashboardRequest, Grain, SourcesSnapshot, TokenMeasure, UsageSerie
 import { compactTokens, fullTokens, percentage } from '../shared/format';
 import { availableGrain, calendarDateLabel } from '../shared/main-filter';
 import { useDashboard } from './useDashboard';
-import { Cost, coverageNames, reasonNames, when } from './usage-display';
+import { Cost, coverageStatus, coverageSummary, reasonNames, when } from './usage-display';
 import { AccountQuotaOverview } from '../shared/AccountQuota';
 
 function Measure({ label, measure, secondary = false }: { label: string; measure: TokenMeasure; secondary?: boolean }) { return <div className={`measure ${secondary ? 'breakdown-support' : ''}`}><dt>{label}</dt><dd>{fullTokens(measure.value)}{(measure.value === null || !measure.complete) && <small>{measure.value === null ? '未知' : `部分已知 · 覆盖 ${fullTokens(measure.covered_total_tokens)} Token`}</small>}</dd></div>; }
@@ -19,9 +19,9 @@ function Trend({ buckets }: { buckets: UsageSeriesBucket[] }) {
     const height = maximum === 0n ? 0 : Number(value * 10000n / maximum) / 100;
     const parts = [bucket.totals.output_total, bucket.totals.cached_input, bucket.totals.noncached_input];
     const stacked = value > 0n && parts.every(part => part.complete && part.value !== null) && parts.reduce((sum, part) => sum + BigInt(part.value ?? '0'), 0n) === value;
-    const label = `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageNames[bucket.coverage.state]}`;
+    const label = `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageStatus(bucket.coverage)}`;
     return <button key={bucket.start_ms} className={`trend-bin ${selected === index ? 'selected' : ''}`} aria-label={label} title={label} onClick={() => setSelected(index)} onFocus={() => setSelected(index)} style={{ '--bar-height': `${height}%` } as CSSProperties}>{stacked ? <span className="trend-stack" aria-hidden="true">{parts.map((part, i) => <i key={i} className={['output', 'cached', 'input'][i]} style={{ height: `${Number(BigInt(part.value!) * 10000n / value) / 100}%` }} />)}</span> : <span />}</button>;
-  })}</div><div className="trend-axis"><span>{buckets[0]?.display_label}</span><span>{buckets.at(-1)?.display_label}</span></div><div className="trend-legend" aria-hidden="true"><span><i />非缓存输入</span><span><i className="cached" />缓存输入</span><span><i className="output" />输出总数</span></div>{(bucket || maximum === 0n) && <p className="chart-caption" aria-live="polite">{bucket ? `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageNames[bucket.coverage.state]}` : maximum === 0n ? '当前范围暂无可信消费' : null}</p>}</>;
+  })}</div><div className="trend-axis"><span>{buckets[0]?.display_label}</span><span>{buckets.at(-1)?.display_label}</span></div><div className="trend-legend" aria-hidden="true"><span><i />非缓存输入</span><span><i className="cached" />缓存输入</span><span><i className="output" />输出总数</span></div>{(bucket || maximum === 0n) && <p className="chart-caption" aria-live="polite">{bucket ? `${bucket.display_label} ${bucket.utc_offset} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageStatus(bucket.coverage)}` : maximum === 0n ? '当前范围暂无可信消费' : null}</p>}</>;
 }
 function Heatmap({ buckets, timezone, onDay }: { buckets: UsageSeriesBucket[]; timezone: string; onDay: (date: string) => void }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -30,12 +30,12 @@ function Heatmap({ buckets, timezone, onDay }: { buckets: UsageSeriesBucket[]; t
   return <><div className="activity-grid" role="group" aria-label="近 26 周每日活动">{buckets.map((bucket, index) => {
     const amount = BigInt(bucket.totals.total_tokens);
     const level = amount === 0n ? 0 : Number((amount * 3n + max - 1n) / max);
-    const label = `${bucket.display_label} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageNames[bucket.coverage.state]}`;
+    const label = `${bucket.display_label} · ${fullTokens(bucket.totals.total_tokens)} Token · ${coverageStatus(bucket.coverage)}`;
     return <button key={bucket.start_ms} className={`activity-day level-${level}`} title={label} aria-label={label} onClick={() => { setSelected(index); onDay(calendarDateLabel(bucket.start_ms, timezone)); }} onFocus={() => setSelected(index)} onMouseEnter={() => setSelected(index)} />;
-  })}</div>{chosen && <p className="chart-caption" aria-live="polite">{`${chosen.display_label} · ${fullTokens(chosen.totals.total_tokens)} Token · ${coverageNames[chosen.coverage.state]}`}</p>}</>;
+  })}</div>{chosen && <p className="chart-caption" aria-live="polite">{`${chosen.display_label} · ${fullTokens(chosen.totals.total_tokens)} Token · ${coverageStatus(chosen.coverage)}`}</p>}</>;
 }
 
-export function OverviewPage({ request, refreshRevision, sources, accountTimezone, onSources, onPrices, onSessions, onGrain, onDay, active = true }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; accountTimezone: string | null; onSources: () => void; onPrices: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void; active?: boolean }) {
+export function OverviewPage({ request, refreshRevision, sources, accountTimezone, onSources, onDiagnostics, onPrices, onSessions, onGrain, onDay, active = true }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; accountTimezone: string | null; onSources: () => void; onDiagnostics: () => void; onPrices: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void; active?: boolean }) {
   const { bundle, error, loading } = useDashboard(request, refreshRevision, active);
   if (!active) return null;
   if (sources?.sources.length === 0) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><div className="empty-symbol">▥</div><h2>添加 Codex 数据来源</h2><p>选择 Codex Home，导入历史用量。</p><button className="primary" onClick={onSources}>查看数据来源</button></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
@@ -47,7 +47,7 @@ export function OverviewPage({ request, refreshRevision, sources, accountTimezon
   const parts = [['非缓存命中输入', totals.noncached_input, 'input'], ['缓存输入', totals.cached_input, 'cached'], ['完整输出', totals.output_total, 'output']] as const;
   return <>
     {error && <div className="notice" role="alert">{error}<span>保留上次快照 · {when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}</span></div>}
-    <div className={`overview-coverage ${bundle.coverage.state}`}><span>{coverageNames[bundle.coverage.state]} · 待确认观察 {fullTokens(bundle.coverage.pending_observation_count)} · 待读文件 {fullTokens(bundle.coverage.pending_file_count)}</span><span role="status">{loading ? '正在刷新…' : `快照 ${when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}`}</span></div>
+    <div className={`overview-coverage ${bundle.coverage.state}`}><span>{coverageSummary(bundle.coverage)}{bundle.coverage.state === 'partial' && <button className="text-button" onClick={onDiagnostics}>查看诊断</button>}</span><span role="status">{loading ? '正在刷新…' : `快照 ${when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}`}</span></div>
     <div className="overview-grid"><div className="overview-left">
       <section className="overview-summary panel"><div><div className="metric-label">所选范围可信 Token 总量</div><div className="total-number" title={fullTokens(totals.total_tokens)} aria-label={`${fullTokens(totals.total_tokens)} Token`}>{compactTokens(totals.total_tokens)}<span>Token</span></div><p className="metric-foot">{fullTokens(totals.session_count)} 个会话 · {fullTokens(totals.usage_event_count)} 条用量事件</p></div><div className="overview-cost"><div className="metric-label">已计价部分估算</div><Cost pricing={pricing} /><button className="text-button" onClick={onPrices}>覆盖 {priceCoverage === null ? '—' : `${priceCoverage}%`} · 查看依据</button></div></section>
       <section className="panel breakdown-panel"><div className="panel-heading"><h2>Token 分解</h2></div>

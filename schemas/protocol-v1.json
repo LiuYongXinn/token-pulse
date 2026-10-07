@@ -1595,6 +1595,17 @@
               "type": "null"
             }
           ]
+        },
+        "verifying_file_count": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalInt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
         }
       },
       "required": [
@@ -1702,6 +1713,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -3629,6 +3651,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -5981,6 +6014,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -6794,6 +6838,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -9864,6 +9919,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -11587,6 +11653,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -12410,6 +12487,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -12889,6 +12977,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -15365,6 +15464,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -16973,6 +17083,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [
@@ -18341,6 +18462,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "verifying_file_count": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DecimalInt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Already read files awaiting a fresh scan confirmation, separate from unread bytes."
             }
           },
           "required": [

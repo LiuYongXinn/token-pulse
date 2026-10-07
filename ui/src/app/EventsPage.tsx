@@ -2,12 +2,12 @@ import { Fragment, useState } from 'react';
 import type { DashboardRequest, MatchedPrice, RawUsageVector, RequestInputEvidence, UsageEventRow, UsageEventSort, UsageEventsPage, UsageEventsQuery } from '../shared/generated/contracts';
 import { compactTokens, fullTokens, money, rawTokens } from '../shared/format';
 import { closeQuerySnapshot, queryUsageEvents } from '../shared/runtime';
-import { Cost, coverageNames, reasonNames, when, whenExact } from './usage-display';
+import { Cost, coverageSummary, reasonNames, when, whenExact } from './usage-display';
 import { usePagedUsage, type PageAdapter } from './usePagedUsage';
 import './events.css';
 
 const adapter: PageAdapter<UsageEventsQuery, UsageEventsPage> = { label: '明细', read: queryUsageEvents, close: request => closeQuerySnapshot({ kind: 'usage_events', request }), keys: page => page.events.map(event => event.event_id) };
-const methodNames: Record<string, string> = { last_new_stream: '新计数流的最后用量', last_with_baseline: '最后用量（累计基线已核对）', cumulative_delta: '累计差值', last_only: '最后用量', episode_reset: '新计数阶段或重置', physical_duplicate: '相同物理记录', verified_duplicate: '已证实重复', inherited: '已证实继承', lineage_pending: '继承待确认', repeated_snapshot: '累计快照未增加', unattributed_anchor: '缺少归属依据的基线', unattributed_usage: '未归属用量', ambiguous_usage: '存在歧义的用量', invalid_usage: '无效用量', stream_capacity_exceeded: '计数流超出上限' };
+const methodNames: Record<string, string> = { last_new_stream: '新计数流的最后用量', last_with_baseline: '最后用量（累计基线已核对）', cumulative_delta: '累计差值', last_rebased: '最后用量（后续累计基线已恢复）', unchanged_cumulative: '累计未变的上下文刷新', last_only: '最后用量', episode_reset: '新计数阶段或重置', physical_duplicate: '相同物理记录', verified_duplicate: '已证实重复', inherited: '已证实继承', lineage_pending: '继承待确认', repeated_snapshot: '累计快照未增加', unattributed_anchor: '缺少归属依据的基线', unattributed_usage: '未归属用量', ambiguous_usage: '存在歧义的用量', invalid_usage: '无效用量', stream_capacity_exceeded: '计数流超出上限' };
 const qualityNames: Record<string, string> = { confirmed: '已确认', pending: '待确认', inherited: '继承', duplicate: '重复证据', unattributed: '未归属' };
 const vectors: [keyof RawUsageVector, string][] = [['input_total', '输入总数'], ['cached_input', '缓存输入'], ['cache_write_input', '缓存写入（输入包含项）'], ['output_total', '输出总数'], ['reasoning_output', '其中推理'], ['reported_total', '报告总量']];
 function EventCost({ row }: { row: UsageEventRow }) {
@@ -69,7 +69,7 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
     <div className="session-toolbar"><div><label>排序 <select aria-label="明细排序" value={sort} onChange={e => setSort(e.target.value as UsageEventSort)}><option value="time_desc">最近发生</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="明细每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button disabled={pager.loading} onClick={pager.reload}>重新查询</button></div>
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留上次读取的明细。</span>}</div>}
     {!page ? <section className="empty panel"><h2>{pager.loading ? '正在读取明细快照' : '用量明细暂不可用'}</h2></section> : <>
-      <div className={`overview-coverage ${page.coverage.state}`}><span>{coverageNames[page.coverage.state]} · 待确认观察 {fullTokens(page.coverage.pending_observation_count)}</span><span>快照 {when(page.meta.generated_at_ms, timezone)}</span></div>
+      <div className={`overview-coverage ${page.coverage.state}`}><span>{coverageSummary(page.coverage)}</span><span>快照 {when(page.meta.generated_at_ms, timezone)}</span></div>
       <section className="group-stat-strip" aria-label="明细统计汇总"><div><p className="metric-label">范围内可信 Token</p><strong className="group-total" aria-label={`${fullTokens(page.summary.total_tokens)} Token`} title={fullTokens(page.summary.total_tokens)}>{compactTokens(page.summary.total_tokens)}</strong></div><div><p className="metric-label">已计价部分估算</p><Cost pricing={page.pricing} /></div><div><p className="metric-label">可信用量事件</p><strong className="group-total">{fullTokens(page.summary.usage_event_count)}</strong></div></section>
       {page.events.length === 0 ? <section className="panel group-empty"><h2>当前筛选暂无可信事件</h2></section> : <div className="event-table-wrap"><table className="event-table" aria-label="用量明细"><thead><tr><th>记录时间 / 会话</th><th>项目 / 模型</th><th>输入 / 缓存</th><th>输出 / 推理</th><th>总量</th><th>估算</th><th>依据</th></tr></thead><tbody>{page.events.map(row => {
         const expandedKey = JSON.stringify([scope,row.event_id]); const open = expanded === expandedKey;

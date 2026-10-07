@@ -1,7 +1,7 @@
 import type { PricingSummary } from '../shared/generated/contracts';
 import { money } from '../shared/format';
 
-export const coverageNames = { complete: '已配置来源覆盖完整', partial: '存在采集或解释缺口', unknown: '来源覆盖尚未确认' };
+export { coverageStatus, coverageSummary } from '../shared/coverage';
 export const reasonNames: Record<string, string> = { unknown_model: '模型或提供方未知', missing_rule: '无匹配价格', ambiguous_rule: '价格规则存在歧义', insufficient_usage: '必要分项不足', incomplete_pricing_conditions: '计费条件尚未完整确认', overflow: '精确计算溢出' };
 export function when(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(time); }
 export function whenExact(time: number, timezone: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 }).format(time); }

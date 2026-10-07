@@ -51,7 +51,7 @@ fn full_proof_can_complete_without_confusing_breakdown_or_empty_source_selection
     ));
 }
 #[test]
-fn discovered_unregistered_and_known_unconfirmed_files_are_distinct_gaps() {
+fn discovered_unregistered_and_known_unconfirmed_files_are_separate_work() {
     let (_d, db) = setup();
     db.commit(fixture()).unwrap();
     ready(&db);
@@ -65,7 +65,8 @@ fn discovered_unregistered_and_known_unconfirmed_files_are_distinct_gaps() {
     .unwrap();
     db.finish_source_scan(h.clone(), None, 5).unwrap();
     let c = db.usage_coverage(&filter()).unwrap();
-    assert_eq!(c.pending_file_count.as_str(), "2");
+    assert_eq!(c.pending_file_count.as_str(), "1");
+    assert_eq!(c.verifying_file_count.unwrap().as_str(), "1");
     assert!(matches!(c.state, CoverageState::Partial));
     db.confirm_source_scan_file(h, "synthetic.jsonl".into(), "generation".into(), 1, 6)
         .unwrap();

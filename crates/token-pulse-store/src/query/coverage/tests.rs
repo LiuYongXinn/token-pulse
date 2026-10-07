@@ -220,3 +220,73 @@ fn whole_source_file_and_format_gaps_survive_date_and_model_filters_and_old_snap
             .is_empty()
     );
 }
+
+#[test]
+fn periodic_scan_confirmation_is_separate_from_unread_or_new_files() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    db.write(|conn| {
+        conn.execute("UPDATE sources SET readability='readable'", [])?;
+        Ok(())
+    })
+    .unwrap();
+    let scan = || {
+        db.begin_source_scan("source".into(), "synthetic".into(), 1)
+            .unwrap()
+    };
+    let h = scan();
+    db.record_source_scan_files(h.clone(), vec![("synthetic.jsonl".into(), 100)])
+        .unwrap();
+    db.confirm_source_scan_file(
+        h.clone(),
+        "synthetic.jsonl".into(),
+        "generation".into(),
+        1,
+        2,
+    )
+    .unwrap();
+    db.finish_source_scan(h, None, 3).unwrap();
+    assert!(matches!(
+        db.usage_coverage(&filter()).unwrap().state,
+        CoverageState::Complete
+    ));
+    let old_total = db.usage_totals(&filter()).unwrap().total_tokens;
+    let next = scan();
+    db.record_source_scan_files(next.clone(), vec![("synthetic.jsonl".into(), 100)])
+        .unwrap();
+    db.finish_source_scan(next.clone(), None, 4).unwrap();
+    let c = db.usage_coverage(&filter()).unwrap();
+    assert_eq!(c.pending_file_count.as_str(), "0");
+    assert_eq!(c.verifying_file_count.unwrap().as_str(), "1");
+    assert!(matches!(c.state, CoverageState::Unknown));
+    assert_eq!(c.source_issues[0].code, "source_scan_verifying");
+    assert_eq!(db.usage_totals(&filter()).unwrap().total_tokens, old_total);
+    db.confirm_source_scan_file(next, "synthetic.jsonl".into(), "generation".into(), 1, 5)
+        .unwrap();
+    assert!(matches!(
+        db.usage_coverage(&filter()).unwrap().state,
+        CoverageState::Complete
+    ));
+
+    // An append found by enumeration is unread even before observed_size is updated.
+    let appended = scan();
+    db.record_source_scan_files(appended.clone(), vec![("synthetic.jsonl".into(), 120)])
+        .unwrap();
+    db.finish_source_scan(appended, None, 6).unwrap();
+    let c = db.usage_coverage(&filter()).unwrap();
+    assert_eq!(c.pending_file_count.as_str(), "1");
+    assert_eq!(c.verifying_file_count.unwrap().as_str(), "0");
+    assert!(matches!(c.state, CoverageState::Partial));
+
+    let new_file = scan();
+    db.record_source_scan_files(
+        new_file.clone(),
+        vec![("synthetic.jsonl".into(), 100), ("unknown.jsonl".into(), 5)],
+    )
+    .unwrap();
+    db.finish_source_scan(new_file, None, 7).unwrap();
+    let c = db.usage_coverage(&filter()).unwrap();
+    assert_eq!(c.pending_file_count.as_str(), "1");
+    assert_eq!(c.verifying_file_count.unwrap().as_str(), "1");
+    assert!(matches!(c.state, CoverageState::Partial));
+}

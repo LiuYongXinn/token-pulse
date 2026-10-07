@@ -328,7 +328,11 @@ export type SourceIssue = { source_id: string, code: string, last_success_ms: Ep
 
 export type FormatIssue = { format: string, count: DecimalInt, };
 
-export type Coverage = { state: CoverageState, pending_observation_count: DecimalInt, unattributed_observation_count: DecimalInt, unattributed_total_tokens: DecimalInt | null, pending_file_count: DecimalInt, source_issues: Array<SourceIssue>, format_issues: Array<FormatIssue>, breakdown_complete: boolean, };
+export type Coverage = { state: CoverageState, pending_observation_count: DecimalInt, unattributed_observation_count: DecimalInt, unattributed_total_tokens: DecimalInt | null, pending_file_count: DecimalInt,
+/**
+ * Already read files awaiting a fresh scan confirmation, separate from unread bytes.
+ */
+verifying_file_count?: DecimalInt, source_issues: Array<SourceIssue>, format_issues: Array<FormatIssue>, breakdown_complete: boolean, };
 
 export type ContextSnapshot = { context_tokens: DecimalInt | null, model_context_window: DecimalInt | null, percentage: number | null, observed_at_ms: EpochMs | null, quality: string, };
 

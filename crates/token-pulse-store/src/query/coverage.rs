@@ -12,6 +12,10 @@ use token_pulse_core::{
     sources::SourceReadability,
 };
 
+// A missing scan confirmation alone is verification work, not an unread file.
+// An enumerated append still counts before collection updates observed_size.
+const UNREAD_ENTRY: &str = "f.file_id IS NULL OR readg.file_generation_id IS NULL OR readg.state<>'current' OR f.source_id IS NOT e.source_id OR f.status NOT IN ('present','known') OR readg.committed_offset<readg.observed_size OR (e.file_generation_id IS NULL AND readg.committed_offset<e.upper_bound)";
+
 fn source_selection(filter: &UsageFilter, expression: &str) -> Predicate {
     let mut p = Predicate {
         sql: "1".into(),
@@ -75,12 +79,14 @@ pub fn coverage(
     let mut values = source.values;
     values.extend(scan_source.values);
     // Discovered-but-unregistered files count too. The union counts a known file only once.
-    let pending_files:i64=tx.query_row(&format!("SELECT COUNT(*) FROM (SELECT sf.source_id,'file:'||sf.file_id AS identity FROM source_files sf LEFT JOIN file_generations fg ON fg.file_generation_id=sf.current_generation_id WHERE {} AND (fg.file_generation_id IS NULL OR fg.state<>'current' OR fg.committed_offset<fg.observed_size OR sf.status NOT IN ('present','known')) UNION SELECT e.source_id,CASE WHEN e.file_id IS NULL THEN 'path:'||e.canonical_path ELSE 'file:'||e.file_id END FROM source_scan_files e JOIN source_scan_state ss USING(source_id,scan_revision) JOIN sources s ON s.source_id=e.source_id AND s.root_path=ss.source_root LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE {} AND ({BAD_ENTRY}))",source.sql,scan_source.sql),params_from_iter(values),|r|r.get(0))?;
+    let pending_files:i64=tx.query_row(&format!("SELECT COUNT(*) FROM (SELECT sf.source_id,'file:'||sf.file_id AS identity FROM source_files sf LEFT JOIN file_generations fg ON fg.file_generation_id=sf.current_generation_id WHERE {} AND (fg.file_generation_id IS NULL OR fg.state<>'current' OR fg.committed_offset<fg.observed_size OR sf.status NOT IN ('present','known')) UNION SELECT e.source_id,CASE WHEN e.file_id IS NULL THEN 'path:'||e.canonical_path ELSE 'file:'||e.file_id END FROM source_scan_files e JOIN source_scan_state ss USING(source_id,scan_revision) JOIN sources s ON s.source_id=e.source_id AND s.root_path=ss.source_root LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations readg ON readg.file_generation_id=f.current_generation_id WHERE {} AND ({UNREAD_ENTRY}))",source.sql,scan_source.sql),params_from_iter(values),|r|r.get(0))?;
+    let scan_source = source_selection(filter, "e.source_id");
+    let verifying_files:i64=tx.query_row(&format!("SELECT COUNT(*) FROM (SELECT DISTINCT e.source_id,CASE WHEN e.file_id IS NULL THEN 'path:'||e.canonical_path ELSE 'file:'||e.file_id END FROM source_scan_files e JOIN source_scan_state ss USING(source_id,scan_revision) JOIN sources s ON s.source_id=e.source_id AND s.root_path=ss.source_root LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id LEFT JOIN file_generations readg ON readg.file_generation_id=f.current_generation_id WHERE {} AND ({BAD_ENTRY}) AND NOT ({UNREAD_ENTRY}))",scan_source.sql),params_from_iter(scan_source.values),|r|r.get(0))?;
 
     // A file with unknown time/identity can belong to the selected date/session.
     // Whole-source health gaps must not disappear behind a model/date filter.
     let source = source_selection(filter, "s.source_id");
-    let mut statement=tx.prepare(&format!("SELECT s.source_id,s.enabled,s.readability,s.last_success_at_ms,ss.state,ss.source_root=s.root_path,ss.discovery_complete,ss.invalidated,ss.issue_code,EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({BAD_ENTRY})) FROM sources s LEFT JOIN source_scan_state ss USING(source_id) WHERE {} ORDER BY s.source_id COLLATE BINARY",source.sql))?;
+    let mut statement=tx.prepare(&format!("SELECT s.source_id,s.enabled,s.readability,s.last_success_at_ms,ss.state,ss.source_root=s.root_path,ss.discovery_complete,ss.invalidated,ss.issue_code,EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations g ON g.file_generation_id=e.file_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({BAD_ENTRY})),EXISTS(SELECT 1 FROM source_scan_files e LEFT JOIN source_files f ON f.file_id=e.file_id LEFT JOIN file_generations readg ON readg.file_generation_id=f.current_generation_id WHERE e.source_id=ss.source_id AND e.scan_revision=ss.scan_revision AND ({UNREAD_ENTRY})) FROM sources s LEFT JOIN source_scan_state ss USING(source_id) WHERE {} ORDER BY s.source_id COLLATE BINARY",source.sql))?;
     let mut rows = statement.query(params_from_iter(source.values))?;
     let mut source_issues = Vec::new();
     let mut known_source_gap = false;
@@ -105,6 +111,7 @@ pub fn coverage(
                     let invalidated: Option<bool> = row.get(7)?;
                     let issue: Option<String> = row.get(8)?;
                     let pending_entries: bool = row.get(9)?;
+                    let unread_entries: bool = row.get(10)?;
                     if same_root != Some(true) || state.is_none() {
                         "scan_evidence_missing"
                     } else if issue.is_some() {
@@ -117,8 +124,12 @@ pub fn coverage(
                     } else if complete != Some(true) {
                         "source_scanning"
                     } else if pending_entries {
-                        known_source_gap = true;
-                        "source_scan_pending"
+                        if unread_entries {
+                            known_source_gap = true;
+                            "source_scan_pending"
+                        } else {
+                            "source_scan_verifying"
+                        }
                     } else if state.as_deref() == Some("ready") {
                         continue;
                     } else {
@@ -148,8 +159,8 @@ pub fn coverage(
     }
     drop(rows);
     drop(statement);
-    let source = source_selection(filter, "d.source_id");
-    let mut statement=tx.prepare(&format!("SELECT COALESCE(json_extract(d.metadata_json,'$.parser_version'),'unknown') AS format,sum_token_decimal(d.occurrences) FROM diagnostics d WHERE {} AND d.code='UNSUPPORTED_FORMAT' AND d.resolved_at_ms IS NULL GROUP BY format ORDER BY format COLLATE BINARY",source.sql))?;
+    let source = source_selection(filter, "COALESCE(d.source_id,df.source_id)");
+    let mut statement=tx.prepare(&format!("SELECT COALESCE(json_extract(d.metadata_json,'$.parser_version'),'unknown') AS format,sum_token_decimal(d.occurrences) FROM diagnostics d LEFT JOIN file_generations dg ON dg.file_generation_id=d.file_generation_id LEFT JOIN source_files df ON df.file_id=dg.file_id WHERE {} AND d.code='UNSUPPORTED_FORMAT' AND d.resolved_at_ms IS NULL AND (d.file_generation_id IS NULL OR (dg.state='current' AND df.current_generation_id=dg.file_generation_id AND (d.source_id IS NULL OR d.source_id=df.source_id))) GROUP BY format ORDER BY format COLLATE BINARY",source.sql))?;
     let mut rows = statement.query(params_from_iter(source.values))?;
     let mut format_issues = Vec::new();
     while let Some(row) = rows.next()? {
@@ -180,6 +191,7 @@ pub fn coverage(
             None
         },
         pending_file_count: DecimalInt::from_nonnegative(pending_files.into())?,
+        verifying_file_count: Some(DecimalInt::from_nonnegative(verifying_files.into())?),
         source_issues,
         format_issues,
         breakdown_complete: [
