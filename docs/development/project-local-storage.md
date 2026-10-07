@@ -48,6 +48,8 @@ pwsh -NoProfile -File scripts/migrate-local-data.ps1
 
 第一步逐文件复制并校验 SHA-256，保留源数据。第二步再次核对后只删除白名单中的明确源目录。目标存在不同数据、源路径被重解析或应用仍在运行时会拒绝迁移。Cargo 临时锁和可重建的全局缓存元数据不迁移；通知登记及签名材料保留原有权限。
 
+旧 Windows 临时目录中的 `tokenpulse*`、`token-pulse*`、`token_pulse*` 和 `token.pulse*` 均会迁入 `.local/tmp/migrated/` 并校验。随机命名的 Rust `.tmp*` 目录仅在其中全部内容为 `token-pulse.db` 及其 WAL/SHM 文件时迁移，并先检查数据库未被占用。若只清理这些历史临时数据，可执行 `pwsh -NoProfile -File scripts/migrate-local-data.ps1 -TempOnly`，无需关闭当前程序；该模式不会迁移正在使用的数据库或工具链。迁移后仅在原 `.tokenpulse` 签名父目录为空时删除它。
+
 历史 npm 缓存若位于其他目录，可通过 `-ToolsOnly -LegacyNpmCache '原缓存绝对路径'` 迁入 `.local/cache/npm/legacy/`。同样先加 `-CopyOnly` 校验，再执行实际迁移；源目录必须包含 npm 的 `_cacache`，迁移目标不会覆盖当前缓存。
 
 迁移现有 NSIS 安装后，可直接编译并更新程序，不生成安装包。关闭 TokenPulse 后执行：

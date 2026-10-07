@@ -1,4 +1,4 @@
-param([switch]$CopyOnly, [switch]$ToolsOnly, [switch]$SkipRelease, [switch]$SkipTools, [string]$LegacyNpmCache)
+param([switch]$CopyOnly, [switch]$ToolsOnly, [switch]$TempOnly, [switch]$SkipRelease, [switch]$SkipTools, [string]$LegacyNpmCache)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'This migration applies to the existing Windows installation.' }
 $migrationRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -42,7 +42,8 @@ function Move-TokenPulseOwnedPath([string]$Source, [string]$Destination, [switch
     $temporaryPrefix = [IO.Path]::GetFullPath($migrationOldTemp).TrimEnd('\') + '\'
     $sourceAllowed = $sourcePath -in $migrationAllowedSources -or
         ($sourcePath.StartsWith($temporaryPrefix, [StringComparison]::OrdinalIgnoreCase) -and
-         [IO.Path]::GetFileName($sourcePath).StartsWith('tokenpulse', [StringComparison]::OrdinalIgnoreCase))
+         [IO.Path]::GetDirectoryName($sourcePath).Equals($temporaryPrefix.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) -and
+         [IO.Path]::GetFileName($sourcePath) -match '^token[-_.]?pulse')
     if (-not $sourceAllowed -or -not ($destinationPath.StartsWith($localPrefix, [StringComparison]::OrdinalIgnoreCase) -or $destinationPath.Equals($toolsPrefix.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) -or $destinationPath.StartsWith($toolsPrefix, [StringComparison]::OrdinalIgnoreCase))) {
         throw 'Migration path is outside its explicit source/destination scope.'
     }
@@ -93,7 +94,7 @@ function Move-TokenPulseOwnedPath([string]$Source, [string]$Destination, [switch
     Write-Host ("LOCAL_DATA_" + $(if ($CopyOnly) { 'COPIED' } else { 'MOVED' }) + ": $sourcePath -> $destinationPath ($($sourceFiles.Count) files)")
 }
 
-if (-not $ToolsOnly) {
+if (-not $ToolsOnly -and -not $TempOnly) {
     if (Get-Process -Name token-pulse-desktop,token-pulse-taskbar-host -ErrorAction SilentlyContinue) { throw 'Close TokenPulse before migrating its database and installation.' }
     if (-not $SkipRelease) {
         $releaseDatabase = Join-Path $migrationOldLocal 'com.tokenpulse.desktop\token-pulse.db'
@@ -109,11 +110,37 @@ if (-not $ToolsOnly) {
         Move-TokenPulseOwnedPath (Join-Path $migrationOldLocal $entry[0]) (Join-Path $migrationLocal $entry[1]) -Private
     }
     Move-TokenPulseOwnedPath (Join-Path $migrationProfile '.tokenpulse\release-signing') (Join-Path $migrationLocal 'secrets\release-signing') -Private
-    foreach ($entry in @(Get-ChildItem -LiteralPath $migrationOldTemp -Force | Where-Object Name -like 'tokenpulse*')) {
+}
+if (-not $ToolsOnly) {
+    foreach ($entry in @(Get-ChildItem -LiteralPath $migrationOldTemp -Force | Where-Object Name -match '^token[-_.]?pulse')) {
         Move-TokenPulseOwnedPath $entry.FullName (Join-Path $migrationLocal ('tmp\migrated\' + $entry.Name))
     }
+    foreach ($fixture in @(Get-ChildItem -LiteralPath $migrationOldTemp -Directory -Filter '.tmp*' -Force)) {
+        if (-not (Test-Path -LiteralPath (Join-Path $fixture.FullName 'token-pulse.db') -PathType Leaf)) { continue }
+        $children = @(Get-ChildItem -LiteralPath $fixture.FullName -Force)
+        # Rust tempfile directories have random names. Only accept a direct child containing
+        # exclusively this project's named SQLite database and its WAL/SHM companions.
+        if ($children | Where-Object { $_.PSIsContainer -or $_.Name -notmatch '^token-pulse\.db(?:-wal|-shm)?$' }) { continue }
+        if (-not $CopyOnly) {
+            $fixtureGuard = [IO.File]::Open((Join-Path $fixture.FullName 'token-pulse.db'), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+            $fixtureGuard.Dispose()
+        }
+        $migrationAllowedSources += $fixture.FullName
+        Move-TokenPulseOwnedPath $fixture.FullName (Join-Path $migrationLocal ('tmp\migrated\rust-fixtures\' + $fixture.Name))
+    }
+    $oldSigningParent = [IO.Path]::GetFullPath((Join-Path $migrationProfile '.tokenpulse'))
+    if (-not $CopyOnly -and (Test-Path -LiteralPath $oldSigningParent)) {
+        $parent = Get-Item -LiteralPath $oldSigningParent -Force
+        if ($parent.FullName -ne (Join-Path $migrationProfile '.tokenpulse') -or
+            ($parent.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unexpected old signing parent.' }
+        if (-not @(Get-ChildItem -LiteralPath $oldSigningParent -Force).Count) {
+            # Exact legacy directory only; nonrecursive removal never deletes remaining keys.
+            Remove-Item -LiteralPath $oldSigningParent -Force
+            Write-Host "LOCAL_EMPTY_DIRECTORY_REMOVED: $oldSigningParent"
+        }
+    }
 }
-if ($SkipTools) { return }
+if ($SkipTools -or $TempOnly) { return }
 if (-not $CopyOnly -and (Get-Process -Name cargo,rustc,rustup,rustfmt,clippy-driver -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path.StartsWith((Join-Path $migrationProfile '.cargo'), [StringComparison]::OrdinalIgnoreCase) -or $_.Path.StartsWith((Join-Path $migrationProfile '.rustup'), [StringComparison]::OrdinalIgnoreCase)) })) { throw 'Rust tools are still running from the old directories; their source directories have not been removed.' }
 foreach ($entry in @(@((Join-Path $migrationProfile '.cargo'),'tools\cargo'), @((Join-Path $migrationProfile '.rustup'),'tools\rustup'), @((Join-Path $migrationOldLocal 'ms-playwright'),'cache\playwright'))) {
     Move-TokenPulseOwnedPath $entry[0] (Join-Path $migrationLocal $entry[1])
