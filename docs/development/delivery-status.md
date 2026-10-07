@@ -2714,3 +2714,12 @@ Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROU
 按实际阶段计时继续减少模型 / 项目行重复读取待核对范围。当前事务内一次 materialized pending / unattributed 读取，按本页至多 200 个实际分组的模型身份或项目 ID 分组；保留完整日期、来源、模型、项目、会话条件、NULL 时间、活跃账本和精确整数规则。只复用同一事务的来源健康；每组的待核对、未归属及已知金额 / 缺失标记独立，成功查询的空计数为零，金额仍为 NULL，未知不补零。临时结果按当前页面的分组数有界，不新增持久缓存或跨版本结果。会话仍使用 schema 18 的账本窄查询。
 
 新增一次分组与各组独立 coverage SQL 的逐字段等价回归，包含不同 provider 的同名模型、未知模型 / 项目、NULL 时间、来源与日期筛选、超过 JavaScript 安全整数的金额、混合未知金额；并发来源暂停及金额变化后真实旧事务结果不变，新事务正确变化。query 84 passed / 1 ignored，完整 core-store-collector 571 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 当前隐私 / 离线价格通过。日志 millisecond-grouped-coverage-tests2.log / millisecond-group-final-regression.log / millisecond-group-final-clippy.log / millisecond-group-release-check.log / millisecond-group-native-*.log。最终实际数据三轮首次 / 重启回执追加于下一节。
+
+
+## 毫秒级复查 I20：复用完整模型身份计数
+
+同一完整范围的定价遍历已经收集全部模型身份，包含未知、未计价和零 Token 事件分组。模型 total_group_count 改为使用这个同快照完整映射的数量，避免为计数再解码全范围模型身份；仍保留项目的原 SQL 计数，并保留实际分组、排序、精确总量、截断和价格一致性检查。query 84 passed / 1 ignored，未知 / 未计价分组计数、筛选、旧事务和精确排序回归通过；strict all-target Clippy 通过。
+
+上一轮 I19 首次真实副屏回执 millisecond-final-group-1-first.json：7 / 30 天 714.6 / 995.7ms，更新 450.7ms；缓存切换 P95 22.3ms，小窗 102.2–150.4ms，后台阻塞与完整 DTO 等价检查通过。启动 915.1ms，匿名 50ms 焦点采样 204 次，成为前台为 0。30 天余量较小，继续通过本模块计数复用及重复测量确认结果，不只选最快回执。
+
+独立真实 store 后台完整校验回执 millisecond-final-whole-check.log：数据库约 3.14 GB，启动 4,719.951ms，后台完整检查 57,521.920ms，healthy=true，完成后连接关闭。该探针只测存储维护，不替代 WebView；系统缓存状态未控制，启动仍有秒级波动，后台全库扫描和一次性备份 / 迁移成本仍需明确报告。

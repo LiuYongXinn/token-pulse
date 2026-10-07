@@ -1,5 +1,5 @@
 //! Bounded model/project groups, priced inside the same SQLite snapshot.
-use super::{MODEL_KEY, coverage, fact_from, grouped, predicate};
+use super::{coverage, fact_from, grouped, predicate};
 use crate::{Database, ErrorCode, Revision, StoreResult};
 use rusqlite::{Transaction, params_from_iter};
 #[cfg(test)]
@@ -45,21 +45,28 @@ fn assemble(
     let filter = &request.filter;
     let summary = common.totals.clone();
     let coverage = common.coverage.clone();
-    let p = predicate(filter)?;
-    let key = match request.dimension {
-        GroupDimension::Models => MODEL_KEY,
-        GroupDimension::Projects => "e.project_id",
+    // The complete, same-snapshot pricing traversal already collected every model
+    // identity, including unknown and unpriced/zero-token groups. Avoid decoding
+    // every model identity again merely to count it. Project keys keep their SQL count.
+    let total_group_count: i64 = if matches!(request.dimension, GroupDimension::Models) {
+        common
+            .models
+            .len()
+            .try_into()
+            .map_err(|_| ErrorCode::NumericOverflow)?
+    } else {
+        let p = predicate(filter)?;
+        // A grouped subquery counts NULL too; COUNT(DISTINCT key) would drop it.
+        tx.query_row(
+            &format!(
+                "SELECT COUNT(*) FROM (SELECT e.project_id FROM {} WHERE {} GROUP BY e.project_id)",
+                fact_from(filter, false),
+                p.sql
+            ),
+            params_from_iter(p.values),
+            |row| row.get(0),
+        )?
     };
-    // A grouped subquery counts the NULL category too. COUNT(DISTINCT key) would drop it.
-    let total_group_count: i64 = tx.query_row(
-        &format!(
-            "SELECT COUNT(*) FROM (SELECT {key} FROM {} WHERE {} GROUP BY {key})",
-            fact_from(filter, matches!(request.dimension, GroupDimension::Models)),
-            p.sql
-        ),
-        params_from_iter(p.values),
-        |row| row.get(0),
-    )?;
     let mut groups = grouped(
         tx,
         filter,
