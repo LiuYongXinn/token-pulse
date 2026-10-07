@@ -337,6 +337,7 @@ pub struct Job {
 pub enum WindowAction {
     OpenStats,
     ShowMini,
+    HideMini,
     HideMain,
     Quit,
 }

@@ -21,6 +21,7 @@ import { DisplaySettingsPanel } from './DisplaySettingsPanel';
 import { UpdateSettingsPanel } from './UpdateSettingsPanel';
 import { TaskbarDiagnosticsPanel, TaskbarSettingsPanel } from './TaskbarSettingsPanel';
 import { TaskbarToggle } from './TaskbarToggle';
+import { useMiniVisibility } from './useMiniVisibility';
 import { useMainNavigation } from './useMainNavigation';
 import { whenFull } from './usage-display';
 import type { MiniStatsRequest } from '../shared/generated/contracts';
@@ -46,6 +47,7 @@ type Page = typeof pages[number][0];
 
 export function App() {
   useUsageQueryController();
+  const mini = useMiniVisibility();
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
   const [page, setPage] = useState<Page>('overview');
   const [statusCache, setStatus] = useState<{ value: AppStatus; epoch: number } | null>(null);
@@ -153,13 +155,14 @@ export function App() {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><Icon name="pulse" size={23} /></span>TokenPulse</div>
       <nav aria-label="主导航">{pages.map(([id, label]) => <button key={id} className={page === id ? 'active' : ''} aria-current={page === id ? 'page' : undefined} onClick={() => { timeNavigation(id); flushSync(() => setPage(id)); }}><Icon name={id} /><span>{label}</span></button>)}</nav>
-      <div className="sidebar-bottom"><ActionButton icon="mini" disabled={!status} onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示悬浮窗</ActionButton><TaskbarToggle /></div>
+      <div className="sidebar-bottom"><ActionButton icon="mini" aria-pressed={mini.visible === true} disabled={mini.visible === null || mini.busy} onClick={() => void mini.toggle()}>{mini.busy ? '正在处理…' : mini.visible ? '隐藏悬浮窗' : '显示悬浮窗'}</ActionButton><TaskbarToggle /></div>
     </aside>
     <main>
-      <header className="heading"><div><h1>{current[1]}</h1></div><div className="head-actions"><ActionButton icon="mini" variant="primary" disabled={!status} title="显示小窗" onClick={() => void windowAction('show_mini').catch(e => setError(runtimeError(e)))}>显示小窗</ActionButton><ActionButton icon="refresh" title="刷新" onClick={() => void refresh()} disabled={loading}>刷新</ActionButton>{status && <ActionButton icon="tray" variant="quiet" title="隐藏到托盘" onClick={() => void windowAction('hide_main').catch(e => setError(runtimeError(e)))}>隐藏到托盘</ActionButton>}</div></header>
+      <header className="heading"><div><h1>{current[1]}</h1></div><div className="head-actions"><ActionButton icon="mini" variant="primary" aria-pressed={mini.visible === true} disabled={mini.visible === null || mini.busy} title={mini.visible ? '隐藏小窗' : '显示小窗'} onClick={() => void mini.toggle()}>{mini.busy ? '正在处理…' : mini.visible ? '隐藏小窗' : '显示小窗'}</ActionButton><ActionButton icon="refresh" title="刷新" onClick={() => void refresh()} disabled={loading}>刷新</ActionButton>{status && <ActionButton icon="tray" variant="quiet" title="隐藏到托盘" onClick={() => void windowAction('hide_main').catch(e => setError(runtimeError(e)))}>隐藏到托盘</ActionButton>}</div></header>
       <Fragment key={policy.epoch}>
       {!['settings', 'diagnostics'].includes(page) && <div className="filters" aria-label="统一筛选">{miniStats ? <div className="mini-stat-scope" aria-label="从小窗带入的精确范围"><span>{whenFull(miniStats.calendar.range.start_ms, miniStats.calendar.range.timezone)} 至 {whenFull(miniStats.calendar.range.end_ms, miniStats.calendar.range.timezone)}（不含结束时刻）</span><button onClick={() => setMiniStats(null)}>改用主窗口日期</button></div> : <DateFilter selection={selection} calendar={display.calendar} timezone={display.settings?.preferences.display_timezone ?? null} disabled={!status} onChange={value => { setMiniStats(null); setSelection(value); }} />}<select aria-label="来源" disabled={sources === null} value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(source => <option value={source.source_id} key={source.source_id}>{source.root_path}{source.removed ? '（历史来源）' : ''}</option>)}</select>{query && <AdvancedFilters filter={query.filter} choices={safeChoices} disabled={status?.storage !== 'ready'} onChange={(dimension, choice) => setChoices(value => ({ ...value, [dimension]: choice }))} />}{(miniStats !== null || selection.kind !== 'today' || source !== null || Object.values(choices).some(choice => choice !== null) || priceBasis.mode !== 'event_time') && <button className="reset-filters" onClick={() => { setMiniStats(null); setSelection({ kind: 'today' }); setPriceBasis({ mode: 'event_time' }); setSource(null); setChoices({ models: null, projects: null, sessions: null }); }}>重置筛选</button>}<PriceBasisFilter basis={priceBasis} disabled={!status} onChange={setPriceBasis} /><span>{miniStats?.calendar.range.timezone ?? display.settings?.preferences.display_timezone ?? '等待统计时区'}</span></div>}
       {(error || statusPollError) && <div role="alert" className="notice">{error || statusPollError}<button onClick={() => void refresh()}>重试连接</button></div>}
+      {mini.error && <div role="alert" className="notice">{mini.error}<button disabled={mini.busy} onClick={() => void mini.reload(true)}>重试悬浮窗状态</button></div>}
       {status?.storage_error && <div role="alert" className="notice">本地数据库无法使用（{status.storage_error}）。已保留数据库文件，采集尚未启动。请查看采集诊断。</div>}
       {sourceError && !['settings', 'diagnostics'].includes(page) && <div className="notice" role="alert">来源候选暂不可用：{sourceError}</div>}
       {display.settingsError && page !== 'settings' && <div className="notice" role="alert">显示设置读取失败：{display.settingsError}<button onClick={() => void display.reloadSettings()}>重试显示设置</button></div>}

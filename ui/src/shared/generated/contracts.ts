@@ -396,7 +396,7 @@ export type JobRequest = { kind: JobKind, scope: JobScope, request_key: string, 
 
 export type CancelJobResult = "accepted" | "already_finished" | "too_late";
 
-export type WindowAction = "open_stats" | "show_mini" | "hide_main" | "quit";
+export type WindowAction = "open_stats" | "show_mini" | "hide_mini" | "hide_main" | "quit";
 
 export type SourceOrigin = "windows_default" | "environment" | "custom" | "wsl";
 

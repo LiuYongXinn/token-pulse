@@ -1,11 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { TaskbarPreferences, TaskbarRuntimeSnapshot } from '../../ui/src/shared/generated/contracts';
-type QA = { __taskbarQA: { calls: () => { command: string; request: unknown }[]; external: () => void; reject: (value: boolean) => void; failRead: (value: boolean) => void; status: (value: Partial<TaskbarRuntimeSnapshot>) => void; listeners: () => number } };
+type QA = { __taskbarQA: { calls: () => { command: string; request: unknown }[]; mini: (visible: boolean) => void; rejectMini: (value: boolean) => void; holdMini: () => void; releaseMini: () => void; external: () => void; reject: (value: boolean) => void; failRead: (value: boolean) => void; status: (value: Partial<TaskbarRuntimeSnapshot>) => void; listeners: () => number } };
 
 test.beforeEach(async ({ page }) => {
   // Browser-only synthetic protocol. Production never loads this bridge or these values.
   await page.addInitScript(() => {
     let revision = '9007199254740993', reject = false, failRead = false;
+    let miniVisible = false, rejectMini = false, holdMini = false;
+    const miniWaits: (() => void)[] = [];
     let preferences = { enabled: false, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true }, position: 'notification_left', fallback_to_mini: true };
     let status = { revision: '9007199254740993', state: 'disabled', applied_settings_revision: null, issue: null, error: null, compact: null, fallback_visible: null, fallback_error: null, action_error: null, last_cleanup: null, last_snapshot_at_ms: null };
     const calls: { command: string; request: unknown }[] = [], callbacks = new Map<number, (value: unknown) => void>(), listeners = new Map<number, { event: string; handler: number }>();
@@ -17,7 +19,7 @@ test.beforeEach(async ({ page }) => {
       __TAURI_INTERNALS__: {
         transformCallback: (callback: (value: unknown) => void) => { callbacks.set(++callbackId, callback); return callbackId; },
         invoke: async (command: string, args: Record<string, unknown>) => {
-          calls.push({ command, request: args.request });
+          calls.push({ command, request: args.request ?? args.action });
           const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, ...(command.includes('taskbar') ? {} : { display_policy: { settings_revision: '1', privacy: false } }), data });
           if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
           if (command === 'plugin:event|unlisten') return null;
@@ -36,11 +38,23 @@ test.beforeEach(async ({ page }) => {
             // Deliberately keep actual native status unchanged: persistence cannot prove embedding.
             return response({ preferences: structuredClone(preferences), settings_revision: revision });
           }
-          if (command === 'retry_taskbar_embed' || command === 'perform_window_action') return response(null);
+          if (command === 'get_mini_visibility') return response(miniVisible);
+          if (command === 'perform_window_action') {
+            if (args.action === 'show_mini' || args.action === 'hide_mini') {
+              if (rejectMini) throw { code: 'WINDOW_UNAVAILABLE' };
+              if (holdMini) { holdMini = false; await new Promise<void>(resolve => miniWaits.push(resolve)); }
+              miniVisible = args.action === 'show_mini'; notify('mini_visibility_changed');
+            }
+            return response(null);
+          }
+          if (command === 'retry_taskbar_embed') return response(null);
           throw new Error('Unexpected synthetic taskbar command ' + command);
         },
       },
       __taskbarQA: {
+        mini: (visible: boolean) => { miniVisible = visible; notify('mini_visibility_changed'); },
+        rejectMini: (value: boolean) => { rejectMini = value; },
+        holdMini: () => { holdMini = true; }, releaseMini: () => miniWaits.splice(0).forEach(resolve => resolve()),
         calls: () => calls, external: () => { revision = String(BigInt(revision) + 1n); notify('settings_changed'); }, reject: (value: boolean) => { reject = value; }, failRead: (value: boolean) => { failRead = value; },
         status: (value: unknown) => { status = { ...status, ...value as typeof status }; notify('taskbar_status_changed'); },
         listeners: () => [...listeners.values()].filter(v => v.event === 'taskbar_status_changed').length,
@@ -49,6 +63,37 @@ test.beforeEach(async ({ page }) => {
   });
 });
 async function open(page: Page) { await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '任务栏显示' }).click(); const panel = page.getByRole('tabpanel', { name: '任务栏显示设置' }); await expect(panel.getByRole('checkbox', { name: '启用任务栏显示' })).toBeEnabled(); return panel; }
+
+test('mini shortcuts toggle both ways and synchronize external visibility and failures', async ({ page }, testInfo) => {
+  await page.goto('/');
+  const sidebar = page.locator('.sidebar-bottom'), header = page.locator('.head-actions');
+  await expect(sidebar.getByRole('button', { name: '显示悬浮窗', exact: true })).toBeEnabled();
+  await sidebar.getByRole('button', { name: '显示悬浮窗', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '隐藏悬浮窗' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(header.getByRole('button', { name: '隐藏小窗' })).toBeEnabled();
+  await page.locator('.sidebar-bottom').screenshot({ path: testInfo.outputPath('display-shortcuts-visible.png') });
+  await header.getByRole('button', { name: '隐藏小窗' }).click();
+  await expect(sidebar.getByRole('button', { name: '显示悬浮窗' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(header.getByRole('button', { name: '显示小窗' })).toBeEnabled();
+  expect(await page.evaluate(() => (window as unknown as QA).__taskbarQA.calls().filter(v => v.command === 'perform_window_action').map(v => v.request))).toEqual(['show_mini', 'hide_mini']);
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.mini(true));
+  await expect(sidebar.getByRole('button', { name: '隐藏悬浮窗' })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.mini(false));
+  await expect(header.getByRole('button', { name: '显示小窗' })).toBeVisible();
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.rejectMini(true));
+  await sidebar.getByRole('button', { name: '显示悬浮窗' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '悬浮窗切换失败' })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: '显示悬浮窗' })).toHaveAttribute('aria-pressed', 'false');
+  await page.evaluate(() => { (window as unknown as QA).__taskbarQA.rejectMini(false); (window as unknown as QA).__taskbarQA.holdMini(); });
+  await header.getByRole('button', { name: '显示小窗' }).click();
+  await expect(sidebar.getByRole('button', { name: '正在处理…' })).toBeDisabled();
+  await expect(header.getByRole('button', { name: '正在处理…' })).toBeDisabled();
+  await page.evaluate(() => (window as unknown as QA).__taskbarQA.releaseMini());
+  await expect(sidebar.getByRole('button', { name: '隐藏悬浮窗' })).toBeEnabled();
+  await expect(page.getByRole('alert').filter({ hasText: '悬浮窗切换失败' })).toHaveCount(0);
+  await sidebar.getByRole('button', { name: '隐藏悬浮窗' }).click();
+  await expect(sidebar.getByRole('button', { name: '显示悬浮窗' })).toBeEnabled();
+});
 
 test('sidebar toggles taskbar, stays in sync with settings and preserves display options', async ({ page }, testInfo) => {
   const panel = await open(page), sidebar = page.locator('.sidebar-bottom');

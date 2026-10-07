@@ -10,6 +10,53 @@ use token_pulse_core::{
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
     show_internal(app, None, None)
 }
+pub(super) fn notify_visibility(app: &tauri::AppHandle) {
+    // An invalidation only: main reads the native window again instead of trusting event order.
+    let _ = app.emit_to("main", "mini_visibility_changed", ());
+}
+pub fn hide(app: &tauri::AppHandle) -> Result<(), String> {
+    let runtime = app.state::<super::RuntimeState>();
+    let _creation = runtime
+        .mini_creation
+        .lock()
+        .map_err(|_| "WINDOW_STATE_UNAVAILABLE")?;
+    if let Some(window) = app.get_webview_window("mini") {
+        if save_current_placement(&window).is_err() {
+            eprintln!("MINI_PLACEMENT_SAVE_FAILED");
+        }
+        window.hide().map_err(|e| e.to_string())?;
+        super::quota_commands::update_visibility(&window);
+    }
+    notify_visibility(app);
+    Ok(())
+}
+#[tauri::command]
+pub fn get_mini_visibility(
+    window: WebviewWindow,
+    request_id: String,
+) -> Result<Response<bool>, Box<AppError>> {
+    validate_request_id(&request_id)
+        .map_err(|code| AppError::new(code, "invalid-request".into()))?;
+    if window.label() != "main" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
+    let visible = window
+        .app_handle()
+        .get_webview_window("mini")
+        .map(|mini| mini.is_visible())
+        .transpose()
+        .map_err(|_| {
+            Box::new(AppError::new(
+                ErrorCode::WindowUnavailable,
+                request_id.clone(),
+            ))
+        })?
+        .unwrap_or(false);
+    Ok(Response::new(request_id, visible))
+}
 pub(super) fn show_taskbar(
     app: &tauri::AppHandle,
     request: &super::taskbar_service::ActionRequest,
@@ -166,6 +213,7 @@ fn show_internal(
         eprintln!("MINI_PLACEMENT_UNAVAILABLE");
     }
     super::quota_commands::update_visibility(&window);
+    notify_visibility(app);
     if fallback.is_some() || action.is_some() || secondary_probe {
         Ok(())
     } else {
@@ -396,7 +444,10 @@ pub fn mini_window_action(
             }
             window
                 .hide()
-                .map(|_| super::quota_commands::update_visibility(&window))
+                .map(|_| {
+                    super::quota_commands::update_visibility(&window);
+                    notify_visibility(window.app_handle());
+                })
         }
     };
     result.map_err(|_| {

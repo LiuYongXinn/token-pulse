@@ -81,7 +81,7 @@ h1{font-size:29px;letter-spacing:-1px;font-weight:650}h2{font-size:16px;font-wei
 .sidebar-bottom small{font-size:10px;line-height:1.9;margin-top:7px}
 .sidebar-bottom .action-button{width:100%;margin-top:17px;font-size:11px;background:var(--button);height:36px}
 .sidebar-taskbar .action-button{margin-top:8px}
-.sidebar-taskbar .action-button[aria-pressed=true]{background:var(--selected);border-color:var(--selectedLine);color:var(--fg)}
+.sidebar-bottom .action-button[aria-pressed=true]{background:var(--selected);border-color:var(--selectedLine);color:var(--fg)}
 .sidebar-action-error{margin-top:8px;font-size:10px;overflow-wrap:anywhere;color:var(--error)}
 .sidebar-action-error button{margin-top:6px;font-size:10px;min-height:30px;padding:5px 9px}
 .status-dot{width:6px;height:6px;background:var(--neutral)}

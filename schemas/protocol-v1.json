@@ -21833,6 +21833,7 @@
       "enum": [
         "open_stats",
         "show_mini",
+        "hide_mini",
         "hide_main",
         "quit"
       ],

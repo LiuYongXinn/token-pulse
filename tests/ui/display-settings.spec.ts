@@ -76,7 +76,7 @@ test.beforeEach(async ({ page }) => {
     let theme = sessionStorage.getItem('synthetic-theme') ?? 'dark', rejectTheme = false;
     let shortcut = { control: true, alt: true, shift: true, key: 'T' }, shortcutStatus = 'ready', shortcutConflict = false;
     let opacity = 100, opacitySupported = true, rejectOpacity = false;
-    let pass = false, persistedPass = false, miniPresent = false, rejectPass = false;
+    let pass = false, persistedPass = false, miniPresent = false, miniVisible = false, rejectPass = false;
     let timezone: string | null = 'Asia/Shanghai', revision = '9007199254740993', failRead = false, badCalendar = false;
     const calls: { command: string; request: unknown }[] = [];
     let callbackId = 0, eventId = 0;
@@ -95,8 +95,15 @@ test.beforeEach(async ({ page }) => {
         if (command === 'plugin:event|unlisten') return null;
         if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: revision, sources: [] });
+        if (command === 'get_mini_visibility') return response(miniVisible);
+        if (command === 'get_taskbar_preferences') return response({ settings_revision: revision, preferences: { enabled: false, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true }, position: 'notification_left', fallback_to_mini: true } });
         if (command === 'get_mini_passthrough') return response({ enabled: pass, persisted_enabled: persistedPass, window_present: miniPresent, supported: true, recovery_shortcut: shortcut, recovery_registration: shortcutStatus, settings_revision: revision });
-        if (command === 'perform_window_action') { miniPresent = true; pass = false; if (!rejectPass && persistedPass) { persistedPass = false; revision = String(BigInt(revision) + 1n); notify(); } for (const [id, listener] of listeners) if (listener.event === 'mini_interaction_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null }); return response(null); }
+        if (command === 'perform_window_action') {
+          if (args.action === 'hide_mini') { miniVisible = false; }
+          else { miniPresent = true; miniVisible = true; pass = false; if (!rejectPass && persistedPass) { persistedPass = false; revision = String(BigInt(revision) + 1n); notify(); } }
+          for (const [id, listener] of listeners) if (listener.event === 'mini_interaction_changed' || listener.event === 'mini_visibility_changed') callbacks.get(listener.handler)?.({ event: listener.event, id, payload: null });
+          return response(null);
+        }
         if (command === 'set_mini_passthrough') {
           const r = args.request as { enabled: boolean; acknowledged_recovery: typeof shortcut | null; expected_settings_revision: string };
           if (r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
