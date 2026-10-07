@@ -251,6 +251,9 @@ pub fn adapt(
         }
         "response_item" => AdaptedRecord::Ignored,
         "compacted" => AdaptedRecord::Ignored,
+        // Codex emits environment snapshots before the first request. They carry no
+        // usage and must not invalidate the collector's independent session head.
+        "world_state" => AdaptedRecord::Ignored,
         _ => diagnostic(
             position,
             ErrorCode::UnsupportedFormat,

@@ -33,6 +33,83 @@ fn count(db: &Database, table: &str) -> i64 {
 }
 
 #[test]
+fn world_state_before_usage_preserves_session_head_across_restart_and_reread() {
+    use serde_json::json;
+    use token_pulse_collector::replay::execute_rebuild;
+    use token_pulse_core::{
+        jobs::{JobRequest, JobScope},
+        protocol::JobKind,
+    };
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    source(&db, "local", logs.path(), true);
+    let path = logs.path().join("sessions/world-state.jsonl");
+    let header = [
+        json!({"type":"session_meta","payload":{"id":"thread"}}),
+        json!({"type":"world_state","payload":{"full":true,"state":{"environment":"synthetic"}}}),
+        json!({"type":"turn_context","payload":{"model":"synthetic","turn_id":"turn"}}),
+    ]
+    .into_iter()
+    .map(|v| format!("{v}\n"))
+    .collect::<String>();
+    fs::write(&path, &header).unwrap();
+    collect_file(&db, "local", &path, 5000).unwrap();
+    assert!(
+        db.file_checkpoint("local", path.to_str().unwrap(), None)
+            .unwrap()
+            .unwrap()
+            .context
+            .independent_head_available
+    );
+    drop(db);
+    let db = Database::open(data.path()).unwrap();
+    let vector = |input, cached, output| json!({"input_tokens":input,"cached_input_tokens":cached,"cache_write_input_tokens":0,"output_tokens":output,"reasoning_output_tokens":0,"total_tokens":input+output});
+    let records = [
+        (vector(100, 60, 10), vector(100, 60, 10)),
+        (vector(20, 5, 5), vector(120, 65, 15)),
+    ].into_iter().map(|(last, cumulative)| format!("{}\n", json!({"timestamp":"2026-10-07T03:13:26Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":last,"total_token_usage":cumulative}}}))).collect::<String>();
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .unwrap()
+        .write_all(records.as_bytes())
+        .unwrap();
+    collect_file(&db, "local", &path, 5001).unwrap();
+    assert_eq!(total(&db), "135");
+    assert_eq!(count(&db, "usage_events"), 2);
+    assert_eq!(count(&db, "pending_usage"), 0);
+    assert_eq!(count(&db, "diagnostics"), 0);
+    let original = fs::read(&path).unwrap();
+    for id in ["read-one", "read-two"] {
+        db.create_source_reread_job(
+            id.into(),
+            JobRequest {
+                kind: JobKind::Rebuild,
+                scope: JobScope::All {},
+                request_key: id.into(),
+            },
+            5002,
+        )
+        .unwrap();
+        execute_rebuild(&db, id, || false, || 5003).unwrap();
+        assert_eq!(total(&db), "135");
+        db.snapshot(|tx, _| {
+            assert_eq!(
+                tx.query_row("SELECT COUNT(*) FROM active_usage_events", [], |r| r
+                    .get::<_, i64>(0))?,
+                2
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+    collect_file(&db, "local", &path, 5004).unwrap();
+    assert_eq!(total(&db), "135");
+    assert_eq!(fs::read(&path).unwrap(), original);
+}
+
+#[test]
 fn invalid_optional_request_evidence_keeps_valid_independent_consumption() {
     use serde_json::json;
     use token_pulse_core::domain::NormalizedObservation;
