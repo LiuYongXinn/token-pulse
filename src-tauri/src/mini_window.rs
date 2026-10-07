@@ -89,6 +89,10 @@ fn show_internal(
         .visible(false)
         .build()
         .map_err(|e| e.to_string())?;
+        if let Err(error) = super::mini_shape::install(&window) {
+            let _ = window.destroy();
+            return Err(error.to_string());
+        }
         *state
             .mini_window
             .lock()

@@ -46,7 +46,78 @@ fn size(window: &WebviewWindow, width: f64, height: f64) -> Result<(), String> {
     if (logical.width - width).abs() > 1.0 || (logical.height - height).abs() > 1.0 {
         return Err(format!("mini logical size mismatch: {logical:?}"));
     }
+    #[cfg(windows)]
+    verify_shape(window)?;
     Ok(())
+}
+#[cfg(windows)]
+pub(super) fn verify_shape(window: &WebviewWindow) -> Result<(), String> {
+    use windows_sys::Win32::{
+        Foundation::{POINT, RECT},
+        Graphics::Gdi::{
+            ClientToScreen, CreateRectRgn, DeleteObject, GetRgnBox, GetWindowRgn, PtInRegion,
+        },
+        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect},
+    };
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0.cast();
+    unsafe {
+        let mut client = RECT::default();
+        let mut outer = RECT::default();
+        let mut origin = POINT::default();
+        if GetClientRect(hwnd, &mut client) == 0
+            || GetWindowRect(hwnd, &mut outer) == 0
+            || ClientToScreen(hwnd, &mut origin) == 0
+        {
+            return Err("native mini client bounds unavailable".into());
+        }
+        let region = CreateRectRgn(0, 0, 0, 0);
+        if region.is_null() {
+            return Err("native region allocation failed".into());
+        }
+        let result = (|| {
+            let mut bounds = RECT::default();
+            if GetWindowRgn(hwnd, region) == 0 || GetRgnBox(region, &mut bounds) == 0 {
+                return Err("mini is still a rectangular native window".into());
+            }
+            let left = origin.x - outer.left;
+            let top = origin.y - outer.top;
+            let right = left + client.right;
+            let bottom = top + client.bottom;
+            if (bounds.left, bounds.top, bounds.right, bounds.bottom) != (left, top, right, bottom)
+            {
+                return Err(format!(
+                    "native mini region does not match client: {:?}, expected {:?}",
+                    (bounds.left, bounds.top, bounds.right, bounds.bottom),
+                    (left, top, right, bottom)
+                ));
+            }
+            // Four clipped corners plus four retained edge midpoints; detects a stale
+            // compact region after expansion and missing bottom/right border pixels.
+            for (x, y) in [
+                (left, top),
+                (right - 1, top),
+                (left, bottom - 1),
+                (right - 1, bottom - 1),
+            ] {
+                if PtInRegion(region, x, y) != 0 {
+                    return Err("native mini square corner remains".into());
+                }
+            }
+            for (x, y) in [
+                ((left + right) / 2, top),
+                ((left + right) / 2, bottom - 1),
+                (left, (top + bottom) / 2),
+                (right - 1, (top + bottom) / 2),
+            ] {
+                if PtInRegion(region, x, y) == 0 {
+                    return Err("native mini region clips a straight edge".into());
+                }
+            }
+            Ok(())
+        })();
+        DeleteObject(region);
+        result
+    }
 }
 #[cfg(windows)]
 pub(super) fn start_placement(app: tauri::AppHandle) {
@@ -57,14 +128,15 @@ pub(super) fn start_placement(app: tauri::AppHandle) {
             evaluate(
                 &app,
                 &mini,
-                "await wait(()=>document.querySelector('button[aria-label=\"展开小窗\"]')); ",
+                "await wait(()=>document.querySelector('button[aria-label=\"展开小窗\"]')); if(getComputedStyle(document.querySelector('.mini-window')).borderTopLeftRadius!=='15px')throw new Error('MINI_RADIUS_MISMATCH');",
             )?;
+            verify_shape_interactions(&mini)?;
             verify_placement_restore(&app, &mini)
         })();
         match result {
             Ok(()) => {
                 println!(
-                    "NATIVE_MINI_OUTER_BOUNDS_OK: actual Win32 outer rectangle, missing-monitor fallback and moved-event edge clamp; fixed client sizes retained"
+                    "NATIVE_MINI_OUTER_BOUNDS_OK: actual Win32 outer rectangle, missing-monitor fallback and moved-event edge clamp; fixed client sizes retained; rounded native region clips all four corners in compact/expanded/recreated windows"
                 );
                 app.exit(0);
             }
@@ -74,6 +146,42 @@ pub(super) fn start_placement(app: tauri::AppHandle) {
             }
         }
     });
+}
+#[cfg(windows)]
+fn verify_shape_interactions(window: &WebviewWindow) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetLayeredWindowAttributes, LWA_ALPHA};
+    super::mini_opacity::apply(window, 80).map_err(|e| e.to_string())?;
+    for pinned in [false, true] {
+        window
+            .set_always_on_top(pinned)
+            .map_err(|e| e.to_string())?;
+        verify_shape(window)?;
+    }
+    window.hide().map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    verify_shape(window)?;
+    let mut alpha = 0;
+    let mut key = 0;
+    let mut flags = 0;
+    if unsafe {
+        GetLayeredWindowAttributes(
+            window.hwnd().map_err(|e| e.to_string())?.0.cast(),
+            &mut key,
+            &mut alpha,
+            &mut flags,
+        )
+    } == 0
+        || alpha != 204
+        || flags != LWA_ALPHA
+    {
+        return Err("rounded native window lost whole-window opacity".into());
+    }
+    super::mini_opacity::apply(window, 100).map_err(|e| e.to_string())?;
+    verify_shape(window)?;
+    println!(
+        "NATIVE_MINI_SHAPE_INTERACTIONS_OK: four clipped corners and intact edges survive alpha 100/80%, pin changes and hide/show"
+    );
+    Ok(())
 }
 #[cfg(windows)]
 fn wait_for_outer_fit(window: &WebviewWindow) -> Result<(), String> {

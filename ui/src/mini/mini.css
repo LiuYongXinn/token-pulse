@@ -1,4 +1,5 @@
-.mini-window{width:100vw;height:100vh;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px 13px;color:var(--fg);display:flex;flex-direction:column;overflow:hidden;font-size:11px;user-select:none}
+/* Keep the radius in sync with CORNER_RADIUS_DIP in src-tauri/src/mini_shape.rs. */
+.mini-window{width:100vw;height:100vh;border:1px solid var(--line);border-radius:15px;background:var(--panel);padding:9px 13px;color:var(--fg);display:flex;flex-direction:column;overflow:hidden;font-size:11px;user-select:none}
 .mini-window{position:relative}.mini-display{display:flex;flex-direction:column;flex:1;min-height:0}
 .mini-scope-editor{position:absolute;inset:38px 8px 8px;z-index:3;background:var(--panel);border:1px solid var(--strongLine);border-radius:8px;padding:10px;display:flex;flex-direction:column;min-height:0;box-shadow:0 8px 22px #0004}
 .mini-scope-editor header{display:flex;justify-content:space-between;align-items:center;flex-shrink:0}.mini-scope-editor h2{font-size:12px}.mini-scope-editor header button{padding:0 7px}

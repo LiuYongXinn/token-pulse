@@ -432,6 +432,7 @@ mod job_commands;
 mod mini_commands;
 mod mini_opacity;
 mod mini_passthrough;
+mod mini_shape;
 #[cfg(debug_assertions)]
 mod mini_smoke;
 mod mini_window;

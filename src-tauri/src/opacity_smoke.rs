@@ -15,7 +15,7 @@ fn inspect(window: &tauri::WebviewWindow, expected: u8) -> Result<(), String> {
             return Err(format!("native opacity mismatch: {alpha}, {flags}"));
         }
     }
-    Ok(())
+    super::mini_smoke::verify_shape(window)
 }
 pub fn verify(app: &tauri::AppHandle) -> Result<(), String> {
     let main = app.get_webview_window("main").ok_or("main missing")?;
