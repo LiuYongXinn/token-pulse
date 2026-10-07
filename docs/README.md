@@ -26,6 +26,8 @@
 
 - [项目目录内的数据与工具缓存](development/project-local-storage.md)：数据、WebView、临时文件、工具缓存和现有数据迁移的路径约定。
 
+- [页签即时显示与统计更新开发方案](development/instant-navigation.md)：查询缓存、前台调度、分页快照恢复、设置与诊断状态共享、变更通知、后端复用及分阶段性能验收。
+
 - [账户额度共享显示与验证](development/account-quota-verification.md)
 - [实施与交付记录](development/delivery-status.md)
 - [开发实施与验收计划](development/implementation-plan.md)
