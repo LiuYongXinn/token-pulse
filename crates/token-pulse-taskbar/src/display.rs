@@ -358,16 +358,24 @@ pub fn measure(
         return Ok(None);
     }
     let pad = (6 * dpi / 96) as i32;
+    // Two rows share the taskbar's limited height. Horizontal spacing remains
+    // unchanged; using the single-row vertical margin needlessly collapses them.
+    let mut vertical_pad = if prefs.layout == DisplayLayout::TwoRows {
+        (2 * dpi / 96) as i32
+    } else {
+        pad
+    };
     let left = (12 * dpi / 96) as i32;
     let gap = (8 * dpi / 96) as i32;
     let line_gap = (2 * dpi / 96) as i32;
-    if font_height * 2 + line_gap + pad * 2 > available_height {
+    if font_height * 2 + line_gap + vertical_pad * 2 > available_height {
         prefs.layout = DisplayLayout::SingleRow;
+        vertical_pad = pad;
     }
     for density in [Density::Full, Density::Compact, Density::Minimal] {
         let rows = rows(view, prefs, density, now)?;
         let height = font_height * rows.len() as i32 + line_gap * (rows.len() as i32 - 1);
-        if height + pad * 2 > available_height {
+        if height + vertical_pad * 2 > available_height {
             continue;
         }
         let mut widest = 0i32;

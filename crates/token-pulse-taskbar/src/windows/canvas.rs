@@ -683,7 +683,7 @@ impl NativeCanvas {
     ) -> Result<(), WireError> {
         // Build a replacement while the old layered surface remains visible. The
         // WM_PAINT path publishes the complete bitmap in one UpdateLayeredWindow.
-        let font = NativeFont::new(dpi)?;
+        let font = NativeFont::for_taskbar(dpi, prefs, height)?;
         let plan = font.plan(view, prefs, now, width, height)?;
         self.state.details.prepare(self.window, view, dpi, now)?;
         unsafe {
@@ -1106,7 +1106,11 @@ mod tests {
         super::super::render::PRESENTED_FRAMES.with(|frames| frames.borrow_mut().clear());
         canvas.set_attached(true);
         super::super::render::PRESENTED_FRAMES.with(|frames| {
-            assert_eq!(*frames.borrow(), [true], "attachment immediately presents its prepared frame");
+            assert_eq!(
+                *frames.borrow(),
+                [true],
+                "attachment immediately presents its prepared frame"
+            );
             frames.borrow_mut().clear();
         });
         view.privacy = true;
@@ -1126,12 +1130,20 @@ mod tests {
         assert_eq!(rect(canvas.window).unwrap(), before);
         assert!(canvas.plan().is_some());
         super::super::render::PRESENTED_FRAMES.with(|frames| {
-            assert_eq!(*frames.borrow(), [true], "refresh must never submit an empty layered frame");
+            assert_eq!(
+                *frames.borrow(),
+                [true],
+                "refresh must never submit an empty layered frame"
+            );
             frames.borrow_mut().clear();
         });
         canvas.clear().unwrap();
         super::super::render::PRESENTED_FRAMES.with(|frames| {
-            assert_eq!(*frames.borrow(), [false], "explicit clear still overwrites private pixels");
+            assert_eq!(
+                *frames.borrow(),
+                [false],
+                "explicit clear still overwrites private pixels"
+            );
         });
         assert!(canvas.plan().is_none());
         let mut caption = [0; 64];

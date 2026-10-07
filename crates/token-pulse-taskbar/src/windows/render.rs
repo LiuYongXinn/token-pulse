@@ -1,7 +1,7 @@
 //! System-font measurement and GDI drawing. No screenshots of other applications or file I/O.
 use crate::{
     TaskbarView, WireError,
-    display::{DisplayPreferences, MeasureBounds, MeasuredPlan, Tone, measure},
+    display::{DisplayLayout, DisplayPreferences, MeasureBounds, MeasuredPlan, Tone, measure},
 };
 use std::{mem, ptr};
 #[cfg(test)]
@@ -127,6 +127,33 @@ pub struct NativeFont {
 }
 impl NativeFont {
     pub fn new(dpi: u32) -> Result<Self, WireError> {
+        Self::with_height(dpi, None)
+    }
+    pub(crate) fn for_taskbar(
+        dpi: u32,
+        prefs: DisplayPreferences,
+        available_height: i32,
+    ) -> Result<Self, WireError> {
+        let system = Self::new(dpi)?;
+        if prefs.layout != DisplayLayout::TwoRows {
+            return Ok(system);
+        }
+        let line_height = (available_height - (6 * dpi / 96) as i32) / 2;
+        if system.height <= line_height {
+            return Ok(system);
+        }
+        // Keep the system typeface and measure every candidate. Stop at 8 pt;
+        // genuinely short taskbars still use the existing readable fallback.
+        let minimum = (8 * dpi / 72) as i32;
+        for height in (minimum..system.height).rev() {
+            let font = Self::with_height(dpi, Some(height))?;
+            if font.height <= line_height {
+                return Ok(font);
+            }
+        }
+        Ok(system)
+    }
+    fn with_height(dpi: u32, height: Option<i32>) -> Result<Self, WireError> {
         if !(96..=768).contains(&dpi) {
             return Err(WireError::InvalidFrame);
         }
@@ -147,6 +174,9 @@ impl NativeFont {
         // Grayscale coverage can be composited over the real taskbar without
         // ClearType fringes that were calculated against an opaque background.
         metrics.lfMessageFont.lfQuality = ANTIALIASED_QUALITY;
+        if let Some(height) = height {
+            metrics.lfMessageFont.lfHeight = -height;
+        }
         let font = unsafe { CreateFontIndirectW(&metrics.lfMessageFont) };
         if font.is_null() {
             return Err(WireError::InvalidState);
@@ -589,6 +619,57 @@ mod tests {
     use super::*;
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, SelectClipRgn};
 
+    #[test]
+    fn two_rows_fit_standard_taskbar_heights_at_four_dpis_with_real_fonts() {
+        let view: TaskbarView =
+            serde_json::from_str(include_str!("../../../../fixtures/taskbar-display.json"))
+                .unwrap();
+        for dpi in [96, 120, 144, 192] {
+            let height = (40 * dpi / 96) as i32;
+            let width = (600 * dpi / 96) as i32;
+            for layout in [DisplayLayout::TwoRows, DisplayLayout::SingleRow] {
+                let prefs = DisplayPreferences {
+                    layout,
+                    ..Default::default()
+                };
+                let font = NativeFont::for_taskbar(dpi, prefs, height).unwrap();
+                let plan = font.plan(&view, prefs, 0, width, height).unwrap().unwrap();
+                assert_eq!(plan.density, crate::display::Density::Full);
+                let mut positions: Vec<_> = plan.spans.iter().map(|span| span.y).collect();
+                positions.sort_unstable();
+                positions.dedup();
+                assert_eq!(
+                    positions.len(),
+                    if layout == DisplayLayout::TwoRows {
+                        2
+                    } else {
+                        1
+                    }
+                );
+                assert!(
+                    plan.spans
+                        .iter()
+                        .all(|span| span.y >= 0 && span.y + font.height() <= height)
+                );
+                let bitmap = font
+                    .bitmap(Some(&plan), plan.width, height, Palette::for_background(0))
+                    .unwrap();
+                for y in positions {
+                    assert!(
+                        bitmap[54..]
+                            .chunks_exact(4)
+                            .enumerate()
+                            .any(|(index, pixel)| {
+                                // BMP scanlines run bottom to top. Check actual non-background
+                                // glyph pixels within each separately measured row.
+                                let row = height - 1 - index as i32 / plan.width;
+                                row >= y && row < y + font.height() && pixel[..3] != [0, 0, 0]
+                            })
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn alpha_pixels_preserve_input_spacing_and_exact_premultiplied_glyph_colors() {
         assert_eq!(premultiplied_pixel(rgb(241, 244, 248), 0), [0, 0, 0, 1]);
