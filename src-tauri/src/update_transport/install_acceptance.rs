@@ -285,7 +285,11 @@ SectionEnd
         assert_eq!(std::fs::read_to_string(&completed).unwrap(), "complete");
         assert_eq!(
             std::fs::read_to_string(&marker).unwrap(),
-            format!("/P /UPDATE /R /TOKENPULSE_PARENT={} /D={}", std::process::id(), std::env::current_exe().unwrap().parent().unwrap().display())
+            format!(
+                "/P /UPDATE /R /TOKENPULSE_PARENT={} /D={}",
+                std::process::id(),
+                std::env::current_exe().unwrap().parent().unwrap().display()
+            )
         );
         assert_eq!(exits.load(Ordering::Acquire), 1);
         assert!(matches!(

@@ -442,12 +442,10 @@ pub fn mini_window_action(
             if save_current_placement(&window).is_err() {
                 eprintln!("MINI_PLACEMENT_SAVE_FAILED");
             }
-            window
-                .hide()
-                .map(|_| {
-                    super::quota_commands::update_visibility(&window);
-                    notify_visibility(window.app_handle());
-                })
+            window.hide().map(|_| {
+                super::quota_commands::update_visibility(&window);
+                notify_visibility(window.app_handle());
+            })
         }
     };
     result.map_err(|_| {

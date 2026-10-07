@@ -7,7 +7,9 @@ pub(super) fn start_visibility(app: tauri::AppHandle) {
         let result = verify_visibility(&app);
         match result {
             Ok(()) => {
-                println!("NATIVE_MINI_VISIBILITY_OK: real WebView ACL, main/header toggle, self-hide and external show synchronization");
+                println!(
+                    "NATIVE_MINI_VISIBILITY_OK: real WebView ACL, main/header toggle, self-hide and external show synchronization"
+                );
                 app.exit(0);
             }
             Err(error) => {
@@ -20,7 +22,10 @@ pub(super) fn start_visibility(app: tauri::AppHandle) {
 
 fn verify_visibility(app: &tauri::AppHandle) -> Result<(), String> {
     let main = app.get_webview_window("main").ok_or("main missing")?;
-    evaluate(app, &main, r#"
+    evaluate(
+        app,
+        &main,
+        r#"
       await wait(()=>document.querySelector('.sidebar-bottom'));
       const initial=await invoke('get_mini_visibility',{requestId:'native-mini-visibility-initial'});
       if(initial.api_version!==1 || initial.request_id!=='native-mini-visibility-initial' || initial.data!==false)throw new Error('MINI_INITIAL_VISIBILITY');
@@ -37,31 +42,44 @@ fn verify_visibility(app: &tauri::AppHandle) -> Result<(), String> {
       if(hidden.data!==false)throw new Error('MINI_HIDE_FAILED');
       entry('显示悬浮窗').click();
       await wait(()=>entry('隐藏悬浮窗'));
-    "#)?;
+    "#,
+    )?;
     let mini = app.get_webview_window("mini").ok_or("mini missing")?;
     if !mini.is_visible().map_err(|e| e.to_string())? {
         return Err("actual native mini was not shown".into());
     }
-    evaluate(app, &mini, r#"
+    evaluate(
+        app,
+        &mini,
+        r#"
       let denied=false;
       try{await invoke('get_mini_visibility',{requestId:'native-mini-visibility-denied'});}catch(error){denied=true;}
       if(!denied)throw new Error('MAIN_ONLY_VISIBILITY_ACL');
       await wait(()=>document.querySelector('button[aria-label="隐藏小窗"]')?.disabled===false);
       document.querySelector('button[aria-label="隐藏小窗"]').click();
-    "#)?;
-    evaluate(app, &main, r#"
+    "#,
+    )?;
+    evaluate(
+        app,
+        &main,
+        r#"
       await wait(()=>[...document.querySelectorAll('.sidebar-bottom button')].some(b=>b.textContent==='显示悬浮窗' && !b.disabled));
       await wait(()=>document.querySelector('.head-actions button[title="显示小窗"]')?.disabled===false);
-    "#)?;
+    "#,
+    )?;
     // Tray and recovery routes use this same external show implementation.
     super::mini_window::show(app)?;
-    evaluate(app, &main, r#"
+    evaluate(
+        app,
+        &main,
+        r#"
       const entry=()=>[...document.querySelectorAll('.sidebar-bottom button')].find(b=>b.textContent==='隐藏悬浮窗' && !b.disabled);
       await wait(()=>entry());
       entry().click();
       await wait(()=>[...document.querySelectorAll('.sidebar-bottom button')].some(b=>b.textContent==='显示悬浮窗' && !b.disabled));
       if([...document.querySelectorAll('[role="alert"]')].some(e=>e.textContent.includes('悬浮窗状态读取失败')))throw new Error('MINI_VISIBILITY_ALERT');
-    "#)?;
+    "#,
+    )?;
     if mini.is_visible().map_err(|e| e.to_string())? {
         return Err("actual native mini was not hidden".into());
     }

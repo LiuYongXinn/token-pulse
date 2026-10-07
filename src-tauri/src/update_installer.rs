@@ -34,10 +34,12 @@ pub(super) fn launch(bytes: &[u8]) -> Result<(), UpdateIssue> {
     if !portable_executable(bytes) {
         return Err(UpdateIssue::InstallerUnavailable);
     }
-    let temporary = super::local_paths::temporary_directory()
-        .map_err(|_| UpdateIssue::InstallerUnavailable)?;
+    let temporary =
+        super::local_paths::temporary_directory().map_err(|_| UpdateIssue::InstallerUnavailable)?;
     let executable = std::env::current_exe().map_err(|_| UpdateIssue::InstallerUnavailable)?;
-    let installation = executable.parent().ok_or(UpdateIssue::InstallerUnavailable)?;
+    let installation = executable
+        .parent()
+        .ok_or(UpdateIssue::InstallerUnavailable)?;
     let mut file = tempfile::Builder::new()
         .prefix("tokenpulse-verified-update-")
         .suffix(".exe")

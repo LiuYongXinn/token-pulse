@@ -400,7 +400,9 @@ pub fn run() {
         for window in &mut context.config_mut().app.windows {
             window.title = "TokenPulse · 开发版".into();
             #[cfg(windows)]
-            if navigation_smoke::secondary_probe() { window.focus = false; }
+            if navigation_smoke::secondary_probe() {
+                window.focus = false;
+            }
         }
         context
     };

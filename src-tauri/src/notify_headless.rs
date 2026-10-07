@@ -20,8 +20,8 @@ pub fn run_if_requested() -> Option<i32> {
             notify_registry::{RegistryError, windows::NotifyRegistry},
         };
         let result = (|| {
-            let directory = token_pulse_app::local_paths::data_directory()
-                .map_err(|_| RegistryError::Io)?;
+            let directory =
+                token_pulse_app::local_paths::data_directory().map_err(|_| RegistryError::Io)?;
             // Explicit debug-native acceptance only; a single validated child name cannot redirect
             // product notifications to another Home or external directory.
             #[cfg(debug_assertions)]
