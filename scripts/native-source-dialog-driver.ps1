@@ -1,5 +1,6 @@
 param([Parameter(Mandatory)][uint32]$ApplicationId, [Parameter(Mandatory)][ValidateSet('cancel','select')][string]$Action, [string]$Folder, [ValidateSet('source','account_executable','account_home','notify_home')][string]$Kind = 'source')
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;

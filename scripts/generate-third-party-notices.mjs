@@ -83,7 +83,7 @@ export function generate(target) {
   const cache = join(root, 'scripts/third-party');
   const metadata = JSON.parse(command('cargo', ['metadata', '--locked', '--offline', '--format-version', '1', '--filter-platform', target]));
   const entries = [...cargoEntries(metadata, cache), ...npmEntries(JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8')), root)];
-  const nsis = join(process.env.LOCALAPPDATA ?? '', 'tauri/NSIS/makensis.exe');
+  const nsis = join(root, 'target/.tauri/NSIS/makensis.exe');
   // The pinned CLI bootstraps these tools after beforeBuildCommand on first build.
   // Verify existing caches, but do not require a prior installer build.
   const cli = JSON.parse(readFileSync(join(root, 'node_modules/@tauri-apps/cli/package.json'), 'utf8'));

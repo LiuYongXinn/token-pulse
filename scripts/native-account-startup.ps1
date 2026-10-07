@@ -1,9 +1,10 @@
 param([switch]$ExistingAccount, [switch]$TaskbarAccount)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Native account startup acceptance requires Windows.' }
 if ($TaskbarAccount -and -not $ExistingAccount) { throw 'TaskbarAccount requires the explicit ExistingAccount opt-in.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+    $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"
 }
 if (-not $ExistingAccount) {
     & cargo build -p token-pulse-quota --features test-fixture --bin quota-fixture

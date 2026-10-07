@@ -92,8 +92,7 @@ fn signed_nsis_handoff_uses_exact_arguments_and_requests_exit_once() {
     assert!(directory.starts_with(std::env::temp_dir().canonicalize().unwrap()));
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let cli = root.join("node_modules/@tauri-apps/cli/tauri.js");
-    let compiler = Path::new(&std::env::var_os("LOCALAPPDATA").expect("Windows local app data"))
-        .join("tauri/NSIS/makensis.exe");
+    let compiler = root.join("target/.tauri/NSIS/makensis.exe");
     assert!(
         cli.is_file() && compiler.is_file(),
         "installed tools required"
@@ -286,7 +285,7 @@ SectionEnd
         assert_eq!(std::fs::read_to_string(&completed).unwrap(), "complete");
         assert_eq!(
             std::fs::read_to_string(&marker).unwrap(),
-            format!("/P /UPDATE /R /TOKENPULSE_PARENT={}", std::process::id())
+            format!("/P /UPDATE /R /TOKENPULSE_PARENT={} /D={}", std::process::id(), std::env::current_exe().unwrap().parent().unwrap().display())
         );
         assert_eq!(exits.load(Ordering::Acquire), 1);
         assert!(matches!(

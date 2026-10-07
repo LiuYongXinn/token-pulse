@@ -1,0 +1,5 @@
+[env]
+# Cargo resolves relative values from the repository root, including tests launched directly.
+TEMP = { value = ".local/tmp", relative = true, force = true }
+TMP = { value = ".local/tmp", relative = true, force = true }
+TMPDIR = { value = ".local/tmp", relative = true, force = true }

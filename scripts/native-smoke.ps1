@@ -1,11 +1,12 @@
 param([switch]$Taskbar, [switch]$TaskbarActions, [switch]$TaskbarExplorerRestart, [switch]$PowerMessages, [switch]$PowerResume, [switch]$PowerTaskbarMessages, [switch]$PowerTaskbarResume, [switch]$ApplicationRight, [switch]$PriceAliases, [switch]$OfflinePrices, [switch]$PriceRevalue, [switch]$Diagnostics, [switch]$RecoveryRoutes, [switch]$Notify, [switch]$Updates, [switch]$SourceDialogs, [switch]$AccountDialogs, [switch]$NotifyDialogs)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Native smoke requires Windows.' }
 if ($TaskbarExplorerRestart -and $PSBoundParameters.Count -ne 1) { throw 'Actual Explorer restart acceptance must be the only selected scene.' }
 if ($ApplicationRight -and -not ($PowerTaskbarMessages -or $PowerTaskbarResume)) { throw 'ApplicationRight requires one exclusive taskbar power scene.' }
 if (($PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume) -and ($PSBoundParameters.Count -ne $(if ($ApplicationRight) { 2 } else { 1 }) -or (@($PowerMessages,$PowerResume,$PowerTaskbarMessages,$PowerTaskbarResume) | Where-Object { $_ }).Count -ne 1)) { throw 'Native power acceptance must be the only selected scene, with optional ApplicationRight for taskbar power.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+    $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"
 }
 if (-not ($Notify -or $Updates -or $SourceDialogs -or $NotifyDialogs -or $TaskbarExplorerRestart -or $PowerMessages -or $PowerResume -or $PowerTaskbarMessages -or $PowerTaskbarResume)) {
     & cargo build -p token-pulse-quota --features test-fixture --bin quota-fixture

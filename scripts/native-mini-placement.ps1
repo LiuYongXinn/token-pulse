@@ -1,10 +1,11 @@
 param()
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows -or [Environment]::OSVersion.Version.Build -ne 19045) {
     throw 'This native floating-window placement acceptance targets Windows 10 build 19045.'
 }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+    $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"
 }
 & cargo build -p token-pulse-desktop --features custom-protocol --locked --offline
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

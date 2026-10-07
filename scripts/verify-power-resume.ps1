@@ -1,6 +1,7 @@
 # Default preflight only. -ActualStandby pauses the whole computer; never restarts it.
 param([switch]$ActualStandby, [switch]$Taskbar, [switch]$ApplicationRight, [string]$EvidenceDirectory)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if ($ApplicationRight -and -not $Taskbar) { throw 'ApplicationRight requires the explicit Taskbar scene.' }
 $position = if ($Taskbar) { if ($ApplicationRight) { 'application_right' } else { 'notification_left' } } else { $null }
 if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) {

@@ -1,9 +1,10 @@
 param([switch]$PhysicalInput, [Parameter(Mandatory)][string]$BaselineExecutable)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) { throw 'This tray acceptance requires the reviewed Windows 10 x64 build.' }
 . (Join-Path $PSScriptRoot 'installer-window-probe.ps1')
 $application = @(Get-Process token-pulse-desktop -ErrorAction Stop)
-$installedExecutable = Join-Path $env:LOCALAPPDATA 'TokenPulse\token-pulse-desktop.exe'
+$installedExecutable = Join-Path $tokenPulseLocal 'app\token-pulse-desktop.exe'
 if ($application.Count -ne 1 -or $application[0].Path -ne $installedExecutable) { throw 'Unexpected installed application identity.' }
 if (-not [InstallerWindowProbe]::NsIsBinaryMatches((Resolve-Path -LiteralPath $BaselineExecutable).Path, $installedExecutable)) { throw 'Installed executable does not match the explicit release baseline.' }
 $probeRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path

@@ -5,10 +5,11 @@ param(
     [switch]$Exercise
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Windows native acceptance only.' }
 $repository = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'installer-window-probe.ps1')
-$installedPath = Join-Path $env:LOCALAPPDATA 'TokenPulse/token-pulse-desktop.exe'
+$installedPath = Join-Path $tokenPulseLocal 'app/token-pulse-desktop.exe'
 $application = Get-Process -Id $ApplicationId -ErrorAction Stop
 $applicationStart = $application.StartTime.ToUniversalTime()
 $baseline = (Resolve-Path -LiteralPath $BaselineExecutable).Path
@@ -16,7 +17,7 @@ if ($application.Path -ne $installedPath -or -not [InstallerWindowProbe]::NsIsBi
     throw 'Installed process does not match the explicit NSIS baseline.'
 }
 $python = (Resolve-Path -LiteralPath $PythonExecutable).Path
-$databasePath = Join-Path $env:LOCALAPPDATA 'com.tokenpulse.desktop/token-pulse.db'
+$databasePath = Join-Path $tokenPulseLocal 'data/release/token-pulse.db'
 $readSettings = @'
 import hashlib, json, pathlib, sqlite3, sys
 db = sqlite3.connect(pathlib.Path(sys.argv[1]).resolve().as_uri() + '?mode=ro', uri=True)

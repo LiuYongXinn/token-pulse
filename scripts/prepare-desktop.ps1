@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'TokenPulse installer preparation requires Windows.' }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+    $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"
 }
 $desktopRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 Push-Location -LiteralPath $desktopRoot

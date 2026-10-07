@@ -1,5 +1,6 @@
 param([string]$Installer)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Local release signing requires Windows.' }
 $signingRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $signingVersion = (Get-Content -LiteralPath (Join-Path $signingRepository 'package.json') -Raw | ConvertFrom-Json).version
@@ -9,7 +10,7 @@ if ([IO.Path]::GetFileName($Installer) -notin @("TokenPulse_${signingVersion}_x6
     throw 'Installer name must match the project version and supported target.'
 }
 if (Test-Path -LiteralPath ($Installer + '.sig')) { throw 'Signature already exists; replacement refused.' }
-$signingRoot = Join-Path $env:USERPROFILE '.tokenpulse\release-signing'
+$signingRoot = Join-Path $tokenPulseLocal 'secrets\release-signing'
 $signingMetadata = Get-Content -LiteralPath (Join-Path $signingRoot 'active.json') -Raw | ConvertFrom-Json
 if ($signingMetadata.schema -ne 1 -or $signingMetadata.key_directory -notmatch '^[a-f0-9]{32}$') { throw 'Local signing registration invalid.' }
 $signingDirectory = Join-Path $signingRoot $signingMetadata.key_directory

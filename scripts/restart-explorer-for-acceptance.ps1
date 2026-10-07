@@ -1,6 +1,7 @@
 # Explicit development acceptance only. Normal Restart Manager shutdown, never force/OS reboot.
 param([Parameter(Mandatory)][uint32]$BaselineShellPid, [switch]$RestartShell)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 $null = . (Join-Path $PSScriptRoot 'inspect-explorer-restart.ps1')
 $before = [ExplorerRestartInspection]::Inspect()
 if ($before.ShellPid -ne $BaselineShellPid) { throw 'Explorer differs from the explicit baseline PID.' }

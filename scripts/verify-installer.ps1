@@ -1,5 +1,6 @@
 param([string]$Installer, [switch]$OwnTrayCommands, [switch]$UseExistingLocalState)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Installer acceptance requires Windows.' }
 $installerRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $releaseVersion = (Get-Content -LiteralPath (Join-Path $installerRoot 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json).version
@@ -7,8 +8,8 @@ if (-not $Installer) { $Installer = Join-Path $installerRoot "target\release\bun
 $Installer = (Resolve-Path -LiteralPath $Installer).Path
 $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\TokenPulse'
 $productKey = 'HKCU:\Software\tokenpulse\TokenPulse'
-$dataDirectory = Join-Path $env:LOCALAPPDATA 'com.tokenpulse.desktop'
-$roamingDirectory = Join-Path $env:APPDATA 'com.tokenpulse.desktop'
+$dataDirectory = Join-Path $tokenPulseLocal 'data\release'
+$roamingDirectory = Join-Path $dataDirectory 'config'
 # An existing installation is always refused. Existing data/retained installer state
 # require explicit authorization; the normal clean-machine entry remains unchanged.
 foreach ($existing in @($uninstallKey,

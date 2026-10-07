@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$Report
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Release artifact verification requires Windows.' }
 $verificationRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $verifier = (Resolve-Path -LiteralPath (Join-Path $verificationRoot 'target\release\token-pulse-desktop.exe')).Path

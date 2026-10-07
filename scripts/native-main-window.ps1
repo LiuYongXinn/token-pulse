@@ -1,7 +1,8 @@
 param()
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
 if (-not $IsWindows) { throw 'Native main-window acceptance requires Windows.' }
-if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH" }
+if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { $env:PATH = "$env:CARGO_HOME\bin;$env:PATH" }
 & cargo build -p token-pulse-desktop --features custom-protocol
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $placementProbeId = [guid]::NewGuid().ToString()

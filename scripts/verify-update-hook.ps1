@@ -1,5 +1,7 @@
-param([string]$Compiler = (Join-Path $env:LOCALAPPDATA 'tauri\NSIS\makensis.exe'))
+param([string]$Compiler)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'project-env.ps1')
+if (-not $Compiler) { $Compiler = Join-Path $tokenPulseRoot 'target\.tauri\NSIS\makensis.exe' }
 if (-not $IsWindows) { throw 'Windows is required.' }
 if (-not (Test-Path -LiteralPath $Compiler -PathType Leaf)) { throw 'Build the NSIS channel first to install its compiler.' }
 $probeRoot = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) ('tokenpulse-update-hook-' + [guid]::NewGuid().ToString())))
@@ -13,6 +15,7 @@ try {
 Unicode true
 RequestExecutionLevel user
 Name "TokenPulse isolated hook fixture"
+InstallDir "$EXEDIR"
 OutFile "hook-fixture.exe"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"

@@ -24,6 +24,8 @@
 
 ## 开发与维护
 
+- [项目目录内的数据与工具缓存](development/project-local-storage.md)：数据、WebView、临时文件、工具缓存和现有数据迁移的路径约定。
+
 - [账户额度共享显示与验证](development/account-quota-verification.md)
 - [实施与交付记录](development/delivery-status.md)
 - [开发实施与验收计划](development/implementation-plan.md)
