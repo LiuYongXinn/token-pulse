@@ -2775,3 +2775,30 @@ Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROU
 | 38127e2 | 模型 / 项目 pending 覆盖同快照一次分组 |
 | 1356f53 | 复用完整模型身份，保持精确计数 |
 | 本节记录提交 | 最终三轮 / 重启回执、测试格式和交付状态 |
+
+
+## I22：生成 0.1.11 正式安装包并重新安装本机（2026-10-07）
+
+用户在 I21 后明确授权生成安装包并重新安装本机。当前源码版本、正式 release 和本机注册版本为 0.1.11，现有安装目录仍为 D:/Apps/TokenPulse。本节取代 I21 中“安装版未更新”的当前状态；此前测量与旧文件 SHA 仍作为历史记录保留。本次只进行本机安装，没有上传或发布 GitHub Release，公开版本仍按此前 0.1.10 的记录。
+
+版本准备提交 3979784 同步 Cargo workspace / Cargo.lock 七个本地包 / package.json / package-lock 根字段 / Tauri 配置到 0.1.11，没有更新依赖版本。按正式入口 npm run tauri:build 完整退出 0：前端 typecheck / production build、334 组件 notices、配套任务栏宿主、release 桌面和 NSIS 全部成功；桌面优化编译 3m20s，安装包 6,999,691 字节（6.68 MiB）。本次构建包含当前工作区既有源码修改；用户的未提交文件保留且没有混入本次提交。日志 .local/tmp/instant-install-v0.1.11-build.log。
+
+安装包 target/release/bundle/nsis/TokenPulse_0.1.11_x64-setup.exe，SHA256 f2423727c94073ce4e740dc43c46ec6aa79dc2d59df63706504d43aeb476384e。npm run release:sign 使用现有受当前用户 DPAPI 保护的项目密钥，密码 / 私钥未输出；安装包旁 .exe.sig 已生成。verify-release-artifact.ps1 启动本次 release 维护入口并等待实际退出 0，确认项目更新签名、编译公钥、版本和 x64 target 匹配。这里是项目更新签名验收，不表述为 Windows Authenticode 证书验收。日志 instant-install-v0.1.11-sign.log；报告 .local/backups/instant-install-v0.1.11-20261007/release-verification.json。
+
+安装前现有主程序与宿主均没有运行，无需强制结束进程。安装路径及注册旧版本身份校验后，将原主程序、宿主、notices、卸载器和数据库 / WAL / SHM 复制到 .local/backups/instant-install-v0.1.11-20261007，并核对数据库副本及源文件 SHA 一致。原正式库为 schema 14 / 3,222,937,600 字节，46,514 事件 / 43,883 观测 / 226 会话 / 1 来源。本次没有复制 WebView 凭据或用户来源日志。
+
+NSIS 使用 /S /D=D:\Apps\TokenPulse 静默覆盖，实际退出 0；没有卸载、启动应用或重启。安装器执行前后数据库 / WAL / SHM SHA 完全一致。主程序通过 NsIsBinaryMatches 的全字节比较，仅允许既有校验器明确限定的唯一固定宽度 UNK→NSS bundle marker 差异；宿主和 notices 完全按 SHA 匹配正式构建。HKCU TokenPulse InstallLocation 与 DisplayVersion=0.1.11、主程序 FileVersion=0.1.11 核对通过。安装回执 installation.json；安装操作没有显示窗口或修改主屏任务栏。
+
+| 当前产物 | SHA256 |
+| --- | --- |
+| target/release/token-pulse-desktop.exe | 5A66B1AD87B7576866F9CD8088E4CB7A0FD3AA426978B83EA2E824CDAF773BE8 |
+| D:/Apps/TokenPulse/token-pulse-desktop.exe（0.1.11） | A4D5A19E1FB8D71264647DE2F3464C1EBB55FD2095C1ADC07D083E7996859704 |
+| D:/Apps/TokenPulse/token-pulse-taskbar-host.exe（0.1.11） | 30CFBDB2DFE8B29C576C670210BD96AE8E8ABC458E8B90E414386C95DD9B29A4 |
+
+安装后的首次 schema 14→18 升级提前通过无窗口维护程序执行：直接链接本次 0.1.11 release Store rlib，调用与生产启动相同的 Database::open_desktop，保留生产完整检查、自动备份、事务及迁移 SHA 验证；未启动 Tauri、采集、账户服务或任务栏。实际退出 0，61,395.592ms，设置读取和完整用量修订读取成功。首次链接遗漏 release thin LTO 参数而失败，没有打开数据库；添加匹配构建参数后编译成功，再执行维护。日志 instant-install-v0.1.11-migration-build.log / instant-install-v0.1.11-migration.log。生产迁移另在安装数据目录 migration-backups 保存 before-v14-to-v18 的数据库及 SHA 清单；原手工备份保留。
+
+迁移后用只读事务将 45 张既有业务表与安装前备份按完整主键排序、逐行精确编码 SHA 比较，全部一致；data / price / settings 修订号不变，settings 全部内容、来源配置和 DISPLAY2 副屏位置保留。app_state / schema_migrations 属于预期升级元数据，不要求字节相等；两张大型派生明细没有加入此次额外逐行摘要比较，完整性已经走生产升级及备份检查。schema 与 user_version 均为 18。只读核对耗时 6,573.706ms；回执 database-migration-verification.json，最终合并回执 installation-final.json。安装器的“数据库字节不变”仅指安装前后阶段，不混称后续 schema 迁移也字节不变。
+
+当前安装版已包含即时范围缓存、刷新保留内容、分页租约隔离、隐私与展示修订，以及 I12–I20 的覆盖和计价优化。开发主程序和配套 debug 宿主同步构建成功（43.91s），主程序 FileVersion=0.1.11；日志 instant-install-v0.1.11-debug-build.log。debug 主程序 SHA256 E2BF5BCD3E60331306E2D9DD2AF1781C9C5185C7C29C747766C6BA9B90AE5BF2，debug 宿主 SHA256 4B64AB07241D1BD70D289FA1E92BA3CE96BF549715BD8E179A240117833547B9。源码、开发主程序、正式 release 及安装主程序版本一致，优化 / debug / NSIS 标记导致二进制 SHA 不相同，已分别核对。I21 原生性能回执属于此前保留测试入口的 0.1.10 优化测量构建，不能表述为本次安装版已经复测硬件点击 / DWM P95。因用户持续要求不影响主屏，且原 taskbar_enabled=true，本次没有自动打开正式应用或启用其任务栏；已完成文件、注册、签名、真实数据迁移及业务内容核对，安装版实际 UI 和持续采集负载性能没有在本次重新验证。
+
+追加安装版无窗口验证：直接运行 D:/Apps/TokenPulse/token-pulse-desktop.exe --verify-update-release 并等待实际退出 0，安装版编译公钥、0.1.11 版本、x64 target 和本次安装包更新签名匹配；报告 installed-release-verification.json。未初始化 Tauri、数据库或服务。后续只读再次确认 app_state.schema_version / PRAGMA user_version 均为 18。版本同步后本轮重跑正式前端类型 / 构建与原生完整打包；未改运行时算法，因此此前完整回归和 I21 实测记录继续作为对应功能证据，不改写为本次安装版 UI 复测。
