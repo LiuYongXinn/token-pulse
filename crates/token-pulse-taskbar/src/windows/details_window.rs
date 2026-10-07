@@ -295,7 +295,7 @@ impl Frame {
     fn build(view: &TaskbarView, dpi: u32, width: i32, now: i64) -> Result<Self, WireError> {
         let model = content(view, now)?;
         let theme = view.details.as_ref().ok_or(WireError::InvalidState)?.theme;
-        let font = NativeFont::new(dpi)?;
+        let font = NativeFont::for_details(dpi)?;
         let layout = Layout::build(&model, dpi, width, &font)?;
         Ok(Self {
             font,
@@ -1001,7 +1001,7 @@ mod tests {
         }
     }
     #[test]
-    fn real_system_font_preserves_every_character_and_complete_values_at_four_dpis() {
+    fn real_project_font_preserves_every_character_and_complete_values_at_four_dpis() {
         use token_pulse_core::numeric::DecimalInt;
         let mut view = fixture();
         view.total_tokens = Some(DecimalInt::parse("9007199254740993").unwrap());
@@ -1100,6 +1100,7 @@ mod tests {
     }
     #[test]
     fn actual_nonactivating_popup_refresh_scroll_failure_clear_pixels_and_owner_destruction() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SWP_NOMOVE, SWP_NOZORDER};
         let _dpi = DpiGuard::enter().unwrap();
         let source = unsafe {
             CreateWindowExW(
@@ -1131,6 +1132,22 @@ mod tests {
         let before = unsafe { GetForegroundWindow() };
         details.show(true).unwrap();
         assert!(details.visible());
+        // Force overflow independently of the chosen typeface and monitor height.
+        let popup = window_rect(details.window).unwrap();
+        assert_ne!(
+            unsafe {
+                SetWindowPos(
+                    details.window,
+                    ptr::null_mut(),
+                    0,
+                    0,
+                    popup.width(),
+                    pixels(120, dpi),
+                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+                )
+            },
+            0
+        );
         assert_eq!(unsafe { GetForegroundWindow() }, before);
         // Null foreground on this desktop does not count as physical focus acceptance.
         assert_eq!(

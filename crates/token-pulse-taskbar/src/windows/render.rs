@@ -14,10 +14,10 @@ use windows_sys::Win32::{
     Graphics::Gdi::{
         ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, COLOR_WINDOW, COLOR_WINDOWTEXT,
         CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW, CreateSolidBrush,
-        DIB_RGB_COLORS, DeleteDC, DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor,
-        GetTextExtentPoint32W, GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION,
-        RestoreDC, SaveDC, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT,
-        TextOutW,
+        DEFAULT_CHARSET, DIB_RGB_COLORS, DeleteDC, DeleteObject, FillRect, GdiFlush, GetClipBox,
+        GetSysColor, GetTextExtentPoint32W, GetTextFaceW, GetTextMetricsW, HDC, HFONT, HGDIOBJ,
+        IntersectClipRect, NULLREGION, RestoreDC, SaveDC, SelectObject, SetBkMode, SetTextColor,
+        TEXTMETRICW, TRANSPARENT, TextOutW,
     },
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -129,6 +129,27 @@ impl NativeFont {
     pub fn new(dpi: u32) -> Result<Self, WireError> {
         Self::with_height(dpi, None)
     }
+    pub(crate) fn for_details(dpi: u32) -> Result<Self, WireError> {
+        // Match ui/src/shared/silver-mist.css. GDI can silently substitute a
+        // missing face, so check the selected font before accepting a candidate.
+        for face in ["Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI"] {
+            let font = Self::with_typeface(dpi, None, Some(face))?;
+            let mut selected = [0u16; 32];
+            let length =
+                unsafe { GetTextFaceW(font.dc.0, selected.len() as i32, selected.as_mut_ptr()) };
+            if length == 0 {
+                return Err(WireError::InvalidState);
+            }
+            let end = selected
+                .iter()
+                .position(|&ch| ch == 0)
+                .unwrap_or(selected.len());
+            if String::from_utf16_lossy(&selected[..end]).eq_ignore_ascii_case(face) {
+                return Ok(font);
+            }
+        }
+        Self::new(dpi)
+    }
     pub(crate) fn for_taskbar(
         dpi: u32,
         prefs: DisplayPreferences,
@@ -154,6 +175,9 @@ impl NativeFont {
         Ok(system)
     }
     fn with_height(dpi: u32, height: Option<i32>) -> Result<Self, WireError> {
+        Self::with_typeface(dpi, height, None)
+    }
+    fn with_typeface(dpi: u32, height: Option<i32>, face: Option<&str>) -> Result<Self, WireError> {
         if !(96..=768).contains(&dpi) {
             return Err(WireError::InvalidFrame);
         }
@@ -174,6 +198,20 @@ impl NativeFont {
         // Grayscale coverage can be composited over the real taskbar without
         // ClearType fringes that were calculated against an opaque background.
         metrics.lfMessageFont.lfQuality = ANTIALIASED_QUALITY;
+        if let Some(face) = face {
+            metrics.lfMessageFont.lfFaceName.fill(0);
+            for (target, ch) in metrics
+                .lfMessageFont
+                .lfFaceName
+                .iter_mut()
+                .zip(face.encode_utf16())
+            {
+                *target = ch;
+            }
+            metrics.lfMessageFont.lfWeight = 400;
+            metrics.lfMessageFont.lfItalic = 0;
+            metrics.lfMessageFont.lfCharSet = DEFAULT_CHARSET;
+        }
         if let Some(height) = height {
             metrics.lfMessageFont.lfHeight = -height;
         }
