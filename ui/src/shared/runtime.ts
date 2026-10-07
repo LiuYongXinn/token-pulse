@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest, MiniSessionsRequest, MiniSessionsPage } from './generated/contracts';
 import { displayPolicy } from './display-policy';
+import { recordQueryTiming } from './query-timing';
 import type { UpdateSnapshot, UpdateActionRequest } from './generated/contracts';
 import type { NotifyIntegrationsSnapshot, NotifyPrepareAction, NotifyConfigPreview, NotifyApplyResult } from './generated/contracts';
 import type { DisplayPolicyStamp, DisplayPrivacyMutation, DisplayThemeMutation } from './generated/contracts';
@@ -40,7 +41,8 @@ async function request<T>(command: string, args: Record<string, unknown> = {}, e
   if (!isTauri()) throw new Error('请通过桌面应用打开。浏览器预览不提供本地采集与统计。');
   const epoch = displayPolicy.get().epoch;
   const requestId = crypto.randomUUID();
-  const response = await invoke<Response<T>>(command, { ...args, requestId });
+  const started = performance.now();
+  const response = await invoke<Response<T>>(command, { ...args, requestId }).finally(() => recordQueryTiming(command, 'ipc', started));
   if (response.api_version !== 1 || response.request_id !== requestId) throw new Error('桌面协议版本或响应身份不匹配。');
   if (!plainCommands.has(command)) {
     const stamp = response.display_policy;

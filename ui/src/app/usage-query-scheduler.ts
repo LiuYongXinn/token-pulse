@@ -1,12 +1,14 @@
+import { recordQueryTiming } from '../shared/query-timing';
 type Task = { run: () => Promise<void>; foreground: () => boolean; current: () => boolean };
 const pending: Task[] = [];
 const running = new Set<Task>();
 
 /** Leave a database reader free for mini/status/detail queries while warming pages. */
 export function scheduleUsageQuery(work: () => Promise<void>, foreground: () => boolean, current: () => boolean = () => true): Promise<void> {
+  const queued = performance.now();
   return new Promise((resolve, reject) => {
     pending.push({ foreground, current, run: async () => {
-      try { if (current()) await work(); resolve(); } catch (error) { reject(error); }
+      try { if (current()) { recordQueryTiming('snapshot', 'queue', queued); await work(); } resolve(); } catch (error) { reject(error); }
     } });
     drain();
   });

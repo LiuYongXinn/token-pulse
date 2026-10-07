@@ -2534,3 +2534,7 @@ M16y1 构建准备澄清：首次完整构建因 Cargo.lock 的七个本项目�
 `cargo clippy -p token-pulse-taskbar -p token-pulse-desktop --all-targets -- -D warnings` 通过。
 
 `pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar` 构建成功，但真实场景在初始 `inspect_primary_taskbar` 返回 UnsafeGeometry 后停止，退出 1；没有到达启用 / 保存场景，不能记为真实 Shell 嵌入通过。检查时已安装主程序及宿主仍运行，未关闭或覆盖它们；任务栏完整形态下的设置保存 / 视觉验收仍须复测。
+
+## 即时导航 I01：现状复现与匿名计时
+
+基线 HEAD 872b66b；保留原有 README / docs 索引 / core settings 未提交内容。既有 navigation-cache 四项通过，但全部等待五页预读，换日期明确期待整块读取页。代码确认普通统计串行、状态失败撤销 status、分页离开释放后自动重建。新增最多 2048 条匿名 queue / IPC / 导航首帧机会计时；不记录请求或名称。typecheck 与 scheduler 三项通过。此计时的 paint 是 rAF 帧机会，不代表物理输入到屏幕呈现。后端耗时、未预热与真实数据基线仍待补齐；本阶段未验收完成。
