@@ -2661,3 +2661,6 @@ schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。�
 后台检查使用只允许查询的独立连接，可通过 progress handler 和 SQLite interrupt 中断；完成即关闭连接，不持有 Database 引用循环。固定查询 / writer 仍为十连接，检查运行期间另有一个临时连接。检测失败将健康状态置为 DB_CORRUPT，普通读取、写队列及分页前后都受门禁，迟到结果不能发布，get_app_status 显示存储错误。释放租约仍允许清理。测试发现 SQLite 文件只读打开会遗漏 CHECK 约束，改为正常打开应用数据库并开启 query_only 后，损坏约束测试确认被检测且禁止 SQL 写入。
 
 五项真实 SQLite 启动损坏 / 校验和 / 读写分页门禁 / 迟到租约 / 正常结果回归通过，随后 store 全量 308 passed / 1 ignored。副屏探索性 debug 回执的启动从约十秒变为 1,132.4ms，其中关键表检查 1,057.5ms；该轮与优化构建重叠，不能当作无负载最终性能。后台整库校验仍有秒级维护成本，但不再阻塞启动返回。日志 millisecond-integrity-tests3.log / millisecond-store-regression.log / millisecond-coverage-profile-native.log，继续进行查询索引和最终优化构建复测。
+
+
+启动门禁追加回归：已经接受且成功提交的隐私写入，若随后后台发现损坏，仍返回真实提交成功，以便调用者发布新隐私策略；仅封锁后续新写入。读取与分页仍在返回前拒绝迟到结果。六项 integrity 回归通过（millisecond-integrity-commit-tests.log）。避免把已提交事务改报失败而遗漏策略更新。

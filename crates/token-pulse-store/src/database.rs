@@ -267,6 +267,10 @@ impl Database {
     pub fn integrity_error(&self) -> Option<ErrorCode> {
         self.inner.health.check().err().map(|e| e.code)
     }
+    #[cfg(test)]
+    pub(crate) fn testing_health(&self) -> crate::integrity::Health {
+        self.inner.health.clone()
+    }
     pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache {
         &self.inner.summaries
     }
@@ -292,13 +296,9 @@ impl Database {
             .sender
             .send(Message::Run(Box::new(move |conn| {
                 let before = read_usage_revision(conn).ok();
-                let result = health
-                    .check()
-                    .and_then(|_| operation(conn))
-                    .and_then(|value| {
-                        health.check()?;
-                        Ok(value)
-                    });
+                // Once accepted, preserve the operation's commit result. Converting a
+                // successful privacy save to an error would prevent policy publication.
+                let result = health.check().and_then(|_| operation(conn));
                 let after = read_usage_revision(conn).ok();
                 let changed = after.filter(|revision| before.as_ref() != Some(revision));
                 let _ = sender.send((result, changed));

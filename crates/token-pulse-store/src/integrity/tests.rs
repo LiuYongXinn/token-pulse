@@ -124,3 +124,24 @@ fn active_lease_cannot_publish_a_late_response_after_integrity_failure() {
     );
     leases.release(&lease, &binding).unwrap();
 }
+
+#[test]
+fn an_accepted_privacy_commit_keeps_its_success_result_when_verification_fails() {
+    let (_directory, db) = setup();
+    let health = db.testing_health();
+    let saved = db
+        .write(move |conn| {
+            let tx = conn.transaction()?;
+            tx.execute(
+                "UPDATE settings SET payload_json=json_set(payload_json,'$.privacy',json('true'))",
+                [],
+            )?;
+            tx.commit()?;
+            health.0.store(true, Ordering::Release);
+            Ok("committed")
+        })
+        .unwrap();
+    assert_eq!(saved, "committed"); // The caller can publish the new privacy policy.
+    assert_eq!(db.integrity_error(), Some(ErrorCode::DbCorrupt));
+    assert!(matches!(db.write(|_| Ok(())), Err(e) if e.code==ErrorCode::DbCorrupt));
+}
