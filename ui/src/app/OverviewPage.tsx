@@ -6,6 +6,7 @@ import { availableGrain, calendarDateLabel } from '../shared/main-filter';
 import { useDashboard } from './useDashboard';
 import { Cost, coverageStatus, coverageSummary, reasonNames, when } from './usage-display';
 import { AccountQuotaOverview } from '../shared/AccountQuota';
+import { PendingOverview } from './PendingStatistics';
 
 function Measure({ label, measure, secondary = false }: { label: string; measure: TokenMeasure; secondary?: boolean }) { return <div className={`measure ${secondary ? 'breakdown-support' : ''}`}><dt>{label}</dt><dd>{fullTokens(measure.value)}{(measure.value === null || !measure.complete) && <small>{measure.value === null ? '未知' : `部分已知 · 覆盖 ${fullTokens(measure.covered_total_tokens)} Token`}</small>}</dd></div>; }
 
@@ -39,7 +40,7 @@ export function OverviewPage({ request, refreshRevision, sources, accountTimezon
   const { bundle, error, loading } = useDashboard(request, refreshRevision, active);
   if (!active) return null;
   if (sources?.sources.length === 0) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><div className="empty-symbol">▥</div><h2>添加 Codex 数据来源</h2><p>选择 Codex Home，导入历史用量。</p><button className="primary" onClick={onSources}>查看数据来源</button></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
-  if (!bundle) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><h2>{loading ? '正在读取统计快照' : '统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}</section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
+  if (!bundle) return <>{error && <p className="notice" role="alert">{error}</p>}<PendingOverview grainControls={<div className="grain-switch" role="group" aria-label="时间粒度">{([['hour', '小时'], ['day', '日'], ['month', '月']] as const).map(([grain, label]) => <button key={grain} aria-pressed={request.grain === grain} disabled={availableGrain(grain, request.filter.range) !== grain} onClick={() => onGrain(grain)}>{label}</button>)}</div>} recentAction={<button className="text-button" onClick={onSessions}>查看全部</button>}><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></PendingOverview></>;
   const totals = bundle.summary, pricing = bundle.pricing;
   const fullBreakdown = totals.noncached_input.complete && totals.cached_input.complete && totals.output_total.complete;
   const cacheRate = totals.cached_input.complete && totals.input_total.complete ? percentage(totals.cached_input.value, totals.input_total.value) : null;

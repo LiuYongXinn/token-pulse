@@ -1,45 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
-import { onPriceRulesChanged, runtimeError } from '../shared/runtime';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { runtimeError } from '../shared/runtime';
+import { displayPolicy } from '../shared/display-policy';
 import { scheduleUsageQuery } from './usage-query-scheduler';
+import { usageQueryKey } from './usage-query-key';
+import { usageQueryCache } from './usage-query-cache';
 
-/** Keeps a complete response together and never relabels it with another scope. */
+const readers = new WeakMap<object, string>();
+let serial = 0, epoch = displayPolicy.get().epoch;
+displayPolicy.subscribe(() => {
+  if (epoch !== displayPolicy.get().epoch) { epoch = displayPolicy.get().epoch; usageQueryCache.clear(); }
+});
+
 export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision: number, read: (request: Query) => Promise<Bundle>, foreground = true) {
-  const [result, setResult] = useState<{ key: string; bundle: Bundle } | null>(null);
-  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const sequence = useRef(0);
-  const filterKey = JSON.stringify(request);
-  const lastFilter = useRef<string | null>(null);
-  const visiblePage = useRef(foreground);
-  visiblePage.current = foreground;
+  const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
+  if (!readers.has(read)) readers.set(read, `read-${++serial}`);
+  const key = usageQueryKey(readers.get(read)!, request, policy.epoch);
+  const visible = useRef(foreground); visible.current = foreground;
+  const subscribe = useCallback((listener: () => void) => usageQueryCache.subscribe(key, listener), [key]);
+  const get = useCallback(() => usageQueryCache.get<Bundle>(key), [key]);
+  const result = useSyncExternalStore(subscribe, get);
+  const refresh = useCallback(() => usageQueryCache.read(key, async () => {
+    let value!: Bundle;
+    await scheduleUsageQuery(async () => { value = await read(request); }, () => visible.current, () => policy.epoch === displayPolicy.get().epoch);
+    return value;
+  }, runtimeError), [key, read]);
+  const previousRefresh = useRef(refreshRevision);
   useEffect(() => {
-    let active = true;
-    let busy = false;
-    const refresh = async () => {
-      if (busy) return;
-      busy = true;
-      const serial = ++sequence.current;
-      if (lastFilter.current !== filterKey) { setResult(null); setFailure(null); lastFilter.current = filterKey; }
-      setLoading(true);
-      await scheduleUsageQuery(async () => {
-        if (!active || serial !== sequence.current) return;
-        try { const bundle = await read(request); if (active && serial === sequence.current) { setResult({ key: filterKey, bundle }); setFailure(null); } }
-        catch (e) { if (active && serial === sequence.current) setFailure({ key: filterKey, message: runtimeError(e) }); }
-        finally { busy = false; if (active && serial === sequence.current) setLoading(false); }
-      }, () => active && visiblePage.current, () => active && serial === sequence.current);
-    };
-    void refresh();
-    const interval = setInterval(() => { if (!document.hidden) void refresh(); }, 10_000);
-    const visible = () => { if (!document.hidden) void refresh(); };
-    document.addEventListener('visibilitychange', visible);
-    let stopPriceListener: (() => void) | null = null;
-    // A missing event channel still has polling and visibility recovery. StrictMode
-    // can dispose this effect before listen resolves, so release that late handle.
-    void onPriceRulesChanged(() => { if (active && !document.hidden) void refresh(); })
-      .then(stop => { if (active) stopPriceListener = stop; else stop(); })
-      .catch(() => {});
-    return () => { active = false; ++sequence.current; stopPriceListener?.(); clearInterval(interval); document.removeEventListener('visibilitychange', visible); };
-  }, [filterKey, refreshRevision, read]);
-  // Also guard the frame before the new filter's effect starts its request.
-  return { bundle: result?.key === filterKey ? result.bundle : null, error: failure?.key === filterKey ? failure.message : null, loading: loading || lastFilter.current !== filterKey };
+    if (previousRefresh.current !== refreshRevision) { previousRefresh.current = refreshRevision; usageQueryCache.invalidate(key); }
+    if (!policy.pending) void refresh();
+  }, [key, refreshRevision, policy.pending, refresh]);
+  useEffect(() => { if (result.stale && !result.loading && !result.error && !policy.pending) void refresh(); }, [result, refresh, policy.pending]);
+  return { bundle: result.value, error: result.error, loading: result.loading || result.value === null };
 }

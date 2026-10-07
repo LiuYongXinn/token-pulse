@@ -119,7 +119,7 @@ export function App() {
       try {
         const result = await getAppStatus();
         if (current()) { setStatus({ value: result, epoch }); setStatusPollError(null); }
-      } catch (e) { if (current()) { setStatus(null); setStatusPollError(runtimeError(e)); } }
+      } catch (e) { if (current()) setStatusPollError(runtimeError(e)); }
       finally { inFlight = false; }
     };
     const timer = setInterval(() => void poll(), 2000);

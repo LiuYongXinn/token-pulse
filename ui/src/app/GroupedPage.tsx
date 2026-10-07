@@ -6,6 +6,7 @@ import { useSnapshotQuery } from './useSnapshotQuery';
 import { Cost, coverageStatus, coverageSummary, reasonNames, when } from './usage-display';
 import './grouped.css';
 import { Icon } from '../shared/Icon';
+import { PendingStatistics } from './PendingStatistics';
 
 function ratio(a: string | null, b: string | null) { const n = percentage(a, b); return n === null ? '—' : `${n}%`; }
 function PriceCoverage({ pricing, total, onPrices }: { pricing: PricingSummary; total: string; onPrices: () => void }) {
@@ -24,8 +25,8 @@ export function GroupedPage({ request, dimension, refreshRevision, onPrices, act
   const [limit, setLimit] = useState(200);
   const { bundle, error, loading } = useSnapshotQuery({ filter: request.filter, price_basis: request.price_basis, dimension, sort, limit }, refreshRevision, getGroupedUsage, active);
   if (!active) return null;
-  if (!bundle) return <section className="empty panel"><h2>{loading ? '正在读取分组统计' : '分组统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}</section>;
   const name = dimension === 'models' ? '模型' : '项目';
+  if (!bundle) return <>{error && <p className="notice" role="alert">{error}</p>}<PendingStatistics label={name} columns={[name, 'Token 总量', '占总量', '缓存 / 输入', '估算费用', '价格覆盖']}><div className="group-toolbar"><span>— 个{name}分类</span><div><label>排序 <select aria-label={`${name}排序`} value={sort} onChange={e => setSort(e.target.value as GroupSort)}><option value="total_desc">消耗最多</option><option value="name_asc">名称顺序</option></select></label><label>显示 <select aria-label={`${name}显示数量`} value={limit} onChange={e => setLimit(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 个</option>)}</select></label></div></div></PendingStatistics></>;
   return <>
     {error && <div className="notice" role="alert">{error}<span>保留上次快照 · {when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}</span></div>}
     <div className={`overview-coverage ${bundle.coverage.state}`}><span>{coverageSummary(bundle.coverage)}</span><span role="status">{loading ? '正在刷新…' : `快照 ${when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}`}</span></div>
