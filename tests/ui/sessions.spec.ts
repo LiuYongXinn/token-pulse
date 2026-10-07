@@ -37,6 +37,8 @@ test.beforeEach(async ({ page }) => {
       if (command === 'plugin:event|listen') { listeners.set(++eventId, { event: String(args.event), handler: Number(args.handler) }); return eventId; }
       if (command === 'plugin:event|unlisten') return null;
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: settingsRevision, privacy }, data: privacy ? hide(data) : data });
+      if (command === 'get_mini_visibility') return response(false);
+      if (command === 'get_taskbar_preferences') return response({ settings_revision: settingsRevision, preferences: { enabled: false, position: 'notification_left', fallback_to_mini: true, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true } } });
       if (command === 'get_display_settings') return response({ settings_version: 1, settings_revision: settingsRevision, preferences: { theme: 'dark', privacy, display_timezone: 'Asia/Shanghai' } });
       if (command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'set_display_privacy') {

@@ -22,6 +22,8 @@ test.beforeEach(async ({ page }, info) => {
       __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
         const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: structuredClone(data) });
+        if (command === 'get_mini_visibility') return response(false);
+        if (command === 'get_taskbar_preferences') return response({ settings_revision: '1', preferences: { enabled: false, position: 'notification_left', fallback_to_mini: true, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true } } });
         if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
         if (command === 'get_usage_revision') return response({ database_id: 'a'.repeat(32), data_revision: String(version), price_revision: '1', usage_view_revision: String(version) });
         if (command === 'get_app_status' && statusFail) throw new Error('Synthetic status disconnected');

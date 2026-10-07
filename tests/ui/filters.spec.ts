@@ -15,6 +15,8 @@ test.beforeEach(async ({ page }) => {
     Object.assign(window, { isTauri: true, __facetCalls: calls, __expireFacet: () => { expired = true; }, __deferFacet: () => { deferSlow = true; }, __releaseFacet: () => { releaseSlow?.(); }, __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} }, __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
       if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
       const response = (data: unknown) => ({ api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data });
+      if (command === 'get_mini_visibility') return response(false);
+      if (command === 'get_taskbar_preferences') return response({ settings_revision: '1', preferences: { enabled: false, position: 'notification_left', fallback_to_mini: true, display: { layout: 'two_rows', show_tokens: true, show_costs: true, show_quota: true, show_weekly_reset: true } } });
       if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
       if (command === 'get_app_status') return response({ version: 'synthetic-test', development: true, data_directory: 'synthetic-test', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
       if (command === 'get_sources') return response({ settings_revision: '1', sources: [] });
