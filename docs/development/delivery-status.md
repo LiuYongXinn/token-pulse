@@ -2522,3 +2522,15 @@ M16y1 构建准备澄清：首次完整构建因 Cargo.lock 的七个本项目�
 回执 / 图片 `target/release/review/v0.1.4-4e4e052/taskbar-inspection-3e2ed06b-aa52-4ff7-9c9b-9776d4c0b19e/`，补充各点命中 / 颜色在 `taskbar-inspection-bf51dca4-264e-42c5-8e19-c79450c87a6f/`。旧取色点为 ReBar (0,1) 即屏幕 (502,1381)，实际 WindowFromPoint 是同 Explorer PID 的 DynamicContent1 / 天气组件，COLORREF 12763842（RGB 194,194,194）；周围任务区深色与它不同。源代码没有证明该点为空白，故取色虽成功仍错误。此次短时观察没有稳定复现“平时消失”，该项独立待复测。
 
 修正为完整 UIA 控件几何之后的任务列表空白点，前后同窗口 / 完整拓扑，仅读该 Shell 表面的一个像素，不读取别的应用或截图内容。无空白证据不猜颜色；严格真实自动隐藏 / 有效租约 / 已确认 palette 才保留先前颜色。两位置均初始化原控件几何探针。新增独立预期覆盖天气点排除、负坐标、满占用 / 两像素窄缝 / 不完整和变化几何。taskbar 全套 71 passed / 1 私有真实嵌入入口 ignored、strict all-target Clippy 通过；此前 wire 夹具遗漏新增 cache_write_input 被完整 DTO 正确拒绝，按未知字段补齐后通过，未放宽生产解析。正式 0.1.4 仍旧包；准备新包、本机安装及实际视觉 / 输入验证继续，不将源码检查记为已交付修复。
+
+## 2026-10-07：任务栏保存、闪动与两行布局修复
+
+用户反馈保存后任务栏未及时出现、数据刷新闪动、选择两行仍显示单行。本次移除显示偏好保存前不必要的隐私清屏，改为成功提交后立即触发后台重新应用；挂接后立即重绘。普通刷新保留旧 surface 并一次提交新位图，显式清屏及失败清理仍覆盖旧内容。两行缩减纵向留白，并按实际高度测量系统字体族内的可读字号。细节见[原生宿主协议](../design/taskbar-host-protocol.md#2026-10-07设置应用静默刷新与两行高度)。
+
+源码检查：`cargo test -p token-pulse-taskbar -- --test-threads=1` 为 74 passed / 1 内部子进程入口 ignored；实际 layered 提交序列断言挂接立即提交完整帧、普通更新没有空白帧、显式清屏仍提交清除帧。100 / 125 / 150 / 200% DPI 的真实 Windows 字体及位图检查确认 40 DIP 高度中存在两行独立文字像素，单行仍为一行。`npx playwright test tests/ui/taskbar.spec.ts --workers=1` 六项通过；`npm run build` 通过。已构建本次 debug 主程序和独立宿主，未替换已安装版本。
+
+`cargo test -p token-pulse-desktop taskbar_service --lib -- --test-threads=1` 十二项通过。存储任务栏四项检查首次发现历史夹具将 Light 当作实际主题变更，而当前默认已经是 Light，导致后续硬编码修订 3 冲突；改用实际不同的 Dark 主题，保留精确修订 4 与配置 / 用量一致性断言，四项复测通过。此处仅修正测试夹具，不修改产品默认主题或修订语义。
+
+`cargo clippy -p token-pulse-taskbar -p token-pulse-desktop --all-targets -- -D warnings` 通过。
+
+`pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar` 构建成功，但真实场景在初始 `inspect_primary_taskbar` 返回 UnsafeGeometry 后停止，退出 1；没有到达启用 / 保存场景，不能记为真实 Shell 嵌入通过。检查时已安装主程序及宿主仍运行，未关闭或覆盖它们；任务栏完整形态下的设置保存 / 视觉验收仍须复测。

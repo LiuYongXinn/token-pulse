@@ -210,3 +210,11 @@ application_right 在专用无窗口 MTA 中使用 IUIAutomation2，针对已验
 请求前后复核根 / 列表 HWND、Explorer PID / 创建时间和整组矩形。所有子矩形须完整包含在本次实际列表且可见；空列表保留最小区域，覆盖不确定 / offscreen / 越界失败。槽起点取最右按钮 + 8 DIP 与最小 320 DIP 应用区域的较大者，只在原 switch 内安排实测宽度。预留后再次验证按钮，展示前保持隐藏；变化时有条件释放租约、清除旧交互、从完整当前区域重新探测和挂接。空间不足沿用精简及明确回退，不能覆盖系统控件。
 
 只读开发工具 cargo run -p token-pulse-taskbar --example inspect_buttons -- --inspect-buttons 仅输出几何和数量，不预留布局 / 读取名称。-TaskbarActions 的自有合成窗口使用独立本窗口 AppUserModelID，验证真实按钮增减。依据 [窗口 AppUserModelID](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-id) 与 [SHGetPropertyStoreForWindow](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetpropertystoreforwindow)，在销毁前清空自有属性，不改其他窗口或进程级分组；此夹具仅 debug 可用。实际证据和边界见交付记录 M13e6。
+
+## 2026-10-07：设置应用、静默刷新与两行高度
+
+任务栏显示偏好保存不修改共享隐私策略，因此不再先执行 PublicationPause 清屏屏障。SQLite CAS 写入成功后立即 invalidate 后台代次，重新读取已提交的配置并重置重试预算；相同偏好再次保存也触发重试，写入失败保留当前显示。Configure 仍拒绝旧修订并清除过期数据，真正的隐私切换继续等待原生清屏确认。
+
+普通快照更新先测量并准备新帧，保留当前 layered surface，最后通过一次 UpdateLayeredWindow 提交完整位图。State::prepare 与 NativeCanvas::prepare 不再先提交空白帧；无数据、无可读布局、隐私屏障或准备失败仍清除旧文字、窗口名称和像素。成功挂接并显示子窗口后立即重绘已准备内容，避免等待下一秒快照。
+
+两行使用上下各 2 DIP 留白及 2 DIP 行间距；横向留白不变。先测量系统字体，若两行超出实际宿主高度，在系统字体族内测量较小字号，最小约 8 pt。只有仍无法容纳可读内容时才沿用单行 / 空间不足回退。单行与详情窗保留原系统字号。四种 DPI 的真实字体 / 位图回归覆盖 40 DIP 常见任务栏高度下的两行与单行，以及每行的实际非背景像素。
