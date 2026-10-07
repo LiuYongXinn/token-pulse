@@ -34,10 +34,9 @@ export function DateFilter({ selection, calendar, timezone, disabled, onChange }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.start) || !/^\d{4}-\d{2}-\d{2}$/.test(draft.end) || draft.start > draft.end) { setError('请选择有效日期，结束日期不能早于开始日期。'); return; }
       onChange({ kind: 'custom', start_date: draft.start, end_date_inclusive: draft.end }); close();
     }}>
-      <strong>自定义日期</strong><p>开始和结束日期均包含当天 · {timezone}</p>
+      <strong>自定义日期</strong>
       <label>开始日期<input ref={startInput} type="date" aria-label="开始日期" value={draft.start} required onChange={event => { const start = event.target.value; setDraft(value => value && { ...value, start }); }} /></label>
       <label>结束日期（包含当天）<input type="date" aria-label="结束日期（包含当天）" value={draft.end} required onChange={event => { const end = event.target.value; setDraft(value => value && { ...value, end }); }} /></label>
-      <p>点击应用后更新统一筛选，当前统计暂时保持已应用范围。</p>
       {error && <p className="date-error" role="alert">{error}</p>}
       <div className="date-actions"><button className="primary" type="submit">应用日期</button><button type="button" onClick={close}>取消</button></div>
     </form>}

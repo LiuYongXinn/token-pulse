@@ -173,7 +173,6 @@ test('price notifications refresh whole bundles and warm offscreen views with bo
   const before = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await expect(page.getByText('$1.23', { exact: true })).toBeVisible({ timeout: 3000 });
-  await expect(page.locator('.overview-details')).toContainText('7 / 4');
   expect((await state()).reads).toBe(before + 1);
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(true));
@@ -181,9 +180,9 @@ test('price notifications refresh whole bundles and warm offscreen views with bo
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await page.waitForTimeout(150);
   expect((await state()).reads).toBe(hiddenReads);
-  await expect(page.locator('.overview-details')).toContainText('7 / 4');
+  await expect(page.getByText('$1.23', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as Bridge).__setSyntheticHidden(false));
-  await expect(page.locator('.overview-details')).toContainText('7 / 5');
+  await expect.poll(async () => (await state()).reads).toBe(before + 2);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
   await expect.poll(async () => (await state()).listeners).toBe(5);

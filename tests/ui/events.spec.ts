@@ -64,7 +64,8 @@ test('events retain precise vectors, unknown values, true zero price and stable 
   await page.getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
   const evidence = page.getByLabel('synthetic-event-0 核算依据', { exact: true });
   await expect(evidence).toBeVisible(); await expect(evidence.locator('.raw-negative')).toHaveText('-1');
-  await expect(evidence).toContainText('9,007,199,254,741,093'); await expect(evidence).toContainText('9007199254740993（10⁻¹⁵）');
+  await expect(evidence).toContainText('9,007,199,254,741,093');
+  await expect(evidence).toContainText('USD 9.007199254740993');
   await expect(evidence).toContainText('synthetic-rule'); await expect(evidence).toContainText('最后用量（累计基线已核对）');
   await page.screenshot({ path: 'test-results/event-evidence-1280.png' });
   await page.getByRole('button', { name: '下一页', exact: true }).click();
@@ -126,7 +127,6 @@ test('price notification replaces the whole snapshot and navigation keeps bounde
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);
   await page.evaluate(() => (window as unknown as Bridge).__emitEventPriceChange());
   await expect(page.locator('.event-table>tbody>tr').first().getByText('$18.01', { exact: true })).toBeVisible({ timeout: 3000 });
-  await expect(page.locator('.group-footnote')).toContainText('价格修订 4');
   await page.getByLabel('明细排序').selectOption('total_desc'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);

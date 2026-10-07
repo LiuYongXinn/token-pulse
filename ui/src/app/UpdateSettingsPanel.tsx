@@ -49,12 +49,12 @@ export function UpdateSettingsPanel({ timezone, development }: { timezone: strin
   const downloaded = snapshot?.downloaded_bytes ?? null, total = snapshot?.total_bytes ?? null;
   const percent = downloaded !== null && total !== null && BigInt(total) > 0n ? Number((BigInt(downloaded) * 100n) / BigInt(total)) : null;
   return <section className="panel update-panel" role="tabpanel" aria-label="软件更新">
-    <div className="panel-heading"><div><h2>软件更新</h2><p className="muted">从 TokenPulse 官方发布源获取安装包，签名验证通过后安装。</p></div><button onClick={() => void refresh()}>刷新更新状态</button></div>
+    <div className="panel-heading"><div><h2>软件更新</h2></div><button onClick={() => void refresh()}>刷新更新状态</button></div>
     <div className="update-summary"><span className="update-phase" role="status">{snapshot ? phaseText[snapshot.phase] : '正在读取更新状态'}</span><p>当前版本 <strong>{snapshot?.current_version ?? '尚未读取'}</strong>{snapshot?.release && <> <span className="muted">→</span> 可用版本 <strong>{snapshot.release.version}</strong></>}</p>
       <dl><dt>最近成功检查</dt><dd>{time(snapshot?.last_checked_at_ms ?? null, timezone)}</dd>{snapshot?.release && <><dt>版本发布时间</dt><dd>{time(snapshot.release.published_at_ms, timezone)}</dd></>}</dl>
     </div>
     {snapshot?.issue && <p className="notice" role="alert">{issueText[snapshot.issue]}</p>}
-    {downloaded !== null && <div className="update-progress"><p>{downloaded} 字节已下载 / {total === null ? '总大小未知' : `${total} 字节`}</p>{percent !== null && <progress aria-label="更新下载进度" max={100} value={percent} />}{snapshot?.phase === 'verifying' && <p className="muted">下载完成，等待签名与版本校验。</p>}</div>}
+    {downloaded !== null && <div className="update-progress"><p>{downloaded} 字节已下载 / {total === null ? '总大小未知' : `${total} 字节`}</p>{percent !== null && <progress aria-label="更新下载进度" max={100} value={percent} />}</div>}
     {snapshot?.release?.notes && <section className="update-notes" aria-label="版本说明"><h3>版本说明</h3><p>{snapshot.release.notes}</p></section>}
     {error && <p className="notice" role="alert">{error}</p>}
     <div className="update-actions"><button className="primary" disabled={blocked || snapshot?.phase === 'unavailable'} onClick={() => void action('check')}>检查更新</button>{snapshot?.phase === 'available' && <button className="primary" disabled={blocked} onClick={() => void action('download')}>下载更新</button>}{snapshot?.phase === 'ready_to_install' && <button className="primary" disabled={blocked || development !== false} onClick={() => { if (snapshot.release) setReview({ revision: snapshot.update_revision, version: snapshot.release.version }); }}>安装更新</button>}</div>

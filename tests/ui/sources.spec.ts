@@ -36,7 +36,7 @@ test('source settings use explicitly mocked DTOs and preserve disabled and unkno
   await expect(panel.locator('.source-list .source-path')).toHaveText('E:\\synthetic-fixture\\.codex');
   await expect(panel.getByText('等待目录出现')).toBeVisible();
   await expect(panel.getByText('尚无成功记录')).toHaveCount(2);
-  await expect(panel.getByText('尚未探测', { exact: true })).toBeVisible();
+  await expect(panel.getByText('文件监听能力', { exact: true })).toHaveCount(0);
   await panel.getByRole('button', { name: '暂停采集' }).click();
   await expect(panel.getByText('已暂停', { exact: true })).toBeVisible();
   const status = page.locator('.sidebar-bottom');

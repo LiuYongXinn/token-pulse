@@ -25,12 +25,11 @@ export function RecoveryShortcutPanel() {
     finally { writing.current = false; if (active.current) setBusy(false); }
   };
   return <section className="recovery-shortcut" aria-label="恢复快捷键设置"><h3>恢复小窗交互</h3>
-    <p className="muted">快捷键会显示小窗并恢复鼠标交互；托盘始终保留恢复入口。注册冲突时不会替换已生效组合。</p>
+    <p className="muted">按快捷键显示小窗并恢复鼠标交互。</p>
     <p role="status" aria-label="恢复快捷键注册状态">{readError ? '快捷键状态读取失败，保留上次状态：' : ''}{snapshot ? labels[snapshot.registration] : '尚未读取恢复快捷键'}{readError ? ` · ${readError}` : ''}</p>
     <div className="shortcut-fields">{(['control', 'alt', 'shift'] as const).map((field, index) => <label key={field}><input type="checkbox" aria-label={`恢复快捷键 ${['Ctrl', 'Alt', 'Shift'][index]}`} checked={value?.[field] ?? false} disabled={!snapshot || busy} onChange={e => change({ [field]: e.target.checked })} />{['Ctrl', 'Alt', 'Shift'][index]}</label>)}
       <label>按键<select aria-label="恢复快捷键按键" disabled={!snapshot || busy} value={value?.key ?? ''} onChange={e => change({ key: e.target.value })}>{!value && <option value="">等待配置</option>}{[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', ...Array.from({ length: 11 }, (_, i) => `F${i + 1}`)].map(key => <option key={key} value={key}>{key}</option>)}</select></label></div>
-    {error && <p className="notice" role="alert">{error} 草稿保持保留，可刷新后明确重置。</p>}
+    {error && <p className="notice" role="alert">{error}</p>}
     <div className="display-setting-actions"><button className="primary" disabled={!snapshot || busy || (!draft && snapshot.registration === 'ready') || snapshot.registration === 'unsupported'} onClick={() => void save()}>{busy ? '正在注册并保存…' : draft ? '保存恢复快捷键' : '重新注册恢复快捷键'}</button><button disabled={busy} onClick={() => void reload()}>刷新快捷键状态</button><button disabled={!draft || busy} onClick={() => { setDraft(null); setError(null); }}>重置快捷键草稿</button></div>
-    <p className="chart-caption">{draft ? `编辑基于修订 ${draft.revision}；刷新不覆盖草稿。` : snapshot ? `配置修订 ${snapshot.settings_revision}` : '注册成功后才允许后续穿透功能。'}</p>
   </section>;
 }

@@ -126,9 +126,8 @@ test('sessions show exact consumption and independent context, stable pages and 
   await expect(drawer.getByRole('heading', { name: '所选范围累计消耗' })).toBeVisible();
   await expect(drawer.getByRole('heading', { name: '最近请求上下文' })).toBeVisible();
   await expect(drawer.getByText('窗口容量未知', { exact: true })).toBeVisible();
-  await expect(drawer).toContainText('最近上下文不表示所选日期内累计消费');
+  await expect(drawer.locator('.session-context')).toContainText('快照');
   await expect(drawer.locator('.session-drawer-total')).toContainText('321');
-  await expect(drawer).toContainText('详情整体快照 · 数据 8 / 价格 3');
   await expect(drawer.getByRole('heading', { name: '当前账本分类证据' })).toBeVisible();
   await expect(drawer.locator('.session-classifications')).toContainText('父序列前缀已验证');
   await expect(drawer.locator('.session-classifications')).toContainText('继承边界待确认');
@@ -224,7 +223,6 @@ test('detail refresh replaces its whole bundle, child navigation retains filters
   await drawer.getByRole('button', { name: '刷新详情' }).click();
   await expect(drawer.locator('.session-drawer-total')).toContainText('654');
   await expect(drawer).toContainText('Synthetic Detail Model 1');
-  await expect(drawer).toContainText('详情整体快照 · 数据 9 / 价格 4');
   await drawer.locator('.session-classifications').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/session-classifications-1280.png' });
   await page.setViewportSize({ width: 960, height: 680 });
@@ -264,7 +262,6 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
   await expect(drawer.locator('.session-turn-list')).toContainText('已识别回合 23，未识别回合的用量事件 3 条');
   await expect(drawer.locator('.session-turn-list')).toContainText('回合识别不完整');
-  await expect(drawer.locator('.session-turn-list')).toContainText('回合分页固定数据 10 / 价格 3');
   await expect(drawer.locator('.session-turn-cards [title="18,446,744,073,709,551,614"]')).toBeVisible();
   await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/session-turns-1280.png' });

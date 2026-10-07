@@ -72,7 +72,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
     if (!current(generation, epoch)) { await cancelAccountServiceSelection(selected.selection_handle).catch(() => {}); return; }
     lease.current = selected.selection_handle;
     setDraft({ epoch, value: { selection: selected, auto: auto ?? draft?.auto ?? config.auto_connect } });
-    if (kind === 'detect_local') setNotice('已检测到本地程序，请核对程序和 Home 后保存。检测不会建立账户连接。');
+    if (kind === 'detect_local') setNotice('已检测到本地程序，请核对后保存。');
   });
   const discard = async () => {
     const handle = lease.current; lease.current = null; setDraft(null);
@@ -82,7 +82,7 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
     if (!draft || !unhidden) return;
     const value = await saveAccountServiceConfig({ selection_handle: draft.selection.selection_handle, auto_connect: draft.auto, expected_settings_revision: draft.selection.preview.settings_revision });
     lease.current = null;
-    if (current(generation, epoch)) { ++configSequence.current; setConfig({ value, epoch }); setDraft(null); setNotice('连接配置已保存；用于下次连接或启动，当前连接保持原状。'); }
+    if (current(generation, epoch)) { ++configSequence.current; setConfig({ value, epoch }); setDraft(null); setNotice('配置已保存，下次连接生效。'); }
   });
   const connection = (request: AccountConnectionRequest) => run(async (generation, epoch) => {
     ++quotaSequence.current;
@@ -99,13 +99,13 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
   });
   const selectable = unhidden && !busy && !!config;
   return <section className="account-service" aria-label="账户额度连接">
-    <div className="source-heading"><div><h2>账户额度（可选）</h2><p className="muted">账户额度与本地 Token、费用估算分别计算，不随会话或日期筛选变化。</p></div><button disabled={busy} onClick={() => { setError(null); void readConfig(); void readQuota(); }}>刷新连接状态</button></div>
+    <div className="source-heading"><div><h2>账户额度（可选）</h2></div><button disabled={busy} onClick={() => { setError(null); void readConfig(); void readQuota(); }}>刷新连接状态</button></div>
     {!unhidden && <p className="notice">隐私模式已隐藏账户服务路径和额度。关闭后可选择程序或建立连接。</p>}
     {error && <p role="alert" className="notice">{error}</p>}
     {notice && <p role="status" className="notice">{notice}</p>}
     <article className="source-card">
       <h3>{draft ? '待保存的连接配置' : '已保存的连接配置'}</h3>
-      <p className="muted">选择本机原生 codex.exe 和已登录的 Codex Home，复用现有登录状态读取额度，无需在 TokenPulse 重新登录。选择和保存不会启动服务；点击连接后读取。</p>
+      <p className="muted">选择 codex.exe 和已登录的 Codex Home，保存后连接。</p>
       {!preview ? <p className="muted">尚未读取连接配置</p> : !preview.configured ? <p className="muted">尚未配置账户服务</p> : <dl><dt>服务程序</dt><dd className="source-path">{unhidden ? preview.executable_display_path ?? '—' : '已隐藏'}</dd><dt>Codex Home</dt><dd className="source-path">{unhidden ? preview.home_display_path ?? '账户服务默认目录' : '已隐藏'}</dd><dt>程序指纹（SHA-256）</dt><dd className="source-path">{unhidden ? preview.executable_sha256 ?? '—' : '已隐藏'}</dd></dl>}
       <div className="source-actions"><button className="primary" disabled={!selectable} onClick={() => void choose('detect_local')}>检测本地 Codex</button><button disabled={!selectable} onClick={() => void choose('executable')}>选择账户服务程序</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('home')}>选择账户服务 Home</button><button disabled={!selectable || !preview?.configured} onClick={() => void choose('default_home')}>使用服务默认 Home</button></div>
       <label className="account-auto"><input type="checkbox" checked={draft?.auto ?? config?.auto_connect ?? false} disabled={!selectable || !preview?.configured} onChange={e => { const auto = e.target.checked; if (draft) setDraft({ epoch: policy.epoch, value: { ...draft, auto } }); else void choose('current', auto); }} />启动 TokenPulse 时自动连接此服务</label>
@@ -113,11 +113,10 @@ export function AccountServicePanel({ timezone }: { timezone: string | null }) {
     </article>
     <article className="source-card">
       <h3>当前连接账户</h3><p role="status">{quota ? quotaStates[quota.state] : '尚未读取连接状态'}</p>
-      {quota?.state === 'authorization_required' && <p className="muted">所选 Codex Home 没有可用的 ChatGPT 登录状态。请选择本地已登录账户使用的 Home，再重新连接；本地用量统计继续可用。</p>}
+      {quota?.state === 'authorization_required' && <p className="muted">所选 Home 未登录 ChatGPT，请选择已登录的 Home 后重新连接。</p>}
       {quota?.state === 'stale' && <p className="notice">保留上次成功额度。以下读数可能已过期，等待服务更新。</p>}
       {quota?.error_code && <p className="muted">服务状态：{quota.error_code}</p>}
       <div className="source-actions"><button className="primary" disabled={busy || !unhidden || !!draft || !config?.configured || !config.executable_sha256 || !quota || quota.state === 'connecting'} onClick={() => { if (config?.executable_sha256 && quota) void connection({ kind: 'connect', expected_settings_revision: config.settings_revision, expected_connection_epoch: quota.connection_epoch, acknowledged_executable_sha256: config.executable_sha256 }); }}>连接已保存服务</button><button disabled={busy || !quota || quota.state === 'disconnected'} onClick={() => { if (quota) void connection({ kind: 'disconnect', expected_connection_epoch: quota.connection_epoch }); }}>断开本次连接</button><button disabled={busy || !unhidden || !quota || !['ready', 'stale', 'error'].includes(quota.state)} onClick={() => void refresh()}>刷新账户额度</button></div>
-      <p className="muted">断开本次连接保留已保存的启动连接偏好。更换程序或 Home 后，请点击连接已保存服务。</p>
       {unhidden && quota && <>
         {quota.available_limits.length > 0 && <label>额度桶 <select aria-label="账户额度桶" value={quota.selected_limit_id ?? ''} disabled={busy} onChange={e => void connection({ kind: 'select_limit', expected_connection_epoch: quota.connection_epoch, expected_quota_revision: quota.quota_revision, limit_id: e.target.value })}><option value="" disabled>请选择额度桶</option>{quota.available_limits.map(limit => <option key={limit.limit_id} value={limit.limit_id}>{limit.display_name ?? limit.limit_id}</option>)}</select></label>}
         <p className="muted">最近成功读取：{quotaDate(quota.fetched_at_ms, timezone)}</p>

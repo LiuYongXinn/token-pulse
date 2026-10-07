@@ -96,7 +96,7 @@ test('failed writes retain draft; revision conflict requires deliberate reselect
   await page.evaluate(() => { (window as unknown as QA).__quotaQA.fail(false); (window as unknown as QA).__quotaQA.conflict(); });
   await region.getByRole('button', { name: '刷新连接状态' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click(); await expect(region.getByRole('alert')).toContainText('已发生变化');
   await region.getByRole('button', { name: '放弃账户配置草稿' }).click(); await region.getByRole('button', { name: '选择账户服务程序' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click();
-  await expect(region.getByText('连接配置已保存；用于下次连接或启动，当前连接保持原状。')).toBeVisible();
+  await expect(region.getByText('配置已保存，下次连接生效。')).toBeVisible();
 });
 
 test('local detection returns a reviewable draft without connecting and preserves the explicit Home', async ({ page }) => {
@@ -116,7 +116,7 @@ test('privacy clears path and capabilities; authorization required stays distinc
   await page.goto('/'); await page.getByRole('button', { name: '设置', exact: true }).click(); const region = page.getByRole('region', { name: '账户额度连接' });
   await region.getByRole('button', { name: '选择账户服务程序' }).click(); await region.getByRole('button', { name: '保存账户连接配置' }).click();
   await page.evaluate(() => (window as unknown as QA).__quotaQA.authorization()); await region.getByRole('button', { name: '连接已保存服务' }).click(); await expect(region.getByText('本地登录态不可用', { exact: true })).toBeVisible();
-  await expect(region.getByText('所选 Codex Home 没有可用的 ChatGPT 登录状态。请选择本地已登录账户使用的 Home，再重新连接；本地用量统计继续可用。')).toBeVisible();
+  await expect(region.getByText('所选 Home 未登录 ChatGPT，请选择已登录的 Home 后重新连接。')).toBeVisible();
   await expect(region.getByRole('button', { name: /登录|授权/ })).toHaveCount(0);
   await region.getByRole('button', { name: '选择账户服务 Home' }).click();
   await page.evaluate(() => (window as unknown as QA).__quotaQA.privacy());

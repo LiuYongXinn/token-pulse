@@ -32,11 +32,11 @@ export function MiniPassthroughPanel({ revision }: { revision: string | null }) 
     finally { writing.current = false; if (active.current) setBusy(false); }
   };
   return <section className="mini-passthrough-settings" aria-label="鼠标穿透设置"><h3>鼠标穿透</h3>
-    <p className="muted">开启后，小窗上的鼠标操作会传给下方窗口。使用恢复快捷键或托盘「显示悬浮窗 / 恢复交互」解除；重新显示小窗也会关闭穿透。</p>
+    <p className="muted">鼠标操作将传给下方窗口。按恢复快捷键或通过托盘恢复交互。</p>
     <p role="status" aria-label="鼠标穿透状态">{snapshot ? `${snapshot.enabled ? '穿透已开启' : '穿透已关闭'}${snapshot.supported ? '' : ' · 当前平台不支持'}${snapshot.window_present ? '' : ' · 小窗尚未创建'}${snapshot.persisted_enabled !== snapshot.enabled ? ' · 已恢复交互，但保存状态尚未同步，请重试关闭' : ''}` : '尚未读取穿透状态'}{readError ? ` · 读取失败，保留上次状态：${readError}` : ''}</p>
     <p className="muted">{snapshot ? `恢复快捷键 ${keyName(snapshot.recovery_shortcut)} · ${snapshot.recovery_registration === 'ready' ? '已注册' : '尚未有效注册，请先处理恢复快捷键'}` : '等待实际恢复键状态。'}</p>
     <label className="passthrough-ack"><input type="checkbox" aria-label="我已了解鼠标穿透与恢复方式" checked={ack !== null} disabled={!ready || busy || snapshot?.enabled === true} onChange={e => { setError(null); setAck(e.target.checked && snapshot ? { key: snapshot.recovery_shortcut, revision: snapshot.settings_revision } : null); }} /><span>我已了解鼠标会穿透，并记住当前恢复快捷键。</span></label>
-    {ack && <p className="chart-caption">已确认 {keyName(ack.key)} · 修订 {ack.revision}{!sameKey ? '；恢复键已变化，请取消勾选后重新确认。' : ''}</p>}
+    {ack && <p className="chart-caption">已确认 {keyName(ack.key)}{!sameKey ? '；恢复键已变化，请取消勾选后重新确认。' : ''}</p>}
     {error && <p className="notice" role="alert">{error}</p>}
     <div className="display-setting-actions"><button className="primary" disabled={!ready || !ack || !sameKey || snapshot?.enabled === true || busy} onClick={() => void change(true)}>开启鼠标穿透</button><button disabled={!snapshot || busy || (!snapshot.enabled && !snapshot.persisted_enabled)} onClick={() => void change(false)}>关闭鼠标穿透</button><button disabled={busy} onClick={() => void recover()}>显示小窗并恢复交互</button><button disabled={busy} onClick={() => void reload()}>刷新穿透状态</button></div>
   </section>;

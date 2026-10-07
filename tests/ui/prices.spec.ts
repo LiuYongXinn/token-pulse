@@ -103,7 +103,6 @@ test('alias self mapping and CAS conflict preserve draft and exact captured revi
   await panel.getByRole('button', { name: '刷新当前版本' }).click();
   await editor.getByRole('button', { name: '保存别名并发布版本' }).click();
   await expect(panel.getByRole('alert')).toContainText('配置或作业状态已发生变化');
-  await expect(editor.getByText('基于版本 0 发布；失败或冲突会保留草稿。')).toBeVisible();
   await expect(editor.getByLabel('标准模型标识', { exact: true })).toHaveValue('b');
   await editor.getByRole('button', { name: '取消别名编辑' }).click();
   await aliases.getByRole('button', { name: '新增别名' }).click();
@@ -184,10 +183,10 @@ test('revision conflicts preserve unsaved prices even after manually refreshing 
   await editor.getByRole('button', { name: '保存并发布版本' }).click();
   await expect(panel.getByRole('alert')).toContainText('配置或作业状态已发生变化');
   await expect(editor.getByLabel('输入单价 / 百万 Token', { exact: true })).toHaveValue('1.000000001');
-  await expect(editor.getByText('基于版本 0 发布。模型与提供方须填写日志中的确切标识。')).toBeVisible();
+  await expect(editor.getByText('模型与提供方须填写日志中的确切标识。')).toBeVisible();
   await editor.getByRole('button', { name: '取消编辑' }).click();
   await panel.getByRole('button', { name: '新增规则', exact: true }).click();
-  await expect(editor.getByText('基于版本 1 发布。模型与提供方须填写日志中的确切标识。')).toBeVisible();
+  await expect(editor.getByText('模型与提供方须填写日志中的确切标识。')).toBeVisible();
   await editor.getByLabel('提供方', { exact: true }).fill('synthetic-provider');
   await editor.getByLabel('确切模型标识', { exact: true }).fill('conflict-fixture');
   await editor.getByLabel('输入单价 / 百万 Token', { exact: true }).fill('0');

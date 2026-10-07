@@ -55,26 +55,25 @@ export function PriceRevaluePanel({ revision, historical }: { revision: string; 
     pendingStart.current = null;
   };
   return <section className="price-revalue" aria-label="后台费用重估">
-    <div className="panel-heading"><div><h3>后台费用重估</h3><p className="muted">为已确认用量保存费用缓存；每次任务固定价格版本，Token 与账户额度保持独立。</p></div><button disabled={busy} onClick={() => refresh.current()}>刷新重估状态</button></div>
+    <div className="panel-heading"><div><h3>后台费用重估</h3><p className="muted">按所选计价依据重新估算全部用量。</p></div><button disabled={busy} onClick={() => refresh.current()}>刷新重估状态</button></div>
     {readError && <p role="alert" className="notice">重估状态读取失败：{readError}</p>}
     {actionError && <p role="alert" className="notice">{actionError}</p>}
     {notice && <p role="status" className="muted">{notice}</p>}
     {!status && !readError && <p className="muted" role="status">正在读取重估状态…</p>}
     {status && <>
-      <p className="muted">当前价格版本 {status.current_price_revision} · 按事件发生时价格待补缓存：{fullTokens(status.uncached_ledgers)} 个会话账本。启动、用量或价格变化后自动补建。</p>
+      <p className="muted">当前价格版本 {status.current_price_revision} · 按事件发生时价格待补缓存：{fullTokens(status.uncached_ledgers)} 个会话账本。</p>
       {job ? <div className="revalue-progress" role="status" aria-live="polite">
         <div className="revalue-progress-heading"><strong>{states[job.state]}</strong><span>{job.automatic ? '自动任务' : '手动任务'} · 价格版本 {job.price_revision}</span></div>
         <p>已处理记录 {fullTokens(job.processed_events)} / {fullTokens(job.total_events)} · 完成账本 {fullTokens(job.completed_ledgers)} / {fullTokens(job.total_ledgers)}</p>
         {percent !== null && <progress aria-label="费用重估进度" value={percent} max={100}>{percent}%</progress>}
         <p className="muted">{job.basis.mode === 'event_time' ? '按每条事件发生时的有效单价' : `指定估价时点：${new Date(job.basis.specified_at_ms).toISOString()}`}</p>
         {job.error && <p className="notice">{revalueError({ code: job.error })}</p>}
-        {job.can_cancel && <button disabled={busy || job.state === 'cancelling'} onClick={() => void run(() => cancelPriceRevalue(job.job_id), '取消请求已处理；已发布缓存继续可用。')}>{job.state === 'cancelling' ? '等待取消完成…' : '取消当前重估'}</button>}
+        {job.can_cancel && <button disabled={busy || job.state === 'cancelling'} onClick={() => void run(() => cancelPriceRevalue(job.job_id), '已请求取消重估。')}>{job.state === 'cancelling' ? '等待取消完成…' : '取消当前重估'}</button>}
       </div> : <p className="muted">暂无重估任务。</p>}
     </>}
     {historical ? <p className="muted">历史价格版本只读；回到当前版本后可创建重估任务。</p> : <>
       {stale && <p className="notice">当前规则已变化，请刷新当前版本后重估。</p>}
       <div className="revalue-actions"><PriceBasisFilter basis={basis} disabled={busy} onChange={next => { pendingStart.current = null; setBasis(next); }} /><button className="primary" disabled={busy || !status || stale || status.active_job !== null} onClick={() => void run(start, '重估请求已接受。')}>重估全部已确认用量</button></div>
     </>}
-    <p className="muted revalue-note">缺少规则的记录仍为未计价。取消停止剩余工作；同一输入不自动重新排队，可手动重试。统计查询按自己的快照即时补算尚无缓存的记录。</p>
   </section>;
 }

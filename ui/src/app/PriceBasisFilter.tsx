@@ -18,11 +18,10 @@ export function PriceBasisFilter({ basis, disabled, onChange }: { basis: PriceBa
     </>}
     {draft !== null && <form className="price-instant-editor" aria-label="指定估价时点" onSubmit={event => {
       event.preventDefault(); const instant = parsePriceInstant(draft);
-      if (instant === null) { setError('请输入有效 UTC 日期和时刻，不会自动更正无效日期。'); return; }
+      if (instant === null) { setError('请输入有效的 UTC 日期和时刻。'); return; }
       onChange({ mode: 'specified_time', specified_at_ms: instant }); close();
     }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); close(); } }}>
       <label>估价时点（UTC）<input type="datetime-local" autoFocus step="0.001" aria-label="估价时点（UTC）" value={draft} required onChange={event => setDraft(event.target.value)} /></label>
-      <p>按此明确时刻匹配规则；查询和翻页保留该时点，Token 和账户额度不随估价改变。</p>
       {error && <p role="alert">{error}</p>}
       <div><button type="submit" className="primary">应用估价时点</button><button type="button" onClick={close}>取消</button></div>
     </form>}

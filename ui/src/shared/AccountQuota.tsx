@@ -19,7 +19,6 @@ export function AccountQuotaOverview({ timezone, onSettings }: { timezone: strin
   return <section className="panel quota-overview" aria-label="账户额度总览"><div className="panel-heading"><h2>账户额度</h2><button className="text-button" onClick={onSettings}>连接设置</button></div>
     <p className="quota-state" role="status">{view.hidden ? '隐私模式已隐藏账户额度' : view.error && view.quota ? '旧快照 · 更新失败' : view.quota ? quotaStates[view.quota.state] : view.error ? '额度暂不可用' : '正在读取账户状态'}</p>
     {!view.hidden && <><Windows quota={view.quota} clock={view.clock} timezone={timezone} /><Scope quota={view.quota} timezone={timezone} />{view.error && <p className="notice" role="alert">{view.error}</p>}{view.notice && <p className="chart-caption" role="status">{view.notice}</p>}<button disabled={view.refreshing || !view.quota || !['ready', 'stale', 'error'].includes(view.quota.state)} onClick={() => void view.refresh()}>刷新账户额度</button></>}
-    <p className="chart-caption">账户额度独立于本地消费及会话筛选。百分比和重置时间由账户服务提供。</p>
   </section>;
 }
 export function MiniAccountQuota({ timezone, onExpand }: { timezone: string | null; onExpand: () => void }) {
@@ -53,6 +52,6 @@ export function MiniAccountQuota({ timezone, onExpand }: { timezone: string | nu
       <p><span>周重置 {view.hidden ? '已隐藏' : quotaDate(weekly?.resets_at_ms ?? null, timezone, true)}</span><span>{state}</span></p>
       {weekly?.resets_at_ms !== null && weekly?.resets_at_ms !== undefined && !view.hidden && <small>{quotaCountdown(weekly.resets_at_ms, view.clock)}</small>}
     </button>
-    {details && !view.hidden && <section ref={dialog} className="mini-quota-details" role="dialog" aria-modal="true" aria-label="账户额度详情"><header><h2>账户额度</h2><button aria-label="关闭账户额度详情" onClick={() => { setDetails(false); entry.current?.focus(); }}>×</button></header><div className="mini-quota-scroll"><p className="quota-state" role="status">{state}</p><Windows quota={view.quota} clock={view.clock} timezone={timezone} /><Scope quota={view.quota} timezone={timezone} />{view.error && <p role="alert">{view.error}</p>}{view.notice && <p role="status">{view.notice}</p>}<p className="quota-scope">仅账户范围；不随固定会话变化。</p></div><button disabled={view.refreshing || !view.quota || !['ready', 'stale', 'error'].includes(view.quota.state)} onClick={() => void view.refresh()}>刷新账户额度</button></section>}
+    {details && !view.hidden && <section ref={dialog} className="mini-quota-details" role="dialog" aria-modal="true" aria-label="账户额度详情"><header><h2>账户额度</h2><button aria-label="关闭账户额度详情" onClick={() => { setDetails(false); entry.current?.focus(); }}>×</button></header><div className="mini-quota-scroll"><p className="quota-state" role="status">{state}</p><Windows quota={view.quota} clock={view.clock} timezone={timezone} /><Scope quota={view.quota} timezone={timezone} />{view.error && <p role="alert">{view.error}</p>}{view.notice && <p role="status">{view.notice}</p>}</div><button disabled={view.refreshing || !view.quota || !['ready', 'stale', 'error'].includes(view.quota.state)} onClick={() => void view.refresh()}>刷新账户额度</button></section>}
   </>;
 }

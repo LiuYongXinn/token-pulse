@@ -31,15 +31,15 @@ export function OfflinePricesPanel({ revision }: { revision: string }) {
   const rows = catalog?.entries.filter(entry => (tier === 'all' || entry.tier === tier)
     && entry.model_exact.includes(search.trim().toLowerCase())) ?? [];
   return <section className="offline-prices" aria-label="离线价格目录">
-    <div className="panel-heading"><div><h3>离线价格目录</h3><p className="muted">全球 API 参考单价 · 与订阅实付费用、账户剩余额度分别计算。</p></div><button disabled={loading} onClick={() => setRetry(value => value + 1)}>重新读取目录</button></div>
+    <div className="panel-heading"><div><h3>离线价格目录</h3><p className="muted">全球 API 参考单价。</p></div><button disabled={loading} onClick={() => setRetry(value => value + 1)}>重新读取目录</button></div>
     {loading && <p role="status" className="muted">正在读取版本 {revision} 的内置目录…</p>}
     {error && <p role="alert" className="notice">目录读取失败：{error}</p>}
     {!loading && !error && !catalog && <p className="muted">此价格版本尚无内置目录。</p>}
     {catalog && <>
       <p className="muted">核实于 {new Date(catalog.verified_at_ms).toISOString().slice(0, 10)}（UTC） · {catalog.catalog_id} · 价格版本 {revision} · {new Set(catalog.entries.map(entry => entry.model_exact)).size} 个模型 / {catalog.entries.length} 条单价</p>
-      <p className="offline-explanation">实际模式未知时默认按 Standard 参考价估算。可靠单次请求输入用于选择上下文档位；缺少该证据时暂用短上下文参考档，缓存写入量未知时估算暂按 0，假设可在明细价格依据中查看，原始用量保持不变。不会把累计输入当作某一次请求的上下文。核实日之前的事件可选择明确估价时点或自定义历史规则。地区加价、工具、图像 / 音频与微调费用另计。</p>
+      <p className="offline-explanation">模式未知时按 Standard 估算；请求输入未知时使用短上下文档，缓存写入未知时按 0 估算。具体假设见明细价格依据。</p>
       <div className="offline-filters"><label>查找目录模型<input value={search} maxLength={128} onChange={event => setSearch(event.target.value)} placeholder="确切模型标识" /></label><label>目录处理模式<select value={tier} onChange={event => setTier(event.target.value as OfflinePriceTier | 'all')}><option value="all">全部模式</option>{tiers.map(value => <option key={value} value={value}>{title(value)}</option>)}</select></label><span className="muted" role="status">{rows.length} 条匹配价格</span></div>
-      {rows.length === 0 ? <p className="muted">没有匹配的目录条目。未知模型不会套用相似名称的价格。</p> : <div className="offline-table-wrap" tabIndex={0} role="region" aria-label="离线价格表，可横向滚动"><table className="offline-price-table"><caption>USD / 百万 Token · “未公布”保持未知 · 只读官方事实</caption><thead><tr><th>模型 / 条件</th><th>输入</th><th>缓存输入</th><th>缓存写入</th><th>输出</th><th>参考适用情况</th></tr></thead><tbody>{rows.map(entry => <tr key={`${entry.model_exact}/${entry.tier}/${entry.context}`}><td><strong>{entry.model_exact}</strong><small>{title(entry.tier)} · {band[entry.context]}</small><a href={entry.reference} target="_blank" rel="noreferrer">官方来源</a></td><td>{entry.input_per_million}</td><td>{entry.cached_per_million ?? '未公布'}</td><td>{entry.cache_write_per_million ?? '未公布'}</td><td>{entry.output_per_million}</td><td>{applicability(entry)}</td></tr>)}</tbody></table></div>}
+      {rows.length === 0 ? <p className="muted">没有匹配的目录条目。</p> : <div className="offline-table-wrap" tabIndex={0} role="region" aria-label="离线价格表，可横向滚动"><table className="offline-price-table"><caption>USD / 百万 Token</caption><thead><tr><th>模型 / 条件</th><th>输入</th><th>缓存输入</th><th>缓存写入</th><th>输出</th><th>参考适用情况</th></tr></thead><tbody>{rows.map(entry => <tr key={`${entry.model_exact}/${entry.tier}/${entry.context}`}><td><strong>{entry.model_exact}</strong><small>{title(entry.tier)} · {band[entry.context]}</small><a href={entry.reference} target="_blank" rel="noreferrer">官方来源</a></td><td>{entry.input_per_million}</td><td>{entry.cached_per_million ?? '未公布'}</td><td>{entry.cache_write_per_million ?? '未公布'}</td><td>{entry.output_per_million}</td><td>{applicability(entry)}</td></tr>)}</tbody></table></div>}
     </>}
   </section>;
 }

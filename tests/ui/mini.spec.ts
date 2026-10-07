@@ -196,7 +196,7 @@ test('failed refresh keeps an explicitly old success, scope reset carries precis
   await page.goto('/?window=mini'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
   await page.evaluate(() => (window as unknown as QA).__miniQA.fail(true)); await page.getByLabel('刷新小窗').click();
   await expect(page.getByRole('alert')).toContainText('保留上次快照'); await expect(page.getByLabel('可信 Token 分解')).toHaveText('683.1K');
-  await expect(page.getByLabel('刷新小窗')).toHaveAttribute('title', /最近成功统计快照.*不表示最后消费时间/);
+  await expect(page.getByLabel('刷新小窗')).toHaveAttribute('title', /更新时间.*10:40:00\.456.*UTC/);
   await page.evaluate(() => (window as unknown as QA).__miniQA.fail(false));
   await page.getByLabel('展开小窗').click(); await page.setViewportSize({ width: 360, height: 380 });
   await page.getByRole('button', { name: '返回今日全部' }).click(); await expect(page.locator('.mini-scope')).toContainText('全部来源 · 今日');

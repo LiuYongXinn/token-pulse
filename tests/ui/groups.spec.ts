@@ -58,7 +58,7 @@ test('model table keeps precise large tokens, mixed currencies, true zero, unkno
   await page.getByRole('button', { name: '项目', exact: true }).click();
   await expect(page.getByLabel('日期范围')).toHaveValue('last7');
   await expect(page.getByRole('heading', { name: 'Synthetic project alias' })).toBeVisible();
-  await expect(page.getByText('日志中缺少工作目录，归属保持未知')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '未知项目', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 960, height: 680 });
   await page.screenshot({ path: 'test-results/projects-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -80,7 +80,7 @@ test('group limits report undisplayed categories and redacted summaries hide eve
   await page.getByLabel('模型显示数量').selectOption('50');
   await expect(page.locator('.group-table tbody tr')).toHaveCount(50);
   await expect(page.getByText('201 个模型分类 · 已显示 50 个')).toBeVisible();
-  await expect(page.getByText('仍有未显示的模型分类；汇总包含当前筛选的全部消费。可缩小筛选范围查看其他分类。')).toBeVisible();
+  await expect(page.getByText('还有未显示的模型，请缩小筛选范围。')).toBeVisible();
   await expect(page.getByLabel('9,007,199,254,741,231 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { __setSyntheticGroups: (more: boolean, hide: boolean) => void }).__setSyntheticGroups(false, true));
   await page.getByRole('button', { name: '刷新', exact: true }).click();

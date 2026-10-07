@@ -47,7 +47,7 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
   };
   const prepare = (action: NotifyPrepareAction) => run(async (generation, epoch) => {
     clear(); const value = await prepareNotifyIntegration(action);
-    if (!value) { if (current(generation, epoch)) setNotice('已取消目录选择，配置没有修改。'); return; }
+    if (!value) { if (current(generation, epoch)) setNotice('已取消目录选择。'); return; }
     if (!current(generation, epoch) || value.redacted) { await releaseNotifyPreview(value.plan_id).catch(() => {}); return; }
     lease.current = value.plan_id; deadline.current = performance.now() + value.expires_in_seconds * 1000;
     setRemaining(value.expires_in_seconds); setDraft({ epoch, value });
@@ -64,11 +64,11 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
   });
   const retire = (id: string) => run(async (generation, epoch) => {
     await retireNotifyIntegration(id);
-    if (current(generation, epoch)) { setNotice('已清理停用的接入记录，用户配置未修改。'); await reload(); }
+    if (current(generation, epoch)) { setNotice('已清理停用记录。'); await reload(); }
   });
   const choices = sources?.sources.filter(s => !s.removed && s.origin !== 'wsl') ?? [];
   return <section className="notify-settings" aria-label="Codex 通知接入">
-    <div className="source-heading"><div><h2>Codex 通知（可选）</h2><p className="muted">回合完成后提前核对日志。Token 仍按本地日志核算，通知不会新增用量。</p></div><button disabled={busy} onClick={() => void reload()}>刷新通知状态</button></div>
+    <div className="source-heading"><div><h2>Codex 通知（可选）</h2><p className="muted">回合完成后核对用量日志。</p></div><button disabled={busy} onClick={() => void reload()}>刷新通知状态</button></div>
     {!visible && <p className="notice">隐私模式已隐藏通知路径与配置。关闭后可预览接入或停用。</p>}
     {(error ?? readError) && <p className="notice" role="alert">{error ?? readError}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <p className="notify-health">{!snapshot ? '正在读取通知状态…' : snapshot.service_issue ? notifyIssueText(snapshot.service_issue) : snapshot.listener_count === null ? '正在检查通知监听…' : snapshot.listener_count === 0 ? '暂无正在监听的通知接入' : `${snapshot.listener_count} 个通知入口监听中`}</p>
@@ -94,6 +94,5 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
       <p className="muted">{remaining > 0 ? `预览将在 ${remaining} 秒后过期；配置变化后需重新预览。` : '预览已过期，请关闭后重新预览。'}</p>
       <div className="source-actions"><button className="primary" disabled={busy || remaining <= 0} onClick={() => void apply()}>{busy ? '正在应用…' : preview.operation === 'enable' ? '确认启用通知' : '确认停用通知'}</button><button disabled={busy} onClick={clear}>关闭预览</button></div>
     </section>}
-    <p className="muted notify-footnote">停用只恢复本次接入的通知配置，保留其他设置与日志。支持安全修改的本机目录才能启用；不可用时日志监听与定期核对继续运行。</p>
   </section>;
 }

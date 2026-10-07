@@ -40,11 +40,11 @@ export function DiagnosticsIssues({ sources }: { sources: SourcesSnapshot | null
   }, [source]);
   const names = new Map(sources?.sources.map(s => [s.source_id, s.root_path]));
   return <section className="panel diagnostics-issues" aria-label="采集问题与必要位置">
-    <div className="panel-heading"><div><h2>采集与核算问题</h2><p className="muted">每个位置的同类问题显示一处代表偏移。旧代次和已解决的问题不在此显示。</p></div><button disabled={loading} onClick={() => void refresh()}>刷新问题</button></div>
+    <div className="panel-heading"><div><h2>采集与核算问题</h2></div><button disabled={loading} onClick={() => void refresh()}>刷新问题</button></div>
     <label className="diagnostics-source">查看来源<select aria-label="诊断来源" value={source ?? ''} onChange={e => setSource(e.target.value || null)}><option value="">全部来源</option>{sources?.sources.map(s => <option key={s.source_id} value={s.source_id}>{s.root_path}{s.removed ? '（历史保留）' : ''}</option>)}</select></label>
     {error && <p className="notice" role="alert">{error}{snapshot ? ' 显示上次读取的问题。' : ' 问题状态暂不可用。'}</p>}
     {snapshot === null ? !error && <p className="muted" role="status">正在读取采集问题…</p> : <>
-      {snapshot.issues.length === 0 ? <p className="muted">暂无已保存的问题；这不表示来源已完整扫描或所有用量均已确认。</p> : <ul className="diagnostic-issue-list">{snapshot.issues.map(issue => <li key={issue.issue_id}>
+      {snapshot.issues.length === 0 ? <p className="muted">暂无已记录的问题。</p> : <ul className="diagnostic-issue-list">{snapshot.issues.map(issue => <li key={issue.issue_id}>
         <strong>{reason(issue)}</strong>
         <p className="muted">来源：{issue.source_id === null ? '尚未关联' : names.get(issue.source_id) ?? '来源名称暂不可用'}</p>
         <p className="diagnostic-position">位置：{issue.path ?? '尚无文件位置'}{issue.byte_offset !== null && <span> · 字节偏移 {BigInt(issue.byte_offset).toLocaleString('zh-CN')}</span>}</p>

@@ -50,14 +50,14 @@ export function JobsPanel({ timezone }: { timezone: string | null }) {
     if (mounted.current) setNotice(result === 'too_late' ? '重建已进入发布，结果将完整提交。' : result === 'already_finished' ? '重建已结束。' : '已请求安全取消，等待当前批次结束。');
   });
   return <section className="panel jobs-panel" aria-label="基本重建进度">
-    <div className="panel-heading"><div><h2>账本重建</h2><p className="muted">重建重新核算已保存的用量；重读会重新读取已启用来源中已发现的日志，补齐旧版未识别的记录。暂停来源保留已保存历史，通过验证后更新统计。</p></div><div className="source-actions">
+    <div className="panel-heading"><div><h2>账本重建</h2><p className="muted">重建重新核算已保存用量；重读重新导入已启用来源的日志。</p></div><div className="source-actions">
       <button onClick={() => void refresh()} disabled={busy}>刷新重建状态</button>
       <button onClick={() => void rebuild(true)} disabled={busy || snapshot === null || error !== null || (activeJob && pendingRequest.current === null) || (pendingRequest.current !== null && !pendingReread.current)}>重读已启用来源</button>
       <button className="primary" onClick={() => void rebuild()} disabled={busy || snapshot === null || error !== null || (activeJob && pendingRequest.current === null) || (pendingRequest.current !== null && pendingReread.current)}>重建全部账本</button>
     </div></div>
     {(actionError ?? error) && <div className="notice" role="alert">{actionError ?? error}{error && snapshot && '；显示上次读取的状态。'}</div>}
     {notice && <p role="status" className="job-notice">{notice}</p>}
-    {snapshot === null ? <p className="muted">{error ? '重建状态暂不可用。' : '正在读取重建状态…'}</p> : job === null ? <p className="muted">尚无重建记录。配置来源并采集历史后，可在此重新核算。</p> :
+    {snapshot === null ? <p className="muted">{error ? '重建状态暂不可用。' : '正在读取重建状态…'}</p> : job === null ? <p className="muted">尚无重建记录。</p> :
       <article className="job-card"><div className="job-title"><strong>{activeJob ? '当前重建' : '最近重建结果'}</strong><span className={`job-state ${job.state}`}>{states[job.state]}</span></div>
         <p className="muted">{activeJob ? (phases[job.phase] ?? states[job.state]) : states[job.state]} · {timezone === null ? '统计时区尚未配置' : whenFull(job.updated_at_ms, timezone)}</p>
         <div className="job-metrics"><span>文件 {full(job.processed_files)} / {job.discovery_complete ? full(job.discovered_files) : '发现中'}</span><span>已处理 {full(job.processed_bytes)} 字节</span></div>

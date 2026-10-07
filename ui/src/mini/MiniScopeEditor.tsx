@@ -42,7 +42,7 @@ export function MiniScopeEditor({ usage, onSaved, onClose }: { usage: MiniUsageS
     let scope: MiniScope = { kind: 'today_all_sources' };
     if (session !== null) {
       const at = startMode === 'fixed' ? parsePriceInstant(start) : null;
-      if (startMode === 'fixed' && (at === null || at > Date.now())) { setError('请输入有效且不晚于当前时刻的 UTC 起点，不会自动更正日期。'); return; }
+      if (startMode === 'fixed' && (at === null || at > Date.now())) { setError('请输入不晚于当前时刻的有效 UTC 起点。'); return; }
       scope = { kind: 'session', session_key: session, start: startMode === 'today' ? { kind: 'today' } : { kind: 'fixed', start_ms: at! } };
     }
     writing.current = true; setBusy(true); setError(null);
@@ -64,9 +64,8 @@ export function MiniScopeEditor({ usage, onSaved, onClose }: { usage: MiniUsageS
         {candidates.limited && <p className="mini-editor-note">已显示 1,000 项，请缩小搜索。</p>}
         <div className="mini-picker-actions">{candidates.more && <button disabled={busy || candidates.loading} onClick={candidates.loadMore}>加载更多会话</button>}<button disabled={busy || candidates.loading} onClick={candidates.reload}>重新查询会话</button></div>
       </>}
-      {session !== null && <div className="mini-start-editor"><label>消耗起点<select aria-label="小窗消耗起点" value={startMode} disabled={busy} onChange={e => setStartMode(e.target.value as 'today' | 'fixed')}><option value="today">今日 00:00（统计时区）</option><option value="fixed">自选固定起点（UTC）</option></select></label>{startMode === 'fixed' && <label>固定起点（UTC）<input type="datetime-local" step="0.001" aria-label="小窗固定起点（UTC）" value={start} disabled={busy} onChange={e => setStart(e.target.value)} /></label>}<p className="mini-editor-note">{startMode === 'today' ? `每天按 ${base.range.timezone} 零点更新。` : '固定起点跨午夜保留，不随新活跃会话变化。'}</p></div>}
-      <p className="mini-editor-note">已登记会话包含暂无可信消费的会话。账户额度保持账户范围。统计时区 {base.range.timezone}。</p>
-      <p className="mini-editor-note">当前范围起点 {whenFull(base.range.start_ms, base.range.timezone)} · 编辑基于修订 {base.revision}</p>
+      {session !== null && <div className="mini-start-editor"><label>消耗起点<select aria-label="小窗消耗起点" value={startMode} disabled={busy} onChange={e => setStartMode(e.target.value as 'today' | 'fixed')}><option value="today">今日 00:00（统计时区）</option><option value="fixed">自选固定起点（UTC）</option></select></label>{startMode === 'fixed' && <label>固定起点（UTC）<input type="datetime-local" step="0.001" aria-label="小窗固定起点（UTC）" value={start} disabled={busy} onChange={e => setStart(e.target.value)} /></label>}<p className="mini-editor-note">{startMode === 'today' ? `每天按 ${base.range.timezone} 零点更新。` : '固定起点跨午夜保留。'}</p></div>}
+      <p className="mini-editor-note">当前范围起点 {whenFull(base.range.start_ms, base.range.timezone)}</p>
       {error && <p className="mini-editor-error" role="alert">{error} 可取消后重新打开以读取最新范围。</p>}
     </div>
     <div className="mini-editor-footer"><button className="primary" disabled={busy} onClick={() => void save()}>{busy ? '正在保存…' : '应用小窗范围'}</button><button disabled={busy} onClick={onClose}>取消</button></div>

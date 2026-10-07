@@ -167,7 +167,7 @@ test('saved timezone drives all pages, exact revisions and backend DST boundarie
   await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
   await page.getByLabel('统计时区').fill('America/New_York'); await page.getByRole('button', { name: '保存统计时区' }).click();
   await expect(page.locator('.display-notice[role="status"]')).toContainText('已保存时区 America/New_York');
-  await expect(page.getByText('当前配置版本 1 · 修订 9007199254740994')).toBeVisible();
+  expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).settings_revision).toBe('9007199254740994');
   await page.screenshot({ path: 'test-results/display-timezone-1280.png', fullPage: true });
   await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
   await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(1);
@@ -184,7 +184,7 @@ test('saved timezone drives all pages, exact revisions and backend DST boundarie
 test('conflicts preserve draft and original revision until explicit reset, invalid timezone preserves stored state', async ({ page }) => {
   await page.goto('/'); await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
   await page.getByLabel('统计时区').fill('America/New_York'); await page.evaluate(() => (window as unknown as QA).__calendarQA.externalChange());
-  await expect(page.getByText(/当前配置版本 1 · 修订 9007199254740994/)).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot().settings_revision)).toBe('9007199254740994');
   await page.getByRole('button', { name: '刷新显示设置' }).click(); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
   await page.getByRole('button', { name: '保存统计时区' }).click(); await expect(page.getByRole('alert')).toContainText('已发生变化');
   expect((await page.evaluate(() => (window as unknown as QA).__calendarQA.snapshot())).preferences.display_timezone).toBe('UTC');

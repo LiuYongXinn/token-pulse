@@ -20,7 +20,6 @@ export function PinMiniScope({ sessionKey, startMs }: { sessionKey: string; star
   };
   return <section className="pin-mini-scope" aria-label="固定会话到小窗">
     <div><button disabled={busy} onClick={() => void pin(false)}>固定到小窗（今日）</button><button disabled={busy} onClick={() => void pin(true)}>按所选起点固定到小窗</button></div>
-    <p className="chart-caption">仅修改小窗 / 任务栏共享范围，主窗口筛选与账户额度保持各自范围。</p>
     {notice && <p className="chart-caption" role="status">{notice}</p>}{error && <p className="facet-error" role="alert">{error}</p>}
   </section>;
 }

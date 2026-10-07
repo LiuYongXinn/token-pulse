@@ -43,7 +43,6 @@ export function AdvancedFilters({ filter, choices, disabled, onChange }: { filte
     }}>
       <div className="facet-heading"><strong>{labels[open]}筛选</strong><button className="text-button" onClick={() => select(null)}>清除此筛选</button></div>
       <input ref={input} aria-label={`搜索${labels[open]}`} placeholder={`搜索${labels[open]}名称`} value={search} onChange={event => setSearch(event.target.value)} autoComplete="off" />
-      <p className="facet-note">保留其他筛选 · 按稳定标识分页 · 计数为可信事件</p>
       {!searchValid ? <p role="alert" className="facet-error">搜索最多 256 个字符，不能包含控制字符。</p> : !searchReady ? <p className="facet-note" role="status">正在准备搜索…</p> : <>
         {candidates.error && <p className="facet-error" role="alert">{candidates.error}</p>}
         <div role="listbox" aria-label={`${labels[open]}候选`} id="filter-candidates" className="facet-options">{candidates.options.map(option => <button key={option.key ?? 'unknown'} role="option" aria-selected={choices[open]?.key === option.key} onClick={() => select(option)} className="facet-option"><span className="facet-label">{option.display_name}</span><span className="facet-count" title={`${fullTokens(option.count)} 个可信事件`}>{fullTokens(option.count)}</span></button>)}</div>

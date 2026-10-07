@@ -17,11 +17,10 @@ export function MiniOpacityPanel({ revision }: { revision: string | null }) {
     finally { writing.current = false; if (active.current) setBusy(false); }
   };
   return <section className="mini-opacity-settings" aria-label="小窗透明度设置"><h3>小窗透明度</h3>
-    <p className="muted">70%–100%，数值越高越不透明。保存后立即应用于小窗，重新打开时保留；统计数据与主题不受影响。</p>
+    <p className="muted">70%–100%，数值越高越不透明。</p>
     <label>悬浮窗透明度<input type="range" aria-label="悬浮窗透明度" min="70" max="100" step="1" value={draft?.value ?? snapshot?.opacity_percent ?? 100} disabled={!snapshot?.supported || busy} onChange={e => { if (snapshot) setDraft(old => ({ value: Number(e.target.value), revision: old?.revision ?? snapshot.settings_revision })); }} /></label>
     <p role="status" aria-label="小窗透明度状态">{snapshot ? `已保存 ${snapshot.opacity_percent}%${snapshot.supported ? '' : ' · 当前平台暂不支持原生透明度'}` : '尚未读取小窗透明度'}{draft ? ` · 待保存 ${draft.value}%` : ''}{readError ? ` · 读取失败：${readError}` : ''}</p>
-    {error && <p className="notice" role="alert">{error} 草稿已保留；刷新不会覆盖输入。</p>}
+    {error && <p className="notice" role="alert">{error}</p>}
     <div className="display-setting-actions"><button className="primary" disabled={!draft || !snapshot?.supported || busy} onClick={() => void save()}>{busy ? '正在应用并保存…' : '保存小窗透明度'}</button><button disabled={busy} onClick={() => void reload()}>刷新透明度</button><button disabled={!draft || busy} onClick={() => { setDraft(null); setError(null); }}>重置透明度草稿</button></div>
-    {draft && <p className="chart-caption">编辑基于修订 {draft.revision}；其他设置变化时保留草稿。</p>}
   </section>;
 }
