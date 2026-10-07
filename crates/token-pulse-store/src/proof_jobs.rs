@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use token_pulse_core::{
     domain::{
-        ACCOUNTING_VERSION, LEGACY_ACCOUNTING_VERSION, PARSER_VERSION,
+        ACCOUNTING_VERSION, LEGACY_ACCOUNTING_VERSION, PARSER_VERSION, PREVIOUS_ACCOUNTING_VERSION,
         can_upgrade_accounting_version,
     },
     jobs::{JobRequest, JobScope},
@@ -35,10 +35,15 @@ fn request(tx: &Transaction<'_>, trigger: Trigger) -> StoreResult<Option<(String
         Trigger::AccountingUpgrade => {
             // Parser upgrades need a separately verified reparse. Stored
             // observations may be replayed only under their current parser.
-            let mut q=tx.prepare("SELECT s.session_key FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE l.state='active' AND l.parser_version=?1 AND l.accounting_version=?2 AND s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) ORDER BY s.session_key LIMIT 32768")?;
-            q.query_map([PARSER_VERSION, LEGACY_ACCOUNTING_VERSION], |r| {
-                r.get::<_, String>(0)
-            })?
+            let mut q=tx.prepare("SELECT s.session_key FROM sessions s JOIN ledger_generations l ON l.ledger_id=s.active_ledger_id WHERE l.state='active' AND l.parser_version=?1 AND l.accounting_version IN (?2,?3) AND s.session_key NOT IN (SELECT alias_session_key FROM session_aliases) ORDER BY s.session_key LIMIT 32768")?;
+            q.query_map(
+                [
+                    PARSER_VERSION,
+                    LEGACY_ACCOUNTING_VERSION,
+                    PREVIOUS_ACCOUNTING_VERSION,
+                ],
+                |r| r.get::<_, String>(0),
+            )?
             .collect::<crate::rusqlite::Result<Vec<_>>>()?
         }
     };

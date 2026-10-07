@@ -37,10 +37,12 @@ pub enum CalculationMethod {
     Inherited,
     LineagePending,
     RepeatedSnapshot,
+    UnchangedCumulative,
     LastWithBaseline,
     LastNewStream,
     CumulativeDelta,
     LastOnly,
+    LastRebased,
     UnattributedAnchor,
     UnattributedUsage,
     EpisodeReset,
@@ -72,6 +74,12 @@ pub struct AccountingEvidence {
     pub verified_duplicate: Option<CanonicalReference>,
     pub lineage: LineageEvidence,
     pub independent_new_stream: bool,
+    /// A verified physical/canonical Codex sequence uses one thread cumulative counter.
+    /// This never overrides mirror, lineage, reset or multiple-stream ambiguity.
+    pub ordered_cumulative: bool,
+    /// The immediately preceding usage snapshot, including non-consuming snapshots.
+    /// None after an unreadable record; an older baseline is not adjacency evidence.
+    pub previous_cumulative: Option<UsageVector>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestContext {
@@ -143,10 +151,8 @@ pub fn account(
             quality: ObservationQuality::Pending,
         });
     }
-    for vector in [observation.last, observation.cumulative]
-        .into_iter()
-        .flatten()
-    {
+    let last_error = observation.last.and_then(|v| v.validated_total().err());
+    if let Some(vector) = observation.cumulative {
         if let Err(error) = vector.validated_total() {
             result.method = CalculationMethod::InvalidUsage;
             result.error = Some(error);
@@ -210,9 +216,6 @@ pub fn account(
     }
     let last = observation.last;
     let cumulative = observation.cumulative;
-    if last.is_some_and(|v| v.validated_total().is_ok_and(|t| t.is_none())) {
-        return result;
-    }
     let hinted_key = observation
         .stream_hint
         .as_ref()
@@ -221,7 +224,26 @@ pub fn account(
     let existing = hinted_key.as_ref().and_then(|key| state.streams.get(key));
     let reset = observation.explicit_episode_start && existing.is_some();
     if let Some(total) = cumulative {
-        if let Some(baseline) = existing.filter(|_| !reset) {
+        let inferred = if hinted_key.is_none()
+            && !evidence.independent_new_stream
+            && !observation.explicit_episode_start
+        {
+            let snapshots = state
+                .streams
+                .values()
+                .filter(|b| total == b.cumulative && (last.is_none() || last == b.last_snapshot))
+                .collect::<Vec<_>>();
+            if snapshots.len() == 1 && comparable(total, snapshots[0].cumulative) {
+                Some(snapshots[0])
+            } else if evidence.ordered_cumulative && state.streams.len() == 1 {
+                state.streams.values().next()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(baseline) = existing.filter(|_| !reset).or(inferred) {
             result.stream_key = Some(baseline.stream_key.clone());
             result.episode_id = Some(baseline.episode_id.clone());
             if total == baseline.cumulative && (last.is_none() || last == baseline.last_snapshot) {
@@ -233,8 +255,22 @@ pub fn account(
                 }
                 return result;
             }
-            if let Some(last) = last {
-                if subtract(total, last).is_ok_and(|before| before == baseline.cumulative) {
+            let contiguous = evidence.ordered_cumulative
+                && evidence.previous_cumulative == Some(baseline.cumulative);
+            // A context/limit refresh may carry a malformed last vector but no new consumption.
+            if total == baseline.cumulative && (evidence.ordered_cumulative || existing.is_some()) {
+                result.method = CalculationMethod::UnchangedCumulative;
+                result.quality = ObservationQuality::Duplicate;
+                result.error = last_error;
+                if let Some(context) = &mut result.context {
+                    context.quality = ObservationQuality::Duplicate;
+                }
+                return result;
+            }
+            if let Some(last) = last_valid {
+                if subtract(total, last)
+                    .is_ok_and(|before| matches_baseline(before, baseline.cumulative))
+                {
                     return confirm(
                         result,
                         observation,
@@ -243,20 +279,52 @@ pub fn account(
                         CalculationMethod::LastWithBaseline,
                     );
                 }
-                return result;
             }
-            return match subtract(total, baseline.cumulative) {
-                Ok(delta) if delta.validated_total().is_ok_and(|t| t.is_some()) => confirm(
-                    result,
-                    observation,
-                    delta,
-                    Some((baseline.stream_key.clone(), baseline.episode_id.clone())),
-                    CalculationMethod::CumulativeDelta,
-                ),
-                _ => result,
-            };
+            if let Ok(delta) = subtract(total, baseline.cumulative) {
+                if delta.validated_total().is_ok_and(|t| t.is_some()) {
+                    if contiguous || last.is_none() && existing.is_some() {
+                        let mut confirmed = confirm(
+                            result,
+                            observation,
+                            delta,
+                            Some((baseline.stream_key.clone(), baseline.episode_id.clone())),
+                            CalculationMethod::CumulativeDelta,
+                        );
+                        // The consumption is proven by the adjacent counter, while the bad field
+                        // remains a diagnostic rather than a permanently pending usage record.
+                        confirmed.error = last_error;
+                        return confirmed;
+                    }
+                    if evidence.ordered_cumulative {
+                        if let Some(last) = last_valid.filter(|v| {
+                            matches!((v.validated_total(), delta.validated_total()), (Ok(Some(l)), Ok(Some(d))) if l <= d)
+                                && !matches!((v.input_total, delta.input_total), (Some(l), Some(d)) if l > d)
+                                && !matches!((v.output_total, delta.output_total), (Some(l), Some(d)) if l > d)
+                        }) {
+                            // Resume at this known request. Never put an earlier unresolved
+                            // interval into the current request's timestamp or count it twice.
+                            return confirm(result, observation, last,
+                                Some((baseline.stream_key.clone(), baseline.episode_id.clone())),
+                                CalculationMethod::LastRebased);
+                        }
+                    }
+                }
+            }
+            if let Some(error) = last_error {
+                result.method = CalculationMethod::InvalidUsage;
+                result.error = Some(error);
+            }
+            return result;
         }
-        if let Some(last) = last {
+        if let Some(error) = last_error {
+            result.method = CalculationMethod::InvalidUsage;
+            result.error = Some(error);
+            return result;
+        }
+        if last.is_some_and(|v| v.validated_total().is_ok_and(|t| t.is_none())) {
+            return result;
+        }
+        if let Some(last) = last_valid {
             let before = match subtract(total, last) {
                 Ok(v) => v,
                 Err(_) => return result,
@@ -266,7 +334,9 @@ pub fn account(
                 state
                     .streams
                     .values()
-                    .filter(|b| comparable(before, b.cumulative) && before == b.cumulative)
+                    .filter(|b| {
+                        comparable(before, b.cumulative) && matches_baseline(before, b.cumulative)
+                    })
                     .collect()
             } else {
                 vec![]
@@ -334,6 +404,11 @@ pub fn account(
         result.error = None;
         return result;
     }
+    if let Some(error) = last_error {
+        result.method = CalculationMethod::InvalidUsage;
+        result.error = Some(error);
+        return result;
+    }
     if let Some(last) = last_valid {
         return confirm(result, observation, last, None, CalculationMethod::LastOnly);
     }
@@ -397,7 +472,7 @@ fn confirm(
     }
     result
 }
-/// Missing fields stay missing; mismatched masks and invalid component deltas are not comparable.
+/// Optional breakdown masks may change independently of known input/output totals.
 fn subtract(current: UsageVector, previous: UsageVector) -> Result<UsageVector, ErrorCode> {
     fn difference(a: Option<i64>, b: Option<i64>) -> Result<Option<i64>, ErrorCode> {
         match (a, b) {
@@ -407,19 +482,58 @@ fn subtract(current: UsageVector, previous: UsageVector) -> Result<UsageVector, 
                 .filter(|&n| n >= 0)
                 .map(Some)
                 .ok_or(ErrorCode::InvalidUsage),
-            _ => Err(ErrorCode::AmbiguousUsage),
+            _ => Ok(None),
         }
     }
-    let delta = UsageVector {
+    fn child(a: Option<i64>, b: Option<i64>) -> Option<i64> {
+        match (a, b) {
+            (Some(a), Some(b)) => a.checked_sub(b).filter(|&v| v >= 0),
+            _ => None,
+        }
+    }
+    let mut delta = UsageVector {
         input_total: difference(current.input_total, previous.input_total)?,
-        cached_input: difference(current.cached_input, previous.cached_input)?,
-        cache_write_input: difference(current.cache_write_input, previous.cache_write_input)?,
+        cached_input: child(current.cached_input, previous.cached_input),
+        cache_write_input: child(current.cache_write_input, previous.cache_write_input),
         output_total: difference(current.output_total, previous.output_total)?,
-        reasoning_output: difference(current.reasoning_output, previous.reasoning_output)?,
+        reasoning_output: child(current.reasoning_output, previous.reasoning_output),
         reported_total: difference(current.reported_total, previous.reported_total)?,
     };
+    // A provider may revise an optional cumulative subcounter. Its derived
+    // difference then ceases to describe this request, while parent totals remain usable.
+    if let Some(input) = delta.input_total {
+        if delta.cached_input.is_some_and(|v| v > input) {
+            delta.cached_input = None;
+        }
+        if delta.cache_write_input.is_some_and(|v| v > input) {
+            delta.cache_write_input = None;
+        }
+        if matches!((delta.cached_input, delta.cache_write_input), (Some(read), Some(write)) if i128::from(read) + i128::from(write) > i128::from(input))
+        {
+            delta.cached_input = None;
+            delta.cache_write_input = None;
+        }
+    }
+    if matches!((delta.reasoning_output, delta.output_total), (Some(reasoning), Some(output)) if reasoning > output)
+    {
+        delta.reasoning_output = None;
+    }
     delta.validated_total()?;
     Ok(delta)
+}
+/// The parent quantities identify consumption. A missing child cannot disprove that identity;
+/// contradictory known children still cannot select one of several possible streams.
+fn matches_baseline(a: UsageVector, b: UsageVector) -> bool {
+    fn compatible(a: Option<i64>, b: Option<i64>) -> bool {
+        !matches!((a,b), (Some(a),Some(b)) if a != b)
+    }
+    comparable(a, b)
+        && a.input_total == b.input_total
+        && a.output_total == b.output_total
+        && compatible(a.reported_total, b.reported_total)
+        && compatible(a.cached_input, b.cached_input)
+        && compatible(a.cache_write_input, b.cache_write_input)
+        && compatible(a.reasoning_output, b.reasoning_output)
 }
 fn comparable(a: UsageVector, b: UsageVector) -> bool {
     a.input_total.is_some()

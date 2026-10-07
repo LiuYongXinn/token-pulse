@@ -69,6 +69,7 @@ pub struct CandidateBatch {
 pub struct ReplayRecord {
     pub observation_id: String,
     pub record: token_pulse_core::domain::NormalizedObservation,
+    pub counter_gap_before: bool,
 }
 pub struct ReplayPath {
     pub path: String,
@@ -154,6 +155,22 @@ pub(crate) fn current_inputs(tx: &Transaction<'_>, session: &str) -> StoreResult
 fn selected_generations(m: &RebuildManifest) -> StoreResult<String> {
     Ok(serde_json::to_string(
         &m.files.iter().map(|f| &f.generation_id).collect::<Vec<_>>(),
+    )?)
+}
+// A saved usage row is not proof that the source contained no rejected record
+// before it. Check both published and replacement diagnostics in the same snapshot.
+fn counter_gap_before(
+    tx: &Transaction<'_>,
+    record: &token_pulse_core::domain::NormalizedObservation,
+) -> StoreResult<bool> {
+    let token_pulse_core::domain::NormalizedObservation::Usage(u) = record else {
+        return Ok(true);
+    };
+    let pos = &u.physical_position;
+    Ok(tx.query_row(
+        "WITH previous AS (SELECT MAX(byte_offset) AS offset FROM observations WHERE file_generation_id=?1 AND session_key=?2 AND kind='usage' AND byte_offset<?3) SELECT offset IS NULL OR EXISTS(SELECT 1 FROM diagnostics WHERE file_generation_id=?1 AND byte_offset>previous.offset AND byte_offset<?3 AND resolved_at_ms IS NULL) OR EXISTS(SELECT 1 FROM file_candidate_diagnostics WHERE generation_id=?1 AND byte_offset>previous.offset AND byte_offset<?3) FROM previous",
+        params![pos.file_generation_id, u.session_key, i64::try_from(pos.byte_offset).map_err(|_| ErrorCode::NumericOverflow)?],
+        |r| r.get(0),
     )?)
 }
 fn manifest(tx: &Transaction<'_>, job_id: &str) -> StoreResult<RebuildManifest> {
@@ -275,7 +292,9 @@ impl Database {
                 if next>16*1024*1024 {if result.is_empty() {return Err(ErrorCode::InvalidQuery.into());}break;}
                 let generation_id:String=row.get(2)?;let end:i64=row.get(3)?;
                 if !m.files.iter().any(|f|f.generation_id==generation_id && end<=f.committed_offset) {return Err(ErrorCode::CandidateObsolete.into());}
-                result.push(ReplayRecord{observation_id:row.get(0)?,record:json(&encoded)?});size=next;
+                let record=json(&encoded)?;
+                let counter_gap_before=counter_gap_before(tx,&record)?;
+                result.push(ReplayRecord{observation_id:row.get(0)?,record,counter_gap_before});size=next;
             }
             Ok(result)
         })
@@ -297,7 +316,9 @@ impl Database {
                 if next>16*1024*1024 {if result.is_empty(){return Err(ErrorCode::InvalidQuery.into());}break;}
                 let generation:String=row.get(2)?;let end:i64=row.get(3)?;let session:String=row.get(4)?;
                 if !m.ledgers.iter().any(|l|l.session_key==session) || !m.files.iter().any(|f|f.generation_id==generation && end<=f.committed_offset){return Err(ErrorCode::CandidateObsolete.into());}
-                result.push(ReplayRecord{observation_id:row.get(0)?,record:json(&encoded)?});size=next;
+                let record=json(&encoded)?;
+                let counter_gap_before=counter_gap_before(tx,&record)?;
+                result.push(ReplayRecord{observation_id:row.get(0)?,record,counter_gap_before});size=next;
             }
             if result.is_empty(){return Err(ErrorCode::InvalidQuery.into());}Ok(result)
         })

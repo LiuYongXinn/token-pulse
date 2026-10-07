@@ -173,10 +173,15 @@ fn collect_file_with_hook(
     };
     let mut sessions: BTreeMap<String, SessionAccounting> = BTreeMap::new();
     let mut streams: BTreeMap<(String, String, String), StreamWrite> = BTreeMap::new();
+    let mut counter_gap_before = false;
     for line in batch.lines {
         let mut record = match line {
             FramedLine::Oversized { position } => {
+                counter_gap_before = true;
                 context.independent_head_available = false;
+                for session in sessions.values_mut() {
+                    session.previous_cumulative = None;
+                }
                 diagnostic(
                     &mut write,
                     source_id,
@@ -190,7 +195,11 @@ fn collect_file_with_hook(
             {
                 AdaptedRecord::Ignored => continue,
                 AdaptedRecord::Diagnostic(d) => {
+                    counter_gap_before = true;
                     context.independent_head_available = false;
+                    for session in sessions.values_mut() {
+                        session.previous_cumulative = None;
+                    }
                     diagnostic(
                         &mut write,
                         source_id,
@@ -292,6 +301,12 @@ fn collect_file_with_hook(
                 .ok_or(ErrorCode::CheckpointConflict)?;
             let mut evidence = AccountingEvidence {
                 independent_new_stream: context.independent_head_available,
+                ordered_cumulative: true,
+                previous_cumulative: if counter_gap_before {
+                    None
+                } else {
+                    session.previous_cumulative
+                },
                 lineage: if context.requires_sequence_rebuild {
                     LineageEvidence::Pending
                 } else {
@@ -368,6 +383,10 @@ fn collect_file_with_hook(
                 }
             }
             let result = account(&session.state, usage, &evidence);
+            counter_gap_before = false;
+            session.previous_cumulative = usage
+                .cumulative
+                .filter(|v| v.validated_total().is_ok_and(|t| t.is_some()));
             context.independent_head_available = false;
             let method = method_name(result.method);
             if let Some(event_usage) = result.event_usage {

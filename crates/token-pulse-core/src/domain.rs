@@ -2,11 +2,15 @@ use crate::error::ErrorCode;
 use serde::{Deserialize, Serialize};
 
 pub const PARSER_VERSION: &str = "codex-rollout-v1";
-pub const ACCOUNTING_VERSION: &str = "accounting-v2";
+pub const ACCOUNTING_VERSION: &str = "accounting-v3";
 pub const LEGACY_ACCOUNTING_VERSION: &str = "accounting-v1";
+pub const PREVIOUS_ACCOUNTING_VERSION: &str = "accounting-v2";
 
 pub fn can_upgrade_accounting_version(version: &str) -> bool {
-    version == LEGACY_ACCOUNTING_VERSION
+    matches!(
+        version,
+        LEGACY_ACCOUNTING_VERSION | PREVIOUS_ACCOUNTING_VERSION
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -46,7 +50,7 @@ impl UsageVector {
     /// Incoming observations, events, baselines and candidates use validated_total.
     pub fn published_total(&self, accounting_version: &str) -> Result<Option<i64>, ErrorCode> {
         match accounting_version {
-            ACCOUNTING_VERSION => self.validated_total(),
+            ACCOUNTING_VERSION | PREVIOUS_ACCOUNTING_VERSION => self.validated_total(),
             LEGACY_ACCOUNTING_VERSION => self.validated_total_v1(),
             _ => Err(ErrorCode::UnsupportedFormat),
         }

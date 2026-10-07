@@ -166,8 +166,19 @@ fn overflow_invalid_cumulative_and_missing_mask_do_not_advance_baseline() {
     next = observation(1, &fixture.scenarios[0].steps[1]);
     next.cumulative.as_mut().unwrap().cached_input = None;
     let result = account(&state, &next, &AccountingEvidence::default());
-    assert_eq!(result.state, state);
-    assert!(result.event_usage.is_none());
+    assert_eq!(result.method, CalculationMethod::LastWithBaseline);
+    assert_eq!(result.event_usage, next.last);
+    assert_eq!(
+        result
+            .state
+            .streams
+            .values()
+            .next()
+            .unwrap()
+            .cumulative
+            .cached_input,
+        None
+    );
 }
 #[test]
 fn proven_duplicate_and_inheritance_do_not_advance_a_baseline_twice() {

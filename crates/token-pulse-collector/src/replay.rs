@@ -559,6 +559,8 @@ fn run(
             _ => None,
         };
         let mut state = AccountingState::new(key.clone());
+        let mut previous_cumulative = None;
+        let mut previous_generation = None;
         let mut usage_index = 0usize;
         let mut outcomes = vec![];
         let mut revisions = BTreeMap::new();
@@ -597,8 +599,16 @@ fn run(
                 let NormalizedObservation::Usage(mut u) = record.record else {
                     return Err(ErrorCode::InvalidUsage.into());
                 };
+                if record.counter_gap_before
+                    || previous_generation.as_ref() != Some(&u.physical_position.file_generation_id)
+                {
+                    previous_cumulative = None;
+                }
+                previous_generation = Some(u.physical_position.file_generation_id.clone());
                 u.session_key = key.clone();
                 let mut evidence = AccountingEvidence {
+                    ordered_cumulative: true,
+                    previous_cumulative,
                     independent_new_stream: usage_index == 0
                         && sequence.head
                         && sequence.single_generation
@@ -633,6 +643,9 @@ fn run(
                     }
                 }
                 let result = account(&state, &u, &evidence);
+                previous_cumulative = u
+                    .cumulative
+                    .filter(|v| v.validated_total().is_ok_and(|t| t.is_some()));
                 let method = method_name(result.method);
                 let event_id = id("event", &format!("{ledger}:{}", record.observation_id));
                 if let Some(usage) = result.event_usage {

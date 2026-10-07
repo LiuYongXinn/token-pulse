@@ -23,6 +23,7 @@ pub struct SessionAccounting {
     pub state: AccountingState,
     pub revisions: BTreeMap<(String, String), i64>,
     pub canonical: Option<CanonicalFileState>,
+    pub previous_cumulative: Option<UsageVector>,
 }
 pub struct CanonicalFileState {
     pub cursor: i64,
@@ -168,7 +169,14 @@ impl Database {
                     Some(CanonicalFileState{cursor,length,aligned:status=="aligned",head_proven,slots})
                 }else{None}
             }else{None};
-            Ok(SessionAccounting{ledger_id,state,revisions,canonical})
+            let previous_cumulative = if let Some(generation) = generation {
+                let previous:Option<String>=tx.query_row("SELECT o.normalized_json FROM observations o WHERE o.file_generation_id=?1 AND o.kind='usage' AND COALESCE((SELECT canonical_session_key FROM session_aliases WHERE alias_session_key=o.session_key),o.session_key)=?2 AND NOT EXISTS(SELECT 1 FROM diagnostics d WHERE d.file_generation_id=?1 AND d.byte_offset>o.byte_offset AND d.resolved_at_ms IS NULL) ORDER BY o.byte_offset DESC LIMIT 1",params![generation,session],|r|r.get(0)).optional()?;
+                match previous.map(|v|serde_json::from_str::<NormalizedObservation>(&v)).transpose()? {
+                    Some(NormalizedObservation::Usage(u)) => u.cumulative.filter(|v|v.validated_total().is_ok_and(|t|t.is_some())),
+                    _ => None,
+                }
+            } else {None};
+            Ok(SessionAccounting{ledger_id,state,revisions,canonical,previous_cumulative})
         })
     }
 }

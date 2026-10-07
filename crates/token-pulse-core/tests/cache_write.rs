@@ -142,7 +142,7 @@ fn input_categories_are_disjoint_and_total_does_not_add_writes_or_reasoning() {
 }
 
 #[test]
-fn cumulative_delta_preserves_write_counter_and_mask_changes_do_not_advance_baseline() {
+fn cumulative_delta_preserves_known_writes_and_keeps_unavailable_subcounts_unknown() {
     let old = vector(100, 60, Some(20), 10);
     let first = account(
         &AccountingState::new("session".into()),
@@ -171,8 +171,12 @@ fn cumulative_delta_preserves_write_counter_and_mask_changes_do_not_advance_base
             &observation(100, None, inconsistent),
             &AccountingEvidence::default(),
         );
-        assert!(result.event_usage.is_none());
-        assert_eq!(result.state, first.state);
+        assert_eq!(result.method, CalculationMethod::CumulativeDelta);
+        assert_eq!(result.event_usage, Some(vector(20, 10, None, 2)));
+        assert_eq!(
+            result.state.streams.values().next().unwrap().cumulative,
+            inconsistent
+        );
     }
     let reset_usage = vector(5, 1, Some(2), 1);
     let mut reset = observation(200, Some(reset_usage), reset_usage);
