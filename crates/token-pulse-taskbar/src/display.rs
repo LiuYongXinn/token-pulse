@@ -378,14 +378,35 @@ pub fn measure(
             continue;
         }
         let mut widest = 0i32;
+        let mut reserved_widest = 0i32;
         let mut spans = vec![];
         for (row, items) in rows.into_iter().enumerate() {
             let mut x = left;
+            let mut reserved_x = left;
             for item in items {
                 let measured = width(&item.text)?;
                 if !(0..=32_768).contains(&measured) {
                     return Err(WireError::InvalidFrame);
                 }
+                // The native lease keeps its first width across snapshots. A
+                // pending/expired reset label must leave room for the complete
+                // MM/DD HH:MM value when account metadata arrives later.
+                let reserved = if density == Density::Full
+                    && prefs.show_weekly_reset
+                    && !view.privacy
+                    && item.text.starts_with("周重置")
+                {
+                    let full_date = width("周重置 00/00 00:00")?;
+                    if !(0..=32_768).contains(&full_date) {
+                        return Err(WireError::InvalidFrame);
+                    }
+                    measured.max(full_date)
+                } else {
+                    measured
+                };
+                reserved_x = reserved_x
+                    .checked_add(reserved + gap)
+                    .ok_or(WireError::InvalidFrame)?;
                 spans.push(PlacedSpan {
                     span: item,
                     x,
@@ -397,10 +418,11 @@ pub fn measure(
                     .ok_or(WireError::InvalidFrame)?;
             }
             widest = widest.max(x - gap + pad);
+            reserved_widest = reserved_widest.max(reserved_x - gap + pad);
         }
         if widest <= available_width {
             return Ok(Some(MeasuredPlan {
-                width: widest,
+                width: reserved_widest.min(available_width),
                 height: available_height,
                 density,
                 spans,

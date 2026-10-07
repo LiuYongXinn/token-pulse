@@ -1089,6 +1089,7 @@ mod tests {
         let mut view: TaskbarView =
             serde_json::from_str(include_str!("../../../../fixtures/taskbar-display.json"))
                 .unwrap();
+        let reset = view.quota.as_mut().unwrap().windows[1].resets_at_ms.take();
         canvas
             .prepare(
                 &view,
@@ -1099,6 +1100,7 @@ mod tests {
                 1790899200000,
             )
             .unwrap();
+        let startup_width = canvas.plan().unwrap().width;
         assert_ne!(
             unsafe {
                 SetWindowPos(
@@ -1106,7 +1108,7 @@ mod tests {
                     ptr::null_mut(),
                     17,
                     23,
-                    400,
+                    startup_width,
                     60,
                     SWP_NOACTIVATE | SWP_NOZORDER,
                 )
@@ -1125,6 +1127,33 @@ mod tests {
                 *frames.borrow(),
                 [true],
                 "attachment immediately presents its prepared frame"
+            );
+            frames.borrow_mut().clear();
+        });
+        view.quota.as_mut().unwrap().windows[1].resets_at_ms = reset;
+        canvas
+            .prepare(
+                &view,
+                DisplayPreferences::default(),
+                96,
+                startup_width,
+                60,
+                1790899200000,
+            )
+            .unwrap();
+        assert_eq!(rect(canvas.window).unwrap(), before);
+        let plan = canvas.plan().unwrap();
+        assert_eq!(plan.density, crate::display::Density::Full);
+        assert!(
+            plan.spans
+                .iter()
+                .any(|span| span.span.text == "周重置 10/04 10:25")
+        );
+        super::super::render::PRESENTED_FRAMES.with(|frames| {
+            assert_eq!(
+                *frames.borrow(),
+                [true],
+                "late reset metadata publishes a complete frame in the existing slot"
             );
             frames.borrow_mut().clear();
         });

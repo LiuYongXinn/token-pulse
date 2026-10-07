@@ -730,6 +730,74 @@ mod tests {
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, SelectClipRgn};
 
     #[test]
+    fn late_weekly_reset_fits_the_original_startup_reservation() {
+        use crate::display::Density;
+        use token_pulse_core::protocol::QuotaState;
+        let mut ready: TaskbarView =
+            serde_json::from_str(include_str!("../../../../fixtures/taskbar-display.json"))
+                .unwrap();
+        ready
+            .quota
+            .as_mut()
+            .unwrap()
+            .windows
+            .retain(|window| window.duration_mins == Some(10080));
+        for dpi in [96, 120, 144, 192] {
+            for layout in [DisplayLayout::TwoRows, DisplayLayout::SingleRow] {
+                let preferences = DisplayPreferences {
+                    layout,
+                    ..Default::default()
+                };
+                let height = (40 * dpi / 96) as i32;
+                let font = NativeFont::for_taskbar(dpi, preferences, height).unwrap();
+                for state in [0, 1, 2] {
+                    let mut startup = ready.clone();
+                    match state {
+                        0 => startup.quota = None,
+                        1 => startup.quota.as_mut().unwrap().windows[0].resets_at_ms = None,
+                        _ => {
+                            let quota = startup.quota.as_mut().unwrap();
+                            quota.state = QuotaState::Connecting;
+                            quota.windows.clear();
+                        }
+                    }
+                    let initial = font
+                        .plan(
+                            &startup,
+                            preferences,
+                            ready.generated_at_ms.value(),
+                            (600 * dpi / 96) as i32,
+                            height,
+                        )
+                        .unwrap()
+                        .unwrap();
+                    let after = font
+                        .plan(
+                            &ready,
+                            preferences,
+                            ready.generated_at_ms.value(),
+                            initial.width,
+                            height,
+                        )
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(
+                        after.density,
+                        Density::Full,
+                        "late quota metadata at {dpi} DPI, {layout:?}, state {state}"
+                    );
+                    assert!(
+                        after
+                            .spans
+                            .iter()
+                            .any(|span| span.span.text == "周重置 10/04 10:25")
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn two_rows_fit_standard_taskbar_heights_at_four_dpis_with_real_fonts() {
         let view: TaskbarView =
             serde_json::from_str(include_str!("../../../../fixtures/taskbar-display.json"))
