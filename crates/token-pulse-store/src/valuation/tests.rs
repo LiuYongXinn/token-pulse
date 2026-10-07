@@ -768,3 +768,41 @@ fn cache_keeps_integer_and_amount_precision_beyond_javascript_safe_integer() {
     }).unwrap();
     assert_eq!(summary_cost(&db), "90.071992547409930");
 }
+
+#[test]
+fn event_lookup_work_does_not_grow_with_unrelated_ready_history() {
+    let (_directory, db) = priced();
+    let built = db
+        .build_event_valuation("ledger", &PriceBasis::EventTime {}, 2)
+        .unwrap();
+    let id = built.set_id;
+    db.write(move |conn| {
+        let tx = conn.transaction()?;
+        for n in 0..1000 {
+            let unrelated = format!("unrelated-history-{n}");
+            tx.execute("INSERT INTO valuation_sets SELECT ?1,price_revision,mode,specified_at_ms,state,created_at_ms FROM valuation_sets WHERE valuation_set_id=?2", params![unrelated,id])?;
+            tx.execute("INSERT INTO valuation_cache_sets SELECT ?1,ledger_id,evidence_revision,cache_version,parser_version,accounting_version,event_count,content_sha256,published_at_ms FROM valuation_cache_sets WHERE valuation_set_id=?2", params![unrelated,id])?;
+        }
+        tx.commit()?; Ok(())
+    }).unwrap();
+    db.snapshot(|tx, revision| {
+        let fingerprint: String = tx.query_row(
+            "SELECT input_sha256 FROM valuation_cache_inputs WHERE event_id='event' LIMIT 1",
+            [],
+            |row| row.get(0),
+        )?;
+        let mut reader = CacheReader::new(
+            tx,
+            &DecimalInt::from_nonnegative(revision.price.into())?,
+            &PriceBasis::EventTime {},
+        )?;
+        assert_eq!(cost(reader.lookup("event", &fingerprint)?.unwrap()), "900");
+        // SQLite VM work is deterministic; a wall-clock threshold would be flaky.
+        // Starting at all 1,001 ready sets violates this bound by several orders of magnitude.
+        let statement = reader.statement.as_ref().unwrap();
+        assert!(statement.get_status(rusqlite::StatementStatus::VmStep) < 500);
+        assert!(reader.lookup("event", &"0".repeat(64))?.is_none());
+        Ok(())
+    })
+    .unwrap();
+}

@@ -118,7 +118,7 @@ fn verify(app: &tauri::AppHandle) -> Result<(), String> {
         r#"
       const end=Date.now()+10000;
       for(;;){const d=await invoke('query_diagnostics',{requestId:'diagnostic-resolved',request:{source_id:'native-diagnostics'}});if(d.data.issues.length===0)break;if(Date.now()>end)throw new Error('DIAGNOSTICS_NOT_RESOLVED');await new Promise(r=>setTimeout(r,100));}
-      await wait(()=>document.querySelector('.diagnostics-issues')?.textContent.includes('暂无已保存的问题'));
+      await wait(()=>document.querySelector('.diagnostics-issues')?.textContent.includes('暂无已记录的问题'));
     "#,
         Duration::from_secs(15),
     )?;

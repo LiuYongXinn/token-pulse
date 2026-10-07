@@ -2584,3 +2584,10 @@ schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。�
 导航按钮用 React flushSync 同步提交页签状态，原生检查同时确认页标题和对应内容节点。根据小窗 1.8s 计算 / 重叠时 3.8s 的排队证据，把独立交互读池从一连接调整为二连接；固定十个总连接，新增真实事务阻塞详情连接仍能读取小窗配置的测试通过。副屏定位在 show 前执行，主窗口及小窗原生探针不显式抢焦点；新增 native-smoke -SecondaryScreen 参数。
 
 分页持久恢复在发布 DTO 前接受内存准入，十个受保护成功范围之外的结果拒绝驻留，不把恢复路径当作容量例外。前端 54 单元 / 全量 110 UI / 最后分页容量调整后的 28 UI 定向回归通过；store lib 301 passed / 1 性能夹具 ignored，严格 Clippy 通过。任务修改的 Rust 文件逐一检查；全仓 fmt 仍有三处既有 unrelated 差异，保持原工作区。原生最终回执仍在等价比较及重启阶段，后续记录只使用完整成功回执。
+
+
+## 即时导航 I10：真实历史计价查找瓶颈
+
+实测未预热近 7 天范围曾为 49.2s，近 30 天为 19.6s；不能把缓存导航的毫秒级结果当作首次读取完成。定位到约 272 万历史 event_valuations 上，SQLite 从 ready valuation_sets 开始执行每事件查找，导致大量无关集合探测。改用已有 event+fingerprint 索引作为固定首入口；完整 price / mode / specified / cache format / publication 校验和至多两结果的冲突回退保持不变。真实库 1,000 次同键查找 6,873.8ms → 8.7ms。新增 1,000 个无关 ready 历史集合的 SQLite VM 工作量回归，不用易波动的时钟阈值。
+
+增加 summary_totals / coverage / pricing / versions 匿名分段。store 完整串行 302 passed / 1 既有性能夹具 ignored；strict core-store-desktop all-target Clippy、release check 和改动格式检查通过。首次完整副屏复测近 7 天 1.843s / 近 30 天 4.138s，来源显示修订更新 1.091s，data 和 Tokens 均不变，小窗十次 258–333ms。该轮与 Rust 全量测试部分重叠，保留回执并继续无测试负载复测；不宣称为冷磁盘指标。原生诊断空态断言同步到当前产品文案，继续顺序执行完整诊断 / 隐私回归。

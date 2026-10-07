@@ -121,8 +121,13 @@ pub(crate) fn compute(
     basis: &PriceBasis,
 ) -> StoreResult<ScopeSummary> {
     let started = Instant::now();
+    let stage = Instant::now();
     let totals = totals(tx, filter)?;
+    crate::query_timing::record("summary_totals", stage);
+    let stage = Instant::now();
     let coverage = coverage::coverage(tx, filter, &totals)?;
+    crate::query_timing::record("summary_coverage", stage);
+    let stage = Instant::now();
     let catalog = crate::pricing::catalog_at(tx, revision.price)?;
     let mut overall = PricingAccumulator::new(basis.clone());
     let mut sessions: BTreeMap<String, PricingAccumulator> = BTreeMap::new();
@@ -143,6 +148,7 @@ pub(crate) fn compute(
             .push(event.total_tokens, event.outcome.clone())?;
         Ok(overall.push(event.total_tokens, event.outcome)?)
     })?;
+    crate::query_timing::record("summary_pricing", stage);
     let pricing = overall.summary(false)?;
     if pricing
         .priced_total_tokens
@@ -154,7 +160,9 @@ pub(crate) fn compute(
         return Err(ErrorCode::DbCorrupt.into());
     }
     let finish = |items: BTreeMap<String, PricingAccumulator>| -> StoreResult<BTreeMap<String, PricingSummary>> { items.into_iter().map(|(key, accumulator)| Ok((key, accumulator.summary(false)?))).collect() };
+    let stage = Instant::now();
     let (parsers, accounting) = dashboard::versions(tx, filter, filter)?;
+    crate::query_timing::record("summary_versions", stage);
     let result = ScopeSummary {
         totals,
         coverage,

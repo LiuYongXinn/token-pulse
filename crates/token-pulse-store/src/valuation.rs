@@ -104,8 +104,11 @@ impl<'a> CacheReader<'a> {
         let (mode, specified) = basis_fields(basis);
         // Without a matching ready set, do one bounded check and price events directly.
         let available:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM valuation_sets vs JOIN valuation_cache_sets cs USING(valuation_set_id) WHERE vs.price_revision=?1 AND vs.mode=?2 AND vs.specified_at_ms IS ?3 AND vs.state='ready' AND cs.cache_version=?4 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL)",params![revision,mode,specified,CACHE_VERSION],|r|r.get(0))?;
+        // Pin the selective event+fingerprint index first. Starting from every ready
+        // historical set causes thousands of irrelevant probes per event as history grows.
+        // CROSS JOIN preserves this order; all version/publication and duplicate checks remain.
         let statement = if available {
-            Some(tx.prepare("SELECT ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM event_valuations ev JOIN valuation_cache_inputs ci ON ci.valuation_set_id=ev.valuation_set_id AND ci.event_id=ev.event_id JOIN valuation_sets vs ON vs.valuation_set_id=ev.valuation_set_id JOIN valuation_cache_sets cs ON cs.valuation_set_id=vs.valuation_set_id WHERE ev.event_id=?1 AND ci.input_sha256=?2 AND vs.price_revision=?3 AND vs.mode=?4 AND vs.specified_at_ms IS ?5 AND vs.state='ready' AND cs.cache_version=?6 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL ORDER BY vs.created_at_ms DESC,vs.valuation_set_id LIMIT 2")?)
+            Some(tx.prepare("SELECT ev.rule_id,ev.currency,ev.cost_atoms,ev.status FROM valuation_cache_inputs ci INDEXED BY valuation_cache_input_lookup CROSS JOIN event_valuations ev ON ev.valuation_set_id=ci.valuation_set_id AND ev.event_id=ci.event_id CROSS JOIN valuation_sets vs ON vs.valuation_set_id=ev.valuation_set_id CROSS JOIN valuation_cache_sets cs ON cs.valuation_set_id=vs.valuation_set_id WHERE ci.event_id=?1 AND ci.input_sha256=?2 AND vs.price_revision=?3 AND vs.mode=?4 AND vs.specified_at_ms IS ?5 AND vs.state='ready' AND cs.cache_version=?6 AND cs.published_at_ms IS NOT NULL AND cs.content_sha256 IS NOT NULL ORDER BY vs.created_at_ms DESC,vs.valuation_set_id LIMIT 2")?)
         } else {
             None
         };

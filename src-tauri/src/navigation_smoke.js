@@ -20,7 +20,7 @@ const presented = [];
 for (let n = 0; n < 100; ++n) { const started = performance.now(); const name = names[n % names.length]; nav(name).click(); await frame(); if (!hasContent() || document.querySelector('h1').textContent !== name) throw new Error(`CACHE_FIRST_FRAME_FAILED_${n}`); warm.push(performance.now() - started); await frame(); presented.push(performance.now() - started); }
 
 const ranges = [];
-if (!RESTART_PHASE) {
+if (!RESTART_PHASE && !UPDATE_PHASE) {
   nav('模型').click(); await frame(); await until(() => document.querySelector('h1').textContent === '模型' && !!document.querySelector('.group-total[aria-label]'));
   const originalTotal = document.querySelector('.group-total[aria-label]').getAttribute('aria-label');
   const date = document.querySelector('select[aria-label="日期范围"]');
@@ -42,13 +42,15 @@ const before = document.querySelector('.group-stat-strip').dataset.snapshotId;
 const tokensBefore = document.querySelector('.group-total[aria-label]').getAttribute('aria-label');
 const sources = (await original('get_sources', { requestId: crypto.randomUUID() })).data;
 const source = sources.sources.find(value => !value.removed);
+const revisionBefore = (await original('get_usage_revision', { requestId: crypto.randomUUID() })).data;
 let update = null;
 if (source && !RESTART_PHASE) {
   const started = performance.now();
   await original('manage_source', { requestId: crypto.randomUUID(), action: { kind: 'retain_remove', source_id: source.source_id }, expectedSettingsRevision: sources.settings_revision });
-  await until(() => document.querySelector('.group-stat-strip')?.dataset.snapshotId !== before && hasContent());
+  await until(() => document.querySelector('.group-stat-strip')?.dataset.snapshotId !== before && hasContent() && !document.querySelector('.overview-coverage').textContent.includes('正在刷新'));
   await frame();
-  update = { milliseconds: performance.now() - started, tokensUnchanged: tokensBefore === document.querySelector('.group-total[aria-label]').getAttribute('aria-label') };
-  if (!update.tokensUnchanged) throw new Error('DISPLAY_UPDATE_CHANGED_TOKENS');
+  const revisionAfter = (await original('get_usage_revision', { requestId: crypto.randomUUID() })).data;
+  update = { viewAdvanced: BigInt(revisionAfter.usage_view_revision)>BigInt(revisionBefore.usage_view_revision), dataUnchanged: revisionAfter.data_revision === revisionBefore.data_revision, milliseconds: performance.now() - started, tokensUnchanged: tokensBefore === document.querySelector('.group-total[aria-label]').getAttribute('aria-label') };
+  if (!update.tokensUnchanged || !update.dataUnchanged || !update.viewAdvanced) throw new Error('DISPLAY_UPDATE_CHANGED_TOKENS');
 }
 await original('plugin:event|emit', { event: REPORT_EVENT, payload: { ranges, cold, initial_content_ms: initial, cached_click_ms: warm, following_frame_ms: presented, update, stages: window.__tokenPulseQueryTimings() } });

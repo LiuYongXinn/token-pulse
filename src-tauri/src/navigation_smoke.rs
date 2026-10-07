@@ -109,6 +109,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
     if !window.is_visible().unwrap_or(false) {
         return Err("probe window must be visible".into());
     }
+    let update_only = std::env::args().any(|arg| arg == "--native-navigation-update");
     let restart = std::env::args().any(|arg| arg == "--native-navigation-restart");
     let script = include_str!("navigation_smoke.js")
         .replace(
@@ -116,6 +117,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
             &serde_json::to_string(&event).map_err(|_| "probe event encoding")?,
         )
         .replace("RESTART_PHASE", if restart { "true" } else { "false" });
+    let script = script.replace("UPDATE_PHASE", if update_only { "true" } else { "false" });
     println!("NATIVE_NAVIGATION_UI_START");
     let result = super::mini_smoke::evaluate_with_timeout(
         app,
@@ -182,9 +184,15 @@ fn run(app: &tauri::AppHandle) -> Result<(), String> {
     let mini_queries = report.lock().map_err(|_| "probe report lock")?.take();
     mini.hide().map_err(|_| "mini probe hide")?;
     app.unlisten(listener);
-    let baseline = benchmark(database, &request)?;
+    let baseline = if update_only {
+        serde_json::json!([])
+    } else {
+        benchmark(database, &request)?
+    };
     let report = serde_json::json!({ "format": 1, "input": "programmatic DOM click in visible Windows WebView2", "database_startup_ms": database_startup_ms, "screen": secondary_screen, "counts": counts, "ui": ui, "blocked_refresh_passed": true, "backend": timings, "baseline": baseline, "ancillary": ancillary, "mini": mini_queries, "summary_cache": database.summary_cache_stats(), "build": "debug custom-protocol" });
-    let phase = if std::env::args().any(|arg| arg == "--native-navigation-restart") {
+    let phase = if update_only {
+        "update"
+    } else if std::env::args().any(|arg| arg == "--native-navigation-restart") {
         "restart"
     } else {
         "first"
