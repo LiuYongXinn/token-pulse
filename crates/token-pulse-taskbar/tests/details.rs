@@ -79,22 +79,17 @@ fn precise_tokens_costs_scope_timezone_and_independent_timestamps_are_all_readab
     let details = content(&view, view.generated_at_ms.value()).unwrap();
     let text = details.accessible_text();
     for expected in [
-        "可信 Token：9007199254740993",
-        "输入总数：—（未提供）",
+        "Token 用量：9007199254740993",
+        "输入：—（未提供）",
         "缓存输入（包含在输入中）：0",
         "USD 0.565000000000001",
-        "价格覆盖：100.00%",
         "未计价 Token：1",
         "SYNTHETIC DEVELOPMENT FIXTURE",
         "1970-01-01 08:00:00.000",
         "1970-01-01 08:00:01.001",
-        "1970-01-01 08:00:00.500",
         "Asia/Shanghai",
-        "待确认观察：9007199254740993",
-        "来源不可读",
-        "账户成功读取",
-        "用量快照生成",
-        "账户最近尝试：—（未提供）",
+        "额度更新时间",
+        "用量更新时间",
     ] {
         assert!(text.contains(expected), "missing {expected}: {text}");
     }
@@ -118,7 +113,7 @@ fn privacy_removes_cost_account_bucket_and_original_scope_from_all_detail_text()
         "SYNTHETIC DEVELOPMENT",
         "USD",
         "0.565",
-        "价格覆盖",
+        "已计价比例",
         "额度桶",
         "剩余 72%",
     ] {
@@ -135,22 +130,22 @@ fn privacy_removes_cost_account_bucket_and_original_scope_from_all_detail_text()
     assert!(text.contains("费用、会话名称和账户额度已隐藏"));
 }
 #[test]
-fn partial_measurements_never_claim_to_be_the_complete_input_or_output_total() {
+fn measurements_show_values_without_internal_completeness_labels() {
     let mut view = fixture();
     view.input_tokens = Some(number("4"));
     view.output_tokens = Some(number("7"));
     let text = content(&view, view.generated_at_ms.value())
         .unwrap()
         .accessible_text();
-    assert!(text.contains("输入总数：4（仅已提供部分）"));
-    assert!(text.contains("输出总数：7（仅已提供部分）"));
+    assert!(text.contains("输入：4；"));
+    assert!(text.contains("输出：7；"));
     assert!(text.contains("缓存输入（包含在输入中）：0；"));
     view.details = None;
     assert!(
         content(&view, 0)
             .unwrap()
             .accessible_text()
-            .contains("输入总数：4（完整性未提供）")
+            .contains("输入：4；")
     );
 }
 #[test]
@@ -197,11 +192,9 @@ fn account_failure_preserves_old_values_and_attempt_time_but_disconnection_hides
     let text = content(&view, view.generated_at_ms.value())
         .unwrap()
         .accessible_text();
-    assert!(text.contains("读取失败，保留同一账户的旧值"));
-    assert!(text.contains("QUOTA_TIMEOUT"));
+    assert!(text.contains("更新失败，显示上次结果"));
     assert!(text.contains("剩余 72%"));
-    assert!(text.contains("账户成功读取：1970-01-01 08:00:00.500"));
-    assert!(text.contains("账户最近尝试：1970-01-01 08:00:01.000"));
+    assert!(text.contains("额度更新时间：1970-01-01 08:00:00.500"));
     view.quota.as_mut().unwrap().state = QuotaState::Disconnected;
     assert!(
         !content(&view, view.generated_at_ms.value())
@@ -249,38 +242,29 @@ fn extreme_timestamps_and_countdown_carry_are_bounded_and_null_details_stay_unkn
 }
 
 #[test]
-fn scan_progress_and_gaps_have_specific_readable_text_without_claiming_success() {
+fn collection_diagnostics_do_not_appear_in_usage_details() {
     let mut view = fixture();
-    for (status, expected) in [
-        (HostSourceStatus::Scanning, "正在核对来源目录"),
-        (HostSourceStatus::ScanPending, "部分文件待采集或重新核对"),
-        (
-            HostSourceStatus::ScanInterrupted,
-            "来源核对已中断，等待补扫",
-        ),
-        (
-            HostSourceStatus::ScanChanged,
-            "来源文件发生变化，等待重新核对",
-        ),
-        (
-            HostSourceStatus::ScanIncomplete,
-            "来源核对未完成，请查看采集诊断",
-        ),
+    for status in [
+        HostSourceStatus::Scanning,
+        HostSourceStatus::ScanPending,
+        HostSourceStatus::ScanInterrupted,
+        HostSourceStatus::ScanChanged,
+        HostSourceStatus::ScanIncomplete,
+        HostSourceStatus::Unknown,
     ] {
         view.details.as_mut().unwrap().source_statuses = vec![status];
         let text = content(&view, view.generated_at_ms.value())
             .unwrap()
             .accessible_text();
-        assert!(text.contains(expected), "{text}");
-        assert!(!text.contains("来源状态未识别"));
-        assert!(text.contains("待核对文件：1"));
-        assert!(text.contains("来源最近成功核对：1970-01-01 08:00:00.500"));
+        assert!(text.contains("Token 用量：683100"));
+        for internal in [
+            "来源状态",
+            "待核对",
+            "待确认观察",
+            "用量覆盖",
+            "来源最近成功核对",
+        ] {
+            assert!(!text.contains(internal), "{text}");
+        }
     }
-    view.details.as_mut().unwrap().source_statuses = vec![HostSourceStatus::Unknown];
-    assert!(
-        content(&view, view.generated_at_ms.value())
-            .unwrap()
-            .accessible_text()
-            .contains("来源状态未识别")
-    );
 }

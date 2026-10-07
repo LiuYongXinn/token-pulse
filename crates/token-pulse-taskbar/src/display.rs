@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use token_pulse_core::{
     numeric::{DecimalInt, DecimalMoney},
-    protocol::{CoverageState, QuotaState, QuotaWindow},
+    protocol::{QuotaState, QuotaWindow},
 };
 
 pub use token_pulse_core::taskbar::{
@@ -227,9 +227,6 @@ pub fn rows(
             format!("Token {}", compact_tokens(view.total_tokens.as_ref())),
             Tone::Normal,
         ));
-        if density == Density::Full && !matches!(view.usage_status, CoverageState::Complete) {
-            first.push(span("待核对", Tone::Muted));
-        }
     }
     if prefs.show_costs {
         first.push(costs(view, density == Density::Full));
@@ -257,7 +254,7 @@ pub fn rows(
             }
             second.push(percent_span("周", weekly));
             if matches!(quota.state, QuotaState::Stale | QuotaState::Error) {
-                second.push(span("旧快照", Tone::Warning));
+                second.push(span("更新失败", Tone::Warning));
             }
         } else {
             let text = match view.quota.as_ref().map(|q| q.state) {
@@ -265,7 +262,7 @@ pub fn rows(
                 Some(QuotaState::AuthorizationRequired) => "本地登录态不可用",
                 Some(QuotaState::Unsupported) => "额度不支持",
                 Some(QuotaState::Error) => "额度读取失败",
-                Some(QuotaState::Stale) => "额度旧快照",
+                Some(QuotaState::Stale) => "额度更新失败",
                 Some(QuotaState::Ready) => "额度未提供",
                 _ => "额度未连接",
             };

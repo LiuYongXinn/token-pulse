@@ -105,11 +105,10 @@ fn null_zero_stale_and_ambiguous_roles_remain_distinct() {
     quota.windows[1].remaining_percent = Some(0.0);
     let output = rows(&view, DisplayPreferences::default(), Density::Full, 0).unwrap();
     assert_eq!(output[0][0].text, "Token —");
-    assert_eq!(output[0][1].text, "待核对");
-    assert_eq!(output[0][2].text, "费用 —");
+    assert_eq!(output[0][1].text, "费用 —");
     assert_eq!(output[1][1].text, "周 0%");
     assert_eq!(output[1][1].tone, Tone::Warning);
-    assert_eq!(output[1][2].text, "旧快照");
+    assert_eq!(output[1][2].text, "更新失败");
     let duplicate = view.quota.as_ref().unwrap().windows[1].clone();
     let mut duplicate = duplicate;
     duplicate.window_id = "another_actual_week".into();
@@ -125,7 +124,7 @@ fn null_zero_stale_and_ambiguous_roles_remain_distinct() {
     );
     view.unpriced_tokens = DecimalInt::parse("3").unwrap();
     assert_eq!(
-        texts(rows(&view, DisplayPreferences::default(), Density::Full, 0).unwrap())[0][2],
+        texts(rows(&view, DisplayPreferences::default(), Density::Full, 0).unwrap())[0][1],
         "未计价"
     );
 }
