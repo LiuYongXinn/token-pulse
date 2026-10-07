@@ -115,6 +115,19 @@ pub fn temporary_directory() -> io::Result<PathBuf> {
     Ok(directory)
 }
 
+/// Set before desktop/headless startup so ordinary shortcut launches and their children
+/// use the same temporary directory as launches through the development scripts.
+#[cfg(windows)]
+pub fn initialize_process_environment() -> io::Result<()> {
+    let directory = temporary_directory()?;
+    for name in ["TEMP", "TMP", "TMPDIR"] {
+        // Windows environment mutation is thread-safe. main calls this before starting
+        // Tauri, Tokio or any application worker, including WebView child processes.
+        unsafe { std::env::set_var(name, &directory) };
+    }
+    Ok(())
+}
+
 pub(super) fn configure(context: &mut tauri::Context<tauri::Wry>) -> io::Result<()> {
     let directory = data_directory()?;
     validate_location(&directory)?;

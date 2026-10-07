@@ -62,6 +62,10 @@ impl Scene {
     fn invoke(&self, extras: &[&str]) -> std::process::Output {
         let payload = r#"{"type":"agent-turn-complete","thread-id":"native-thread","turn-id":"native-turn","input-messages":["never persist body"],"last-assistant-message":"private response","cwd":"private directory"}"#;
         let mut child = Command::new(executable())
+            // Emulate a normal Windows launch without project-env.ps1.
+            .env("TEMP", r"C:\TokenPulse-should-not-write-here")
+            .env("TMP", r"C:\TokenPulse-should-not-write-here")
+            .env("TMPDIR", r"C:\TokenPulse-should-not-write-here")
             .env("TOKENPULSE_NATIVE_NOTIFY_PROBE", &self.probe_name)
             .args([
                 "--tokenpulse-notify",
@@ -147,6 +151,34 @@ fn retired_cached_notification_is_ignored_without_gui_or_orphan_marker() {
             .registry
             .has_pending(scene.registration.capability().registration_id())
             .unwrap()
+    );
+    scene.require_no_gui_initialization_or_source_write();
+}
+
+#[test]
+fn ordinary_launch_redirects_temporary_environment_for_retained_children() {
+    let shell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+        .join("System32")
+        .join("cmd.exe");
+    let directory = token_pulse_app::local_paths::temporary_directory().unwrap();
+    let expected = directory.to_str().unwrap();
+    let command = format!(
+        "if /I not \"%TEMP%\"==\"{expected}\" exit 7 & if /I not \"%TMP%\"==\"{expected}\" exit 7 & if /I not \"%TMPDIR%\"==\"{expected}\" exit 7 & exit 0"
+    );
+    let scene = Scene::with_original(
+        &executable(),
+        true,
+        &[
+            shell.to_str().unwrap().into(),
+            "/d".into(),
+            "/c".into(),
+            command,
+        ],
+    );
+    let output = scene.invoke(&[]);
+    assert!(
+        output.status.success(),
+        "child inherited the system temporary directory"
     );
     scene.require_no_gui_initialization_or_source_write();
 }
