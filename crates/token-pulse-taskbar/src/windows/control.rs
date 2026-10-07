@@ -338,10 +338,6 @@ impl State {
             None
         };
         if let Some(canvas) = self.canvas.as_mut() {
-            canvas.clear_render().map_err(|error| {
-                acceptance_trace(&format!("clear_render={error:?}"));
-                TransportError::Native
-            })?;
             if let (Some(view), Ok(topology)) = (&self.view, &self.topology) {
                 let available = self
                     .layout
@@ -410,8 +406,11 @@ impl State {
                         self.embedding_failure = Some(ProbeError::InsufficientSpace);
                     }
                 }
-            } else if self.enabled {
-                self.embedding_failure = self.topology.as_ref().err().copied();
+            } else {
+                canvas.clear().map_err(|_| TransportError::Native)?;
+                if self.enabled {
+                    self.embedding_failure = self.topology.as_ref().err().copied();
+                }
             }
         }
         if self.native_failed || self.canvas.as_ref().is_none_or(|c| c.paint_failed()) {

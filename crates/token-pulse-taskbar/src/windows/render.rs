@@ -4,6 +4,11 @@ use crate::{
     display::{DisplayPreferences, MeasureBounds, MeasuredPlan, Tone, measure},
 };
 use std::{mem, ptr};
+#[cfg(test)]
+thread_local! {
+    // Observe actual successful layered submissions, including transient empty frames.
+    pub(crate) static PRESENTED_FRAMES: std::cell::RefCell<Vec<bool>> = const { std::cell::RefCell::new(Vec::new()) };
+}
 use windows_sys::Win32::{
     Foundation::{COLORREF, RECT, SIZE},
     Graphics::Gdi::{
@@ -456,6 +461,8 @@ impl NativeFont {
             SelectObject(dc.0, previous);
         }
         if ok {
+            #[cfg(test)]
+            PRESENTED_FRAMES.with(|frames| frames.borrow_mut().push(plan.is_some()));
             Ok(())
         } else {
             Err(WireError::InvalidState)

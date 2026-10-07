@@ -584,6 +584,13 @@ impl NativeCanvas {
         }
         if !attached {
             self.clear_interactions();
+        } else if self.alive() {
+            // SetParent / showing the reserved child can invalidate its layered surface.
+            // Present the prepared frame immediately, without waiting for the next snapshot.
+            unsafe {
+                InvalidateRect(self.window, ptr::null(), 0);
+                UpdateWindow(self.window);
+            }
         }
     }
     pub(crate) fn set_palette(&mut self, palette: Palette) {
@@ -658,10 +665,27 @@ impl NativeCanvas {
         height: i32,
         now: i64,
     ) -> Result<(), WireError> {
-        self.clear_render()?;
-        self.state.details.prepare(self.window, view, dpi, now)?;
+        let result = self.prepare_frame(view, prefs, dpi, width, height, now);
+        if result.is_err() {
+            // Failed frames and privacy barriers must still discard old private pixels.
+            self.clear().ok();
+        }
+        result
+    }
+    fn prepare_frame(
+        &mut self,
+        view: &TaskbarView,
+        prefs: DisplayPreferences,
+        dpi: u32,
+        width: i32,
+        height: i32,
+        now: i64,
+    ) -> Result<(), WireError> {
+        // Build a replacement while the old layered surface remains visible. The
+        // WM_PAINT path publishes the complete bitmap in one UpdateLayeredWindow.
         let font = NativeFont::new(dpi)?;
         let plan = font.plan(view, prefs, now, width, height)?;
+        self.state.details.prepare(self.window, view, dpi, now)?;
         unsafe {
             (*self.state.get()).font = font;
             (*self.state.get()).privacy = view.privacy;
@@ -701,7 +725,7 @@ impl NativeCanvas {
                 UpdateWindow(self.window);
             }
         } else {
-            self.clear_interactions();
+            self.clear()?;
         }
         Ok(())
     }
@@ -1027,6 +1051,7 @@ mod tests {
     }
     #[test]
     fn updating_attached_canvas_preserves_reserved_position_and_size() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_SHOWNOACTIVATE, ShowWindow};
         let _dpi = DpiGuard::enter().unwrap();
         let parent = unsafe {
             CreateWindowExW(
@@ -1074,7 +1099,16 @@ mod tests {
             0
         );
         let before = rect(canvas.window).unwrap();
+        unsafe {
+            ShowWindow(parent, SW_SHOWNOACTIVATE);
+            ShowWindow(canvas.window, SW_SHOWNOACTIVATE);
+        }
+        super::super::render::PRESENTED_FRAMES.with(|frames| frames.borrow_mut().clear());
         canvas.set_attached(true);
+        super::super::render::PRESENTED_FRAMES.with(|frames| {
+            assert_eq!(*frames.borrow(), [true], "attachment immediately presents its prepared frame");
+            frames.borrow_mut().clear();
+        });
         view.privacy = true;
         view.scope_label = None;
         view.costs.clear();
@@ -1091,7 +1125,14 @@ mod tests {
             .unwrap();
         assert_eq!(rect(canvas.window).unwrap(), before);
         assert!(canvas.plan().is_some());
+        super::super::render::PRESENTED_FRAMES.with(|frames| {
+            assert_eq!(*frames.borrow(), [true], "refresh must never submit an empty layered frame");
+            frames.borrow_mut().clear();
+        });
         canvas.clear().unwrap();
+        super::super::render::PRESENTED_FRAMES.with(|frames| {
+            assert_eq!(*frames.borrow(), [false], "explicit clear still overwrites private pixels");
+        });
         assert!(canvas.plan().is_none());
         let mut caption = [0; 64];
         let length = unsafe { GetWindowTextW(canvas.window, caption.as_mut_ptr(), 64) };
