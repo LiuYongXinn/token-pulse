@@ -35,6 +35,9 @@ struct Inner {
     sender: SyncSender<Message>,
     thread: Option<JoinHandle<()>>,
     readers: ReaderPool,
+    usage_readers: ReaderPool,
+    interactive_readers: ReaderPool,
+    light_readers: ReaderPool,
     path: PathBuf,
     leases: crate::leases::LeaseService,
     usage_listener: Mutex<Option<UsageListener>>,
@@ -187,6 +190,22 @@ impl Database {
             conn.pragma_update(None, "query_only", true)?;
             readers.push(conn);
         }
+        let pool = |size: usize| -> StoreResult<ReaderPool> {
+            let mut connections = Vec::with_capacity(size);
+            for _ in 0..size {
+                let conn = Connection::open_with_flags(
+                    &path,
+                    OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                )?;
+                configure(&conn)?;
+                conn.pragma_update(None, "query_only", true)?;
+                connections.push(conn);
+            }
+            Ok(ReaderPool {
+                connections: Mutex::new(connections),
+                available: Condvar::new(),
+            })
+        };
         Ok(Self {
             inner: Arc::new(Inner {
                 sender,
@@ -195,6 +214,9 @@ impl Database {
                     connections: Mutex::new(readers),
                     available: Condvar::new(),
                 },
+                usage_readers: pool(2)?,
+                interactive_readers: pool(1)?,
+                light_readers: pool(1)?,
                 leases: lease_service(&path)?,
                 usage_listener: Mutex::new(None),
                 summaries: Default::default(),
@@ -205,15 +227,19 @@ impl Database {
     pub fn path(&self) -> &Path {
         &self.inner.path
     }
-    pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache { &self.inner.summaries }
+    pub(crate) fn summary_cache(&self) -> &crate::query::summary_cache::SummaryCache {
+        &self.inner.summaries
+    }
     pub fn leases(&self) -> &crate::leases::LeaseService {
         &self.inner.leases
     }
     pub fn on_usage_changed(&self, listener: UsageListener) {
-        if let Ok(mut slot) = self.inner.usage_listener.lock() { *slot = Some(listener); }
+        if let Ok(mut slot) = self.inner.usage_listener.lock() {
+            *slot = Some(listener);
+        }
     }
     pub fn usage_revision(&self) -> StoreResult<token_pulse_core::query::UsageRevision> {
-        self.snapshot(|tx, _| read_usage_revision(tx))
+        self.light_snapshot(|tx, _| read_usage_revision(tx))
     }
     pub(crate) fn write<T: Send + 'static>(
         &self,
@@ -234,8 +260,15 @@ impl Database {
         // Called after the transaction and writer operation have returned, on the
         // caller thread. Never invoke UI callbacks while holding a connection.
         if let Some(revision) = changed {
-            let listener = self.inner.usage_listener.lock().ok().and_then(|slot| slot.clone());
-            if let Some(listener) = listener { listener(revision); }
+            let listener = self
+                .inner
+                .usage_listener
+                .lock()
+                .ok()
+                .and_then(|slot| slot.clone());
+            if let Some(listener) = listener {
+                listener(revision);
+            }
         }
         result
     }
@@ -244,9 +277,39 @@ impl Database {
         &self,
         query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
     ) -> StoreResult<T> {
+        self.snapshot_pool(&self.inner.readers, "reader_wait", query)
+    }
+    pub(crate) fn usage_snapshot<T>(
+        &self,
+        query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
+    ) -> StoreResult<T> {
+        self.snapshot_pool(&self.inner.usage_readers, "usage_reader_wait", query)
+    }
+    pub(crate) fn interactive_snapshot<T>(
+        &self,
+        query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
+    ) -> StoreResult<T> {
+        self.snapshot_pool(
+            &self.inner.interactive_readers,
+            "interactive_reader_wait",
+            query,
+        )
+    }
+    pub(crate) fn light_snapshot<T>(
+        &self,
+        query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
+    ) -> StoreResult<T> {
+        self.snapshot_pool(&self.inner.light_readers, "light_reader_wait", query)
+    }
+    fn snapshot_pool<T>(
+        &self,
+        pool: &ReaderPool,
+        wait_stage: &'static str,
+        query: impl FnOnce(&Transaction<'_>, Revision) -> StoreResult<T>,
+    ) -> StoreResult<T> {
         let waited = Instant::now();
-        let mut reader = self.inner.readers.take()?;
-        crate::query_timing::record("reader_wait", waited);
+        let mut reader = pool.take()?;
+        crate::query_timing::record(wait_stage, waited);
         let transaction = reader
             .connection
             .as_mut()
@@ -274,9 +337,16 @@ impl Database {
         })
     }
 }
-pub(crate) fn read_usage_revision(conn: &Connection) -> StoreResult<token_pulse_core::query::UsageRevision> {
+pub(crate) fn read_usage_revision(
+    conn: &Connection,
+) -> StoreResult<token_pulse_core::query::UsageRevision> {
     let (database_id, data, price, view): (String, i64, i64, i64) = conn.query_row("SELECT database_instance_id,data_revision,price_revision,usage_view_revision FROM app_state WHERE singleton=1", [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
-    Ok(token_pulse_core::query::UsageRevision { database_id, data_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(data.into())?, price_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(price.into())?, usage_view_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(view.into())? })
+    Ok(token_pulse_core::query::UsageRevision {
+        database_id,
+        data_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(data.into())?,
+        price_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(price.into())?,
+        usage_view_revision: token_pulse_core::numeric::DecimalInt::from_nonnegative(view.into())?,
+    })
 }
 pub(crate) fn configure(conn: &Connection) -> StoreResult<()> {
     conn.busy_timeout(Duration::from_secs(5))?;

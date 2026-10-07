@@ -163,7 +163,7 @@ test('same-filter refresh retains prior values on error and older-filter replies
   await expect(page.getByLabel('683,067 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as { __deferSyntheticDashboard: () => void }).__deferSyntheticDashboard());
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
-  await expect(page.getByRole('heading', { name: '正在读取统计快照' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Token 分解' })).toBeVisible(); await expect(page.locator('.total-number')).toContainText('—');
   await expect(page.getByLabel('683,067 Token', { exact: true })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { __releaseSyntheticDashboard: () => void }).__releaseSyntheticDashboard());
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
@@ -188,7 +188,7 @@ test('price notifications refresh whole bundles and warm offscreen views with bo
   type Bridge = { __syntheticPriceState: () => { reads: number; listeners: number }; __emitSyntheticPriceChange: () => void; __setSyntheticHidden: (v: boolean) => void };
   const state = () => page.evaluate(() => (window as unknown as Bridge).__syntheticPriceState());
   await expect(page.getByText('$0.87', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await state()).listeners).toBe(5);
+  await expect.poll(async () => (await state()).listeners).toBe(1);
   const before = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await expect(page.getByText('$1.23', { exact: true })).toBeVisible({ timeout: 3000 });
@@ -204,9 +204,9 @@ test('price notifications refresh whole bundles and warm offscreen views with bo
   await expect.poll(async () => (await state()).reads).toBe(before + 2);
   await page.getByLabel('来源', { exact: true }).selectOption('synthetic-b');
   await expect(page.getByLabel('17 Token', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await state()).listeners).toBe(5);
+  await expect.poll(async () => (await state()).listeners).toBe(1);
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await expect.poll(async () => (await state()).listeners).toBe(5);
+  await expect.poll(async () => (await state()).listeners).toBe(1);
   const offscreenReads = (await state()).reads;
   await page.evaluate(() => (window as unknown as Bridge).__emitSyntheticPriceChange());
   await expect.poll(async () => (await state()).reads).toBe(offscreenReads + 1);

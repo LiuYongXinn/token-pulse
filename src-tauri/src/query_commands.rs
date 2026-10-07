@@ -13,6 +13,41 @@ use token_pulse_core::{
 };
 
 #[tauri::command]
+pub async fn restore_usage_display(
+    window: WebviewWindow,
+    state: State<'_, super::RuntimeState>,
+    request: token_pulse_core::display_cache::UsageDisplayRequest,
+    request_id: String,
+) -> Result<PrivateResponse<token_pulse_core::display_cache::UsageDisplaySnapshot>, Box<AppError>> {
+    validate_request_id(&request_id)
+        .map_err(|code| Box::new(AppError::new(code, "invalid-request".into())))?;
+    if window.label() != "main" {
+        return Err(Box::new(AppError::new(
+            ErrorCode::PermissionDenied,
+            request_id,
+        )));
+    }
+    request
+        .validate()
+        .map_err(|code| Box::new(AppError::new(code, request_id.clone())))?;
+    let database = state
+        .database
+        .as_ref()
+        .cloned()
+        .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    let data =
+        tauri::async_runtime::spawn_blocking(move || database.restore_usage_display(&request))
+            .await
+            .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
+            .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
+    Ok(PrivateResponse::new(
+        request_id,
+        data,
+        state.privacy.clone(),
+    ))
+}
+
+#[tauri::command]
 pub async fn get_usage_revision(
     window: WebviewWindow,
     state: State<'_, super::RuntimeState>,
@@ -167,7 +202,24 @@ pub async fn query_usage_events(
     let owner = window.label().to_owned();
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
-        database.query_usage_events(&owner, &request, at)
+        #[cfg(all(debug_assertions, windows))]
+        super::navigation_smoke::wait_if_blocked();
+        let stamp = database.display_cache_stamp().ok();
+        let data = database.query_usage_events(&owner, &request, at)?;
+        if let Some(stamp) = stamp {
+            if request.cursor.is_none() {
+                let _ = database.remember_usage_display(
+                    &token_pulse_core::display_cache::UsageDisplayRequest::Events {
+                        request: request.query.clone(),
+                    },
+                    token_pulse_core::display_cache::UsageDisplayData::Events {
+                        value: data.clone(),
+                    },
+                    stamp,
+                );
+            }
+        }
+        Ok(data)
     })
     .await
     .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
@@ -207,7 +259,24 @@ pub async fn query_sessions(
     let owner = window.label().to_owned();
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
-        database.query_sessions(&owner, &request, at)
+        #[cfg(all(debug_assertions, windows))]
+        super::navigation_smoke::wait_if_blocked();
+        let stamp = database.display_cache_stamp().ok();
+        let data = database.query_sessions(&owner, &request, at)?;
+        if let Some(stamp) = stamp {
+            if request.cursor.is_none() {
+                let _ = database.remember_usage_display(
+                    &token_pulse_core::display_cache::UsageDisplayRequest::Sessions {
+                        request: request.query.clone(),
+                    },
+                    token_pulse_core::display_cache::UsageDisplayData::Sessions {
+                        value: data.clone(),
+                    },
+                    stamp,
+                );
+            }
+        }
+        Ok(data)
     })
     .await
     .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
@@ -336,7 +405,22 @@ pub async fn get_grouped_usage(
     let dimension = request.dimension;
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
-        database.grouped_usage_bundle(&request, at, &snapshot_id)
+        #[cfg(all(debug_assertions, windows))]
+        super::navigation_smoke::wait_if_blocked();
+        let stamp = database.display_cache_stamp().ok();
+        let data = database.grouped_usage_bundle(&request, at, &snapshot_id)?;
+        if let Some(stamp) = stamp {
+            let _ = database.remember_usage_display(
+                &token_pulse_core::display_cache::UsageDisplayRequest::Groups {
+                    request: request.clone(),
+                },
+                token_pulse_core::display_cache::UsageDisplayData::Groups {
+                    value: data.clone(),
+                },
+                stamp,
+            );
+        }
+        Ok(data)
     })
     .await
     .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?
@@ -384,7 +468,22 @@ pub async fn get_dashboard_bundle(
     let snapshot_id = request_id.clone();
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
-        database.dashboard_bundle(&request, at, &snapshot_id)
+        #[cfg(all(debug_assertions, windows))]
+        super::navigation_smoke::wait_if_blocked();
+        let stamp = database.display_cache_stamp().ok();
+        let data = database.dashboard_bundle(&request, at, &snapshot_id)?;
+        if let Some(stamp) = stamp {
+            let _ = database.remember_usage_display(
+                &token_pulse_core::display_cache::UsageDisplayRequest::Dashboard {
+                    request: request.clone(),
+                },
+                token_pulse_core::display_cache::UsageDisplayData::Dashboard {
+                    value: data.clone(),
+                },
+                stamp,
+            );
+        }
+        Ok(data)
     })
     .await
     .map_err(|_| Box::new(AppError::new(ErrorCode::DbWriteFailed, request_id.clone())))?

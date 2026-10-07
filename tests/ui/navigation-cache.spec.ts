@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
 
-type QA = { __navigationCacheQA: { reads: () => string[]; concurrency: () => number; inFlight: () => number; resetConcurrency: () => void; hold: () => void; release: () => void; fail: () => void; total: (value: string) => void; statusFail: () => void } };
+type QA = { __navigationCacheQA: { reads: () => string[]; concurrency: () => number; inFlight: () => number; resetConcurrency: () => void; hold: () => void; release: () => void; fail: () => void; total: (value: string) => void; statusFail: () => void; storageFail: () => void } };
 
 test.beforeEach(async ({ page }, info) => {
   const cold = info.title.includes('unwarmed');
   await installSyntheticCalendar(page);
   await page.addInitScript(({ cold }) => {
     const reads: string[] = [], pending: (() => void)[] = [];
-    let hold = cold, fail = false, serial = 0, version = 1, statusFail = false;
+    let hold = cold, fail = false, serial = 0, version = 1, statusFail = false, storageFail = false;
     let inFlight = 0, maximum = 0;
     const unknown = { value: null, covered_total_tokens: '0', complete: false };
     const summary = { total_tokens: '777', input_total: unknown, cached_input: unknown, noncached_input: unknown, output_total: unknown, reasoning_output: unknown, cache_write_input: unknown, session_count: '0', usage_event_count: '0', reliable_turn_count: null, reliable_turns_complete: false };
@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }, info) => {
     const coverage = { state: 'partial', pending_observation_count: '0', unattributed_observation_count: '0', unattributed_total_tokens: null, pending_file_count: '0', source_issues: [], format_issues: [], breakdown_complete: false };
     Object.assign(window, {
       isTauri: true,
-      __navigationCacheQA: { reads: () => [...reads], concurrency: () => maximum, inFlight: () => inFlight, resetConcurrency: () => { maximum = inFlight; }, hold: () => { hold = true; }, release: () => { hold = false; for (const resolve of pending.splice(0)) resolve(); }, fail: () => { fail = true; }, total: (value: string) => { summary.total_tokens = value; ++version; }, statusFail: () => { statusFail = true; } },
+      __navigationCacheQA: { reads: () => [...reads], concurrency: () => maximum, inFlight: () => inFlight, resetConcurrency: () => { maximum = inFlight; }, hold: () => { hold = true; }, release: () => { hold = false; for (const resolve of pending.splice(0)) resolve(); }, fail: () => { fail = true; }, total: (value: string) => { summary.total_tokens = value; ++version; }, statusFail: () => { statusFail = true; }, storageFail: () => { storageFail = true; } },
       __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
       __TAURI_INTERNALS__: { transformCallback: () => 0, invoke: async (command: string, args: Record<string, unknown>) => {
         if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 0;
@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }, info) => {
         if (command === 'get_display_settings' || command === 'resolve_calendar_selection') return response(window.__syntheticCalendar(command, args));
         if (command === 'get_usage_revision') return response({ database_id: 'a'.repeat(32), data_revision: String(version), price_revision: '1', usage_view_revision: String(version) });
         if (command === 'get_app_status' && statusFail) throw new Error('Synthetic status disconnected');
-        if (command === 'get_app_status') return response({ version: 'synthetic', development: true, data_directory: 'synthetic', collector: 'ready', storage: 'ready', storage_error: null, quota: 'not_configured', taskbar: 'not_implemented' });
+        if (command === 'get_app_status') return response({ version: 'synthetic', development: true, data_directory: 'synthetic', collector: 'ready', storage: storageFail ? 'error' : 'ready', storage_error: storageFail ? 'db_unavailable' : null, quota: 'not_configured', taskbar: 'not_implemented' });
         if (command === 'get_sources') return response({ settings_revision: '1', sources: [{ source_id: 'synthetic', root_path: 'Synthetic Source', enabled: true, removed: false }] });
         if (command === 'get_account_quota') return response({ connection_epoch: 'synthetic', quota_revision: '0', state: 'disconnected', selected_limit_id: null, available_limits: [], windows: [], fetched_at_ms: null, last_attempt_at_ms: null, error_code: null });
         if (command === 'get_main_navigation' || command === 'get_mini_stats_request' || command === 'close_query_snapshot') return response(null);
@@ -139,5 +139,27 @@ test('visited date scopes restore their own snapshot on the first frame and stat
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.statusFail());
   await page.clock.runFor(2100);
   await expect(page.getByRole('alert')).toContainText('Synthetic status disconnected');
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+});
+
+test('confirmed later storage status failure preserves already displayed statistics', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.storageFail());
+  await page.clock.runFor(2100);
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+});
+
+test('custom date statistics refresh their backend heatmap scope after crossing a local day', async ({ page }) => {
+  await page.getByLabel('日期范围').selectOption('custom');
+  await page.getByLabel('开始日期', { exact: true }).fill('2026-09-01');
+  await page.getByLabel('结束日期（包含当天）').fill('2026-09-03');
+  await page.getByRole('button', { name: '应用日期', exact: true }).click();
+  await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
+  const before = await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length);
+  const later = await page.evaluate(() => Date.now()+86400000);
+  await page.clock.setSystemTime(later); await page.clock.runFor(60100);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.reads().length)).toBeGreaterThan(before);
   await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
 });

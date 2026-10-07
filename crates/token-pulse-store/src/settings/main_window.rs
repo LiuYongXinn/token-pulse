@@ -3,7 +3,7 @@ use super::{read_stored, *};
 use token_pulse_core::placement::{MainWindowPreferences, WindowPlacement};
 impl Database {
     pub fn main_window_preferences(&self) -> StoreResult<MainWindowPreferences> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (_, payload) = read_stored(tx, revision.settings)?;
             payload
                 .get("main_window")

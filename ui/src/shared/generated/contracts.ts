@@ -130,6 +130,12 @@ export type SnapshotMeta = { snapshot_id: string, data_revision: DecimalInt, pri
 
 export type UsageRevision = { database_id: string, data_revision: DecimalInt, price_revision: DecimalInt, usage_view_revision: DecimalInt, };
 
+export type UsageDisplayRequest = { "kind": "dashboard", request: DashboardRequest, } | { "kind": "groups", request: GroupedUsageRequest, } | { "kind": "sessions", request: SessionsQuery, } | { "kind": "events", request: UsageEventsQuery, };
+
+export type UsageDisplayData = { "kind": "dashboard", value: DashboardBundle, } | { "kind": "groups", value: GroupedUsageBundle, } | { "kind": "sessions", value: SessionsPage, } | { "kind": "events", value: UsageEventsPage, };
+
+export type UsageDisplaySnapshot = { data: UsageDisplayData | null, has_more: boolean, };
+
 export type DateRange = { start_ms: EpochMs, end_ms: EpochMs, timezone: string, };
 
 export type Grain = "hour" | "day" | "month";

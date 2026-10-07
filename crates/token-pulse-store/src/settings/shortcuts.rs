@@ -2,7 +2,7 @@ use super::*;
 use token_pulse_core::shortcuts::*;
 impl Database {
     pub fn recovery_shortcut(&self) -> StoreResult<(RecoveryShortcut, DecimalInt)> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (display, payload) = read_stored(tx, revision.settings)?;
             let shortcut = payload
                 .get("recovery_shortcut")

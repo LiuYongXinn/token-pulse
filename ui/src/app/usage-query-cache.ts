@@ -1,4 +1,4 @@
-export type CachedResult<T> = Readonly<{ value: T | null; loading: boolean; stale: boolean; error: string | null; fetchedAt: number | null }>;
+export type CachedResult<T> = Readonly<{ value: T | null; loading: boolean; stale: boolean; restored: boolean; error: string | null; fetchedAt: number | null }>;
 type Entry<T> = { snapshot: CachedResult<T>; listeners: Set<() => void>; flight: Promise<void> | null; invalidation: number; bytes: number; used: number };
 
 /** Failed refreshes keep a complete DTO; external-store references stay stable. */
@@ -9,7 +9,7 @@ export class UsageQueryCache {
     let entry = this.entries.get(key);
     if (!entry) {
       this.evict(1);
-      entry = { snapshot: { value: null, loading: false, stale: true, error: null, fetchedAt: null }, listeners: new Set(), flight: null, invalidation: 0, bytes: 0, used: Date.now() };
+      entry = { snapshot: { value: null, loading: false, stale: true, restored: false, error: null, fetchedAt: null }, listeners: new Set(), flight: null, invalidation: 0, bytes: 0, used: Date.now() };
       this.entries.set(key, entry);
     }
     return entry as Entry<T>;
@@ -23,6 +23,24 @@ export class UsageQueryCache {
     entry.snapshot = { ...entry.snapshot, ...update };
     for (const listener of entry.listeners) listener();
   }
+  private admit<T>(entry: Entry<T>, value: T) {
+    const bytes = new TextEncoder().encode(JSON.stringify(value)).length;
+    if (bytes > this.budget) throw new Error('结果超过展示缓存容量，请缩小查询范围。');
+    let others = [...this.entries.values()].filter(other => other !== entry && other.snapshot.value !== null);
+    for (const [key, other] of [...this.entries].sort((a, b) => a[1].used - b[1].used)) {
+      if (others.length < this.limit && others.reduce((sum, item) => sum + item.bytes, 0) + bytes <= this.budget) break;
+      if (other === entry || other.listeners.size || other.flight) continue;
+      this.entries.delete(key); others = others.filter(item => item !== other);
+    }
+    if (others.length >= this.limit || others.reduce((sum, item) => sum + item.bytes, 0) + bytes > this.budget) throw new Error('展示缓存正被使用，请稍后重试或缩小查询范围。');
+    entry.bytes = bytes;
+  }
+  canPrefetch(key: string) {
+    const target = this.entries.get(key);
+    if (target?.snapshot.value !== null && target?.snapshot.value !== undefined) return true;
+    const protectedEntries = [...this.entries.values()].filter(entry => entry !== target && (entry.listeners.size || entry.flight) && entry.snapshot.value !== null);
+    return protectedEntries.length < this.limit && protectedEntries.reduce((sum, entry) => sum + entry.bytes, 0) < this.budget;
+  }
   invalidate(key?: string) {
     for (const [id, entry] of this.entries) if (key === undefined || id === key) {
       ++entry.invalidation; this.publish(entry, { stale: true, error: null });
@@ -30,15 +48,16 @@ export class UsageQueryCache {
   }
   accept<T>(key: string, value: T) {
     const old = this.entry<T>(key);
-    const replacement: Entry<T> = { ...old, flight: null, invalidation: old.invalidation + 1, bytes: new TextEncoder().encode(JSON.stringify(value)).length, snapshot: { value, loading: false, stale: false, error: null, fetchedAt: Date.now() } };
+    this.admit(old, value);
+    const replacement: Entry<T> = { ...old, flight: null, invalidation: old.invalidation + 1, snapshot: { value, loading: false, stale: false, restored: false, error: null, fetchedAt: Date.now() } };
     this.entries.set(key, replacement as Entry<unknown>);
     for (const listener of old.listeners) listener();
   }
   clear() {
     const entries = [...this.entries.values()]; this.entries.clear();
-    for (const entry of entries) { ++entry.invalidation; this.publish(entry, { value: null, stale: true, loading: false, error: null }); }
+    for (const entry of entries) { ++entry.invalidation; this.publish(entry, { value: null, stale: true, restored: false, loading: false, error: null }); }
   }
-  async read<T>(key: string, work: () => Promise<T>, errorText: (error: unknown) => string): Promise<void> {
+  async read<T>(key: string, work: (prime: (value: T) => void) => Promise<T>, errorText: (error: unknown) => string): Promise<void> {
     const entry = this.entry<T>(key);
     if (entry.flight) return entry.flight;
     if (!entry.snapshot.stale && entry.snapshot.value !== null) return;
@@ -46,10 +65,15 @@ export class UsageQueryCache {
     this.publish(entry, { loading: true });
     entry.flight = (async () => {
       try {
-        const value = await work();
+        const value = await work(value => {
+          if (this.entries.get(key) === entry && entry.snapshot.value === null && version === entry.invalidation) {
+            this.admit(entry, value);
+            this.publish(entry, { value, restored: true });
+          }
+        });
         if (this.entries.get(key) !== entry) return;
-        entry.bytes = new TextEncoder().encode(JSON.stringify(value)).length;
-        this.publish(entry, { value, loading: false, stale: version !== entry.invalidation, error: null, fetchedAt: Date.now() });
+        this.admit(entry, value);
+        this.publish(entry, { value, loading: false, restored: false, stale: version !== entry.invalidation, error: null, fetchedAt: Date.now() });
       } catch (error) {
         if (this.entries.get(key) === entry) this.publish(entry, { loading: false, stale: true, error: errorText(error) });
       } finally { entry.flight = null; this.evict(); }

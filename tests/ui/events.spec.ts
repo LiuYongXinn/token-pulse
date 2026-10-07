@@ -68,10 +68,11 @@ test('events retain precise vectors, unknown values, true zero price and stable 
   await expect(evidence).toContainText('USD 9.007199254740993');
   await expect(evidence).toContainText('synthetic-rule'); await expect(evidence).toContainText('最后用量（累计基线已核对）');
   await page.screenshot({ path: 'test-results/event-evidence-1280.png' });
+  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(3); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '上一页', exact: true }).click();
-  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(51); // Cached expanded evidence is the same page.
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50); // Explicit replacement clears old snapshot evidence.
   await page.setViewportSize({ width: 960, height: 680 }); await page.getByRole('heading', { name: '明细', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/events-960.png' }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('.event-table>tbody>tr').first().getByRole('button', { name: 'Synthetic 会话', exact: true }).click();
@@ -111,6 +112,7 @@ test('request input stays distinct from consumption, shows true zero and unknown
 test('expired or mismatched continuations never append fresh data to a frozen event page', async ({ page }) => {
   type Bridge = { __badEventPage: (value: 'expired' | 'mismatch' | null) => void };
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage('mismatch'));
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('明细分页快照不一致');
@@ -124,12 +126,12 @@ test('expired or mismatched continuations never append fresh data to a frozen ev
 test('price notification replaces the whole snapshot and navigation keeps bounded listeners but releases capabilities', async ({ page }) => {
   type Bridge = { __eventListenerCount: () => number; __emitEventPriceChange: () => void; __eventCalls: () => { command: string; request: { kind?: string; query?: { sort: string } } }[] };
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
-  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(1);
   await page.evaluate(() => (window as unknown as Bridge).__emitEventPriceChange());
   await expect(page.locator('.event-table>tbody>tr').first().getByText('$18.01', { exact: true })).toBeVisible({ timeout: 3000 });
   await page.getByLabel('明细排序').selectOption('total_desc'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(5);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventListenerCount())).toBe(1);
   await expect(page.locator('.event-table')).toHaveCount(0);
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__eventCalls())).filter(c => c.command === 'close_query_snapshot' && c.request.kind === 'usage_events').length).toBeGreaterThanOrEqual(3);
   const calls = await page.evaluate(() => (window as unknown as Bridge).__eventCalls());

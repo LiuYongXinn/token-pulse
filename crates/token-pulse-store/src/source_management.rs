@@ -48,7 +48,7 @@ pub(crate) fn encoded(
 }
 impl Database {
     pub fn sources_snapshot(&self) -> StoreResult<SourcesSnapshot> {
-        self.snapshot(|tx,revision| {
+        self.light_snapshot(|tx,revision| {
             let mut s=tx.prepare("SELECT source_id,root_path,kind,enabled,readability,capabilities_json,last_scan_at_ms,last_success_at_ms FROM sources ORDER BY created_at_ms,source_id")?;
             let rows=s.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,bool>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,Option<i64>>(6)?,r.get::<_,Option<i64>>(7)?)))?;
             let mut sources=vec![];

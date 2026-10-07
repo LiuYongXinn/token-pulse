@@ -23,14 +23,15 @@ function cache(group: PricedUsageGroup) {
 export function GroupedPage({ request, dimension, refreshRevision, onPrices, active = true }: { request: DashboardRequest; dimension: GroupDimension; refreshRevision: number; onPrices: () => void; active?: boolean }) {
   const [sort, setSort] = useState<GroupSort>('total_desc');
   const [limit, setLimit] = useState(200);
-  const { bundle, error, loading } = useSnapshotQuery({ filter: request.filter, price_basis: request.price_basis, dimension, sort, limit }, refreshRevision, getGroupedUsage, active);
+  const { bundle, error, loading, restored } = useSnapshotQuery({ filter: request.filter, price_basis: request.price_basis, dimension, sort, limit }, refreshRevision, getGroupedUsage, active);
   if (!active) return null;
   const name = dimension === 'models' ? '模型' : '项目';
   if (!bundle) return <>{error && <p className="notice" role="alert">{error}</p>}<PendingStatistics label={name} columns={[name, 'Token 总量', '占总量', '缓存 / 输入', '估算费用', '价格覆盖']}><div className="group-toolbar"><span>— 个{name}分类</span><div><label>排序 <select aria-label={`${name}排序`} value={sort} onChange={e => setSort(e.target.value as GroupSort)}><option value="total_desc">消耗最多</option><option value="name_asc">名称顺序</option></select></label><label>显示 <select aria-label={`${name}显示数量`} value={limit} onChange={e => setLimit(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 个</option>)}</select></label></div></div></PendingStatistics></>;
   return <>
+    {restored && <p className="notice" role="status">已恢复上次成功快照，正在后台核对更新。</p>}
     {error && <div className="notice" role="alert">{error}<span>保留上次快照 · {when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}</span></div>}
     <div className={`overview-coverage ${bundle.coverage.state}`}><span>{coverageSummary(bundle.coverage)}</span><span role="status">{loading ? '正在刷新…' : `快照 ${when(bundle.meta.generated_at_ms, bundle.meta.display_timezone)}`}</span></div>
-    <section className="group-stat-strip" aria-label={`${name}统计汇总`}>
+    <section data-snapshot-id={bundle.meta.snapshot_id} className="group-stat-strip" aria-label={`${name}统计汇总`}>
       <div><p className="metric-label">可信 Token 总量</p><strong className="group-total" title={fullTokens(bundle.summary.total_tokens)} aria-label={`${fullTokens(bundle.summary.total_tokens)} Token`}>{compactTokens(bundle.summary.total_tokens)}</strong></div>
       <div><p className="metric-label">已计价部分估算</p><Cost pricing={bundle.pricing} /></div>
       <div><p className="metric-label">消费会话</p><strong className="group-total">{fullTokens(bundle.summary.session_count)}</strong></div>

@@ -173,7 +173,7 @@ impl Database {
         at: EpochMs,
         snapshot_id: &str,
     ) -> StoreResult<DashboardBundle> {
-        self.snapshot(|tx, revision| {
+        self.usage_snapshot(|tx, revision| {
             let common = self.scope_summary(tx, revision, &request.filter, &request.price_basis)?;
             assemble(tx, revision, request, at, snapshot_id, &common)
         })

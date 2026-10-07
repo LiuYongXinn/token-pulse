@@ -19,5 +19,5 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
     if (controller.refreshRevision !== null && controller.refreshRevision !== refreshRevision) controller.invalidate();
     controller.refreshRevision = refreshRevision;
   }, [controller, refreshRevision]);
-  return { page: view.pages[view.index] ?? null, pageNumber: view.firstNumber + view.index, hasPrevious: view.index > 0, hasNext: view.index < view.pages.length - 1 || view.hasMore, trimmed: view.firstNumber > 1, loading: view.loading, error: view.error, renewal: view.renewal, updateAvailable: view.updateAvailable, previous: controller.previous, next: controller.next, reload: controller.reload };
+  return { restored: view.restored, page: view.pages[view.index] ?? null, pageNumber: view.firstNumber + view.index, hasPrevious: view.index > 0, hasNext: view.index < view.pages.length - 1 || (view.hasMore && !view.renewal && !view.error), trimmed: view.firstNumber > 1, loading: view.loading, error: view.error, renewal: view.renewal, updateAvailable: view.updateAvailable, previous: controller.previous, next: controller.next, reload: controller.reload };
 }

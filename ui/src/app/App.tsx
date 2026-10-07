@@ -68,7 +68,10 @@ export function App() {
   const statusRequest = useRef(0);
   const statusRefreshBusy = useRef(false);
   const mounted = useRef(false);
-  const display = useMainCalendar(selection, status?.storage === 'ready', refreshRevision, clock);
+  const historicalReady = useRef<number | null>(null);
+  if (status?.storage === 'ready') historicalReady.current = policy.epoch;
+  const ready = status?.storage === 'ready' || historicalReady.current === policy.epoch;
+  const display = useMainCalendar(selection, ready, refreshRevision, clock);
   useAppTheme(display.settings?.preferences.theme);
   // A page/tab change starts at its heading, independent of the previous page's scroll.
   useEffect(() => { window.scrollTo(0, 0); }, [page, tab]);
@@ -167,11 +170,11 @@ export function App() {
         {visitedSettings.current.has('价格规则') && <div hidden={tab !== '价格规则'}>{policy.privacy !== false ? <section className="panel" role="tabpanel"><h2>价格规则已隐藏</h2></section> : <PriceRulesPanel onChanged={() => void refresh()} />}</div>}
       </div>
       {diagnosticVisited.current && <div hidden={page !== 'diagnostics'}><section className="panel"><h2>运行状态</h2><dl><dt>桌面运行壳</dt><dd>{statusPollError ? '连接异常，保留已知状态' : status ? '已连接' : loading ? '正在连接' : '未连接'}</dd><dt>采集服务</dt><dd>{collectorText}</dd><dt>本地数据库</dt><dd>{status?.storage === 'ready' ? '已就绪' : status?.storage_error ?? '未连接'}</dd><dt>核算服务</dt><dd>已接入采集与必要观察重放</dd></dl></section><SourcesPanel diagnostics onChanged={() => void refresh()} timezone={display.settings?.preferences.display_timezone ?? null} /><DiagnosticsIssues sources={sources} /><JobsPanel timezone={display.settings?.preferences.display_timezone ?? null} /><TaskbarDiagnosticsPanel timezone={display.settings?.preferences.display_timezone ?? null} /></div>}
-      {!['settings', 'diagnostics'].includes(page) && (query === null || policy.privacy === null || status?.storage !== 'ready') && <>
+      {!['settings', 'diagnostics'].includes(page) && (query === null || policy.privacy === null || !ready) && <>
         {page === 'overview' ? <PendingOverview grainControls={<span>统计日期确认中</span>} recentAction={<button onClick={() => setPage('sessions')}>查看全部</button>}><section className="panel"><h2>账户额度</h2><p>—</p></section></PendingOverview> : <PendingStatistics label={current[1]} columns={page === 'models' ? ['模型', 'Token 总量', '占总量', '缓存 / 输入', '估算费用', '价格覆盖'] : page === 'projects' ? ['项目', '会话', 'Token 总量', '估算费用'] : ['记录', '项目 / 模型', 'Token 总量', '估算费用']} />}
       </>}
       {/* Keep query owners mounted across navigation; inactive views render no DOM. */}
-      {policy.privacy !== null && status?.storage === 'ready' && query !== null && <>
+      {policy.privacy !== null && ready && query !== null && <>
         <OverviewPage active={page === 'overview'} request={query} refreshRevision={refreshRevision} sources={sources} accountTimezone={display.settings?.preferences.display_timezone ?? null} onSources={openSources} onDiagnostics={() => setPage('diagnostics')} onPrices={() => { setPage('settings'); setTab('价格规则'); }} onSessions={() => setPage('sessions')} onGrain={setGrain} onDay={day => { setMiniStats(null); setSelection({ kind: 'custom', start_date: day, end_date_inclusive: day }); }} />
         <GroupedPage active={page === 'models'} request={query} dimension="models" refreshRevision={refreshRevision} onPrices={() => { setPage('settings'); setTab('价格规则'); }} />
         <GroupedPage active={page === 'projects'} request={query} dimension="projects" refreshRevision={refreshRevision} onPrices={() => { setPage('settings'); setTab('价格规则'); }} />

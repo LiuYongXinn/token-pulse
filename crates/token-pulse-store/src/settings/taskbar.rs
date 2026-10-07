@@ -25,7 +25,7 @@ fn preferences(
 }
 impl Database {
     pub fn taskbar_preferences(&self) -> StoreResult<TaskbarPreferencesSnapshot> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (settings, payload) = read_stored(tx, revision.settings)?;
             Ok(TaskbarPreferencesSnapshot {
                 preferences: preferences(&payload)?,
@@ -35,7 +35,7 @@ impl Database {
     }
     pub fn taskbar_input(&self, at: EpochMs, snapshot_id: &str) -> StoreResult<TaskbarInput> {
         token_pulse_core::protocol::validate_request_id(snapshot_id)?;
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (settings, payload) = read_stored(tx, revision.settings)?;
             let preferences = preferences(&payload)?;
             let usage = if preferences.enabled {

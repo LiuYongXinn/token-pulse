@@ -8,7 +8,7 @@ impl Database {
     pub fn mini_recovery_preferences(
         &self,
     ) -> StoreResult<(MiniWindowPreferences, RecoveryShortcut, DecimalInt)> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (_, payload) = read_stored(tx, revision.settings)?;
             let prefs = payload
                 .get("mini_window")

@@ -9,6 +9,8 @@ export function recordQueryTiming(kind: string, stage: QueryTiming['stage'], sta
 }
 export function queryTimings(): readonly QueryTiming[] { return samples.slice(); }
 export function resetQueryTimings() { samples.length = 0; }
+// Read-only anonymous diagnostic access for native receipts. Contains no query identity or values.
+if (typeof window !== 'undefined') Object.defineProperty(window, '__tokenPulseQueryTimings', { value: queryTimings });
 export function timeNavigation(kind: string) {
   const started = performance.now();
   // After React's discrete event commit; records the first frame opportunity.

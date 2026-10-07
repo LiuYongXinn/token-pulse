@@ -77,12 +77,12 @@ test('install review binds the displayed version and exact revision; stale revie
   expect((await page.evaluate(() => (window as unknown as QA).__updatesQA.calls())).filter(c => c.command === 'install_update')).toEqual([{ command: 'install_update', request: { expected_update_revision: '90071992547409932' } }]);
 });
 
-test('leaving the page releases subscription and late reads cannot overwrite a reopened page', async ({ page }) => {
+test('visited settings share one subscription and late reads cannot overwrite a newer snapshot', async ({ page }) => {
   const panel = await open(page);
   await expect.poll(() => page.evaluate(() => (window as unknown as QA).__updatesQA.subscriptions())).toBe(1);
   await page.evaluate(() => (window as unknown as QA).__updatesQA.late()); await panel.getByRole('button', { name: '刷新更新状态' }).click();
   await page.getByRole('tab', { name: '数据来源', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__updatesQA.subscriptions())).toBe(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__updatesQA.subscriptions())).toBe(1);
   await page.evaluate(() => (window as unknown as QA).__updatesQA.set('available', { release: { version: '0.4.0', notes: null, published_at_ms: null } }));
   await page.getByRole('tab', { name: '软件更新', exact: true }).click(); await expect(panel.getByRole('status')).toHaveText('发现新版本');
   await page.evaluate(() => (window as unknown as QA).__updatesQA.deliver()); await expect(panel.getByRole('status')).toHaveText('发现新版本'); await expect(panel).toContainText('0.4.0');

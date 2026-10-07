@@ -29,8 +29,27 @@ pub(crate) struct ScopeSummary {
 #[derive(Default)]
 pub(crate) struct SummaryCache {
     values: Mutex<VecDeque<(String, Arc<ScopeSummary>, usize)>>,
+    flights: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
     hits: AtomicU64,
     computations: AtomicU64,
+}
+struct SummaryFlight<'a> {
+    cache: &'a SummaryCache,
+    key: String,
+    lock: Arc<Mutex<()>>,
+}
+impl Drop for SummaryFlight<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut flights) = self.cache.flights.lock() {
+            if flights
+                .get(&self.key)
+                .is_some_and(|lock| Arc::ptr_eq(lock, &self.lock))
+                && Arc::strong_count(&self.lock) == 2
+            {
+                flights.remove(&self.key);
+            }
+        }
+    }
 }
 impl SummaryCache {
     pub(crate) fn get(
@@ -54,6 +73,15 @@ impl SummaryCache {
             }
         }
         let key = serde_json::to_string(&(1, version, normalized, basis))?;
+        let flight = {
+            let mut flights = self.flights.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
+            SummaryFlight {
+                cache: self,
+                key: key.clone(),
+                lock: flights.entry(key.clone()).or_default().clone(),
+            }
+        };
+        let _exclusive = flight.lock.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
         {
             let mut values = self.values.lock().map_err(|_| ErrorCode::DbWriteFailed)?;
             if let Some(index) = values.iter().position(|entry| entry.0 == key) {

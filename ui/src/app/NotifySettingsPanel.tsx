@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { displayPolicy } from '../shared/display-policy';
 import { applyNotifyIntegration, getNotifyIntegrations, notifyIssueText, prepareNotifyIntegration, releaseNotifyPreview, retireNotifyIntegration, runtimeError } from '../shared/runtime';
-import type { NotifyConfigPreview, NotifyIntegrationsSnapshot, NotifyPrepareAction, SourcesSnapshot } from '../shared/generated/contracts';
+import { useSnapshotQuery } from './useSnapshotQuery';
+import type { NotifyConfigPreview, NotifyPrepareAction, SourcesSnapshot } from '../shared/generated/contracts';
 import './notify-settings.css';
 
 type Cached<T> = { epoch: number; value: T };
 export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | null }) {
   const policy = useSyncExternalStore(displayPolicy.subscribe, displayPolicy.get);
-  const [cache, setCache] = useState<Cached<NotifyIntegrationsSnapshot> | null>(null);
+  const shared = useSnapshotQuery(undefined, 0, getNotifyIntegrations);
   const [draft, setDraft] = useState<Cached<NotifyConfigPreview> | null>(null);
   const [sourceId, setSourceId] = useState('');
   const [mode, setMode] = useState<'preserve' | 'replace'>('preserve');
@@ -16,7 +17,7 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
   const [remaining, setRemaining] = useState(0);
   const life = useRef(0), sequence = useRef(0), working = useRef(false), lease = useRef<string | null>(null), deadline = useRef(0);
   const mounted = useRef(false);
-  const snapshot = cache?.epoch === policy.epoch ? cache.value : null;
+  const snapshot = shared.bundle;
   const preview = draft?.epoch === policy.epoch && policy.privacy === false ? draft.value : null;
   const visible = policy.privacy === false && !policy.pending;
   const current = (generation: number, epoch: number) => life.current === generation && displayPolicy.get().epoch === epoch;
@@ -26,15 +27,15 @@ export function NotifySettingsPanel({ sources }: { sources: SourcesSnapshot | nu
   };
   const reload = async () => {
     const generation = life.current, epoch = displayPolicy.get().epoch, serial = ++sequence.current;
-    try { const value = await getNotifyIntegrations(); if (current(generation, epoch) && serial === sequence.current) { setCache({ epoch, value }); setReadError(null); } }
+    try { const value = await getNotifyIntegrations(); if (current(generation, epoch) && serial === sequence.current) { shared.accept(value); setReadError(null); } }
     catch (e) { if (current(generation, epoch) && serial === sequence.current) setReadError(runtimeError(e)); }
   };
   useEffect(() => {
-    mounted.current = true; ++life.current; setCache(null); setDraft(null); setError(null); setReadError(null); setNotice(null); setSourceId('');
-    void reload();
+    mounted.current = true; ++life.current;  setDraft(null); setError(null); setReadError(null); setNotice(null); setSourceId('');
+
     const timer = setInterval(() => {
       setRemaining(Math.max(0, Math.ceil((deadline.current - performance.now()) / 1000)));
-      if (!working.current && !lease.current) void reload();
+
     }, 2000);
     return () => { mounted.current = false; ++life.current; ++sequence.current; clearInterval(timer); const id = lease.current; lease.current = null; deadline.current = 0; if (id) void releaseNotifyPreview(id).catch(() => {}); };
   }, [policy.epoch]);

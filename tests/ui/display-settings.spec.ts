@@ -14,7 +14,7 @@ test('passthrough needs the real window and explicit acknowledged recovery, uses
   expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'set_mini_passthrough').at(-1)?.request)).toEqual({ enabled: true, acknowledged_recovery: { control: true, alt: true, shift: true, key: 'T' }, expected_settings_revision: '9007199254740993' });
   await region.getByRole('button', { name: '显示小窗并恢复交互' }).click(); await expect(region.getByRole('status')).toContainText('穿透已关闭');
   await page.getByRole('button', { name: '模型', exact: true }).click();
-  await expect.poll(async () => page.evaluate(() => (window as unknown as PassQA).__passQA.listeners())).toBe(0);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as PassQA).__passQA.listeners())).toBe(1);
 });
 
 test('unregistered recovery gates enable and revisions retain acknowledged draft on conflict', async ({ page }) => {
@@ -176,7 +176,7 @@ test('saved timezone drives all pages, exact revisions and backend DST boundarie
   await page.getByLabel('日期范围').selectOption('last7'); await expect(page.locator('.filters')).toContainText('America/New_York');
   await expect.poll(async () => page.evaluate(() => { const r = (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'get_grouped_usage').at(-1)?.request as { filter: { range: { start_ms: number } } } | undefined; return r?.filter.range.start_ms; })).toBe(Date.parse('2026-10-26T04:00:00Z'));
   await openSettings(page); await expect(page.getByLabel('统计时区')).toHaveValue('America/New_York');
-  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(2);
+  await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__calendarQA.listeners())).toBe(1);
   await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/display-timezone-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -196,10 +196,10 @@ test('conflicts preserve draft and original revision until explicit reset, inval
 
 test('unreadable settings issue no guessed statistics queries and recover explicitly', async ({ page }) => {
   await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => (window as unknown as QA).__calendarQA.failRead(true)); });
-  await page.goto('/'); await expect(page.getByRole('heading', { name: '统计日期尚未就绪' })).toBeVisible();
+  await page.goto('/'); await expect(page.getByRole('heading', { name: 'Token 分解' })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('已有配置已保留');
   expect(await page.evaluate(() => (window as unknown as QA).__calendarQA.calls().filter(v => v.command === 'resolve_calendar_selection' || v.command === 'get_dashboard_bundle'))).toEqual([]);
-  await page.evaluate(() => (window as unknown as QA).__calendarQA.failRead(false)); await page.getByRole('button', { name: '重新读取' }).click();
+  await page.evaluate(() => (window as unknown as QA).__calendarQA.failRead(false)); await page.getByRole('button', { name: '重试显示设置' }).click();
   await expect(page.getByRole('heading', { name: '添加 Codex 数据来源' })).toBeVisible();
 });
 
@@ -211,7 +211,7 @@ test('first start initializes system timezone once and failed new calendar clear
   expect(calls).toHaveLength(1); expect(calls[0].request).toEqual({ kind: 'initialize', system_timezone: 'UTC' });
   await page.getByRole('button', { name: '模型', exact: true }).click(); await expect(page.getByLabel('模型统计汇总')).toBeVisible();
   await page.evaluate(() => (window as unknown as QA).__calendarQA.badCalendar(true)); await page.getByLabel('日期范围').selectOption('last7');
-  await expect(page.getByRole('heading', { name: '统计日期尚未就绪' })).toBeVisible(); await expect(page.getByLabel('模型统计汇总')).toHaveCount(0);
+  await expect(page.getByLabel('模型统计汇总')).toContainText('—'); await expect(page.getByRole('heading', { name: /正在读取/ })).toHaveCount(0);
   await expect(page.getByRole('alert')).toContainText('统计日期解析失败');
 });
 
@@ -240,7 +240,7 @@ test('saved theme changes real surfaces, persists reload and keeps timezone and 
   await page.getByLabel('应用主题').selectOption('light'); await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByLabel('统计时区')).toHaveValue('Asia/Shanghai');
   expect(await page.locator('html').evaluate(e => getComputedStyle(e).color)).toBe('rgb(41, 41, 41)');
-  expect(await page.locator('.panel').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
+  expect(await page.locator('.panel:visible').evaluate(e => getComputedStyle(e).backgroundColor)).toBe('rgb(255, 255, 255)');
   await page.screenshot({ path: 'test-results/theme-light-1280.png', fullPage: true });
   await page.setViewportSize({ width: 960, height: 680 }); await page.screenshot({ path: 'test-results/theme-light-960.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

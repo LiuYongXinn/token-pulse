@@ -170,7 +170,7 @@ impl Database {
     ) -> StoreResult<SessionBundle> {
         request.validate()?;
         validate_request_id(snapshot_id)?;
-        self.snapshot(|tx, revision| bundle(tx, revision, request, at, snapshot_id))
+        self.interactive_snapshot(|tx, revision| bundle(tx, revision, request, at, snapshot_id))
     }
 }
 #[cfg(test)]

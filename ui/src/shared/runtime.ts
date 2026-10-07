@@ -1,5 +1,21 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import type { Event } from '@tauri-apps/api/event';
+
+const eventSubscriptions = new Map<string, { callbacks: Set<(event: Event<unknown>) => void>; ready: Promise<() => void> }>();
+/** One transport subscription per event per WebView, shared by all read-only consumers. */
+async function sharedListen<T>(name: string, callback: (event: Event<T>) => void): Promise<() => void> {
+  let entry = eventSubscriptions.get(name);
+  if (!entry) {
+    const callbacks = new Set<(event: Event<unknown>) => void>();
+    entry = { callbacks, ready: listen<unknown>(name, event => { for (const consumer of callbacks) consumer(event); }) };
+    eventSubscriptions.set(name, entry);
+  }
+  const consumer = callback as (event: Event<unknown>) => void;
+  entry.callbacks.add(consumer);
+  try { await entry.ready; } catch (error) { entry.callbacks.delete(consumer); if (eventSubscriptions.get(name) === entry) eventSubscriptions.delete(name); throw error; }
+  return () => { entry!.callbacks.delete(consumer); if (!entry!.callbacks.size && eventSubscriptions.get(name) === entry) { eventSubscriptions.delete(name); void entry!.ready.then(unlisten => unlisten()).catch(() => {}); } };
+}
 import type { MiniUsageSnapshot, MiniScopeMutation, MiniScopeSnapshot, MiniWindowAction, MiniWindowState, MiniStatsRequest, MiniStatsOpenRequest, MiniSessionsRequest, MiniSessionsPage } from './generated/contracts';
 import { displayPolicy } from './display-policy';
 import { recordQueryTiming } from './query-timing';
@@ -69,14 +85,14 @@ export async function setDisplayPrivacy(mutation: DisplayPrivacyMutation): Promi
 }
 export async function onDisplayPolicyChanged(): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<DisplayPolicyStamp>('display_policy_changed', event => { try { displayPolicy.accept(event.payload); } catch { displayPolicy.enable(); displayPolicy.failed('无法确认显示隐私策略，已隐藏敏感信息。'); } });
+  const stop = await sharedListen<DisplayPolicyStamp>('display_policy_changed', event => { try { displayPolicy.accept(event.payload); } catch { displayPolicy.enable(); displayPolicy.failed('无法确认显示隐私策略，已隐藏敏感信息。'); } });
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getAppStatus(): Promise<AppStatus> { return request('get_app_status'); }
 export function getUsageRevision(): Promise<import('./generated/contracts').UsageRevision> { return request('get_usage_revision'); }
 export async function onUsageChanged(refresh: (revision: import('./generated/contracts').UsageRevision) => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<import('./generated/contracts').UsageRevision>('usage_changed', event => refresh(event.payload));
+  const stop = await sharedListen<import('./generated/contracts').UsageRevision>('usage_changed', event => refresh(event.payload));
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getUpdateStatus(): Promise<UpdateSnapshot> { return request('get_update_status'); }
@@ -85,7 +101,7 @@ export function downloadUpdate(action: UpdateActionRequest): Promise<UpdateSnaps
 export function installUpdate(action: UpdateActionRequest): Promise<UpdateSnapshot> { return request('install_update', { request: action }); }
 export async function onUpdatesChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen('updates_changed', refresh);
+  const stop = await sharedListen('updates_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 // These DTOs contain display switches and runtime state only, never usage values or paths.
@@ -96,7 +112,7 @@ export async function retryTaskbarEmbed(): Promise<void> { await request<null>('
 /** Runtime events invalidate only; a fresh command supplies the complete authoritative status. */
 export async function onTaskbarStatusChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen('taskbar_status_changed', refresh);
+  const stop = await sharedListen('taskbar_status_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getDisplaySettings(): Promise<DisplaySettingsSnapshot> { return request('get_display_settings'); }
@@ -105,7 +121,7 @@ export function getMiniPassthrough(): Promise<import('./generated/contracts').Mi
 export function setMiniPassthrough(mutation: import('./generated/contracts').MiniPassthroughMutation): Promise<import('./generated/contracts').MiniPassthroughSnapshot> { return request('set_mini_passthrough', { request: mutation }); }
 export async function onMiniInteractionChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen('mini_interaction_changed', refresh);
+  const stop = await sharedListen('mini_interaction_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function setMiniOpacity(mutation: import('./generated/contracts').MiniOpacityMutation): Promise<import('./generated/contracts').MiniOpacitySnapshot> { return request('set_mini_opacity', { request: mutation }); }
@@ -115,13 +131,13 @@ export function setDisplayTheme(mutation: DisplayThemeMutation): Promise<Display
 export function setDisplayTimezone(mutation: TimezoneMutation): Promise<DisplaySettingsSnapshot> { return request('set_display_timezone', { request: mutation }); }
 export async function onSettingsChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<SettingsChanged>('settings_changed', refresh);
+  const stop = await sharedListen<SettingsChanged>('settings_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 /** An invalidation only; values always come from a new complete query response. */
 export async function onPriceRulesChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<PriceChanged>('price_rules_changed', refresh);
+  const stop = await sharedListen<PriceChanged>('price_rules_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getSources(): Promise<SourcesSnapshot> { return request('get_sources'); }
@@ -149,7 +165,7 @@ export function startPriceRevalue(job: import('./generated/contracts').PriceReva
 export function cancelPriceRevalue(jobId: string): Promise<CancelJobResult> { return request('cancel_price_revalue', { jobId }); }
 export async function onPriceRevalueChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen('price_revalue_changed', refresh);
+  const stop = await sharedListen('price_revalue_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 export function getOfflinePriceCatalog(revision: string | null = null): Promise<OfflinePriceCatalogSnapshot> { return request('get_offline_price_catalog', { revision }); }
@@ -241,14 +257,28 @@ export function getAccountQuota(): Promise<import('./generated/contracts').Quota
 export function refreshAccountQuota(): Promise<import('./generated/contracts').QuotaRefreshResult> { return request('refresh_account_quota'); }
 export async function onAccountQuotaChanged(refresh: (change: import('./generated/contracts').QuotaChanged) => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen<import('./generated/contracts').QuotaChanged>('account_quota_changed', event => refresh(event.payload));
+  const stop = await sharedListen<import('./generated/contracts').QuotaChanged>('account_quota_changed', event => refresh(event.payload));
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 
 export function getMainNavigation(): Promise<import('./generated/contracts').MainNavigationSnapshot> { return request('get_main_navigation'); }
 export async function onMainNavigationChanged(refresh: () => void): Promise<() => void> {
   if (!isTauri()) return () => {};
-  const stop = await listen('main_navigation_changed', refresh);
+  const stop = await sharedListen('main_navigation_changed', refresh);
   return () => { void Promise.resolve(stop()).catch(() => {}); };
 }
 
+
+/** Cheap backend-validated restoration precedes the first real read, then refresh runs normally. */
+export async function restoreUsageSnapshot<Query, Bundle>(read: (query: Query) => Promise<Bundle>, query: Query): Promise<{ value: Bundle; hasMore: boolean } | null> {
+  let input: import('./generated/contracts').UsageDisplayRequest;
+  const identity: unknown = read;
+  if (identity === getDashboardBundle) input = { kind: 'dashboard', request: query as unknown as DashboardRequest };
+  else if (identity === getGroupedUsage) input = { kind: 'groups', request: query as unknown as GroupedUsageRequest };
+  else if (identity === querySessions) input = { kind: 'sessions', request: (query as unknown as SessionsRequest).query };
+  else if (identity === queryUsageEvents) input = { kind: 'events', request: (query as unknown as UsageEventsRequest).query };
+  else return null;
+  const result = await request<import('./generated/contracts').UsageDisplaySnapshot>('restore_usage_display', { request: input });
+  if (!result.data || result.data.kind !== input.kind) return null;
+  return { value: result.data.value as unknown as Bundle, hasMore: result.has_more };
+}

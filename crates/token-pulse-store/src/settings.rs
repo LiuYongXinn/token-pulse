@@ -121,7 +121,7 @@ impl Database {
     pub fn mini_window_preferences(
         &self,
     ) -> StoreResult<token_pulse_core::placement::MiniWindowPreferences> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (_, payload) = read_stored(tx, revision.settings)?;
             payload
                 .get("mini_window")
@@ -177,7 +177,7 @@ impl Database {
         })
     }
     pub fn display_settings(&self) -> StoreResult<DisplaySettingsSnapshot> {
-        self.snapshot(|tx, revision| read(tx, revision.settings))
+        self.light_snapshot(|tx, revision| read(tx, revision.settings))
     }
     pub fn mutate_display_privacy(
         &self,

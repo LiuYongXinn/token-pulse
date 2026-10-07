@@ -86,7 +86,7 @@ test('explicit selection and save precede connection; quotas keep zero and unkno
   await region.getByRole('button', { name: '断开本次连接' }).click(); await expect(region.getByRole('status')).toContainText('未连接');
   await expect(region.getByRole('checkbox')).toBeChecked();
   await page.getByRole('button', { name: '模型', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__quotaQA.listeners())).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window as unknown as QA).__quotaQA.listeners())).toBe(2);
 });
 
 test('failed writes retain draft; revision conflict requires deliberate reselection', async ({ page }) => {

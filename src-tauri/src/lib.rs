@@ -203,15 +203,19 @@ pub fn run() {
             #[cfg(all(debug_assertions, windows))]
             let main_window_scene = main_window_smoke::scene()?;
             #[cfg(all(debug_assertions, windows))]
+            let navigation_directory = navigation_smoke::directory()?;
+            #[cfg(all(debug_assertions, windows))]
             if quota_startup_scene.is_some() && main_window_scene.is_some() { return Err("native startup scenes cannot be combined".into()); }
             #[cfg(all(debug_assertions, windows))]
             let data_directory = if let Some(scene) = &main_window_scene { data_directory.join(&scene.directory) } else { data_directory };
             #[cfg(all(debug_assertions, windows))]
             let data_directory = if let Some(scene) = &quota_startup_scene { data_directory.join(&scene.directory) } else { data_directory };
+            #[cfg(all(debug_assertions, windows))]
+            let data_directory = if let Some(directory) = &navigation_directory { let target = data_directory.join(directory); if !target.join("token-pulse.db").is_file() { return Err("isolated real-data copy missing".into()); } target } else { data_directory };
             #[cfg(debug_assertions)]
             let data_directory=if std::env::args().any(|arg|arg=="--native-smoke") {
                 #[cfg(windows)]
-                if quota_startup_scene.is_some() || main_window_scene.is_some() {data_directory}
+                if quota_startup_scene.is_some() || main_window_scene.is_some() || navigation_directory.is_some() {data_directory}
                 else {
                 if std::env::args().any(|arg|arg=="--native-notify-smoke") {data_directory.join(format!("native-notify-{}",uuid::Uuid::new_v4().simple()))}
                 else {data_directory.join(format!("native-probe-{}",uuid::Uuid::new_v4()))}
@@ -244,7 +248,7 @@ pub fn run() {
             }
             let options=token_pulse_collector::service::CollectorOptions::default();
             #[cfg(debug_assertions)]
-            let options=if std::env::args().any(|arg|arg=="--native-smoke") && (std::env::args().any(|arg|arg=="--native-notify-smoke") || std::env::args().any(|arg|arg.starts_with("--native-power-"))) {
+            let options=if std::env::args().any(|arg|arg=="--native-smoke") && (std::env::args().any(|arg|arg=="--native-notify-smoke") || std::env::args().any(|arg|arg.starts_with("--native-navigation-id=")) || std::env::args().any(|arg|arg.starts_with("--native-power-"))) {
                 token_pulse_collector::service::CollectorOptions {watcher:false,active_poll:std::time::Duration::from_secs(3600),manifest_poll:std::time::Duration::from_secs(3600)}
             } else {options};
             let collector=match &database {Ok(database)=>token_pulse_collector::service::CollectorService::start(database.clone(),options).map(std::sync::Arc::new),Err(error)=>Err(error.code.into())};
@@ -265,6 +269,8 @@ pub fn run() {
             let update_app = app.handle().clone(); let updates = update_service::UpdateService::production(app.package_info().version.to_string(), std::sync::Arc::new(move || { use tauri::Emitter; let _ = update_app.emit("updates_changed", ()); })); app.manage(RuntimeState { updates, notify_operations: notify_commands::initialize(&data_directory), #[cfg(windows)] notify, taskbar: Default::default(), quota_selections: Default::default(), quota_config_actions: Default::default(), quota, recovery_shortcut: Default::default(), #[cfg(debug_assertions)] native_dashboard_request: Default::default(), main_geometry: Default::default(), main_navigation: Default::default(), mini_creation: Default::default(), mini_geometry_sequence: Default::default(), mini_geometry_worker: Default::default(), mini_window: Default::default(), privacy, data_directory, database, collector, jobs, rollups, revaluations, selections: Default::default() });
             #[cfg(all(debug_assertions, windows))]
             let main_window_before_restore = if main_window_scene.is_some() {app.state::<RuntimeState>().database.as_ref().map_err(|e| e.to_string())?.main_window_preferences()?.placement} else {None};
+            #[cfg(all(debug_assertions, windows))]
+            if navigation_directory.is_some() || std::env::args().any(|arg| arg == "--native-secondary-screen") { navigation_smoke::place_on_secondary(app.handle())?; }
             main_window::initialize(app.handle());
             taskbar_commands::initialize(app.handle());
             quota_config::initialize(app.handle());
@@ -298,6 +304,8 @@ pub fn run() {
                 .build(app)?;
             #[cfg(debug_assertions)]
             if std::env::args().any(|arg| arg == "--native-smoke") {
+                #[cfg(windows)]
+                if navigation_directory.is_some() { navigation_smoke::start(app.handle().clone()); return Ok(()); }
                 #[cfg(windows)]
                 if let Some(scene) = power_scene {power_resume_smoke::start(app.handle().clone(),scene);return Ok(());}
                 #[cfg(windows)]
@@ -361,7 +369,8 @@ pub fn run() {
                 quota_commands::update_native_visibility(window);
             }
         })
-        .invoke_handler(tauri::generate_handler![update_commands::get_update_status,update_commands::check_for_updates,update_commands::download_update,update_commands::install_update,notify_commands::get_notify_integrations,notify_commands::prepare_notify_integration,notify_commands::apply_notify_integration,notify_commands::release_notify_preview,notify_commands::retire_notify_integration,navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::query_diagnostics,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::start_source_reread,job_commands::get_job,job_commands::list_jobs,job_commands::get_rebuild_status,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_usage_revision,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,revalue_commands::get_price_revalue_status,revalue_commands::start_price_revalue,revalue_commands::cancel_price_revalue,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
+        .invoke_handler(tauri::generate_handler![update_commands::get_update_status,update_commands::check_for_updates,update_commands::download_update,update_commands::install_update,notify_commands::get_notify_integrations,notify_commands::prepare_notify_integration,notify_commands::apply_notify_integration,notify_commands::release_notify_preview,notify_commands::retire_notify_integration,navigation::get_main_navigation,taskbar_commands::get_taskbar_preferences,taskbar_commands::set_taskbar_preferences,taskbar_commands::get_taskbar_status,taskbar_commands::retry_taskbar_embed,quota_config::get_account_service_config,quota_config::choose_account_service,quota_config::cancel_account_service_selection,quota_config::save_account_service_config,quota_config::manage_account_connection,quota_commands::get_account_quota,quota_commands::refresh_account_quota,mini_passthrough::get_mini_passthrough,mini_passthrough::set_mini_passthrough,mini_opacity::get_mini_opacity,mini_opacity::set_mini_opacity,shortcuts::get_recovery_shortcut, shortcuts::set_recovery_shortcut, get_app_status, perform_window_action,mini_window::mini_window_action,mini_commands::open_mini_stats,mini_commands::get_mini_stats_request,mini_commands::query_mini_sessions,mini_commands::get_mini_scope,mini_commands::get_mini_usage,mini_commands::set_mini_scope,source_commands::get_sources,source_commands::query_diagnostics,source_commands::choose_source_directory,source_commands::manage_source,job_commands::start_job,job_commands::start_source_reread,job_commands::get_job,job_commands::list_jobs,job_commands::get_rebuild_status,job_commands::cancel_job,query_commands::get_context_snapshot,query_commands::get_dashboard_bundle,query_commands::get_usage_revision,
+            query_commands::restore_usage_display,query_commands::get_grouped_usage,query_commands::get_filter_options,query_commands::query_sessions,query_commands::get_session_bundle,query_commands::query_turns,query_commands::resolve_calendar_selection,settings_commands::get_display_settings,settings_commands::set_display_timezone,settings_commands::set_display_theme,settings_commands::set_display_privacy,query_commands::query_usage_events,query_commands::close_query_snapshot,revalue_commands::get_price_revalue_status,revalue_commands::start_price_revalue,revalue_commands::cancel_price_revalue,price_commands::get_price_rules,price_commands::get_offline_price_catalog,price_commands::mutate_model_alias,price_commands::save_price_rule,price_commands::retire_price_rule]);
     let mut context = tauri::generate_context!();
     local_paths::configure(&mut context).expect("project-local storage unavailable");
     #[cfg(debug_assertions)]
@@ -518,3 +527,6 @@ mod main_window;
 
 #[cfg(all(debug_assertions, windows))]
 mod main_window_smoke;
+
+#[cfg(all(debug_assertions, windows))]
+mod navigation_smoke;

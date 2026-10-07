@@ -14,13 +14,14 @@ export function SessionsPage({ request, refreshRevision, onSessionScope, active 
   const pager = useSessions(query, refreshRevision, !active);
   const [selected, setSelected] = useState<{ row: SessionRow; key: string } | null>(null);
   useEffect(() => { if (!active) setSelected(null); }, [active]);
-  const scopeKey = JSON.stringify([query, refreshRevision, pager.page?.meta.snapshot_id]);
+  const scopeKey = JSON.stringify(query);
   const page = pager.page;
   const timezone = page?.meta.display_timezone ?? request.filter.range.timezone;
   const pages = page ? (BigInt(page.summary.session_count) + BigInt(size) - 1n) / BigInt(size) : null;
   if (!active) return null;
   return <>
     <div className="session-toolbar"><div><label>排序 <select aria-label="会话排序" value={sort} onChange={e => setSort(e.target.value as SessionSort)}><option value="latest_desc">最近活跃</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="会话每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button onClick={pager.reload} disabled={pager.loading}>重新查询</button></div>
+    {pager.restored && <p className="notice" role="status">已恢复上次成功快照，正在后台建立新读取快照；续页需要新租约。</p>}
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留已读取的同一快照；重新查询将替换全部页面。</span>}</div>}
     {(pager.renewal || pager.updateAvailable) && page && <p className="notice" role="status">{pager.updateAvailable ? '有新数据。' : '续页租约已释放或临近过期。'}已读取页面仍可浏览；点击“重新查询”将建立新快照并替换全部页面，回到第一页。</p>}
     {!page ? <PendingStatistics label="会话" columns={['会话 / 最近活跃', '项目 / 模型', '累计消费', '估算费用', '事件 / 已识别回合', '最近上下文', '父会话']} /> : <>

@@ -2,6 +2,24 @@ import { expect, test } from 'vitest';
 import { UsageQueryCache } from './usage-query-cache';
 import { usageQueryKey } from './usage-query-key';
 const message = (error: unknown) => String(error);
+test('protected results reject excess admission without exceeding the hard byte budget', async () => {
+  const cache = new UsageQueryCache(2, 12);
+  const stop = cache.subscribe('a', () => {});
+  await cache.read('a', async () => '123456', message);
+  await cache.read('b', async () => '123456', message);
+  expect(cache.stats().bytes).toBeLessThanOrEqual(12);
+  expect(cache.get('a').value).toBe('123456');
+  expect(cache.get('b').value).toBeNull();
+  expect(cache.get('b').error).toContain('缓存');
+  stop();
+});
+test('restored DTO is visible during a blocked fresh query and cannot overwrite a newer identity', async () => {
+  const cache = new UsageQueryCache(); let complete!: (value: number) => void;
+  const flight = cache.read('a', prime => { prime(7); return new Promise(resolve => { complete = resolve; }); }, message);
+  expect(cache.get('a')).toMatchObject({ value: 7, restored: true, loading: true });
+  cache.accept('a', 9); complete(8); await flight;
+  expect(cache.get('a')).toMatchObject({ value: 9, restored: false });
+});
 test('scope keys normalize sets but preserve dates, timezone, unknown and pricing', () => {
   const request = { range: { start_ms: 1, end_ms: 2, timezone: 'UTC' }, models: { kind: 'ids', ids: ['b', 'a', 'a'], include_unknown: false }, price_basis: { mode: 'event_time' } };
   const key = usageQueryKey('models', request, 1);
@@ -34,4 +52,14 @@ test('privacy clear blocks late responses and capacity removes unobserved ranges
   await cache.read('c', async () => 'c', message);
   expect(cache.stats().keys).toBeLessThanOrEqual(2);
   expect(cache.get('c').value).toBe('c');
+});
+
+test('background admission stops before work when every resident result is protected', async () => {
+  const cache = new UsageQueryCache(1, 100);
+  const stop = cache.subscribe('a', () => {});
+  await cache.read('a', async () => 'success', message);
+  expect(cache.canPrefetch('a')).toBe(true);
+  expect(cache.canPrefetch('b')).toBe(false);
+  stop();
+  expect(cache.canPrefetch('b')).toBe(true);
 });

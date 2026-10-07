@@ -18,6 +18,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_app_status",
             "get_usage_revision",
+            "restore_usage_display",
             "get_update_status",
             "check_for_updates",
             "download_update",

@@ -68,6 +68,7 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
   if (!active) return null;
   return <>
     <div className="session-toolbar"><div><label>排序 <select aria-label="明细排序" value={sort} onChange={e => setSort(e.target.value as UsageEventSort)}><option value="time_desc">最近发生</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="明细每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button disabled={pager.loading} onClick={pager.reload}>重新查询</button></div>
+    {pager.restored && <p className="notice" role="status">已恢复上次成功快照，正在后台建立新读取快照；续页需要新租约。</p>}
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留上次读取的明细。</span>}</div>}
     {(pager.renewal || pager.updateAvailable) && page && <p className="notice" role="status">{pager.updateAvailable ? '有新数据。' : '续页租约已释放或临近过期。'}已读取页面仍可浏览；点击“重新查询”将建立新快照并替换全部页面，回到第一页。</p>}
     {!page ? <PendingStatistics label="明细" columns={['记录时间 / 会话', '项目 / 模型', '输入 / 缓存', '输出 / 推理', '总量', '估算', '依据']} /> : <>

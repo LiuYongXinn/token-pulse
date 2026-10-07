@@ -5,7 +5,7 @@ impl Database {
     pub fn account_service_preferences(
         &self,
     ) -> StoreResult<(AccountServicePreferences, DecimalInt)> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (_, payload) = read_stored(tx, revision.settings)?;
             let preferences = payload
                 .get("account_service")

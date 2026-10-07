@@ -1,13 +1,13 @@
-import { runtimeError } from '../shared/runtime';
+import { runtimeError, restoreUsageSnapshot } from '../shared/runtime';
 import type { Coverage, PricingSummary, SnapshotMeta, TokenTotals } from '../shared/generated/contracts';
 import { promoteUsageQueries, scheduleUsageQuery } from './usage-query-scheduler';
 export type SnapshotPage = { meta: SnapshotMeta; summary: TokenTotals; pricing: PricingSummary; coverage: Coverage; next_cursor: string | null };
 export type PageAdapter<Query, Page> = { label: string; read: (request: { query: Query; cursor: string | null }) => Promise<Page>; close: (request: { query: Query; cursor: string | null }) => Promise<void>; keys: (page: Page) => string[] };
-export type PagedView<Page> = Readonly<{ pages: Page[]; index: number; firstNumber: number; loading: boolean; error: string | null; renewal: boolean; updateAvailable: boolean; hasMore: boolean }>;
+export type PagedView<Page> = Readonly<{ pages: Page[]; index: number; firstNumber: number; loading: boolean; error: string | null; renewal: boolean; updateAvailable: boolean; hasMore: boolean; restored: boolean }>;
 
 /** Display DTOs never contain a resumable cursor. The controller alone owns authorization. */
 export class PagedUsage<Query extends { page_size: number }, Page extends SnapshotPage> {
-  private value: PagedView<Page> = { pages: [], index: 0, firstNumber: 1, loading: false, error: null, renewal: false, updateAvailable: false, hasMore: false };
+  private value: PagedView<Page> = { pages: [], index: 0, firstNumber: 1, loading: false, error: null, renewal: false, updateAvailable: false, hasMore: false, restored: false };
   private listeners = new Set<() => void>();
   private owners = new Map<object, boolean>();
   private cursor: string | null = null;
@@ -17,6 +17,7 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   private openedAt = 0;
   private invalidation = 0;
   private pendingReplacement = false;
+  private restorationTried = false;
   refreshRevision: number | null = null;
   used = Date.now();
   constructor(private query: Query, private adapter: PageAdapter<Query, Page>) {}
@@ -32,6 +33,7 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   attach(owner: object, foreground: boolean) {
     this.owners.set(owner, foreground); this.used = Date.now(); promoteUsageQueries();
     if (!this.value.pages.length && !this.value.loading) this.reload();
+    else if (this.value.updateAvailable && this.value.pages.length === 1 && this.value.firstNumber === 1 && !this.value.loading && !document.hidden) this.reload();
     if (!this.foreground) this.enqueue(() => this.release());
     return () => { this.owners.delete(owner); if (!this.foreground) this.enqueue(() => this.release()); };
   }
@@ -56,6 +58,11 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
     this.publish({ loading: true, error: null });
     this.enqueue(async () => {
       await this.release();
+      if (!this.restorationTried && !this.value.pages.length) {
+        this.restorationTried = true;
+        const restored = await restoreUsageSnapshot(this.adapter.read, { query: this.query, cursor: null }).catch(() => null);
+        if (restored && !this.disposed) this.publish({ pages: [{ ...restored.value, next_cursor: null }], index: 0, firstNumber: 1, hasMore: restored.hasMore, renewal: restored.hasMore, restored: true });
+      }
       if (!this.disposed) await this.read(true);
     });
   };
@@ -75,8 +82,9 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
         const pages = [...(replacement ? [] : this.value.pages), { ...page, next_cursor: null }];
         let firstNumber = replacement ? 1 : this.value.firstNumber;
         if (pages.length > 10) { pages.shift(); ++firstNumber; }
+        const trimmed = admitPages(this, pages); firstNumber += trimmed;
         this.readAt = Date.now(); if (replacement) this.openedAt = this.readAt;
-        this.publish({ pages, index: pages.length - 1, firstNumber, error: null, renewal: false, hasMore: page.next_cursor !== null, updateAvailable: version !== this.invalidation });
+        this.publish({ restored: false, pages, index: pages.length - 1, firstNumber, error: null, renewal: false, hasMore: page.next_cursor !== null, updateAvailable: version !== this.invalidation });
         if (!this.foreground) await this.release();
       } catch (error) { await this.release(); if (!this.disposed) this.publish({ error: runtimeError(error), renewal: this.value.hasMore }); }
       finally {
@@ -99,6 +107,19 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   };
 }
 const views = new Map<string, PagedUsage<{ page_size: number }, SnapshotPage>>();
+function admitPages<Query extends { page_size: number }, Page extends SnapshotPage>(current: PagedUsage<Query, Page>, pages: Page[]) {
+  const budget = 16 * 1024 * 1024;
+  const others = () => [...views.values()].filter(view => view !== (current as unknown));
+  const size = () => new TextEncoder().encode(JSON.stringify(pages)).length;
+  for (const [key, view] of [...views].sort((a, b) => a[1].used - b[1].used)) {
+    if (others().reduce((sum, item) => sum + item.bytes, 0) + size() <= budget) break;
+    if (view !== (current as unknown) && !view.protected) { view.dispose(); views.delete(key); }
+  }
+  let trimmed = 0;
+  while (pages.length > 1 && others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) { pages.shift(); ++trimmed; }
+  if (others().reduce((sum, item) => sum + item.bytes, 0) + size() > budget) throw new Error('分页结果超过展示缓存容量，请缩小查询范围或每页数量。');
+  return trimmed;
+}
 export function pagedUsage<Query extends { page_size: number }, Page extends SnapshotPage>(key: string, query: Query, adapter: PageAdapter<Query, Page>): PagedUsage<Query, Page> {
   let view = views.get(key);
   if (!view) {

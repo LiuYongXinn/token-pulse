@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restore-usage-display"
+description = "Enables the restore_usage_display command without any pre-configured scope."
+commands.allow = ["restore_usage_display"]
+
+[[permission]]
+identifier = "deny-restore-usage-display"
+description = "Denies the restore_usage_display command without any pre-configured scope."
+commands.deny = ["restore_usage_display"]

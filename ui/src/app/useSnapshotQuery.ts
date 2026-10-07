@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import { runtimeError } from '../shared/runtime';
+import { runtimeError, restoreUsageSnapshot } from '../shared/runtime';
 import { displayPolicy } from '../shared/display-policy';
 import { promoteUsageQueries, scheduleUsageQuery } from './usage-query-scheduler';
 import { usageQueryKey } from './usage-query-key';
@@ -19,17 +19,24 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
   const subscribe = useCallback((listener: () => void) => usageQueryCache.subscribe(key, listener), [key]);
   const get = useCallback(() => usageQueryCache.get<Bundle>(key), [key]);
   const result = useSyncExternalStore(subscribe, get);
-  const refresh = useCallback(() => usageQueryCache.read(key, async () => {
+  const refresh = useCallback(() => {
+    if (!visible.current && !usageQueryCache.canPrefetch(key)) return Promise.resolve();
+    return usageQueryCache.read(key, async prime => {
+    if (usageQueryCache.get(key).value === null) {
+      const restored = await restoreUsageSnapshot(read, request).catch(() => null);
+      if (restored && policy.epoch === displayPolicy.get().epoch && !displayPolicy.get().pending) prime(restored.value);
+    }
     let value!: Bundle;
     await scheduleUsageQuery(async () => { value = await read(request); }, () => visible.current, () => policy.epoch === displayPolicy.get().epoch);
     return value;
-  }, runtimeError), [key, read]);
+  }, runtimeError);
+  }, [key, read]);
   const previousRefresh = useRef(refreshRevision);
-  useEffect(() => { promoteUsageQueries(); }, [foreground]);
+  useEffect(() => { promoteUsageQueries(); if (foreground && !policy.pending) void refresh(); }, [foreground, refresh, policy.pending]);
   useEffect(() => {
     if (previousRefresh.current !== refreshRevision) { previousRefresh.current = refreshRevision; usageQueryCache.invalidate(key); }
     if (!policy.pending) void refresh();
   }, [key, refreshRevision, policy.pending, refresh]);
   useEffect(() => { if (result.stale && !result.loading && !result.error && !policy.pending) void refresh(); }, [result, refresh, policy.pending]);
-  return { bundle: result.value, error: result.error, loading: result.loading || result.value === null, reload: () => { usageQueryCache.invalidate(key); void refresh(); }, accept: (value: Bundle) => usageQueryCache.accept(key, value) };
+  return { bundle: result.value, restored: result.restored, error: result.error, loading: result.loading || (result.value === null && result.error === null), reload: () => { usageQueryCache.invalidate(key); void refresh(); }, accept: (value: Bundle) => usageQueryCache.accept(key, value) };
 }

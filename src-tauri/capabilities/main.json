@@ -9,6 +9,7 @@
     "core:default",
     "allow-get-app-status",
     "allow-get-usage-revision",
+    "allow-restore-usage-display",
     "allow-get-update-status",
     "allow-check-for-updates",
     "allow-download-update",

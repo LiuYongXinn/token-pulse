@@ -75,7 +75,7 @@ pub(crate) fn usage(
 }
 impl Database {
     pub fn mini_scope(&self) -> StoreResult<MiniScopeSnapshot> {
-        self.snapshot(|tx, revision| {
+        self.interactive_snapshot(|tx, revision| {
             let (settings, payload) = crate::settings::read_stored(tx, revision.settings)?;
             Ok(MiniScopeSnapshot {
                 settings_revision: settings.settings_revision,
@@ -84,7 +84,7 @@ impl Database {
         })
     }
     pub fn mini_usage(&self, at: EpochMs, snapshot_id: &str) -> StoreResult<MiniUsageSnapshot> {
-        self.snapshot(|tx, revision| usage(tx, revision, at, snapshot_id))
+        self.interactive_snapshot(|tx, revision| usage(tx, revision, at, snapshot_id))
     }
     pub fn mutate_mini_scope(
         &self,

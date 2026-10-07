@@ -7,8 +7,6 @@ pub mod batch;
 mod canonical_progress;
 pub mod collection;
 mod database;
-#[cfg(test)]
-mod usage_revision_tests;
 pub mod diagnostics;
 pub mod file_candidate;
 pub mod jobs;
@@ -29,6 +27,8 @@ pub mod rollup_service;
 pub mod settings;
 pub mod source_management;
 pub mod source_scan;
+#[cfg(test)]
+mod usage_revision_tests;
 pub mod valuation;
 pub use database::{Database, Revision, SourceRecord};
 pub use registration::{FileRegistration, SessionRegistration};
@@ -94,3 +94,7 @@ pub fn prepare_data_directory(path: &Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod publication_visibility_tests;
+
+pub mod display_cache;
+#[cfg(test)]
+mod reader_priority_tests;

@@ -3,7 +3,7 @@ use token_pulse_core::{mini_opacity::*, placement::MiniWindowPreferences};
 
 impl Database {
     pub fn mini_opacity(&self, supported: bool) -> StoreResult<MiniOpacitySnapshot> {
-        self.snapshot(|tx, revision| {
+        self.light_snapshot(|tx, revision| {
             let (_, payload) = read_stored(tx, revision.settings)?;
             let preferences: MiniWindowPreferences = payload
                 .get("mini_window")
