@@ -196,13 +196,6 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
             ),
             Tone::Muted,
         ));
-        if !details.breakdown_complete {
-            rows.push(row(
-                "分项口径",
-                "部分计数未提供，未知分项保留未知",
-                Tone::Warning,
-            ));
-        }
         rows.push(row(
             "来源最近成功核对",
             absolute(details.source_last_success_at_ms, timezone),
@@ -311,17 +304,8 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
             .as_ref()
             .is_some_and(|details| details.pricing_calculating)
         {
-            rows.push(row(
-                "计价状态",
-                "正在计算，价格版本与 Token 账本分别处理",
-                Tone::Warning,
-            ));
+            rows.push(row("计价状态", "正在计算", Tone::Warning));
         }
-        rows.push(row(
-            "费用口径",
-            "等价价格估算；与订阅实付、账户额度分别计算",
-            Tone::Muted,
-        ));
         match &view.quota {
             None => rows.push(row("账户额度", "未连接，额度未提供", Tone::Muted)),
             Some(quota) => {
@@ -335,7 +319,7 @@ pub fn content(view: &TaskbarView, now: i64) -> Result<DetailContent, WireError>
                     QuotaState::Error => "读取失败，保留同一账户的旧值",
                 };
                 rows.push(row(
-                    "账户额度（独立范围）",
+                    "账户额度",
                     status,
                     if matches!(quota.state, QuotaState::Stale | QuotaState::Error) {
                         Tone::Warning
