@@ -70,6 +70,19 @@ pub fn project_root() -> io::Result<PathBuf> {
     validate_root(&root)?;
     let root = root.canonicalize()?;
     validate_root(&root)?;
+    // Windows canonicalize adds \\?\ to local drives. Store/source safety checks distinguish
+    // ordinary local paths from network/device paths, so retain the canonical location
+    // while spelling a local drive normally (without converting Unicode path components).
+    #[cfg(windows)]
+    if let Some(Component::Prefix(prefix)) = root.components().next() {
+        if let std::path::Prefix::VerbatimDisk(drive) = prefix.kind() {
+            let mut local = PathBuf::from(format!("{}:\\", char::from(drive)));
+            for component in root.components().skip(2) {
+                local.push(component.as_os_str());
+            }
+            return Ok(local);
+        }
+    }
     Ok(root)
 }
 
@@ -151,5 +164,15 @@ mod tests {
         ] {
             assert_eq!(root_for_executable(&root.join(executable)).unwrap(), root);
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolved_data_directory_is_accepted_by_the_store() {
+        let directory = data_directory().unwrap();
+        assert!(!directory.to_string_lossy().starts_with("\\\\"));
+        let fixture = tempfile::tempdir_in(temporary_directory().unwrap()).unwrap();
+        let database = token_pulse_store::Database::open(fixture.path()).unwrap();
+        assert!(database.path().is_file());
     }
 }
