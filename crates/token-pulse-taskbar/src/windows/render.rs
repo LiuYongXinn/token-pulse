@@ -12,13 +12,13 @@ thread_local! {
 use windows_sys::Win32::{
     Foundation::{COLORREF, RECT, SIZE},
     Graphics::Gdi::{
-        ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, COLOR_WINDOW,
-        COLOR_WINDOWTEXT, CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection,
-        CreateFontIndirectW, CreateSolidBrush, DEFAULT_CHARSET, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, FillRect, GdiFlush, GetClipBox, GetSysColor, GetTextExtentPoint32W,
-        GetTextFaceW, GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION,
-        RestoreDC, SRCCOPY, SaveDC, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW,
-        TRANSPARENT, TextOutW,
+        ANTIALIASED_QUALITY, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CLEARTYPE_QUALITY,
+        COLOR_WINDOW, COLOR_WINDOWTEXT, CreateCompatibleBitmap, CreateCompatibleDC,
+        CreateDIBSection, CreateFontIndirectW, CreateSolidBrush, DEFAULT_CHARSET, DIB_RGB_COLORS,
+        DeleteDC, DeleteObject, FillRect, GDI_ERROR, GGI_MARK_NONEXISTING_GLYPHS, GdiFlush,
+        GetClipBox, GetGlyphIndicesW, GetSysColor, GetTextExtentPoint32W, GetTextFaceW,
+        GetTextMetricsW, HDC, HFONT, HGDIOBJ, IntersectClipRect, NULLREGION, RestoreDC, SRCCOPY,
+        SaveDC, SelectObject, SetBkMode, SetTextColor, TEXTMETRICW, TRANSPARENT, TextOutW,
     },
     UI::{
         Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
@@ -158,7 +158,9 @@ pub struct NativeFont {
     font: Object,
     previous: HGDIOBJ,
     height: i32,
+    ascent: i32,
     dpi: u32,
+    fallbacks: Vec<NativeFont>,
 }
 impl NativeFont {
     pub fn new(dpi: u32) -> Result<Self, WireError> {
@@ -177,6 +179,7 @@ impl NativeFont {
     fn with_faces(dpi: u32, faces: &[&str]) -> Result<Self, WireError> {
         // Match ui/src/shared/silver-mist.css. GDI can silently substitute a
         // missing face, so check the selected font before accepting a candidate.
+        let mut available = Vec::new();
         for &face in faces {
             let font = Self::with_typeface(dpi, None, Some(face))?;
             let mut selected = [0u16; 32];
@@ -190,10 +193,15 @@ impl NativeFont {
                 .position(|&ch| ch == 0)
                 .unwrap_or(selected.len());
             if String::from_utf16_lossy(&selected[..end]).eq_ignore_ascii_case(face) {
-                return Ok(font);
+                available.push(font);
             }
         }
-        Self::new(dpi)
+        if available.is_empty() {
+            return Self::new(dpi);
+        }
+        let mut primary = available.remove(0);
+        primary.fallbacks = available;
+        Ok(primary)
     }
     pub(crate) fn for_taskbar(
         dpi: u32,
@@ -240,9 +248,14 @@ impl NativeFont {
         {
             return Err(WireError::InvalidState);
         }
-        // Grayscale coverage can be composited over the real taskbar without
-        // ClearType fringes that were calculated against an opaque background.
-        metrics.lfMessageFont.lfQuality = ANTIALIASED_QUALITY;
+        // Explicit UI faces paint onto opaque detail/menu surfaces, matching the
+        // WebView's subpixel text. Transparent taskbar glyphs need grayscale
+        // coverage so their edges can be composited over the real taskbar.
+        metrics.lfMessageFont.lfQuality = if face.is_some() {
+            CLEARTYPE_QUALITY
+        } else {
+            ANTIALIASED_QUALITY
+        };
         if let Some(face) = face {
             metrics.lfMessageFont.lfFaceName.fill(0);
             for (target, ch) in metrics
@@ -286,11 +299,130 @@ impl NativeFont {
             font,
             previous,
             height: text.tmHeight,
+            ascent: text.tmAscent,
             dpi,
+            fallbacks: Vec::new(),
         })
     }
     pub fn height(&self) -> i32 {
-        self.height
+        self.line_ascent()
+            + std::iter::once(self)
+                .chain(self.fallbacks.iter())
+                .map(|font| font.height - font.ascent)
+                .max()
+                .unwrap_or(0)
+    }
+    fn line_ascent(&self) -> i32 {
+        std::iter::once(self)
+            .chain(self.fallbacks.iter())
+            .map(|font| font.ascent)
+            .max()
+            .unwrap_or(self.ascent)
+    }
+    /// CSS selects the first face covering each character, whereas GDI's implicit
+    /// font links can use different faces and scaling. Resolve the UI stack here
+    /// so measurement and painting use the same explicit, unscaled fallback.
+    fn runs<'a>(
+        &'a self,
+        text: &[u16],
+    ) -> Result<Vec<(&'a NativeFont, std::ops::Range<usize>)>, WireError> {
+        if self.fallbacks.is_empty() || text.is_empty() {
+            return Ok(vec![(self, 0..text.len())]);
+        }
+        let fonts: Vec<_> = std::iter::once(self).chain(self.fallbacks.iter()).collect();
+        let mut coverage = Vec::with_capacity(fonts.len());
+        for font in &fonts {
+            let mut glyphs = vec![0u16; text.len()];
+            let previous = unsafe { SelectObject(font.dc.0, font.font.0) };
+            if previous.is_null() || previous as isize == -1 {
+                return Err(WireError::InvalidState);
+            }
+            let result = unsafe {
+                GetGlyphIndicesW(
+                    font.dc.0,
+                    text.as_ptr(),
+                    text.len() as i32,
+                    glyphs.as_mut_ptr(),
+                    GGI_MARK_NONEXISTING_GLYPHS,
+                )
+            };
+            unsafe {
+                SelectObject(font.dc.0, previous);
+            }
+            if result == GDI_ERROR as u32 {
+                return Err(WireError::InvalidState);
+            }
+            coverage.push(glyphs);
+        }
+        let mut runs: Vec<(&NativeFont, std::ops::Range<usize>)> = vec![];
+        let mut offset = 0;
+        while offset < text.len() {
+            let end = offset
+                + if (0xd800..=0xdbff).contains(&text[offset])
+                    && text
+                        .get(offset + 1)
+                        .is_some_and(|unit| (0xdc00..=0xdfff).contains(unit))
+                {
+                    2
+                } else {
+                    1
+                };
+            let selected = coverage
+                .iter()
+                .position(|glyphs| glyphs[offset..end].iter().all(|glyph| *glyph != 0xffff))
+                .unwrap_or(0);
+            let font = fonts[selected];
+            if let Some((previous, range)) = runs.last_mut()
+                && std::ptr::eq(*previous, font)
+            {
+                range.end = end;
+            } else {
+                runs.push((font, offset..end));
+            }
+            offset = end;
+        }
+        Ok(runs)
+    }
+    fn width_units(&self, text: &[u16]) -> Result<i32, WireError> {
+        let mut size: SIZE = unsafe { mem::zeroed() };
+        let previous = unsafe { SelectObject(self.dc.0, self.font.0) };
+        if previous.is_null() || previous as isize == -1 {
+            return Err(WireError::InvalidState);
+        }
+        let result = unsafe {
+            GetTextExtentPoint32W(self.dc.0, text.as_ptr(), text.len() as i32, &mut size)
+        };
+        unsafe {
+            SelectObject(self.dc.0, previous);
+        }
+        if result == 0 {
+            return Err(WireError::InvalidState);
+        }
+        Ok(size.cx)
+    }
+    unsafe fn paint_text(&self, dc: HDC, mut x: i32, y: i32, text: &str) -> Result<(), WireError> {
+        let text: Vec<_> = text.encode_utf16().collect();
+        for (font, range) in self.runs(&text)? {
+            let selected = unsafe { SelectObject(dc, font.font.0) };
+            if selected.is_null() || selected as isize == -1 {
+                return Err(WireError::InvalidState);
+            }
+            let run = &text[range];
+            if unsafe {
+                TextOutW(
+                    dc,
+                    x,
+                    y + self.line_ascent() - font.ascent,
+                    run.as_ptr(),
+                    run.len() as i32,
+                )
+            } == 0
+            {
+                return Err(WireError::InvalidState);
+            }
+            x += font.width_units(run)?;
+        }
+        Ok(())
     }
     /// Draw a menu label with the measured font, preserving the caller's DC.
     pub(crate) unsafe fn text(
@@ -305,21 +437,13 @@ impl NativeFont {
         if saved == 0 {
             return Err(WireError::InvalidState);
         }
-        let result = (|| {
-            let previous = unsafe { SelectObject(dc, self.font.0) };
-            if previous.is_null() || previous as isize == -1 {
-                return Err(WireError::InvalidState);
-            }
-            let text: Vec<_> = text.encode_utf16().collect();
+        let result = {
             unsafe {
                 SetBkMode(dc, TRANSPARENT as i32);
                 SetTextColor(dc, color);
             }
-            if unsafe { TextOutW(dc, x, y, text.as_ptr(), text.len() as i32) } == 0 {
-                return Err(WireError::InvalidState);
-            }
-            Ok(())
-        })();
+            unsafe { self.paint_text(dc, x, y, text) }
+        };
         unsafe { RestoreDC(dc, saved) };
         result
     }
@@ -328,13 +452,13 @@ impl NativeFont {
             return Err(WireError::TooLarge);
         }
         let text: Vec<_> = text.encode_utf16().collect();
-        let mut size: SIZE = unsafe { mem::zeroed() };
-        if unsafe { GetTextExtentPoint32W(self.dc.0, text.as_ptr(), text.len() as i32, &mut size) }
-            == 0
-        {
-            return Err(WireError::InvalidState);
-        }
-        Ok(size.cx)
+        self.runs(&text)?
+            .into_iter()
+            .try_fold(0i32, |width, (font, range)| {
+                width
+                    .checked_add(font.width_units(&text[range])?)
+                    .ok_or(WireError::TooLarge)
+            })
     }
     pub fn plan(
         &self,
@@ -366,18 +490,18 @@ impl NativeFont {
         height: i32,
         palette: Palette,
     ) -> Result<(), WireError> {
-        unsafe { self.paint_mode(dc, plan, width, height, palette, true, None) }
+        unsafe { self.paint_mode(dc, plan, (width, height), palette, true, None) }
     }
     pub(crate) unsafe fn paint_mode(
         &self,
         dc: HDC,
         plan: Option<&MeasuredPlan>,
-        width: i32,
-        height: i32,
+        dimensions: (i32, i32),
         palette: Palette,
         marker: bool,
         data_font: Option<(&Self, &[usize])>,
     ) -> Result<(), WireError> {
+        let (width, height) = dimensions;
         let saved = unsafe { SaveDC(dc) };
         if saved == 0 {
             acceptance_trace("save_dc", dc);
@@ -423,19 +547,10 @@ impl NativeFont {
                         .filter(|(_, indices)| indices.binary_search(&index).is_ok())
                         .map(|(font, _)| font)
                         .unwrap_or(self);
-                    let selected = unsafe { SelectObject(dc, face.font.0) };
-                    if selected.is_null() || selected as isize == -1 {
-                        return Err(WireError::InvalidState);
-                    }
-                    let text: Vec<_> = placed.span.text.encode_utf16().collect();
                     unsafe {
                         SetTextColor(dc, palette.tone(placed.span.tone));
                     }
-                    if unsafe { TextOutW(dc, placed.x, placed.y, text.as_ptr(), text.len() as i32) }
-                        == 0
-                    {
-                        return Err(WireError::InvalidState);
-                    }
+                    unsafe { face.paint_text(dc, placed.x, placed.y, &placed.span.text) }?;
                 }
                 if marker {
                     let dot = (3 * self.dpi / 96) as i32;
@@ -895,8 +1010,7 @@ fn detail_metrics_use_data_glyphs_and_switch_back_to_body_without_changing_the_d
                 body.paint_mode(
                     dc,
                     Some(&plan),
-                    width,
-                    height,
+                    (width, height),
                     palette,
                     false,
                     Some((&data, &[0])),
@@ -931,6 +1045,110 @@ fn detail_metrics_use_data_glyphs_and_switch_back_to_body_without_changing_the_d
             })
             .unwrap();
         assert_eq!(actual, expected, "wrong glyphs at {dpi} DPI");
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn ui_chinese_fallback_matches_explicit_yahei_glyphs_at_one_shared_baseline() {
+    use windows_sys::Win32::Graphics::Gdi::{GetCurrentObject, OBJ_FONT};
+    for dpi in [96, 120, 144, 192] {
+        let latin = NativeFont::with_typeface(dpi, None, Some("Segoe UI")).unwrap();
+        let chinese = NativeFont::with_typeface(dpi, None, Some("Microsoft YaHei UI")).unwrap();
+        let body = NativeFont::for_details(dpi).unwrap();
+        let text: Vec<_> = "统计范围".encode_utf16().collect();
+        let mut missing = vec![0; text.len()];
+        assert_ne!(
+            unsafe {
+                GetGlyphIndicesW(
+                    latin.dc.0,
+                    text.as_ptr(),
+                    text.len() as i32,
+                    missing.as_mut_ptr(),
+                    GGI_MARK_NONEXISTING_GLYPHS,
+                )
+            },
+            GDI_ERROR as u32
+        );
+        assert!(
+            missing.iter().all(|glyph| *glyph == 0xffff),
+            "Segoe UI does not itself contain these Chinese glyphs"
+        );
+        // The bitmap renderer can borrow the measuring DC. Its current object
+        // must not change which face supplies coverage or advance measurements.
+        let previous = unsafe { SelectObject(body.dc.0, chinese.font.0) };
+        let chinese_runs = body.runs(&text).unwrap();
+        assert_eq!(chinese_runs.len(), 1);
+        let selected = chinese_runs[0].0;
+        let mut face = [0u16; 32];
+        unsafe {
+            GetTextFaceW(selected.dc.0, face.len() as i32, face.as_mut_ptr());
+        }
+        let end = face.iter().position(|unit| *unit == 0).unwrap();
+        assert_eq!(String::from_utf16_lossy(&face[..end]), "Microsoft YaHei UI");
+        assert_eq!(
+            body.width("统计范围").unwrap(),
+            chinese.width("统计范围").unwrap()
+        );
+        assert_eq!(
+            unsafe { GetCurrentObject(body.dc.0, OBJ_FONT as u32) },
+            chinese.font.0
+        );
+        unsafe {
+            SelectObject(body.dc.0, previous);
+        }
+        let mixed = "TokenPulse 用量详情 / 输入";
+        let pieces = [
+            ("TokenPulse ", &latin),
+            ("用量详情", &chinese),
+            (" / ", &latin),
+            ("输入", &chinese),
+        ];
+        assert_eq!(
+            body.width(mixed).unwrap(),
+            pieces
+                .iter()
+                .map(|(text, font)| font.width(text).unwrap())
+                .sum::<i32>()
+        );
+        let width = body.width(mixed).unwrap() + 16;
+        let height = body.height() + 16;
+        let colors = Palette::for_background(rgb(255, 255, 255));
+        let actual = body
+            .bitmap_with(width, height, |dc| unsafe {
+                body.paint(dc, None, width, height, colors)?;
+                let previous = GetCurrentObject(dc, OBJ_FONT as u32);
+                body.text(dc, 8, 8, mixed, colors.foreground)?;
+                assert_eq!(GetCurrentObject(dc, OBJ_FONT as u32), previous);
+                Ok(())
+            })
+            .unwrap();
+        let expected = body
+            .bitmap_with(width, height, |dc| unsafe {
+                body.paint(dc, None, width, height, colors)?;
+                let mut x = 8;
+                for (text, font) in pieces {
+                    font.text(
+                        dc,
+                        x,
+                        8 + body.line_ascent() - font.ascent,
+                        text,
+                        colors.foreground,
+                    )?;
+                    x += font.width(text)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            actual, expected,
+            "Chinese must use the explicit UI face at {dpi} DPI"
+        );
+        let emoji: Vec<_> = "中🙂文".encode_utf16().collect();
+        for (_, range) in body.runs(&emoji).unwrap() {
+            assert_ne!(range.start, 2, "do not split a UTF-16 surrogate pair");
+            assert_ne!(range.end, 2, "do not split a UTF-16 surrogate pair");
+        }
     }
 }
 

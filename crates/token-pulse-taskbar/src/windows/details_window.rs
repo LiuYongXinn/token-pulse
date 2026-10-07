@@ -363,8 +363,7 @@ impl Frame {
             self.font.paint_mode(
                 dc,
                 Some(&plan),
-                width,
-                height,
+                (width, height),
                 self.palette,
                 false,
                 Some((&self.data_font, &self.layout.data_indices)),
