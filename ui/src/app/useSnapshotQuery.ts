@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { onPriceRulesChanged, runtimeError } from '../shared/runtime';
+import { scheduleUsageQuery } from './usage-query-scheduler';
 
 /** Keeps a complete response together and never relabels it with another scope. */
-export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision: number, read: (request: Query) => Promise<Bundle>) {
+export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision: number, read: (request: Query) => Promise<Bundle>, foreground = true) {
   const [result, setResult] = useState<{ key: string; bundle: Bundle } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const sequence = useRef(0);
   const filterKey = JSON.stringify(request);
   const lastFilter = useRef<string | null>(null);
+  const visiblePage = useRef(foreground);
+  visiblePage.current = foreground;
   useEffect(() => {
     let active = true;
     let busy = false;
@@ -18,9 +21,12 @@ export function useSnapshotQuery<Query, Bundle>(request: Query, refreshRevision:
       const serial = ++sequence.current;
       if (lastFilter.current !== filterKey) { setResult(null); setFailure(null); lastFilter.current = filterKey; }
       setLoading(true);
-      try { const bundle = await read(request); if (active && serial === sequence.current) { setResult({ key: filterKey, bundle }); setFailure(null); } }
-      catch (e) { if (active && serial === sequence.current) setFailure({ key: filterKey, message: runtimeError(e) }); }
-      finally { busy = false; if (active && serial === sequence.current) setLoading(false); }
+      await scheduleUsageQuery(async () => {
+        if (!active || serial !== sequence.current) return;
+        try { const bundle = await read(request); if (active && serial === sequence.current) { setResult({ key: filterKey, bundle }); setFailure(null); } }
+        catch (e) { if (active && serial === sequence.current) setFailure({ key: filterKey, message: runtimeError(e) }); }
+        finally { busy = false; if (active && serial === sequence.current) setLoading(false); }
+      }, () => active && visiblePage.current, () => active && serial === sequence.current);
     };
     void refresh();
     const interval = setInterval(() => { if (!document.hidden) void refresh(); }, 10_000);

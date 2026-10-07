@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Coverage, PricingSummary, SnapshotMeta, TokenTotals } from '../shared/generated/contracts';
 import { onPriceRulesChanged, runtimeError } from '../shared/runtime';
+import { scheduleUsageQuery } from './usage-query-scheduler';
 
 type SnapshotPage = { meta: SnapshotMeta; summary: TokenTotals; pricing: PricingSummary; coverage: Coverage; next_cursor: string | null };
 export type PageAdapter<Query, Page> = { label: string; read: (request: { query: Query; cursor: string | null }) => Promise<Page>; close: (request: { query: Query; cursor: string | null }) => Promise<void>; keys: (page: Page) => string[] };
@@ -37,7 +38,7 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
       };
     });
   };
-  const read = async (controller: Controller<Query, Page>, resultKey: string) => {
+  const read = (controller: Controller<Query, Page>, resultKey: string) => scheduleUsageQuery(async () => {
     if (controller.disposed) return;
     try {
       const page = await adapter.read({ query: controller.query, cursor: controller.cursor });
@@ -57,7 +58,7 @@ export function usePagedUsage<Query extends { page_size: number }, Page extends 
       if (offscreen.current) await release(controller);
     } catch (error) { await release(controller); controller.error = runtimeError(error); }
     finally { controller.readAt = Date.now(); controller.busy = false; display(controller, resultKey); }
-  };
+  }, () => !controller.disposed && !offscreen.current, () => !controller.disposed);
   useEffect(() => {
     const controller: Controller<Query, Page> = { query, disposed: false, busy: true, cursor: null, pages: [], index: 0, firstNumber: 1, error: null, readAt: 0, needsRenewal: false };
     current.current = controller; display(controller, key); enqueue(() => read(controller, key));

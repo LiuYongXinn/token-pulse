@@ -22,7 +22,7 @@ function cache(group: PricedUsageGroup) {
 export function GroupedPage({ request, dimension, refreshRevision, onPrices, active = true }: { request: DashboardRequest; dimension: GroupDimension; refreshRevision: number; onPrices: () => void; active?: boolean }) {
   const [sort, setSort] = useState<GroupSort>('total_desc');
   const [limit, setLimit] = useState(200);
-  const { bundle, error, loading } = useSnapshotQuery({ filter: request.filter, price_basis: request.price_basis, dimension, sort, limit }, refreshRevision, getGroupedUsage);
+  const { bundle, error, loading } = useSnapshotQuery({ filter: request.filter, price_basis: request.price_basis, dimension, sort, limit }, refreshRevision, getGroupedUsage, active);
   if (!active) return null;
   if (!bundle) return <section className="empty panel"><h2>{loading ? '正在读取分组统计' : '分组统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}<p>消费、费用与覆盖将从同一统计快照返回。</p></section>;
   const name = dimension === 'models' ? '模型' : '项目';

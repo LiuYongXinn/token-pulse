@@ -36,7 +36,7 @@ function Heatmap({ buckets, timezone, onDay }: { buckets: UsageSeriesBucket[]; t
 }
 
 export function OverviewPage({ request, refreshRevision, sources, accountTimezone, onSources, onPrices, onSessions, onGrain, onDay, active = true }: { request: DashboardRequest; refreshRevision: number; sources: SourcesSnapshot | null; accountTimezone: string | null; onSources: () => void; onPrices: () => void; onSessions: () => void; onGrain: (grain: Grain) => void; onDay: (date: string) => void; active?: boolean }) {
-  const { bundle, error, loading } = useDashboard(request, refreshRevision);
+  const { bundle, error, loading } = useDashboard(request, refreshRevision, active);
   if (!active) return null;
   if (sources?.sources.length === 0) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><div className="empty-symbol">▥</div><h2>添加 Codex 数据来源</h2><p>检测 Windows 本地 Codex Home 或选择自定义目录，开始导入历史用量。</p><p className="support-note">原始日志保持只读；账户额度连接可选。</p><button className="primary" onClick={onSources}>查看数据来源</button></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
   if (!bundle) return <div className="overview-grid"><div className="overview-left"><section className="empty panel"><h2>{loading ? '正在读取统计快照' : '统计暂不可用'}</h2>{error && <p role="alert">{error}</p>}<p>可信消费、费用估算与覆盖将从同一读取事务返回。</p></section></div><div className="overview-right"><AccountQuotaOverview timezone={accountTimezone} onSettings={onSources} /></div></div>;
