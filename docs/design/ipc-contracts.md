@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-10 回合时间：`TurnRow` 增加 required-nullable `duration_ms` 和 `time_to_first_token_ms`，采用精确非负毫秒十进制字符串。Rust / TypeScript / protocol-v1 schema 同步，既有缓存反序列化缺字段时默认 null。字段仅通过原 `query_turns` 返回，不增加新命令；表示完整回合完成事件的时间，不随用量筛选截断，也不表示单笔请求 TPS。会话详情的回合卡片分别展示“回合耗时”和“首 Token 等待”，缺失或冲突显示“未知”，真实零显示 `0 ms`。分页保持既有快照一致性。
+
 2026-10-06 M09h3b2c3：`UsageEventRow` 新增 required-nullable `matched_price: MatchedPrice | null`，Rust / TypeScript / protocol-v1 schema 同步。依据取自相同查询快照、价格租约与所选不可变规则；有匹配但用量不足仍可解释，没有匹配不制造身份。普通 Standard 参考不含实际模式字段，原始响应标识 / 物理位置不公开；隐私序列化清除该字段。此前“公开匹配依据待接”保留历史含义，当前公开明细已接，正式包尚未更新。详见[计价专题第 18 节](price-accounting.md)。
 
 2026-10-06 M16z2 当前本机正式候选 0.1.4 已包含下方内部核心 / schema v14 / cache v4 增量，不新增公开实际模式字段或任意覆盖入口。正式 WebView / 原 IPC 在真实非空用量中保留 incomplete_pricing_conditions，价格编辑器仍只显示 37 条普通参考规则；完整目录浏览仍为 51 模型 / 172 条事实。内部条件身份 / 核心合成金额、正式安装未计价状态和真实模式采集是不同证据；公开仍原 0.1.3，详见[交付记录](../development/delivery-status.md)。
@@ -23,6 +25,8 @@ M09h1a 追加 TokenTotals.cache_write_input: TokenMeasure 及 RawUsageVector.cac
 M06f4 不增加 DTO 或新命令。普通会话读取以已拥有活跃账本为发布边界；选择器排除未发布身份，直接详情 / 轮次 / 上下文及固定范围提交返回 INVALID_QUERY。父子工具内部键 / 名称与 child_count 仅包含已发布会话，已确认的 provider 父标识继续保留；真实空账本的上下文未知字段保持 null。选择器分页继续由原 SQLite 租约固定可见性，候选身份发布后只有新快照可见。
 
 M06e2 沿用现有 Coverage DTO，不新增扫描历史接口。Complete 现在可由真实目录枚举与当前文件读取证明产生；无选中来源或缺失证明保持 Unknown，已知文件 / 格式 / 待归属缺口保持 Partial。source_issues 新增受控原因 `source_scanning`、`source_scan_interrupted`、`source_scan_changed`、`source_scan_incomplete`、`source_scan_pending`；查询在自己的 SQLite 快照验证证据，不能用最近成功时间或 ready 缓存标志替代。每个时间桶保留自身核算缺口，来源级缺口适用于所有桶，Token 分项完整性继续独立表达。DTO / TypeScript / schema 字段未变化。
+
+2026-10-07 覆盖进度区分：`pending_file_count` 只统计未注册、实际未读完或缺失的文件；已读完但本轮确认尚未完成的文件通过兼容可选字段 `verifying_file_count` 表达（当前生产者始终给出精确计数）。对应 `source_scan_verifying` 为校验进度，没有真实缺口时保持 Unknown，Complete 仍必须满足原证明条件。旧响应缺少该字段时不推断完整。界面只列非零事项，待校验 / 补采与待核对消费分别展示；格式提示仅统计当前代次的未解决诊断，辅助记录误报经文件证据验证后解除。已确认 Token 的聚合独立于这些覆盖状态。
 
 2026-10-02 范围确认见[实施计划第 7 节](../development/implementation-plan.md#7-已确认的剩余功能范围2026-10-02)。不新增 manage_startup、额外快捷键、WSL / 网络来源或旧格式自动重解析命令；诊断仅保留基本状态、错误与定位。notify、计价 / 重估、账户、任务栏和更新契约继续保留。auto_connect 是软件启动后的账户连接偏好，与已取消的开机启动无关。后文已实现协议记录保留历史事实，不修改既有 schema。
 
@@ -122,6 +126,7 @@ type Coverage = {
   unattributed_observation_count: DecimalInt;
   unattributed_total_tokens: DecimalInt | null;
   pending_file_count: DecimalInt;
+  verifying_file_count?: DecimalInt | null;
   source_issues: Array<{ source_id: Id; code: string; last_success_ms: EpochMs | null }>;
   format_issues: Array<{ format: string; count: DecimalInt }>;
   breakdown_complete: boolean;
@@ -669,3 +674,13 @@ UpdateActionRequest 仅 expected_update_revision，deny_unknown_fields；网络�
 无新命令或窗口权限。UsageEventRow 的 matched_price 必须存在，可为 null；MatchedPrice 的十进制 introduced_revision 与其他精确修订同规则，basis 为严格 custom_rule { source_specific } / offline_standard_reference { catalog_id, reference_basis } / offline_rule {} / offline_request_reference { catalog_id, actual_tier, context, reference_basis }。拒绝未知字段，rule / model 字符串有界，参考假设分支不能携带实际模式。原 request_input 继续区分完整响应与本笔消费关联，不从该输入推断模式。
 
 最新隐私序列化把 matched_price 置 null，并将 price 标为 redacted；原冻结查询内容不修改。只有与求值身份 / 状态一致的选择可投影；响应没有内部响应身份、原始物理位置或新的读写权限。
+
+### 主窗口统计导航的后台读取与缓存
+
+确认显示策略、数据库和统计日期后，总览、模型、项目、会话、明细的查询组件同时挂载。导航只切换可见内容，未选中的页面不生成表格或详情 DOM；即使进入设置或诊断，统计查询状态仍保留。总览及两个分组沿用 10 秒轮询，并限制同一查询只有一个在途读取；后台会话 / 明细按 10 秒定时检查刷新第一页，窗口隐藏时暂停定时读取。正在浏览的分页快照不因后台定时器跳回第一页。
+
+分页缓存按查询范围、排序、每页数量标识，不把刷新修订视为新范围。同一范围重新查询时保留已知内容与原快照时间，完成后整体替换；失败显示错误并保留已有内容。日期、来源、维度或估价依据改变时，旧范围的数据立即停止显示；共享隐私 epoch 改变时重建全部统计组件，清除后台缓存和详情，迟到响应继续由运行时门禁拒绝。
+
+数据库仅有两个分页租约执行器，后台缓存只保留完整 DTO：离开会话 / 明细或后台读取完成后，及时调用原查询绑定的 `close_query_snapshot`，不长期占用数据库读事务。返回有后续游标的列表时，先显示已缓存内容，再重新取得第一页的可用分页快照；排序和每页数量保留，新的分页查询从第一页开始。打开中的会话详情随导航关闭，回合租约沿用卸载清理。会话 / 明细仍只缓存最近 10 页，事件内容与汇总始终取自同一响应。
+
+浏览器回归覆盖五页预读、首个显示帧无整页加载提示、后台更新、延迟 / 失败刷新保留内容、切换范围清除旧统计、分页租约释放与返回时更新，以及既有隐私切换和迟到响应保护。该验证不等同于安装包或真实数据规模的性能验收。

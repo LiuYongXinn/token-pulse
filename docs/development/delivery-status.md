@@ -2522,3 +2522,290 @@ M16y1 构建准备澄清：首次完整构建因 Cargo.lock 的七个本项目�
 回执 / 图片 `target/release/review/v0.1.4-4e4e052/taskbar-inspection-3e2ed06b-aa52-4ff7-9c9b-9776d4c0b19e/`，补充各点命中 / 颜色在 `taskbar-inspection-bf51dca4-264e-42c5-8e19-c79450c87a6f/`。旧取色点为 ReBar (0,1) 即屏幕 (502,1381)，实际 WindowFromPoint 是同 Explorer PID 的 DynamicContent1 / 天气组件，COLORREF 12763842（RGB 194,194,194）；周围任务区深色与它不同。源代码没有证明该点为空白，故取色虽成功仍错误。此次短时观察没有稳定复现“平时消失”，该项独立待复测。
 
 修正为完整 UIA 控件几何之后的任务列表空白点，前后同窗口 / 完整拓扑，仅读该 Shell 表面的一个像素，不读取别的应用或截图内容。无空白证据不猜颜色；严格真实自动隐藏 / 有效租约 / 已确认 palette 才保留先前颜色。两位置均初始化原控件几何探针。新增独立预期覆盖天气点排除、负坐标、满占用 / 两像素窄缝 / 不完整和变化几何。taskbar 全套 71 passed / 1 私有真实嵌入入口 ignored、strict all-target Clippy 通过；此前 wire 夹具遗漏新增 cache_write_input 被完整 DTO 正确拒绝，按未知字段补齐后通过，未放宽生产解析。正式 0.1.4 仍旧包；准备新包、本机安装及实际视觉 / 输入验证继续，不将源码检查记为已交付修复。
+
+## 2026-10-07：任务栏保存、闪动与两行布局修复
+
+用户反馈保存后任务栏未及时出现、数据刷新闪动、选择两行仍显示单行。本次移除显示偏好保存前不必要的隐私清屏，改为成功提交后立即触发后台重新应用；挂接后立即重绘。普通刷新保留旧 surface 并一次提交新位图，显式清屏及失败清理仍覆盖旧内容。两行缩减纵向留白，并按实际高度测量系统字体族内的可读字号。细节见[原生宿主协议](../design/taskbar-host-protocol.md#2026-10-07设置应用静默刷新与两行高度)。
+
+源码检查：`cargo test -p token-pulse-taskbar -- --test-threads=1` 为 74 passed / 1 内部子进程入口 ignored；实际 layered 提交序列断言挂接立即提交完整帧、普通更新没有空白帧、显式清屏仍提交清除帧。100 / 125 / 150 / 200% DPI 的真实 Windows 字体及位图检查确认 40 DIP 高度中存在两行独立文字像素，单行仍为一行。`npx playwright test tests/ui/taskbar.spec.ts --workers=1` 六项通过；`npm run build` 通过。已构建本次 debug 主程序和独立宿主，未替换已安装版本。
+
+`cargo test -p token-pulse-desktop taskbar_service --lib -- --test-threads=1` 十二项通过。存储任务栏四项检查首次发现历史夹具将 Light 当作实际主题变更，而当前默认已经是 Light，导致后续硬编码修订 3 冲突；改用实际不同的 Dark 主题，保留精确修订 4 与配置 / 用量一致性断言，四项复测通过。此处仅修正测试夹具，不修改产品默认主题或修订语义。
+
+`cargo clippy -p token-pulse-taskbar -p token-pulse-desktop --all-targets -- -D warnings` 通过。
+
+`pwsh -NoProfile -File scripts/native-smoke.ps1 -Taskbar` 构建成功，但真实场景在初始 `inspect_primary_taskbar` 返回 UnsafeGeometry 后停止，退出 1；没有到达启用 / 保存场景，不能记为真实 Shell 嵌入通过。检查时已安装主程序及宿主仍运行，未关闭或覆盖它们；任务栏完整形态下的设置保存 / 视觉验收仍须复测。
+
+## 即时导航 I01：现状复现与匿名计时
+
+基线 HEAD 872b66b；保留原有 README / docs 索引 / core settings 未提交内容。既有 navigation-cache 四项通过，但全部等待五页预读，换日期明确期待整块读取页。代码确认普通统计串行、状态失败撤销 status、分页离开释放后自动重建。新增最多 2048 条匿名 queue / IPC / 导航首帧机会计时；不记录请求或名称。typecheck 与 scheduler 三项通过。此计时的 paint 是 rAF 帧机会，不代表物理输入到屏幕呈现。后端耗时、未预热与真实数据基线仍待补齐；本阶段未验收完成。
+
+## 即时导航 I02：范围共享缓存与页面结构
+
+普通统计使用规范化完整请求 / 读接口 / 隐私 epoch 身份，集合 ID 排序去重；快照引用稳定，同键合并、同范围保留成功 DTO、读取中失效合并补读、epoch 清理防迟到恢复。初始 20 范围 / 16 MiB 淘汰无订阅结果。总览、分组、会话、明细缺数据时提供统计结构与未知占位，不再误报空数据。状态轮询失败保留最近成功 status。缓存单元三项及 typecheck 通过。分页共享恢复、容量全部被保护时预读准入、集中版本通知继续实现；原有十秒轮询测试需随统一控制器更新。
+
+## 即时导航 I03：独立资源调度
+
+普通读取最多二项（后台一项），分页租约一项，主窗口调度总上限三项；租约第二槽留给候选 / 详情 / 其他窗口。不可取消的 IPC 始终计入容量；过时代次排队任务跳过；导航重新评估前台优先，可在后台普通查询阻塞时使用另一普通连接。调度四项与 typecheck 通过，新增独立租约和前台越过阻塞后台的断言。实际其他窗口资源回归尚待原生验证，容量为初始策略，未以实测宣称最终优化。
+
+## 即时导航 I04：分页展示与租约分离
+
+新增 paged-usage-cache：按完整范围 / epoch 保存最多十页，原页码和快照同步恢复；DTO 的 next_cursor 清空，授权只在活跃控制器持有。离开后串行释放；已缓存前后页无需租约，未缓存续页遇到已释放 / 临近期限租约时保留旧页并提示明确重新查询。多页失效只提示新数据；成功新第一页整体替换，失败仍保留旧页。重复行 / 页大小 / 完整 meta-summary-pricing-coverage 校验保持。分页单元两项及 typecheck 通过，覆盖释放返回 / 多页不跳 / 显式替换 / 失败 / 跨快照拒绝。真实租约到期及数据场景仍待原生验收。
+
+## 即时导航 I05：来源、诊断和已访问设置
+
+来源读取由 App / 两个来源面板共享，同键合并且修改成功整体发布，旧读取不能覆盖成功保存。诊断按来源共享查询，不再两秒清空 / 重读。已访问设置及诊断保持挂载，切换保留草稿和原 CAS 修订；隐私 epoch 仍销毁全部旧编辑器，价格门禁保持。任务栏运行状态改为单个共享订阅与三十秒回退核对，低修订不能覆盖。设置预读仅来源只读查询，没有保存 / 检测 / 连接 / 下载动作。价格五项、任务栏六项回归通过（任务栏旧卸载断言更新为访问面板维持一个共享订阅）。账户 / 通知独立状态轮询仍有进一步合并空间，继续后续控制器工作。
+
+## 即时导航 I06：事务展示修订与统一更新
+
+schema 15 / Rust UsageRevision / 生成 TS-schema / 主窗口 get_usage_revision / usage_changed 完整注册。触发器覆盖 Token 不变的状态、覆盖、诊断和名称变化；写操作结束后通知，真实事务回滚静默、数据库重开身份稳定及不同库隔离测试通过。统一控制器通知合并 200ms / 最长 1s，隐藏时保留失效、恢复版本核对，三十秒轻量版本轮询替代统计 Hook 重型轮询。普通缓存同步全失效，分页多页只提示替换。
+
+typecheck / build / desktop check / core-store-desktop all-target strict Clippy 通过；控制器单元与导航六项通过，包括独立未预热、六秒阻塞、错范围清除、状态失败保留、无版本变化零重型刷新。存储全量首次 288 通过 / 6 失败：一项新项目夹具字段错误、五项旧 schema 夹具缺少移除新 additive schema，已修复。随后 293 通过 / 1 极短租约时间测试在并行负载下超时 / 1 性能夹具忽略；该租约定向串行复测记录另附。fmt 全仓库受 Windows 文件映射锁及既有格式差异影响，将对任务修改文件定向执行，未提交无关格式化。
+
+## 即时导航 I07：一致范围与固定分页汇总
+
+同一 SQLite 事务中的数据库身份 / data / price / view 完整版本与规范化 filter、计价方式共同标识公共汇总。最多 20 项 / 16 MiB，仅缓存完成结果，单项超限不驻留。单次权威费用遍历计算总览及会话 / 模型 / 项目费用；总览、分组、会话、明细复用公共汇总。租约 reservation 持有固定汇总，释放 / 过期时一起销毁；后续页不依赖公共 LRU 是否仍驻留，不改 snapshot ID 和生成时间。
+
+查询串行回归 80 passed / 1 性能夹具 ignored，覆盖旧事务并发提交和精确核算；新增缓存等价 / 状态变化 / 实际旧事务引用复用测试通过。store strict all-target Clippy 已通过公共汇总版，固定租约版继续随全量复测。匿名计时增加 reader_wait / snapshot_compute / summary_compute / heatmap_compute。真实数据量级和热力图决策留到原生性能报告，不以合成夹具宣称性能验收。
+
+
+## 即时导航 I08：持久恢复、容量和轻量状态补齐
+
+schema 16 保存后端拥有的成功完整 DTO，最多 20 范围 / 16 MiB。身份包含完整规范请求及数据库 / data / price / view 版本；格式、长度、完整范围和当前隐私均核验。分页仅保存内容及 has_more，不保存授权游标。隐私开启的同一提交删除全部持久结果，旧设置代次的迟到保存即使再次关闭隐私也不能恢复。主题或位置保存可增加 settings 修订而不取消仍然有效的统计结果；写入仍要求完全一致的捕获修订。首次恢复以明确说明展示旧成功结果，同时后台构建新的读取快照。
+
+普通及分页内存结果落实字节硬上限；已保护结果占满容量时后台预读先拒绝准入，超大结果保留原成功值并明确报错。共享账户只读状态和通知设置，事件传输按事件复用一个订阅；草稿、显式账户连接与通知确认保持原校验。后台详情首读失败可重试。已就绪服务后来返回错误状态时仍保留统计。后端为统计、交互和轻量读取分别预留连接，同键公共汇总合并计算，背景读池被全部占用的真实 SQLite 测试仍可读取版本 / 设置 / 来源 / 小窗 / 统计。
+
+验证：前端 53 项单元通过；持久恢复三项覆盖重开、身份 / 范围 / 损坏、隐私清除及迟到保存、分页无游标和 LRU 容量。core / store / collector 完整串行测试已通过（包含采集及事务 integration）；store lib 299 passed / 1 性能夹具 ignored 后新增持久容量一项定向通过。core-store-collector-desktop strict all-target Clippy、契约检查、typecheck 和 Vite build 通过。导航八项包含未预热阻塞、真实状态错误保留和自定义范围热力图跨日更新。UI 全量曾 108/108 通过；增加边界及最终日历调整后的完整复测继续进行。
+
+真实数据原生报告已取得首轮及连接预留后的回执；阻塞真实统计 IPC 时缓存切换通过。接下来执行严格重启验证：统计 IPC 仍阻塞时必须先出现恢复说明及数据，不能等待新查询后冒充恢复。最终性能、源码与构建身份及已安装差异将在下一记录补齐。本阶段记录不宣称安装或最终原生验收已完成。
+
+
+## 即时导航 I09：首帧提交与实测资源修正
+
+导航按钮用 React flushSync 同步提交页签状态，原生检查同时确认页标题和对应内容节点。根据小窗 1.8s 计算 / 重叠时 3.8s 的排队证据，把独立交互读池从一连接调整为二连接；固定十个总连接，新增真实事务阻塞详情连接仍能读取小窗配置的测试通过。副屏定位在 show 前执行，主窗口及小窗原生探针不显式抢焦点；新增 native-smoke -SecondaryScreen 参数。
+
+分页持久恢复在发布 DTO 前接受内存准入，十个受保护成功范围之外的结果拒绝驻留，不把恢复路径当作容量例外。前端 54 单元 / 全量 110 UI / 最后分页容量调整后的 28 UI 定向回归通过；store lib 301 passed / 1 性能夹具 ignored，严格 Clippy 通过。任务修改的 Rust 文件逐一检查；全仓 fmt 仍有三处既有 unrelated 差异，保持原工作区。原生最终回执仍在等价比较及重启阶段，后续记录只使用完整成功回执。
+
+
+## 即时导航 I10：真实历史计价查找瓶颈
+
+实测未预热近 7 天范围曾为 49.2s，近 30 天为 19.6s；不能把缓存导航的毫秒级结果当作首次读取完成。定位到约 272 万历史 event_valuations 上，SQLite 从 ready valuation_sets 开始执行每事件查找，导致大量无关集合探测。改用已有 event+fingerprint 索引作为固定首入口；完整 price / mode / specified / cache format / publication 校验和至多两结果的冲突回退保持不变。真实库 1,000 次同键查找 6,873.8ms → 8.7ms。新增 1,000 个无关 ready 历史集合的 SQLite VM 工作量回归，不用易波动的时钟阈值。
+
+增加 summary_totals / coverage / pricing / versions 匿名分段。store 完整串行 302 passed / 1 既有性能夹具 ignored；strict core-store-desktop all-target Clippy、release check 和改动格式检查通过。首次完整副屏复测近 7 天 1.843s / 近 30 天 4.138s，来源显示修订更新 1.091s，data 和 Tokens 均不变，小窗十次 258–333ms。该轮与 Rust 全量测试部分重叠，保留回执并继续无测试负载复测；不宣称为冷磁盘指标。原生诊断空态断言同步到当前产品文案，继续顺序执行完整诊断 / 隐私回归。
+
+
+## 即时导航 I11：最终实测与交付边界（2026-10-07）
+
+八阶段代码及历史计价查询瓶颈修复已经实现。以下为后续最终结果，早期阶段记录中的“待复测”由本节覆盖；不把源码、开发版与安装版合称已经部署。
+
+副屏 Windows WebView2，2560×1440 / 150%，debug custom-protocol；实际数据库只读备份约 3.14 GB，启动后冻结副本采集及派生服务，保留真实查询 / IPC / 提交后通知。实际数量 32,794 用量事件、43,496 observations、222 sessions，约 2,725,179 历史计价行。原数据库、源日志和安装程序未修改。最终 first / restart 均顺序执行，期间没有全量测试负载；未预热是应用范围缓存为空，未控制 Windows 文件缓存，不能宣称冷磁盘基准。
+
+| 实测项目 | 最终结果 |
+| --- | --- |
+| 首次五页完整结构，数据均未就绪 | 3.5–14.8ms，均保持未知占位 |
+| 100 次缓存页签切换 | 首次 rAF 检查正确标题及对应数据：P95 15.6ms / max 19.3ms；后续 rAF P95 18.5ms |
+| 真实统计 IPC 阻塞中的重复切换 | 100 次正确缓存内容通过 |
+| 未预热近 7 天模型范围 | 结构 6.4ms；数据显示 1,444.3ms；修复前完整实测为 49,215.1ms |
+| 未预热近 30 天模型范围 | 结构 1.6ms；数据显示 3,068.3ms；修复前完整实测为 19,559.4ms |
+| 切回已有今日范围 | 1.5ms，精确对应原范围 |
+| 来源状态提交到模型新快照完成 | 1,011.5ms，view 推进、data 与 Tokens 不变 |
+| 重启恢复，新的统计 IPC 仍阻塞 | 五页 10.5–21.8ms，要求恢复说明及数据先出现；缓存切换 P95 19.1ms，后续 rAF 22.3ms |
+| 小窗十次真实 IPC | 227.1–287.5ms；修复前约 1.52–2.18s |
+| 附属状态 / 来源 / 候选 / 会话详情 | 7.9 / 4.1 / 337.2 / 94.8ms |
+| 数据库启动到原生探针开始 | first 9,274.9ms / restart 10,029.4ms，未计入页签点击指标 |
+
+匿名细分：最终公共汇总 max 1,970.1ms，其中计价 max 1,588.1ms、覆盖 max 354.5ms、数量 max 13.8ms、版本 max 13.4ms；统计读池排队 max 0.001ms，轻量池 max 0.374ms。热力图 max 612.7ms，当前主要瓶颈已解决且总览保持完整一致快照，本次未进一步拆分，避免跨版本混合。宽范围首次读取仍为秒级，数据库启动约十秒，均保留为具体性能限制。
+
+同一完整快照 / 请求的当前原始汇总路径与公共缓存路径 DTO 全量比较相等：模型 1,813.5→770.5ms，项目 1,780.0→653.9ms，总览 1,710.3→630.6ms。这个对比证明一致性和复用效果，不能称为与历史安装版的二进制对比。
+
+本机匿名回执保存于 `.local/review/instant-navigation/`：`final-first.json` / `final-restart.json` 为计价索引修复前，`after-selective-lookup-first.json` 为带测试负载的中间复测，`final-idle-first.json` / `final-idle-restart.json` 为最终无测试负载回执；原生输出见 `.local/tmp/instant-navigation-idle-*.log`。报告不记录查询正文、名称、费用或来源内容。
+
+界面：最终前端 54 / 14 files 通过，完整 Playwright 110 通过；typecheck、Vite build 和生成契约 check 通过。新增分页容量测试的推断类型在最后全量 typecheck 中暴露，已补显式类型后重新通过，不把仅 Vitest 运行成功当作类型通过。
+
+原生：真实 first / restart / 阻塞统计查询回执全部 NATIVE_NAVIGATION_OK；诊断 NATIVE_DIAGNOSTIC_POSITIONS_OK、来源重读 NATIVE_SOURCE_REREAD_OK、精确输入 NATIVE_REQUEST_INPUT_OK、价格 NATIVE_OFFLINE_PRICES_OK。覆盖当前隐私投影、小窗禁止诊断和价格访问、修复文件替换、只读字节不变、单次核算和价格幂等；诊断两项过期文案断言已与现有界面同步。WebView2 在成功退出后仍打印 Chrome_WidgetWin_0 unregister 1412，原样保留日志，未把它作为查询失败或已修复的退出问题。
+
+构建：开发 exe 为 `target/debug/token-pulse-desktop.exe`，版本 0.1.10，SHA256 `43381CDCFB9A3C2D93473D8054D98B4F024B208A186EA3C9E877D2125AB65C58`；前端 JS `index-D5EIY2VB.js` / CSS `index-gxUnaf2N.css`。已安装 `D:/Apps/TokenPulse/token-pulse-desktop.exe` 仍为 0.1.10，SHA256 `D918187407F7F98EFEBF60FE405A331F96C58085B6A12B2B6CE0C70F0E548516`。源码功能与开发构建一致，安装版本不一致。本次未安装、未生成可发布签名安装包；release check 是优化配置编译检查，不等于已完成 release 打包。
+
+测量边界：使用真实 WebView 的程序化 DOM click 和 rAF 检查页面内容，达到该测量口径的 100ms 目标；没有测量硬件鼠标输入至 DWM 最终合成显示的全链路 P95，不能将本记录表述为该全链路已验收。未模拟系统冷磁盘、未在安装版测量、未运行会重启 Explorer / 改动主屏的无关原生场景。原有工作区未提交文件保持不动。
+
+
+最终 Rust 回归：`cargo test -p token-pulse-core -p token-pulse-store -p token-pulse-collector -- --test-threads=1` 合计 560 passed / 1 ignored（含 integration 和 doc-test）；`cargo test -p token-pulse-desktop --lib -- --test-threads=1` 30 passed / 3 需显式外部更新器验收的 ignored。core-store-collector-desktop strict all-target Clippy、release check 通过。任务修改 Rust 定向格式检查通过；全仓 fmt 的三处既有差异 `update_installer.rs` / `update_transport/install_acceptance.rs` / `notify_headless.rs` 未改动。日志 `.local/tmp/instant-rust-delivery.log`、`instant-desktop-delivery.log`、`instant-clippy-delivery.log`、`instant-build-delivery2.log`、`instant-unit-delivery2.log`、`instant-e2e-last.log`、`instant-contracts-delivery.log`。
+
+| 本任务模块提交 | 内容 |
+| --- | --- |
+| 4ee8daa | 匿名导航 / 查询计时 |
+| dcc6822 | 完整范围共享缓存 / 即时页面结构 |
+| 7818fbc | 前台优先 / 后台与分页并发调度 |
+| cfe9ab0 | 页面内容与分页租约分离 |
+| 37a15ac | 来源 / 诊断共享与设置草稿保留 |
+| c56c21a | 事务展示修订 / 提交后通知 / 统一更新 |
+| 1249a6d | 同快照公共及固定分页汇总复用 |
+| 60ed753 | 隐私安全重启恢复 / 硬容量 / 轻量状态 |
+| cbd6d95 | 首帧同步提交 / 实测连接预留 / 副屏探针 |
+| 6b00083 | 历史计价索引入口 / VM 工作量回归 |
+| 本记录提交 | 最终验证回执 / 文案断言与测试类型修正 |
+
+
+## 毫秒级复查 I12：覆盖复用与计价集合选择
+
+按用户追加要求继续排查秒级路径。覆盖的来源健康信息只在同一事务、相同来源选择中复用；模型、项目、会话及日历桶各自重新计算待核对与未归属数量，避免每行重新读取来源及诊断全表。新回归将复用结果与独立完整 coverage 查询逐字段比较，覆盖未知、完整、暂停、不可读、中断、空来源和并发修订的旧快照。查询 82 passed / 1 既有性能夹具 ignored，计价定向 22 passed。
+
+计价读取在同一事务集中选出每账本最新两个、完整 price / mode / specified / publication / format 条件匹配的候选集合；8192 个头部硬上限，缺失或不匹配时回退权威引擎。逐事件只探测这两个集合，保留精确整数、未知值、冲突回退和旧事务语义。细分匿名时长涵盖 SQL 行读取、解析及指纹、缓存查找、实时计价和累积。
+
+同一 3 GB / 32,794 事件副本的完整副屏 debug 回执 `millisecond-query-first.json` 通过：会话 IPC 181.3ms、详情 60.3ms，小窗 225.8–316.9ms；近 7 / 30 天首次数据显示仍为 1,638.3 / 2,554.2ms，启动仍 10,215.0ms。完整 DTO 等价比较通过。该模块改善了会话重复覆盖计算，尚不能宣称所有路径都已降到毫秒级；后续继续优化启动并测优化构建。日志 `millisecond-query-tests2.log` / `millisecond-valuation-tests.log` / `millisecond-query-native.log`。
+
+
+## 毫秒级复查 I13：启动检查不阻塞历史缓存全表
+
+新增 open_desktop：仅已是当前 schema 且迁移校验和正确的数据库可以采用分段启动。权威事实、设置与隐私、价格、诊断、持久显示及所有其他表先在同一前台事务检查；只把两张最大的可重建计价明细表 event_valuations / valuation_cache_inputs 纳入后台整库检查。旧 schema、未来 schema、校验和错误及正常 Database::open 保持原同步检查、备份和迁移。用于查询的缓存行继续逐行验证输入指纹、字段、精确数值和重复冲突。
+
+后台检查使用只允许查询的独立连接，可通过 progress handler 和 SQLite interrupt 中断；完成即关闭连接，不持有 Database 引用循环。固定查询 / writer 仍为十连接，检查运行期间另有一个临时连接。检测失败将健康状态置为 DB_CORRUPT，普通读取、写队列及分页前后都受门禁，迟到结果不能发布，get_app_status 显示存储错误。释放租约仍允许清理。测试发现 SQLite 文件只读打开会遗漏 CHECK 约束，改为正常打开应用数据库并开启 query_only 后，损坏约束测试确认被检测且禁止 SQL 写入。
+
+五项真实 SQLite 启动损坏 / 校验和 / 读写分页门禁 / 迟到租约 / 正常结果回归通过，随后 store 全量 308 passed / 1 ignored。副屏探索性 debug 回执的启动从约十秒变为 1,132.4ms，其中关键表检查 1,057.5ms；该轮与优化构建重叠，不能当作无负载最终性能。后台整库校验仍有秒级维护成本，但不再阻塞启动返回。日志 millisecond-integrity-tests3.log / millisecond-store-regression.log / millisecond-coverage-profile-native.log，继续进行查询索引和最终优化构建复测。
+
+
+启动门禁追加回归：已经接受且成功提交的隐私写入，若随后后台发现损坏，仍返回真实提交成功，以便调用者发布新隐私策略；仅封锁后续新写入。读取与分页仍在返回前拒绝迟到结果。六项 integrity 回归通过（millisecond-integrity-commit-tests.log）。避免把已提交事务改报失败而遗漏策略更新。
+
+
+## 毫秒级复查 I14：日期索引与同事务批量计价
+
+Schema 17 增加 observation 时间 / 小型覆盖字段索引、pending observation 索引、session active-ledger 索引，待核对查询先通过真实日期选择 observation，包含 NULL 时间，再验证活跃账本和其他维度。确定性 SQLite VM 回归证明 2,000 条范围外 pending 不会被遍历，仍保留未知时间 / 金额。
+
+公共汇总对同一事务、当前范围中的最新两个完整合格计价集合批量读取，减少逐事件 IPC 内 SQL 查找；指纹、账本、字段与重复冲突仍检查，临时映射硬上限 64 MiB，超限完整丢弃并使用原点查询。分页 / 明细点读取继续按需查询，跨事务不复用这个临时映射。PriceOutcome 使用字段精确比较，避免重复 JSON 编解码。新增批量 / 点读取相等、错误指纹 / 账本及部分超限回退测试。
+
+全量 core-store-collector 569 passed / 1 ignored，store 310 passed / 1 ignored；前端 54 单元通过，typecheck / Vite build / 生成契约校验 / core-store-collector-desktop strict Clippy 通过。无其他测试负载的原生优化构建阶段回执 millisecond-perf-before-adaptive-first.json：7 天 732.6ms、30 天仍 1,547.9ms，更新 740.5ms；状态 / 来源 / 候选 / 总览 / 模型 / 项目 / 会话 / 详情 / 明细分别 2.0 / 3.3 / 36.2 / 462.6 / 286.1 / 47.5 / 223.6 / 78.6 / 23.6ms，小窗 191.9–353.9ms。该构建所有 crate 开启 debug assertions，不能称为已安装生产构建。启动 3,063.1ms，后台完整检查尚未完成，继续排查。
+
+真实副本 16→17 首次备份、迁移及启动 176,074.7ms（并发构建期间），独立记录，不混入日常启动性能。备份与匿名回执保留。原生负载回归发现固定日期优先会让某些会话范围扫描过大，后续使用独立账本索引修正并再次验证，不以本阶段结果宣称全部秒级路径已经消除。
+
+
+## 毫秒级复查 I15：按会话账本选择覆盖读取入口
+
+Schema 18 独立追加 pending ledger / kind / observation 索引，保持已发布 schema 17 的 SQL 字节及校验和不变。指定会话的覆盖读取从活跃 session / ledger 出发，其他范围仍按日期读取；各自仍验证同一事务的活跃账本、来源与完整筛选，保留 NULL 时间和未知金额。避免每个会话重复扫描整个月的 pending，旧事务和独立 coverage 等价测试保持通过。
+
+当前全量 core-store-collector 569 passed / 1 ignored，桌面 strict all-target Clippy 通过；前端 54 单元 / 110 Playwright、typecheck、Vite build、契约校验通过。副屏真实 17→18 迁移回执 millisecond-ledger-migration-first.json 通过，但同时有编译负载：备份、迁移与启动 212,807.1ms；7 / 30 天 1,663.2 / 3,218.0ms，会话 191.6ms、详情 61.3ms、来源更新 692.6ms。一次性维护成本和有负载测量分别保留，不当作最终无负载性能。
+
+补充每张关键表匿名启动耗时，以及后端 debug assertions 编译标志。后续优化测量使用 release 优化后端，桌面与 taskbar 单独保留 debug 原生探针；与全 crate debug assertions 的旧回执明确区分。最终回执另行追加，尚未用开发构建或局部指标宣称全部路径达到毫秒级。
+
+
+## 毫秒级复查 I16：副屏测试显示不激活窗口
+
+用户要求操作不影响主屏。原生副屏模式在创建主窗口前关闭自动 focus，在主线程复用既有 nonactivating_show_owned 逻辑显示主窗口；小窗通过主线程分发复用相同逻辑。该逻辑临时使用 NOACTIVATE 样式及只针对当前自有窗口的 CBT 激活拦截，仍让 Tauri 正常记录可见性。移除导航探针的重复 show / unminimize，避免二次激活。正常打开与任务栏操作保持原有行为。
+
+当前 debug 原生 NATIVE_DIAGNOSTIC_POSITIONS_OK / NATIVE_SOURCE_REREAD_OK / NATIVE_REQUEST_INPUT_OK / NATIVE_OFFLINE_PRICES_OK 均通过，桌面 30 passed / 3 需外部更新器验收的 ignored；strict all-target Clippy 与 release check 通过。原生退出仍有既有 Chrome_WidgetWin_0 1412 日志，未宣称修复。增加生产参数后端实际编译断言标志，用于核对回执构建来源。最终导航、恢复及匿名焦点采样继续验证。
+
+
+## 毫秒级复查 I17：后台完整校验降低资源优先级
+
+Windows 的独立整库校验线程在自身线程上进入 THREAD_MODE_BACKGROUND_BEGIN，降低 CPU 与 I/O 调度优先级，避免约 3 GB 的维护扫描和前台查询竞争。它不共享前台连接，不缩减检查，不提高前台或进程优先级，仍可中断和关闭；设置失败只记录固定匿名标识并保留原校验。依据 [Windows SetThreadPriority 官方文档](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority)，单纯降低 CPU priority 不能解决 I/O 竞争，后台线程应使用资源后台模式。非 Windows 不改变行为。
+
+六项 integrity 门禁 / 损坏 / 提交隐私结果 / 迟到分页回归、core-store-collector-desktop strict all-target Clippy、release check 通过，副屏 debug 来源重读 / 精确输入 / 诊断及隐私 / 离线价格回归再次通过。日志 millisecond-background-integrity-tests.log / millisecond-background-clippy.log / millisecond-background-release-check.log / millisecond-background-native-*.log。
+
+此前生产参数后端的无负载 first 回执：7 / 30 天 720.2 / 1,284.2ms、更新 741.4ms，启动 2,742.6ms；随后 restart 启动 929.7ms，说明系统缓存状态影响明显。分别保存 millisecond-production-backend-first.json / restart.json，后端 assertions=false，100 次阻塞切换和 DTO 等价检查通过；50ms 匿名焦点采样分别 270 / 125 次，自有应用成为前台均为 0。最终带后台资源优先级的复测另行追加，不把前一轮指标当作修复后的结果。
+
+
+## 毫秒级复查 I18：先固定事实范围，再读取批量计价
+
+实际执行计划显示批量读取从候选 valuation set 开始，再读取事件并判断活跃账本与日期，范围外和退役账本也产生探测。新 SQL 先在同一事务将完整筛选下的 event / ledger 固定为 MATERIALIZED selected，将每账本至多两个完整合格集合绑定为 wanted；先遍历小型 wanted，再通过 selected 的账本临时索引及 event_valuations / valuation_cache_inputs 主键读取。页级点读取不变，候选上限、64 MiB 整体超限回退、指纹及冲突验证保持。没有新增数据库迁移或跨版本临时映射。
+
+真实副本单独 SQL 比较 11,360 行全部缓存字段相等：旧执行计划约 350.4ms，固定范围后约 167.0ms（Python SQLite 3.49.1，系统缓存未控制，不能替代真实 WebView 的端到端验收）。新增确定性 VM 回归：两千个范围外缓存事件仍只取得一个对应范围事件，遍历工作量小于 1,000 VM steps，精确费用与点查询相等。24 项 valuation 回归通过；完整 core-store-collector 570 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 隐私 / 离线价格通过。最终原生优化构建使用 bundled SQLite 3.53.2，其完整未预热回执随后追加。
+
+
+## 毫秒级复查 I19：模型 / 项目覆盖一次分组读取
+
+按实际阶段计时继续减少模型 / 项目行重复读取待核对范围。当前事务内一次 materialized pending / unattributed 读取，按本页至多 200 个实际分组的模型身份或项目 ID 分组；保留完整日期、来源、模型、项目、会话条件、NULL 时间、活跃账本和精确整数规则。只复用同一事务的来源健康；每组的待核对、未归属及已知金额 / 缺失标记独立，成功查询的空计数为零，金额仍为 NULL，未知不补零。临时结果按当前页面的分组数有界，不新增持久缓存或跨版本结果。会话仍使用 schema 18 的账本窄查询。
+
+新增一次分组与各组独立 coverage SQL 的逐字段等价回归，包含不同 provider 的同名模型、未知模型 / 项目、NULL 时间、来源与日期筛选、超过 JavaScript 安全整数的金额、混合未知金额；并发来源暂停及金额变化后真实旧事务结果不变，新事务正确变化。query 84 passed / 1 ignored，完整 core-store-collector 571 passed / 1 ignored，strict all-target Clippy、release check、副屏诊断 / 来源重读 / 精确输入 / 当前隐私 / 离线价格通过。日志 millisecond-grouped-coverage-tests2.log / millisecond-group-final-regression.log / millisecond-group-final-clippy.log / millisecond-group-release-check.log / millisecond-group-native-*.log。最终实际数据三轮首次 / 重启回执追加于下一节。
+
+
+## 毫秒级复查 I20：复用完整模型身份计数
+
+同一完整范围的定价遍历已经收集全部模型身份，包含未知、未计价和零 Token 事件分组。模型 total_group_count 改为使用这个同快照完整映射的数量，避免为计数再解码全范围模型身份；仍保留项目的原 SQL 计数，并保留实际分组、排序、精确总量、截断和价格一致性检查。query 84 passed / 1 ignored，未知 / 未计价分组计数、筛选、旧事务和精确排序回归通过；strict all-target Clippy 通过。
+
+上一轮 I19 首次真实副屏回执 millisecond-final-group-1-first.json：7 / 30 天 714.6 / 995.7ms，更新 450.7ms；缓存切换 P95 22.3ms，小窗 102.2–150.4ms，后台阻塞与完整 DTO 等价检查通过。启动 915.1ms，匿名 50ms 焦点采样 204 次，成为前台为 0。30 天余量较小，继续通过本模块计数复用及重复测量确认结果，不只选最快回执。
+
+独立真实 store 后台完整校验回执 millisecond-final-whole-check.log：数据库约 3.14 GB，启动 4,719.951ms，后台完整检查 57,521.920ms，healthy=true，完成后连接关闭。该探针只测存储维护，不替代 WebView；系统缓存状态未控制，启动仍有秒级波动，后台全库扫描和一次性备份 / 迁移成本仍需明确报告。
+
+
+## 毫秒级复查 I21：最终构建三轮未预热与重启验收（2026-10-07）
+
+本节是 I12–I20 后的最新实测结果。源码功能、debug 开发构建和生产优化参数后端的测量构建一致；当前安装应用未更新。普通查询、范围变化、更新通知和缓存切换在本轮实际数据测试中均为毫秒级；启动关键表检查仍受系统文件缓存影响，完整校验及首次迁移仍存在秒级维护成本。不能将本节解释为所有操作、安装应用或冷磁盘启动已经达到毫秒级。
+
+数据采用已有只读备份的独立副本：约 3.14 GB，32,794 个事件、43,496 个观测、222 个会话，2,725,179 行计价明细及对应输入。schema 18；schema 17 / 18 的 SQL 校验和保持不可改写。每轮 first 前只清空这个副本的 usage_display_cache，并恢复副本来源标记；没有等待页签预读完成再开始验收。restart 沿用上一轮成功结果，统计 IPC 在开始前阻塞，要求先恢复正确内容和明确说明，再解除阻塞。副本正常服务启动后停止采集及派生任务，真实查询、IPC 和事务提交后通知继续运行。最终性能测量期间没有并行编译和测试负载；系统磁盘 / 文件缓存未控制。
+
+测量构建采用 release 优化参数（opt-level 3 / thin LTO / codegen-units 1），仅 desktop 与 taskbar 保留 debug 原生测试入口；后端回执 backend_debug_assertions=false。它是有原生探针的优化测量构建，不是已签名、已安装的发布包。
+
+| 最终原生回执 | 数据库启动 ms | 未访问 7 天数据就绪 ms | 未访问 30 天数据就绪 ms | 来源提交至显示更新 ms | 缓存首次 rAF P95 / 最大 ms | 后续 rAF P95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| millisecond-final-model-1-first.json | 950.5 | 594.4 | 859.9 | 422.9 | 19.8 / 26.8 | 22.4 |
+| millisecond-final-model-2-first.json | 916.0 | 609.7 | 863.1 | 431.5 | 23.3 / 27.2 | 27.8 |
+| millisecond-final-model-3-first.json | 931.9 | 574.7 | 845.2 | 436.7 | 18.6 / 33.6 | 22.4 |
+| millisecond-final-model-restart.json | 1,060.5 | 不重新查询该范围 | 不重新查询该范围 | 不触发写入 | 19.4 / 23.0 | 22.4 |
+
+回执及匿名汇总位于 .local/review/instant-navigation/millisecond-final-summary.json 和上述四个 JSON；副屏 2560×1440 / scale 1.5，全部 NATIVE_NAVIGATION_OK。每轮 100 次缓存切换在首次检查帧已经有对应内容，另有统计 IPC 阻塞时的 100 次切换，通过检查。首次五页的结构出现 5.2–171.7ms，未显示整块读取画面；首次实际内容检查为 5.6–190.7ms。无缓存结构的最慢值没有混入缓存命中的 P95。未访问 7 / 30 天结构分别 5.4–9.6 / 1.6–3.7ms，返回今天原范围的内容为 2.0–3.7ms。restart 在 IPC 阻塞期间恢复内容为 15.8–27.2ms，保留明确恢复标识。
+
+来源变化验收确认 data / Token 不变、view 修订推进，显示随后更新；不是仅用 Token 变化触发刷新。普通查询与有界汇总的完整 DTO 在每轮逐字段比较均相等，覆盖总览、模型和项目。四轮状态、来源、候选、总览、模型、项目、会话、详情、明细及租约释放的真实 IPC 总范围 2.3–509.6ms，小窗 95.8–151.7ms。三轮 heatmap_compute 为 161.4–216.8ms，保持同一快照，没有为拆分而制造跨版本混合；本次没有新增热力图独立接口。
+
+副屏显示使用不激活的自有窗口逻辑，50ms 匿名采样合计 628 次，自有应用成为前台 0 次。此采样不证明亚毫秒期间绝对不存在焦点变化。导航测量是可见 Windows WebView2 的程序化 DOM click 至 rAF 内容检查；达到该口径的缓存切换 P95≤100ms 目标，没有测量硬件鼠标输入至 DWM 最终显示的全链路，也没有在安装版进行性能验收。
+
+最新完整 core / store / collector 回归合计 571 passed / 1 ignored（50 个 suite，含 integration / doc-test），日志 millisecond-model-final-regression.log。query 定向 84 passed / 1 ignored；包含分组 coverage 与独立 SQL 相等、旧读取快照、跨 provider / 未知身份、NULL 时间、未计价分组、超安全整数和精确计数。六项完整性门禁及已提交隐私写入回归、24 项计价回归均通过。最新副屏 debug 原生 NATIVE_SOURCE_REREAD_OK / NATIVE_REQUEST_INPUT_OK / NATIVE_DIAGNOSTIC_POSITIONS_OK / NATIVE_OFFLINE_PRICES_OK 通过，覆盖当前隐私、mini 权限限制、源文件只读、重试单次核算和价格幂等；日志 millisecond-model-native-diagnostics.log / millisecond-model-native-prices.log。成功退出后既有 Chrome_WidgetWin_0 unregister 1412 仍记录，未宣称已修复。
+
+最新桌面回归 30 passed / 3 需外部签名更新器验收的 ignored（24.57s），日志 millisecond-model-desktop-final.log。前端没有追加变更，现有最终 54 / 14 files 单元测试、110 Playwright（41.9s）、typecheck、Vite build、生成契约校验通过。core-store-collector-desktop strict all-target Clippy、桌面 release check、debug custom-protocol build 及 native-perf build 通过。定向 Rust 格式检查发现新增测试的一处 import 排序，已按 rustfmt 修正后通过；无运行时代码变化。原本压缩格式的两个 lib.rs 不做全文件重排，全仓已有三处格式差异仍按 I11 保留。
+
+当前构建来源可核验：
+
+| 文件 | SHA256 |
+| --- | --- |
+| target/debug/token-pulse-desktop.exe | D9AF79FC1386938D3D5E28726E73C2A47A7BF5358F57BF1490779FCF31513396 |
+| target/native-perf/token-pulse-desktop.exe | D6F39E8F1031C451A5A7AE613E882E653C4DE483FD0853A58AFD46874E32FD67 |
+| D:/Apps/TokenPulse/token-pulse-desktop.exe（未更新） | D918187407F7F98EFEBF60FE405A331F96C58085B6A12B2B6CE0C70F0E548516 |
+
+三个文件版本号均为 0.1.10，版本号相同不代表功能相同；前端 JS index-D5EIY2VB.js / CSS index-gxUnaf2N.css。源码运行时改动已进入前两个构建，安装版仍是旧二进制。本次没有安装、生成签名安装包或运行会影响主屏 / 重启 Explorer 的其他原生测试。
+
+明确的秒级残留：独立真实存储探针启动 4,719.951ms、低资源优先级后台整库检查 57,521.920ms，healthy=true，扫描完成连接关闭；新 WebView restart 也有 1,060.5ms 启动。完整事实检查、备份、旧 schema 升级不使用不完整的缓存校验跳过，旧版至 schema 17 / 18 首次迁移在并发编译时分别 176.07 / 212.81s，保留独立回执，不作为无负载迁移性能指标。没有控制系统冷磁盘，不能保证任意机器和任意范围首次查询均低于一秒；要宣称全部毫秒级仍缺这些路径的证明，当前只交付已测普通查询及页面交互改善。
+
+| 追加模块 Git 提交 | 内容 |
+| --- | --- |
+| a448465 | 同快照来源覆盖复用 / 限定计价候选 |
+| 3ff487a | 关键事实前台检查 / 可中断后台整库校验 |
+| 696a6ec | 保留已经成功提交的隐私结果及通知语义 |
+| ef174e5 | schema 17 日期索引 / 有界批量计价 |
+| e0df7ee | schema 18 会话账本覆盖入口 |
+| 1fd8e9e | 副屏测试窗口显示不激活 |
+| 5a69705 | 后台完整校验降低 CPU 与 I/O 资源优先级 |
+| d7fad5b | 先固定当前事实范围，再按计价主键读取 |
+| 38127e2 | 模型 / 项目 pending 覆盖同快照一次分组 |
+| 1356f53 | 复用完整模型身份，保持精确计数 |
+| 本节记录提交 | 最终三轮 / 重启回执、测试格式和交付状态 |
+
+
+## I22：生成 0.1.11 正式安装包并重新安装本机（2026-10-07）
+
+用户在 I21 后明确授权生成安装包并重新安装本机。当前源码版本、正式 release 和本机注册版本为 0.1.11，现有安装目录仍为 D:/Apps/TokenPulse。本节取代 I21 中“安装版未更新”的当前状态；此前测量与旧文件 SHA 仍作为历史记录保留。本次只进行本机安装，没有上传或发布 GitHub Release，公开版本仍按此前 0.1.10 的记录。
+
+版本准备提交 3979784 同步 Cargo workspace / Cargo.lock 七个本地包 / package.json / package-lock 根字段 / Tauri 配置到 0.1.11，没有更新依赖版本。按正式入口 npm run tauri:build 完整退出 0：前端 typecheck / production build、334 组件 notices、配套任务栏宿主、release 桌面和 NSIS 全部成功；桌面优化编译 3m20s，安装包 6,999,691 字节（6.68 MiB）。本次构建包含当前工作区既有源码修改；用户的未提交文件保留且没有混入本次提交。日志 .local/tmp/instant-install-v0.1.11-build.log。
+
+安装包 target/release/bundle/nsis/TokenPulse_0.1.11_x64-setup.exe，SHA256 f2423727c94073ce4e740dc43c46ec6aa79dc2d59df63706504d43aeb476384e。npm run release:sign 使用现有受当前用户 DPAPI 保护的项目密钥，密码 / 私钥未输出；安装包旁 .exe.sig 已生成。verify-release-artifact.ps1 启动本次 release 维护入口并等待实际退出 0，确认项目更新签名、编译公钥、版本和 x64 target 匹配。这里是项目更新签名验收，不表述为 Windows Authenticode 证书验收。日志 instant-install-v0.1.11-sign.log；报告 .local/backups/instant-install-v0.1.11-20261007/release-verification.json。
+
+安装前现有主程序与宿主均没有运行，无需强制结束进程。安装路径及注册旧版本身份校验后，将原主程序、宿主、notices、卸载器和数据库 / WAL / SHM 复制到 .local/backups/instant-install-v0.1.11-20261007，并核对数据库副本及源文件 SHA 一致。原正式库为 schema 14 / 3,222,937,600 字节，46,514 事件 / 43,883 观测 / 226 会话 / 1 来源。本次没有复制 WebView 凭据或用户来源日志。
+
+NSIS 使用 /S /D=D:\Apps\TokenPulse 静默覆盖，实际退出 0；没有卸载、启动应用或重启。安装器执行前后数据库 / WAL / SHM SHA 完全一致。主程序通过 NsIsBinaryMatches 的全字节比较，仅允许既有校验器明确限定的唯一固定宽度 UNK→NSS bundle marker 差异；宿主和 notices 完全按 SHA 匹配正式构建。HKCU TokenPulse InstallLocation 与 DisplayVersion=0.1.11、主程序 FileVersion=0.1.11 核对通过。安装回执 installation.json；安装操作没有显示窗口或修改主屏任务栏。
+
+| 当前产物 | SHA256 |
+| --- | --- |
+| target/release/token-pulse-desktop.exe | 5A66B1AD87B7576866F9CD8088E4CB7A0FD3AA426978B83EA2E824CDAF773BE8 |
+| D:/Apps/TokenPulse/token-pulse-desktop.exe（0.1.11） | A4D5A19E1FB8D71264647DE2F3464C1EBB55FD2095C1ADC07D083E7996859704 |
+| D:/Apps/TokenPulse/token-pulse-taskbar-host.exe（0.1.11） | 30CFBDB2DFE8B29C576C670210BD96AE8E8ABC458E8B90E414386C95DD9B29A4 |
+
+安装后的首次 schema 14→18 升级提前通过无窗口维护程序执行：直接链接本次 0.1.11 release Store rlib，调用与生产启动相同的 Database::open_desktop，保留生产完整检查、自动备份、事务及迁移 SHA 验证；未启动 Tauri、采集、账户服务或任务栏。实际退出 0，61,395.592ms，设置读取和完整用量修订读取成功。首次链接遗漏 release thin LTO 参数而失败，没有打开数据库；添加匹配构建参数后编译成功，再执行维护。日志 instant-install-v0.1.11-migration-build.log / instant-install-v0.1.11-migration.log。生产迁移另在安装数据目录 migration-backups 保存 before-v14-to-v18 的数据库及 SHA 清单；原手工备份保留。
+
+迁移后用只读事务将 45 张既有业务表与安装前备份按完整主键排序、逐行精确编码 SHA 比较，全部一致；data / price / settings 修订号不变，settings 全部内容、来源配置和 DISPLAY2 副屏位置保留。app_state / schema_migrations 属于预期升级元数据，不要求字节相等；两张大型派生明细没有加入此次额外逐行摘要比较，完整性已经走生产升级及备份检查。schema 与 user_version 均为 18。只读核对耗时 6,573.706ms；回执 database-migration-verification.json，最终合并回执 installation-final.json。安装器的“数据库字节不变”仅指安装前后阶段，不混称后续 schema 迁移也字节不变。
+
+当前安装版已包含即时范围缓存、刷新保留内容、分页租约隔离、隐私与展示修订，以及 I12–I20 的覆盖和计价优化。开发主程序和配套 debug 宿主同步构建成功（43.91s），主程序 FileVersion=0.1.11；日志 instant-install-v0.1.11-debug-build.log。debug 主程序 SHA256 E2BF5BCD3E60331306E2D9DD2AF1781C9C5185C7C29C747766C6BA9B90AE5BF2，debug 宿主 SHA256 4B64AB07241D1BD70D289FA1E92BA3CE96BF549715BD8E179A240117833547B9。源码、开发主程序、正式 release 及安装主程序版本一致，优化 / debug / NSIS 标记导致二进制 SHA 不相同，已分别核对。I21 原生性能回执属于此前保留测试入口的 0.1.10 优化测量构建，不能表述为本次安装版已经复测硬件点击 / DWM P95。因用户持续要求不影响主屏，且原 taskbar_enabled=true，本次没有自动打开正式应用或启用其任务栏；已完成文件、注册、签名、真实数据迁移及业务内容核对，安装版实际 UI 和持续采集负载性能没有在本次重新验证。
+
+追加安装版无窗口验证：直接运行 D:/Apps/TokenPulse/token-pulse-desktop.exe --verify-update-release 并等待实际退出 0，安装版编译公钥、0.1.11 版本、x64 target 和本次安装包更新签名匹配；报告 installed-release-verification.json。未初始化 Tauri、数据库或服务。后续只读再次确认 app_state.schema_version / PRAGMA user_version 均为 18。版本同步后本轮重跑正式前端类型 / 构建与原生完整打包；未改运行时算法，因此此前完整回归和 I21 实测记录继续作为对应功能证据，不改写为本次安装版 UI 复测。
+
+
+## I23：按用户要求清理全部已清点安装与迁移备份（2026-10-07）
+
+用户明确要求删除本次及此前安装备份，并再次要求执行已准备的清理脚本。清点清单九个目标已全部删除：两套手工安装备份、八份正式 / 仓库 / 性能副本迁移备份、两份真实数据库验证副本、两套安装验收备份和两个旧 debug 宿主备份；按清点共十四份数据库副本、七十六个文件，逻辑大小 26,816,276,179 字节（26.82 GB / 24.97 GiB）。随后再次扫描 TokenPulse 数据及临时目录，没有残留 migration-backups / before-test 目录。I22 的安装与迁移备份及其内部回执链接已按用户要求删除，历史 SHA 和验证结果保留在本文，不重新复制数据库或创建新备份。匿名清理记录位于 .local/review/backup-inventory-20261007.json。
+
+实际执行的清理脚本完成删除后，在末尾检查原 target/release/bundle/nsis/TokenPulse_0.1.11_x64-setup.exe 时发现路径缺失，退出 1；清理回执明确记录这一异常，不将整场校验写为退出 0。该检查之前的三份在用数据库和已安装主程序 / 宿主前后 SHA 核对通过；独立再次核对安装主程序 A4D5A19E...9704、宿主 30CFBDB2...29A4 与 I22 相同，正式库 schema 18、仓库原 release 库 schema 14、开发原库 schema 1 保留。原安装包路径缺失原因未确认，不能据此证明该产物保留；没有重建它。全部已指定备份路径均已不存在，未启动应用或操作主屏，原有源码修改保持。

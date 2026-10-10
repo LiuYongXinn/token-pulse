@@ -1,5 +1,11 @@
 # 本地开发与运行
 
+悬浮窗显示 / 隐藏按钮的真实桌面回归：先执行 `npm run build`，再用 PowerShell 7 执行 `scripts/native-smoke.ps1 -MiniVisibility`。该场使用独立开发版和隔离 `native-probe` 数据目录，检查 `get_mini_visibility` 的真实 WebView 权限、左下角与右上角按钮双向切换、小窗自身隐藏和外部显示后的同步；小窗调用主窗口专属状态接口必须被拒绝。成功需打印 `NATIVE_MINI_VISIBILITY_OK` 且退出 0。新增桌面命令必须同时登记在 `src-tauri/build.rs` 的命令清单和对应 capability；浏览器模拟接口与 `cargo check` 不会验证实际调用权限。
+
+2026-10-07 备份清理：用户要求删除所有已清点 TokenPulse 安装 / 迁移备份和真实验证副本后，九个目标已全部删除，十四份数据库副本 / 七十六个文件，逻辑大小 26.82 GB。下文 I22 的备份目录和内部回执链接为已删除的历史路径；现有正式 / 仓库 / 开发数据库和已安装 0.1.11 主程序及宿主保留。脚本末尾原安装包路径缺失导致退出 1，记录为核验异常，不写成全程通过；详见[交付记录 I23](delivery-status.md)。
+
+2026-10-07 即时导航优化本机安装：用户明确授权后，版本准备提交 3979784，正式 `npm run tauri:build`、现有项目密钥更新签名及同次 release 验签均成功；0.1.11 NSIS 6,999,691 字节，静默安装到原 `D:/Apps/TokenPulse`，实际退出 0。主程序按唯一 bundle marker 验全字节、宿主 / notices 按 SHA、注册 / 文件版本按 0.1.11 核对。安装器前后 DB / WAL / SHM 字节保持；随后无窗口调用当前正式 Store 完成真实 schema 14→18 的完整备份 / 校验 / 事务升级（61.40s），45 张业务表和原 data / price / settings 修订保持，副屏位置保留。证据 `.local/backups/instant-install-v0.1.11-20261007/installation-final.json`；安装包 `target/release/bundle/nsis/TokenPulse_0.1.11_x64-setup.exe`。原 taskbar 偏好启用，因此本轮未自动启动正式 UI，以保持主屏；安装版 UI 性能尚未复测。公开版本仍按此前 0.1.10 记录，没有发布。此条取代下方历史“本机与公开 0.1.10 一致”的当前状态，详情见[交付记录 I22](delivery-status.md)。
+
 2026-10-07 正式发布与安装：当前[公开 0.1.10](https://github.com/LiuYongXinn/token-pulse/releases/tag/v0.1.10)与本机安装一致，匿名下载 / 正式版本绑定验签、真实 0.1.9→0.1.10 线上安装 / 正常退出 / 自动启动 / 最新检查完成。`target/release/review/v0.1.10/` 的 online-*、匿名下载与数据库前后摘要区分下载、安装器实际退出 0、文件匹配及 15,977 条非零消费保留，不使用手工运行新包代替更新。
 
 同目录 native-comprehensive-final.log 为当前源码默认隔离 Win10 全场实际退出 0，包含真实 SendInput 穿透 / 恢复键；运行前正式正常退出释放键，之后正式恢复，不改变用户快捷键。合成账户 / 电源消息不冒充真实账户 / 系统 S3；完整矩阵沿用各专项实际记录。个人真实 UI 效果图入口为同目录 screenshot-gallery.html / .md，仅本机、不跟踪，不需要修改文档索引。明细快照过期用生产“重新查询”，截图等待实际用量和可用控件，不能交付初始空白图。

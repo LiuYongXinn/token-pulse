@@ -42,7 +42,7 @@
 
 M13b2 在正确握手后启动专属 Win32 UI 线程，创建隐藏、无激活、无任务栏按钮的顶层控制窗口。该窗口接收 TaskbarCreated、显示器、DPI、主题、设置与电源变更，重新读取探测结果；不向系统发送这些广播，不重启 Explorer。原生缓存通过容量 4 的私有 Rust 队列及无指针的 WM_APP 唤醒处理，外部同号窗口消息无法注入命令或载荷。快照、隐私与 shutdown 更新等待 UI 线程处理完成后才回复；关闭同时释放缓存、窗口、类和线程。M13c1 增加自有读数子窗口；M13c2 增加受控 Rust 队列的原生启用 / 禁用与安全布局租约。生产 wire 及主应用尚未发送启用配置，默认仍隐藏；实际挂接通过显式独立开发验收程序验证。
 
-只读探测在受控 DPI 上下文中读取屏幕矩形并恢复调用线程原上下文，避免将虚拟化坐标混入物理像素。[Microsoft 窗口矩形与 DPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect) 目前只接受 Windows 10 build 19045，校验系统目录 explorer.exe、唯一类名、窗口 PID、父子关系、最多 256 个子窗口和区域包含 / 不交叠；额外工具栏、陌生版本、竖向 / 不安全几何返回明确能力错误。Windows 11 适配仍需后续实现与实际版本独立验证，当前拒绝不等于取消该范围。
+只读探测在受控 DPI 上下文中读取屏幕矩形并恢复调用线程原上下文，避免将虚拟化坐标混入物理像素。[Microsoft 窗口矩形与 DPI](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect) 2026-10-10 起不再按 Windows build 白名单拦截，保留系统返回的真实 build；校验系统目录 explorer.exe、唯一类名、窗口 PID、父子关系、最多 256 个子窗口和区域包含 / 不交叠。额外工具栏、无法识别的窗口结构、竖向 / 不安全几何返回对应能力错误，陌生版本号本身不再构成失败。现有适配器仍依赖 ReBar / MSTaskSw / MSTaskList 结构，其他结构的 Windows 11 适配及各系统实机验证按实际问题继续补齐。
 
 纯空间计划接受实际测量的宿主宽度及任务按钮区最小宽度，返回两块不重叠矩形；它不调整任何 HWND，也不证明按钮区内全部内容已安全重排。真正嵌入前还要验证窗口代际 / 布局所有权、调用字体测量、安全调整并复核结果。读数父窗口与预留算法接入后方可报告 embedded。
 
@@ -62,7 +62,7 @@ Windows 字体由 SystemParametersInfoForDpi 的系统消息字体创建；GetTe
 
 M13g11 补充系统完全自动隐藏语义：Embedded 表示严格验证的预留 / 父子挂接仍成立，不保证任务栏根本身处于可见样式。只有整个底部任务栏在对应显示器外、系统自动隐藏开启、租约 / 归属 / DPI / 几何有效且读数自身 WS_VISIBLE 保持时，effective readout_visible=false 不使其误报 Os；读数自身隐藏仍拒绝。根暂时隐藏时仅在同一系统证明下按控件自身可见样式枚举，普通过滤与未知结构保护保持。系统刷新可以保留此有效隐藏租约，但必须先清动作 / 详情意图并更新主题 / 数据；其他变化保持原脱离流程，TaskbarCreated 继续丢弃旧代次。规则与实际证据见[M13g11](../development/delivery-status.md#m13g11系统自动隐藏与读数自身可见性的区分)。
 
-仅支持已声明的 Win10 19045 水平主任务栏。探测保留 Explorer 进程句柄和创建时间，操作前后重新检查存活、类名、PID、父子关系及物理矩形；额外 ReBar 工具栏或预留区域内其他根子窗口拒绝挂接。布局互斥量按 Explorer PID / 创建时间命名，限一个 UI 线程持有；任务列表窗口上的随机非零 owner 属性绑定本次窗口代际，不作为可解引用指针。
+对具备兼容窗口结构的水平主任务栏尝试嵌入，不限定 Windows build。探测保留 Explorer 进程句柄和创建时间，操作前后重新检查存活、类名、PID、父子关系及物理矩形；额外 ReBar 工具栏或预留区域内其他根子窗口拒绝挂接。布局互斥量按 Explorer PID / 创建时间命名，限一个 UI 线程持有；任务列表窗口上的随机非零 owner 属性绑定本次窗口代际，不作为可解引用指针。通知区尺寸变化后的恢复同样不限定 build，仍要求本次预留前后的系统身份、build 和实际几何一致。
 
 先按真实文字测量宽度规划，至少保留 320 DIP 任务按钮空间；同步缩小 MSTaskSwWClass，复核任务列表子窗口已跟随缩小、通知区与任务栏容器不变后，才把自有 WS_CHILD 读数挂到 Shell_TrayWnd。子窗口只在已预留矩形内提升到 ReBar 背景之上，不创建桌面覆盖窗或激活窗口。[Microsoft SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos) `SetParent` 不自动修正窗口样式，跨进程 DPI 行为需要单独检查；本实现保持子窗口样式，挂接后再次进入物理坐标上下文并核对实际矩形。[Microsoft SetParent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setparent)
 
@@ -210,3 +210,11 @@ application_right 在专用无窗口 MTA 中使用 IUIAutomation2，针对已验
 请求前后复核根 / 列表 HWND、Explorer PID / 创建时间和整组矩形。所有子矩形须完整包含在本次实际列表且可见；空列表保留最小区域，覆盖不确定 / offscreen / 越界失败。槽起点取最右按钮 + 8 DIP 与最小 320 DIP 应用区域的较大者，只在原 switch 内安排实测宽度。预留后再次验证按钮，展示前保持隐藏；变化时有条件释放租约、清除旧交互、从完整当前区域重新探测和挂接。空间不足沿用精简及明确回退，不能覆盖系统控件。
 
 只读开发工具 cargo run -p token-pulse-taskbar --example inspect_buttons -- --inspect-buttons 仅输出几何和数量，不预留布局 / 读取名称。-TaskbarActions 的自有合成窗口使用独立本窗口 AppUserModelID，验证真实按钮增减。依据 [窗口 AppUserModelID](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-id) 与 [SHGetPropertyStoreForWindow](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetpropertystoreforwindow)，在销毁前清空自有属性，不改其他窗口或进程级分组；此夹具仅 debug 可用。实际证据和边界见交付记录 M13e6。
+
+## 2026-10-07：设置应用、静默刷新与两行高度
+
+任务栏显示偏好保存不修改共享隐私策略，因此不再先执行 PublicationPause 清屏屏障。SQLite CAS 写入成功后立即 invalidate 后台代次，重新读取已提交的配置并重置重试预算；相同偏好再次保存也触发重试，写入失败保留当前显示。Configure 仍拒绝旧修订并清除过期数据，真正的隐私切换继续等待原生清屏确认。
+
+普通快照更新先测量并准备新帧，保留当前 layered surface，最后通过一次 UpdateLayeredWindow 提交完整位图。State::prepare 与 NativeCanvas::prepare 不再先提交空白帧；无数据、无可读布局、隐私屏障或准备失败仍清除旧文字、窗口名称和像素。成功挂接并显示子窗口后立即重绘已准备内容，避免等待下一秒快照。
+
+两行使用上下各 2 DIP 留白及 2 DIP 行间距；横向留白不变。先测量系统字体，若两行超出实际宿主高度，在系统字体族内测量较小字号，最小约 8 pt。只有仍无法容纳可读内容时才沿用单行 / 空间不足回退。单行与详情窗保留原系统字号。四种 DPI 的真实字体 / 位图回归覆盖 40 DIP 常见任务栏高度下的两行与单行，以及每行的实际非背景像素。
