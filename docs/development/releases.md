@@ -31,3 +31,11 @@ npm run release:prepare -- --desktop target/release/token-pulse-desktop.exe --in
 ## 验证边界
 
 发布检查包括前端类型与生产构建、单元测试、浏览器回归、发布脚本回归、Rust 工作区测试、格式与生成契约一致性，以及实际安装包的版本绑定签名验证。自动构建、验签和匿名下载核验不代表已完成本机重新安装、真实多屏 / DPI / 物理输入或所有 Windows 任务栏结构验收；这些结果单独记录在[交付记录](delivery-status.md)。
+
+## 1.0.1 构建验证记录
+
+2026-10-10，正式 Windows x64 构建、现有项目密钥签名和同次 release 主程序原生验签均成功。安装包为 `TokenPulse_1.0.1_x64-setup.exe`，7,071,548 字节，SHA-256 为 `a64af8afea9668335cccd3b44e6304070c7d6d805847144c09518d211238c68b`。
+
+本轮 TypeScript、前端生产构建、57 项 Vitest、13 项发布脚本回归、128 项 Playwright 和 Rust 工作区全功能串行测试均通过；Rust 799 passed / 0 failed / 5 ignored。Rust 格式、应用生成契约和任务栏宿主生成契约检查通过。首次宿主契约检查发现遗漏两个标题索引诊断代码，重新生成仅补齐对应枚举值并单独提交，重跑通过。
+
+本地日志为 `.local/tmp/release-v1.0.1-*.log`，准备的安装包、签名、更新元数据、校验文件和原生回执位于 `.local/artifacts/release-v1.0.1/`。本轮未重新安装或启动用户的正式应用，真实系统交互验收范围沿用上节说明。
