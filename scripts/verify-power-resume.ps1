@@ -4,8 +4,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
 if ($ApplicationRight -and -not $Taskbar) { throw 'ApplicationRight requires the explicit Taskbar scene.' }
 $position = if ($Taskbar) { if ($ApplicationRight) { 'application_right' } else { 'notification_left' } } else { $null }
-if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) {
-    throw 'This acceptance requires reviewed Windows 10 build 19045 x64.'
+if (-not $IsWindows -or [IntPtr]::Size -ne 8) {
+    throw 'This acceptance requires a 64-bit Windows process.'
 }
 if (-not $EvidenceDirectory) { $EvidenceDirectory = Join-Path ([IO.Path]::GetTempPath()) ('tokenpulse-system-power-' + [guid]::NewGuid().ToString('N')) }
 if (Test-Path -LiteralPath $EvidenceDirectory) { throw 'Use a new evidence directory to preserve prior runs.' }

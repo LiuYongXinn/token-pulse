@@ -1,4 +1,4 @@
-// Windows 10 capability inspection only. No sleep, hibernation, restart or policy mutation API.
+// Windows capability inspection only. No sleep, hibernation, restart or policy mutation API.
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -38,7 +38,7 @@ public static class TokenPulsePowerInspection {
     static extern void SetLastError(uint error);
 
     public sealed class Evidence {
-        public int Schema=1, Build=19045, SessionId;
+        public int Schema=1, Build=Environment.OSVersion.Version.Build, SessionId;
         public bool? StandbyS3, SystemS4Supported, HibernationFilePresent;
         public bool StandbyAllowed, CapabilitiesRead;
         public int? CapabilitiesError, PowerStatusError;
@@ -57,8 +57,8 @@ public static class TokenPulsePowerInspection {
         return error==0 ? (int?)null : error;
     }
     public static Evidence Inspect(bool checkWakeTimer) {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || IntPtr.Size!=8 || Environment.OSVersion.Version.Build!=19045)
-            throw new InvalidOperationException("Reviewed Windows 10 build 19045 x64 required.");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || IntPtr.Size!=8)
+            throw new InvalidOperationException("A 64-bit Windows process is required.");
         var result=new Evidence {SessionId=Process.GetCurrentProcess().SessionId, WakeTimerChecked=checkWakeTimer};
         // Native BOOLEAN fields begin with three button/lid flags then S1/S2/S3/S4/S5.
         // A zeroed oversized allocation contains the entire Win10 SYSTEM_POWER_CAPABILITIES;

@@ -1,8 +1,8 @@
 param()
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
-if (-not $IsWindows -or [Environment]::OSVersion.Version.Build -ne 19045) {
-    throw 'This native floating-window placement acceptance targets Windows 10 build 19045.'
+if (-not $IsWindows) {
+    throw 'This native floating-window placement acceptance requires Windows.'
 }
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     $env:PATH = "$env:CARGO_HOME\bin;$env:PATH"

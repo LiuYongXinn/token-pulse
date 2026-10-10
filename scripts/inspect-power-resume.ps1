@@ -2,8 +2,8 @@
 param([switch]$CheckWakeTimer)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
-if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) {
-    throw 'This inspection requires reviewed Windows 10 build 19045 x64.'
+if (-not $IsWindows -or [IntPtr]::Size -ne 8) {
+    throw 'This inspection requires a 64-bit Windows process.'
 }
 Add-Type -Path (Join-Path $PSScriptRoot 'power-resume-probe.cs')
 [TokenPulsePowerInspection]::Inspect([bool]$CheckWakeTimer) | ConvertTo-Json -Depth 3

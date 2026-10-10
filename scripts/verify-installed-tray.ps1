@@ -1,7 +1,7 @@
 param([switch]$PhysicalInput, [Parameter(Mandatory)][string]$BaselineExecutable)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'project-env.ps1')
-if (-not $IsWindows -or [IntPtr]::Size -ne 8 -or [Environment]::OSVersion.Version.Build -ne 19045) { throw 'This tray acceptance requires the reviewed Windows 10 x64 build.' }
+if (-not $IsWindows -or [IntPtr]::Size -ne 8) { throw 'This tray acceptance requires a 64-bit Windows process.' }
 . (Join-Path $PSScriptRoot 'installer-window-probe.ps1')
 $application = @(Get-Process token-pulse-desktop -ErrorAction Stop)
 $installedExecutable = Join-Path $tokenPulseLocal 'app\token-pulse-desktop.exe'

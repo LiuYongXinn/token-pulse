@@ -34,8 +34,8 @@ public static class TokenPulseStandbyDriver {
         public bool SleepInvoked=false, HibernateInvoked=false, ComputerRestart=false, PolicyChanged=false;
     }
     static void RequirePlatform() {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || IntPtr.Size!=8 || Environment.OSVersion.Version.Build!=19045 || Marshal.SizeOf<Privileges>()!=16)
-            throw new InvalidOperationException("Reviewed Windows 10 build 19045 x64 required.");
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || IntPtr.Size!=8 || Marshal.SizeOf<Privileges>()!=16)
+            throw new InvalidOperationException("A 64-bit Windows process with the expected privilege structure is required.");
     }
     static Luid ShutdownPrivilege() {
         Luid id;
