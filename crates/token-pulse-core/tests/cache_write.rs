@@ -101,25 +101,35 @@ fn adapter_preserves_missing_null_zero_and_positive_and_rejects_conflicting_spel
         usage["cache_write_tokens"] = other;
         assert!(matches!(adapted(usage), AdaptedRecord::Diagnostic(_)));
     }
-    let mut usage = base;
-    usage["unknown_billing_tokens"] = json!(1);
-    assert!(matches!(adapted(usage), AdaptedRecord::Diagnostic(_)));
+    for field in ["unknown_billing_tokens", "unknown_usage"] {
+        let mut usage = base.clone();
+        usage[field] = json!(1);
+        assert!(matches!(adapted(usage), AdaptedRecord::Diagnostic(_)));
+    }
 }
 
 #[test]
 fn additive_usage_metadata_does_not_discard_existing_counters() {
-    let base = json!({"input_tokens":100,"cached_input_tokens":60,"output_tokens":10,"total_tokens":110});
+    let base =
+        json!({"input_tokens":100,"cached_input_tokens":60,"output_tokens":10,"total_tokens":110});
     let mut extended = base.clone();
     extended["service_tier"] = json!("future-mode");
     extended["metadata"] = json!({"source":"new-server","flags":[1,2]});
     extended["version"] = json!(9);
     for value in [base, extended] {
-        let AdaptedRecord::Observation(record) = adapted(value) else { panic!("compatible usage"); };
-        let NormalizedObservation::Usage(usage) = *record else { panic!("usage"); };
+        let AdaptedRecord::Observation(record) = adapted(value) else {
+            panic!("compatible usage");
+        };
+        let NormalizedObservation::Usage(usage) = *record else {
+            panic!("usage");
+        };
         assert_eq!(usage.last.unwrap().input_total, Some(100));
         assert_eq!(usage.last.unwrap().cached_input, Some(60));
         assert_eq!(usage.last.unwrap().validated_total().unwrap(), Some(110));
-        assert_eq!(usage.cumulative.unwrap().validated_total().unwrap(), Some(110));
+        assert_eq!(
+            usage.cumulative.unwrap().validated_total().unwrap(),
+            Some(110)
+        );
     }
 }
 

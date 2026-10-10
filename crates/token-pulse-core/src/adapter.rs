@@ -418,7 +418,7 @@ fn usage(value: Option<&Value>) -> Result<Option<UsageVector>, ()> {
             // silently guessing whether they overlap input/output would corrupt totals.
             if map.keys().any(|key| {
                 !allowed.contains(&key.as_str())
-                    && (key.ends_with("_tokens") || key.ends_with("_token_usage"))
+                    && (key.ends_with("_tokens") || key.ends_with("_usage"))
             }) {
                 return Err(());
             }
