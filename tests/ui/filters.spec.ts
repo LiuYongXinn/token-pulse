@@ -146,3 +146,32 @@ test('search serializes late replies, closes their original query and cleans up 
     return calls.filter(call => call.command === 'close_query_snapshot').map(call => call.request.request?.query.search);
   })).toEqual(['', 'slow', '']);
 });
+
+test('candidate browsing continues beyond one thousand with bounded display cache', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.evaluate(() => {
+    const runtime = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    const invoke = runtime.invoke;
+    runtime.invoke = async (command, args) => {
+      if (command !== 'get_filter_options') return invoke(command, args);
+      const r = args.request as { query: { dimension: string; page_size: number }; cursor: string | null };
+      const offset = r.cursor ? Number(r.cursor.replace(/^a+/, '')) : 0;
+      const count = Math.min(r.query.page_size, 1051-offset);
+      return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: {
+        meta: { snapshot_id: 'large-facet', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' }, dimension: r.query.dimension,
+        options: Array.from({ length: count }, (_, n) => ({ key: `large-${offset+n}`, display_name: `Large candidate ${offset+n}`, count: '1' })), next_cursor: offset+count < 1051 ? String(offset+count).padStart(151,'a') : null,
+      } };
+    };
+  });
+  await page.getByRole('combobox', { name: '模型', exact: true }).click();
+  for (let n = 0; n < 21; n++) {
+    await expect(page.getByRole('button', { name: '加载下一页' })).toBeEnabled();
+    await page.getByRole('button', { name: '加载下一页' }).click();
+    await expect(page.getByRole('listbox').getByRole('option').last()).toContainText(n === 20 ? 'Large candidate 1050' : `Large candidate ${(n+2)*50-1}`);
+  }
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(1000);
+  await expect(page.getByRole('button', { name: '加载下一页' })).toHaveCount(0);
+  await page.getByRole('button', { name: '从头浏览' }).click();
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(50);
+  await expect(page.getByRole('listbox').getByRole('option').first()).toContainText('Large candidate 0');
+});

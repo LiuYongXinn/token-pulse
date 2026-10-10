@@ -317,3 +317,32 @@ test('external native expansion rereads authoritative state and ignores older in
   await expect(page.getByLabel('收起小窗')).toBeVisible(); await expect(page.locator('.mini-breakdown')).toContainText('输出（含推理）83.1K');
   await page.screenshot({ path: 'test-results/mini-external-expansion.png' });
 });
+
+test('mini candidates remain reachable after the first thousand sessions', async ({ page }) => {
+  test.setTimeout(60000);
+  await editor(page);
+  await page.evaluate(() => {
+    const runtime = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    const invoke = runtime.invoke;
+    runtime.invoke = async (command, args) => {
+      if (command !== 'query_mini_sessions') return invoke(command, args);
+      const r = args.request as { query: { page_size: number }; cursor: string | null };
+      const offset = r.cursor ? Number(r.cursor.replace(/^a+/, '')) : 0;
+      const count = Math.min(r.query.page_size, 1026-offset);
+      return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '9007199254740993', privacy: false }, data: {
+        meta: { snapshot_id: 'large-mini', data_revision: '7', price_revision: '3', generated_at_ms: 1000, parser_versions: [], accounting_versions: [], display_timezone: 'UTC' },
+        options: Array.from({ length: count }, (_, n) => ({ session_key: `large-${offset+n}`, display_name: `Large session ${offset+n}` })), next_cursor: offset+count < 1026 ? String(offset+count).padStart(151,'a') : null,
+      } };
+    };
+  });
+  await page.getByLabel('搜索小窗会话').fill('large');
+  await expect(page.getByRole('listbox').getByRole('option').last()).toContainText('Large session 24');
+  for (let n = 0; n < 41; n++) {
+    await expect(page.getByRole('button', { name: '加载更多会话' })).toBeEnabled();
+    await page.getByRole('button', { name: '加载更多会话' }).click();
+    await expect(page.getByRole('listbox').getByRole('option').last()).toContainText(n === 40 ? 'Large session 1025' : `Large session ${(n+2)*25-1}`);
+  }
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(1000);
+  await page.getByRole('button', { name: '从头浏览' }).click();
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(25);
+});

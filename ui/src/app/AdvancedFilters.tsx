@@ -49,7 +49,7 @@ export function AdvancedFilters({ filter, choices, disabled, onChange }: { filte
         <div role="listbox" aria-label={`${labels[open]}候选`} id="filter-candidates" className="facet-options">{candidates.options.map(option => <button key={option.key ?? 'unknown'} role="option" aria-selected={choices[open]?.key === option.key} onClick={() => select(option)} className="facet-option"><span className="facet-label">{option.display_name}</span><span className="facet-count" title={`${fullTokens(option.count)} 条用量记录`}>{fullTokens(option.count)}</span></button>)}</div>
         {candidates.loading && <p className="facet-note" role="status">正在读取候选…</p>}
         {!candidates.loading && !candidates.error && candidates.options.length === 0 && <p className="facet-note">当前范围没有匹配候选。</p>}
-        {candidates.limited && <p className="facet-note">已显示 1,000 个候选，请输入更具体的搜索。</p>}
+        {candidates.trimmed && <p className="facet-note">较早候选已移出显示缓存，仍可继续浏览。<button onClick={candidates.restart} disabled={candidates.loading}>从头浏览</button></p>}
         {candidates.more && <div className="facet-actions"><button disabled={candidates.loading} onClick={candidates.loadMore}>加载下一页</button></div>}
       </>}
     </div>}
