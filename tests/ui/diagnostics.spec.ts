@@ -81,3 +81,20 @@ test('a delayed unredacted reply cannot restore paths after shared privacy chang
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('diagnostic-positions-private-light.png'), fullPage: true });
 });
+
+test('title index problems identify the metadata file and preserve usage meaning', async ({ page }) => {
+  await page.evaluate(() => {
+    const runtime = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    const invoke = runtime.invoke;
+    runtime.invoke = async (command, args) => {
+      if (command !== 'query_diagnostics') return invoke(command, args);
+      return { api_version: 1, request_id: args.requestId, display_policy: { settings_revision: '1', privacy: false }, data: { data_revision: '7', has_more: false, issues: ['TITLE_INDEX_INVALID','TITLE_INDEX_UNREADABLE'].map((code, n) => ({ issue_id: `title-${n}`, source_id: 'a', kind: 'log_record', code, path: 'E:/synthetic-a/.codex/session_index.jsonl', byte_offset: n === 0 ? '65537' : null })) } };
+    };
+  });
+  const panel = page.getByRole('region', { name: '采集问题与必要位置' });
+  await panel.getByRole('button', { name: '刷新问题' }).click();
+  await expect(panel).toContainText('已跳过；其他标题和用量继续采集');
+  await expect(panel).toContainText('标题索引暂时无法读取');
+  await expect(panel).toContainText('session_index.jsonl');
+  await expect(panel).toContainText('字节偏移 65,537');
+});

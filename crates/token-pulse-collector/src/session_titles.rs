@@ -228,7 +228,7 @@ mod tests {
             .append(true)
             .open(&path)
             .unwrap()
-            .write_all(partial[20..].as_bytes())
+            .write_all(&partial.as_bytes()[20..])
             .unwrap();
         let (scan, titles) = read_chunk(&path, scan).unwrap();
         assert_eq!(titles.len(), 1);
