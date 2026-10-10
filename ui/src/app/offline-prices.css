@@ -5,7 +5,7 @@
 .offline-filters input { width: min(260px, 55vw); }
 .offline-filters > span { padding-bottom: 9px; }
 .offline-table-wrap { max-height: 390px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
-.offline-price-table { width: 100%; min-width: 630px; border-collapse: collapse; font-size: 12px; }
+.offline-price-table { width: 100%; min-width: 630px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 .offline-price-table caption { padding: 10px; color: var(--muted); text-align: left; }
 .offline-price-table th { text-align: left; font-weight: 500; color: var(--muted); background: var(--panel); }
 .offline-price-table td, .offline-price-table th { padding: 11px 10px; border-bottom: 1px solid var(--line); }
@@ -16,3 +16,7 @@
 .offline-price-table small { color: var(--muted); margin-top: 5px; }
 .offline-price-table a { color: var(--link); font-size: 11px; text-decoration: none; display: inline-block; margin-top: 5px; }
 .offline-price-table a:hover { text-decoration: underline; }
+.offline-price-table th:first-child { width: 35%; }
+.offline-price-table th:not(:first-child) { width: 16.25%; }
+.offline-price-table td { overflow-wrap: anywhere; }
+.offline-price-table td:not(:first-child) { white-space: normal; }

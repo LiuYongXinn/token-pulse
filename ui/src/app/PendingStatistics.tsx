@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 
-export function PendingStatistics({ label, columns, children }: { label: string; columns: string[]; children?: ReactNode }) {
+export function PendingStatistics({ label, columns, tableClass = 'group-table', children }: { label: string; columns: string[]; tableClass?: string; children?: ReactNode }) {
   return <>
     <div className="overview-coverage"><span>正在加载统计…</span><span role="status"></span></div>
     <section className="group-stat-strip" aria-label={`${label}统计汇总`}>
       {['Token 总量', '估算费用', '记录数量'].map(title => <div key={title}><p className="metric-label">{title}</p><strong className="group-total">—</strong></div>)}
     </section>
     {children}
-    <div className="group-table-wrap"><table className="group-table" aria-label={`${label}用量`}><thead><tr>{columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody><tr><td colSpan={columns.length}>—</td></tr></tbody></table></div>
+    <div className={`${tableClass}-wrap`}><table className={tableClass} aria-label={`${label}用量`}><thead><tr>{columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody><tr><td colSpan={columns.length}>—</td></tr></tbody></table></div>
     <div className="session-pagination"><span>第 — 页 · 本页 — 条</span><div><button disabled>上一页</button><button disabled>下一页</button></div></div>
   </>;
 }

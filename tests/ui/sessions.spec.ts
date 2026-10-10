@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
+import { columnBounds, expectStableColumns } from './table-layout';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic DTO bridge, never loaded by production code.
@@ -113,6 +114,41 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
   await expect(page.getByRole('button', { name: '重新查询', exact: true })).toHaveCount(0);
+});
+
+test('session columns stay fixed when refreshed IDs become Chinese titles at desktop and narrow widths', async ({ page }, testInfo) => {
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await page.evaluate(() => {
+    const bridge = (window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: Record<string, unknown>) => Promise<{ data: { sessions?: { display_name: string; latest_project_name: string | null; parent_display_name: string | null }[] } }> } }).__TAURI_INTERNALS__;
+    const invoke = bridge.invoke;
+    let refreshed = false;
+    bridge.invoke = async (command, args) => {
+      const reply = await invoke(command, args);
+      if (command === 'query_sessions') {
+        reply.data.sessions?.forEach(row => {
+          row.display_name = refreshed ? '刷新后的中文会话标题'.repeat(12) : '019a54fe-3072-7196-9bc0-fb9d79bd98aa';
+          row.latest_project_name = refreshed ? '包含很长名称的项目'.repeat(12) : 'token-pulse';
+          row.parent_display_name = refreshed ? '更新后的父会话标题'.repeat(12) : '019a54fe-3072-7196-9bc0-fb9d79bd98ab';
+        });
+        refreshed = !refreshed;
+      }
+      return reply;
+    };
+  });
+  for (const width of [1920, 960]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await expect(page.locator('.session-name').first()).toHaveText('019a54fe-3072-7196-9bc0-fb9d79bd98aa');
+    const table = page.locator('.session-table');
+    const before = await columnBounds(table);
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await expect(page.locator('.session-name').first()).toHaveText('刷新后的中文会话标题'.repeat(12));
+    await expectStableColumns(table, before);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const button = page.locator('.session-name').first();
+    expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`fixed-session-columns-${width}.png`) });
+  }
 });
 
 test('sessions show exact consumption and independent context, stable pages and an accessible drawer', async ({ page }) => {

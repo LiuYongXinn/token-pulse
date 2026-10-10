@@ -6,3 +6,4 @@
 .model-alias-table button { white-space: nowrap; }
 .price-table.model-alias-table { min-width: 0; }
 .model-aliases .price-editor > .muted { margin-bottom: 16px; }
+.price-table.model-alias-table th:first-child { width: 46%; }

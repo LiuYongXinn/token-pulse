@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
+import { expectStableTextColumns } from './table-layout';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic DTO bridge, confined to browser QA. Never a production fallback.
@@ -39,6 +40,15 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.getByRole('button', { name: '模型', exact: true }).click();
+});
+
+test('model columns stay fixed across long IDs and Chinese labels', async ({ page }) => {
+  await expect(page.locator('.group-table tbody tr')).toHaveCount(3);
+  for (const width of [1920, 960]) {
+    await page.setViewportSize({ width, height: 860 });
+    await expectStableTextColumns(page.locator('.group-table'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });
 
 test('model and project share charts stay within their containers in narrow windows', async ({ page }) => {

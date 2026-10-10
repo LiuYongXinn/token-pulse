@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { installSyntheticCalendar } from './calendar-bridge';
+import { columnBounds, expectStableColumns, expectStableTextColumns } from './table-layout';
 
 test.beforeEach(async ({ page }) => {
   // Explicit synthetic IPC QA data; not imported by the desktop application.
@@ -57,6 +58,23 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '明细', exact: true }).click();
+});
+
+test('event columns stay fixed across long labels and expanded evidence', async ({ page }) => {
+  await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
+  for (const width of [1920, 960]) {
+    await page.setViewportSize({ width, height: 860 });
+    const table = page.locator('.event-table');
+    const before = await columnBounds(table);
+    await page.getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
+    await expect(page.locator('.event-evidence')).toBeVisible();
+    await expectStableColumns(table, before);
+    await expectStableTextColumns(page.locator('.event-vector-table'));
+    await page.getByRole('button', { name: '查看 synthetic-event-0 核算依据', exact: true }).click();
+    await expectStableColumns(table, before);
+    await expectStableTextColumns(table);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
 });
 
 test('slow refresh and foreground return do not keep asking to requery', async ({ page }) => {
