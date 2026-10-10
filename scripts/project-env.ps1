@@ -1,8 +1,5 @@
 # Dot-source before any tool/child process. Environment changes are scoped to this process.
 $tokenPulseRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if ([IO.Path]::GetPathRoot($tokenPulseRoot) -in @('C:\', ($env:SystemDrive + '\'))) {
-    throw 'TokenPulse requires a project directory outside the system drive.'
-}
 $tokenPulseLocal = Join-Path $tokenPulseRoot '.local'
 $tokenPulseEnvironment = @{
     TOKENPULSE_PROJECT_ROOT = $tokenPulseRoot

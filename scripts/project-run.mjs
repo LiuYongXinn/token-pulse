@@ -1,12 +1,9 @@
 import { mkdirSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve, parse, delimiter } from 'node:path';
+import { dirname, join, resolve, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 export const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
-if (process.platform === 'win32' && ['C:\\', `${process.env.SystemDrive ?? 'C:'}\\`].some(drive => parse(root).root.toLowerCase() === drive.toLowerCase())) {
-  throw new Error('TokenPulse requires a project directory outside the system drive');
-}
 const local = join(root, '.local');
 export const environment = {
   ...process.env,

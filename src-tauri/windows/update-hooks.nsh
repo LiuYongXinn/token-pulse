@@ -2,17 +2,6 @@
 ; Wait before Tauri's Restart Manager check, so it cannot force-kill the parent
 ; while the taskbar host restores Explorer geometry and workers finish shutdown.
 !macro NSIS_HOOK_PREINSTALL
-  Push $R8
-  Push $R9
-  ${GetRoot} "$INSTDIR" $R9
-  ReadEnvStr $R8 "SystemDrive"
-  ${If} $R9 == "C:"
-  ${OrIf} $R9 == $R8
-    MessageBox MB_OK|MB_ICONEXCLAMATION "Please choose an installation directory on a data drive. TokenPulse does not store its files on the system drive."
-    Abort
-  ${EndIf}
-  Pop $R9
-  Pop $R8
   Push $0
   Push $1
   Push $2

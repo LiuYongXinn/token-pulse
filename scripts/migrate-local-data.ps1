@@ -24,7 +24,6 @@ if ($LegacyNpmCache) {
     if ((Test-Path -LiteralPath $LegacyNpmCache) -and -not (Test-Path -LiteralPath (Join-Path $LegacyNpmCache '_cacache') -PathType Container)) { throw 'Legacy source is not an npm cache.' }
     $migrationAllowedSources += $LegacyNpmCache
 }
-if ([IO.Path]::GetPathRoot($migrationRoot) -in @('C:\', ($env:SystemDrive + '\'))) { throw 'Migration destination must be outside the system drive.' }
 [IO.Directory]::CreateDirectory($migrationLocal) | Out-Null
 
 function Get-MigrationHash([string]$Path) {

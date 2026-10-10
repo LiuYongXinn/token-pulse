@@ -31,11 +31,11 @@ cargo test --workspace --locked --offline
 
 项目的 PowerShell 开发和验收脚本会自行加载该环境。`.cargo/config.toml` 也为直接启动的 Cargo 测试设置项目内临时目录。`.npmrc` 将直接执行的 npm 安装缓存设在项目内。
 
-桌面程序根据自身可执行文件向上定位仓库，主进程与无界面通知进程使用同一套路径规则。安装在 `.local/app/` 和构建在 `target/debug/`、`target/release/` 时，都使用当前项目的 `.local/data/`。也可通过 `TOKENPULSE_PROJECT_ROOT` 明确指定绝对根目录。程序在建立 WebView 前覆盖全部 Tauri 应用数据目录，不会回退到 AppData。Windows 下拒绝 C 盘、系统盘、网络路径和重解析到系统盘的数据位置。
+桌面程序根据自身可执行文件向上定位仓库，主进程与无界面通知进程使用同一套路径规则。安装在 `.local/app/` 和构建在 `target/debug/`、`target/release/` 时，都使用当前项目的 `.local/data/`。也可通过 `TOKENPULSE_PROJECT_ROOT` 明确指定绝对根目录。程序在建立 WebView 前覆盖全部 Tauri 应用数据目录，不会回退到 AppData。Windows 下允许 C 盘及其他本地盘，实际目录需可写；仍拒绝网络 / 设备路径和父目录穿越。
 
 Windows 程序入口在启动 Tauri、通知运行时和工作线程之前，将自身的 `TEMP`、`TMP`、`TMPDIR` 设置为 `.local/tmp/`。从快捷方式双击启动时也会执行，因此 WebView 和程序启动的子进程不会继承默认的 C 盘临时目录。
 
-脱离仓库的便携程序将 `.local/` 放在可执行文件旁，因此必须放在可写的数据盘。更换仓库位置时，需要一并移动 `.local/`，并重新加载开发环境；用户环境中持久化的工具路径也需相应更新。
+脱离仓库的便携程序将 `.local/` 放在可执行文件旁，因此必须放在可写的本地目录，盘符不受限制。更换仓库位置时，需要一并移动 `.local/`，并重新加载开发环境；用户环境中持久化的工具路径也需相应更新。
 
 ## 现有数据迁移
 

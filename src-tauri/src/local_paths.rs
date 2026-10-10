@@ -17,9 +17,9 @@ fn validate_root(path: &Path) -> io::Result<()> {
     #[cfg(windows)]
     {
         use std::path::Prefix;
-        let drive = match path.components().next() {
+        match path.components().next() {
             Some(Component::Prefix(prefix)) => match prefix.kind() {
-                Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => drive.to_ascii_uppercase(),
+                Prefix::Disk(_) | Prefix::VerbatimDisk(_) => {}
                 _ => {
                     return Err(io::Error::other(
                         "TokenPulse storage requires a local drive",
@@ -31,17 +31,6 @@ fn validate_root(path: &Path) -> io::Result<()> {
                     "TokenPulse storage requires a local drive",
                 ));
             }
-        };
-        let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
-        if drive == b'C'
-            || system_drive
-                .as_bytes()
-                .first()
-                .is_some_and(|system| system.to_ascii_uppercase() == drive)
-        {
-            return Err(io::Error::other(
-                "TokenPulse refuses to store data on the system drive; move the project to a data drive",
-            ));
         }
     }
     Ok(())
@@ -154,17 +143,18 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn system_drive_and_network_roots_are_rejected() {
+    fn local_drives_are_accepted_and_network_device_roots_are_rejected() {
         for path in [
             r"C:\data",
             r"c:\data",
             r"\\?\C:\data",
-            r"\\server\share\data",
-            r"\\.\C:\data",
+            r"E:\Documents\Code\token-pulse",
         ] {
+            assert!(validate_root(Path::new(path)).is_ok(), "rejected {path}");
+        }
+        for path in [r"\\server\share\data", r"\\.\C:\data"] {
             assert!(validate_root(Path::new(path)).is_err(), "accepted {path}");
         }
-        assert!(validate_root(Path::new(r"E:\Documents\Code\token-pulse")).is_ok());
     }
 
     #[test]
