@@ -28,6 +28,8 @@
 
 ## 开发与维护
 
+- [项目限制审查](development/restriction-audit.md)：版本与盘符拦截、来源和列表容量、解析兼容性、必要边界及整改顺序。
+
 - [项目目录内的数据与工具缓存](development/project-local-storage.md)：数据、WebView、临时文件、工具缓存和现有数据迁移的路径约定。
 
 - [页签即时显示与统计更新开发方案](development/instant-navigation.md)：查询缓存、前台调度、分页快照恢复、设置与诊断状态共享、变更通知、后端复用及分阶段性能验收。
