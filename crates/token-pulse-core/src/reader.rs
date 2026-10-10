@@ -453,7 +453,7 @@ fn range_anchors(
         .collect()
 }
 #[cfg(windows)]
-fn file_identity(file: &File, _: &Metadata) -> Result<String, ReadError> {
+pub fn file_identity(file: &File, _: &Metadata) -> Result<String, ReadError> {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
@@ -476,7 +476,7 @@ fn file_identity(file: &File, _: &Metadata) -> Result<String, ReadError> {
     ))
 }
 #[cfg(unix)]
-fn file_identity(_: &File, metadata: &Metadata) -> Result<String, ReadError> {
+pub fn file_identity(_: &File, metadata: &Metadata) -> Result<String, ReadError> {
     use std::os::unix::fs::MetadataExt;
     Ok(format!("unix:{}:{}", metadata.dev(), metadata.ino()))
 }

@@ -23,6 +23,41 @@ impl SessionTitle {
     }
 }
 impl Database {
+    /// Title metadata failures are independent of usage ingestion and visible in source diagnostics.
+    pub fn record_title_index_issue(
+        &self,
+        source_id: String,
+        expected_root: String,
+        issue: Option<(ErrorCode, Option<u64>)>,
+        at: i64,
+    ) -> StoreResult<()> {
+        validate_request_id(&source_id)?;
+        if issue.is_some_and(|(code, _)| {
+            !matches!(
+                code,
+                ErrorCode::TitleIndexInvalid | ErrorCode::TitleIndexUnreadable
+            )
+        }) {
+            return Err(ErrorCode::InvalidQuery.into());
+        }
+        self.write(move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            if !tx.query_row("SELECT EXISTS(SELECT 1 FROM sources WHERE source_id=?1 AND enabled=1 AND root_path=?2)", params![source_id,expected_root], |r| r.get::<_,bool>(0))? { return Err(ErrorCode::PermissionDenied.into()); }
+            let key = format!("title-index:{source_id}");
+            let changed = match issue {
+                Some((code, offset)) => {
+                    let offset = offset.map(i64::try_from).transpose().map_err(|_| ErrorCode::NumericOverflow)?;
+                    tx.execute("INSERT INTO diagnostics(diagnostic_id,source_id,byte_offset,code,severity,metadata_json,dedup_key,first_seen_at_ms,last_seen_at_ms) VALUES(?1,?2,?3,?4,'warning','{}',?1,?5,?5) ON CONFLICT(dedup_key) DO UPDATE SET code=excluded.code,byte_offset=excluded.byte_offset,last_seen_at_ms=excluded.last_seen_at_ms,resolved_at_ms=NULL WHERE diagnostics.code<>excluded.code OR diagnostics.byte_offset IS NOT excluded.byte_offset OR diagnostics.resolved_at_ms IS NOT NULL", params![key,source_id,offset,code.to_string(),at])? > 0
+                }
+                None => tx.execute("UPDATE diagnostics SET resolved_at_ms=?2 WHERE dedup_key=?1 AND resolved_at_ms IS NULL", params![key,at])? > 0,
+            };
+            if changed {
+                let revision: i64 = tx.query_row("SELECT usage_view_revision FROM app_state WHERE singleton=1", [], |r| r.get(0))?;
+                tx.execute("UPDATE app_state SET usage_view_revision=?1 WHERE singleton=1", [revision.checked_add(1).ok_or(ErrorCode::NumericOverflow)?])?;
+            }
+            tx.commit()?; Ok(())
+        })
+    }
     /// A missing/partial index never erases previously collected titles. Newer renames win.
     pub fn sync_session_titles(
         &self,

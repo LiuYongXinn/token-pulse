@@ -296,6 +296,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -406,6 +408,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -578,6 +582,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -1071,12 +1077,6 @@
           ],
           "type": "object"
         },
-        "MiniSessionsQuery": {
-          "additionalProperties": false,
-          "properties": {
-            "page_size": {
-              "format": "uint16",
-              "maximum": 100,
         "GroupDimension": {
           "enum": [
             "models",
@@ -1130,6 +1130,12 @@
           ],
           "type": "object"
         },
+        "MiniSessionsQuery": {
+          "additionalProperties": false,
+          "properties": {
+            "page_size": {
+              "format": "uint16",
+              "maximum": 100,
               "minimum": 1,
               "type": "integer"
             },
@@ -1394,12 +1400,6 @@
           "additionalProperties": false,
           "properties": {
             "kind": {
-              "const": "mini_sessions",
-              "type": "string"
-        {
-          "additionalProperties": false,
-          "properties": {
-            "kind": {
               "const": "groups",
               "type": "string"
             },
@@ -1413,6 +1413,12 @@
           ],
           "type": "object"
         },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "mini_sessions",
+              "type": "string"
             },
             "request": {
               "$ref": "#/$defs/MiniSessionsRequest"
@@ -2487,6 +2493,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -2683,6 +2691,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -2990,6 +3000,8 @@
         "INVALID_QUERY",
         "UNSUPPORTED_API",
         "SOURCE_UNREADABLE",
+        "TITLE_INDEX_UNREADABLE",
+        "TITLE_INDEX_INVALID",
         "UNSUPPORTED_FORMAT",
         "UNSUPPORTED_SETTINGS_VERSION",
         "AMBIGUOUS_USAGE",
@@ -4112,6 +4124,13 @@
         "meta": {
           "$ref": "#/$defs/SnapshotMeta"
         },
+        "next_cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "pricing": {
           "$ref": "#/$defs/PricingSummary"
         },
@@ -4124,13 +4143,6 @@
         "truncated": {
           "type": "boolean"
         }
-        "next_cursor": {
-          "default": null,
-          "type": [
-            "string",
-            "null"
-          ]
-        },
       },
       "required": [
         "meta",
@@ -4294,6 +4306,14 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "cursor": {
+          "maxLength": 151,
+          "minLength": 151,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dimension": {
           "$ref": "#/$defs/GroupDimension"
         },
@@ -4305,14 +4325,6 @@
           "maximum": 200,
           "minimum": 1,
           "type": "integer"
-        },
-        "cursor": {
-          "maxLength": 151,
-          "minLength": 151,
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "price_basis": {
           "$ref": "#/$defs/PriceBasis"
@@ -4393,6 +4405,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -8866,6 +8880,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -9180,6 +9196,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -14138,6 +14156,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -14320,6 +14340,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -14859,6 +14881,8 @@
             "INVALID_QUERY",
             "UNSUPPORTED_API",
             "SOURCE_UNREADABLE",
+            "TITLE_INDEX_UNREADABLE",
+            "TITLE_INDEX_INVALID",
             "UNSUPPORTED_FORMAT",
             "UNSUPPORTED_SETTINGS_VERSION",
             "AMBIGUOUS_USAGE",
@@ -16903,6 +16927,13 @@
             "meta": {
               "$ref": "#/$defs/SnapshotMeta"
             },
+            "next_cursor": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "pricing": {
               "$ref": "#/$defs/PricingSummary"
             },
@@ -16928,13 +16959,6 @@
           ],
           "type": "object"
         },
-            "next_cursor": {
-              "default": null,
-              "type": [
-                "string",
-                "null"
-              ]
-            },
         "MatchedPrice": {
           "additionalProperties": false,
           "properties": {
@@ -18155,6 +18179,14 @@
         "GroupedUsageRequest": {
           "additionalProperties": false,
           "properties": {
+            "cursor": {
+              "maxLength": 151,
+              "minLength": 151,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "dimension": {
               "$ref": "#/$defs/GroupDimension"
             },
@@ -18179,14 +18211,6 @@
             "price_basis",
             "dimension",
             "sort",
-            "cursor": {
-              "maxLength": 151,
-              "minLength": 151,
-              "type": [
-                "string",
-                "null"
-              ]
-            },
             "limit"
           ],
           "type": "object"
@@ -18644,6 +18668,13 @@
             "meta": {
               "$ref": "#/$defs/SnapshotMeta"
             },
+            "next_cursor": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "pricing": {
               "$ref": "#/$defs/PricingSummary"
             },
@@ -18669,13 +18700,6 @@
           ],
           "type": "object"
         },
-            "next_cursor": {
-              "default": null,
-              "type": [
-                "string",
-                "null"
-              ]
-            },
         "MatchedPrice": {
           "additionalProperties": false,
           "properties": {

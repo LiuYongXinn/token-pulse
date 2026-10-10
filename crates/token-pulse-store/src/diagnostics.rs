@@ -7,9 +7,9 @@ use token_pulse_core::{diagnostics::*, numeric::DecimalInt};
 
 const ISSUES: &str = "
 WITH issues(origin,identity,source,kind,code,path,offset,sort_time) AS (
- SELECT 'diagnostic',d.diagnostic_id,COALESCE(d.source_id,f.source_id),'log_record',d.code,f.canonical_path,d.byte_offset,d.last_seen_at_ms
- FROM diagnostics d LEFT JOIN file_generations g ON g.file_generation_id=d.file_generation_id LEFT JOIN source_files f ON f.file_id=g.file_id
- WHERE d.resolved_at_ms IS NULL AND (d.file_generation_id IS NULL OR (g.state='current' AND f.current_generation_id=g.file_generation_id AND (d.source_id IS NULL OR d.source_id=f.source_id)))
+ SELECT 'diagnostic',d.diagnostic_id,COALESCE(d.source_id,f.source_id),'log_record',d.code,CASE WHEN d.code IN ('TITLE_INDEX_INVALID','TITLE_INDEX_UNREADABLE') THEN s.root_path || '/session_index.jsonl' ELSE f.canonical_path END,d.byte_offset,d.last_seen_at_ms
+ FROM diagnostics d LEFT JOIN file_generations g ON g.file_generation_id=d.file_generation_id LEFT JOIN source_files f ON f.file_id=g.file_id LEFT JOIN sources s ON s.source_id=d.source_id
+ WHERE d.resolved_at_ms IS NULL AND (d.code NOT IN ('TITLE_INDEX_INVALID','TITLE_INDEX_UNREADABLE') OR s.enabled=1) AND (d.file_generation_id IS NULL OR (g.state='current' AND f.current_generation_id=g.file_generation_id AND (d.source_id IS NULL OR d.source_id=f.source_id)))
  UNION ALL
  SELECT 'usage',p.pending_id,f.source_id,CASE p.kind WHEN 'pending' THEN 'unconfirmed_usage' ELSE 'unattributed_usage' END,NULL,f.canonical_path,o.byte_offset,o.observed_at_ms
  FROM pending_usage p JOIN sessions s ON s.active_ledger_id=p.ledger_id JOIN observations o ON o.observation_id=p.observation_id JOIN file_generations g ON g.file_generation_id=o.file_generation_id JOIN source_files f ON f.file_id=g.file_id

@@ -9,6 +9,8 @@ pub enum ErrorCode {
     InvalidQuery,
     UnsupportedApi,
     SourceUnreadable,
+    TitleIndexUnreadable,
+    TitleIndexInvalid,
     UnsupportedFormat,
     UnsupportedSettingsVersion,
     AmbiguousUsage,

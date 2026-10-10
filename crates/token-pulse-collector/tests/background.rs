@@ -171,3 +171,53 @@ fn actual_native_filesystem_watcher_collects_when_polling_is_far_in_future() {
     wait_for(|| total(&db) == 2);
     assert!(collector.status().last_commit_at_ms.is_some());
 }
+
+#[test]
+fn malformed_title_index_reports_and_resolves_without_changing_usage() {
+    use token_pulse_core::{diagnostics::DiagnosticsRequest, error::ErrorCode};
+    let (logs, _data, db, _) = setup();
+    let index = logs.path().join("session_index.jsonl");
+    let entry = "{\"id\":\"background-synthetic\",\"thread_name\":\"valid title\",\"updated_at\":\"2026-10-07T12:00:00Z\"}\n";
+    fs::write(&index, format!("bad record\n{entry}")).unwrap();
+    let collector = CollectorService::start(
+        db.clone(),
+        CollectorOptions {
+            watcher: false,
+            active_poll: Duration::from_millis(50),
+            manifest_poll: Duration::from_secs(10),
+        },
+    )
+    .unwrap();
+    let issues = || {
+        db.diagnostics(&DiagnosticsRequest {
+            source_id: Some("source".into()),
+        })
+        .unwrap()
+        .issues
+    };
+    wait_for(|| {
+        total(&db) == 1
+            && issues()
+                .iter()
+                .any(|i| i.code == Some(ErrorCode::TitleIndexInvalid))
+    });
+    let issue = issues()
+        .into_iter()
+        .find(|i| i.code == Some(ErrorCode::TitleIndexInvalid))
+        .unwrap();
+    assert!(issue.path.unwrap().ends_with("session_index.jsonl"));
+    assert_eq!(issue.byte_offset.unwrap().as_str(), "0");
+    let revision = db.usage_revision().unwrap();
+    fs::write(&index, entry).unwrap();
+    wait_for(|| {
+        !issues()
+            .iter()
+            .any(|i| i.code == Some(ErrorCode::TitleIndexInvalid))
+    });
+    let after = db.usage_revision().unwrap();
+    assert_eq!(revision.data_revision, after.data_revision);
+    assert_eq!(revision.price_revision, after.price_revision);
+    assert!(after.usage_view_revision.value() > revision.usage_view_revision.value());
+    assert_eq!(total(&db), 1);
+    collector.shutdown();
+}

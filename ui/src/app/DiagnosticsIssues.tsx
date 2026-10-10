@@ -11,6 +11,8 @@ function reason(issue: DiagnosticIssue) {
     case 'missing_file': return '已采集的文件当前未找到，保存的历史消费仍保留。';
     case 'directory_scan': return issue.code === 'SOURCE_UNREADABLE' ? '目录未能完整读取，请检查目录与访问权限。' : issue.code ? `目录核对未完成（${issue.code}）。` : '目录核对尚未完成。';
     case 'log_record': {
+      if (issue.code === 'TITLE_INDEX_INVALID') return '标题索引存在格式无效或过长的记录，已跳过；其他标题和用量继续采集。';
+      if (issue.code === 'TITLE_INDEX_UNREADABLE') return '标题索引暂时无法读取，请检查文件与访问权限；用量采集继续。';
       const descriptions = { UNSUPPORTED_FORMAT: '当前日志记录格式尚不支持，该记录未计入可信消费。', INVALID_USAGE: '日志用量字段无法验证，该记录未计入可信消费。', AMBIGUOUS_USAGE: '日志用量存在歧义，该记录已与可信消费隔离。', NUMERIC_OVERFLOW: '用量超过支持的精确范围，该记录未计入可信消费。' };
       return issue.code !== null && issue.code in descriptions ? descriptions[issue.code as keyof typeof descriptions] : issue.code ? `日志记录处理失败（${issue.code}）。` : '日志记录尚无法解释。';
     }
