@@ -413,7 +413,13 @@ fn usage(value: Option<&Value>) -> Result<Option<UsageVector>, ()> {
                 "reasoning_output_tokens",
                 "total_tokens",
             ];
-            if map.keys().any(|key| !allowed.contains(&key.as_str())) {
+            // Upstream may add descriptive metadata without changing the vector.
+            // Unknown counter fields still require an explicit accounting adapter:
+            // silently guessing whether they overlap input/output would corrupt totals.
+            if map.keys().any(|key| {
+                !allowed.contains(&key.as_str())
+                    && (key.ends_with("_tokens") || key.ends_with("_token_usage"))
+            }) {
                 return Err(());
             }
             Ok(Some(UsageVector {

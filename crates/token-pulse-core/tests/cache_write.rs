@@ -107,6 +107,23 @@ fn adapter_preserves_missing_null_zero_and_positive_and_rejects_conflicting_spel
 }
 
 #[test]
+fn additive_usage_metadata_does_not_discard_existing_counters() {
+    let base = json!({"input_tokens":100,"cached_input_tokens":60,"output_tokens":10,"total_tokens":110});
+    let mut extended = base.clone();
+    extended["service_tier"] = json!("future-mode");
+    extended["metadata"] = json!({"source":"new-server","flags":[1,2]});
+    extended["version"] = json!(9);
+    for value in [base, extended] {
+        let AdaptedRecord::Observation(record) = adapted(value) else { panic!("compatible usage"); };
+        let NormalizedObservation::Usage(usage) = *record else { panic!("usage"); };
+        assert_eq!(usage.last.unwrap().input_total, Some(100));
+        assert_eq!(usage.last.unwrap().cached_input, Some(60));
+        assert_eq!(usage.last.unwrap().validated_total().unwrap(), Some(110));
+        assert_eq!(usage.cumulative.unwrap().validated_total().unwrap(), Some(110));
+    }
+}
+
+#[test]
 fn input_categories_are_disjoint_and_total_does_not_add_writes_or_reasoning() {
     for input in 0..=8 {
         for read in 0..=8 {
