@@ -16,7 +16,13 @@ impl UsageDisplayRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         match self {
             Self::Dashboard { request } => request.validate(),
-            Self::Groups { request } => request.validate(),
+            Self::Groups { request } => {
+                request.validate()?;
+                if request.cursor.is_some() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
             Self::Sessions { request } => request.validate(),
             Self::Events { request } => request.validate(),
         }

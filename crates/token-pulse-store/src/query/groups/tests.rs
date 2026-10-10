@@ -70,6 +70,41 @@ fn pages_cross_two_hundred_groups_and_keep_snapshot_and_binding() {
         .collect();
     assert_eq!(keys.len(), 206);
 }
+#[test]
+fn display_restoration_strips_group_cursor_and_rejects_continuation_requests() {
+    use token_pulse_core::display_cache::{UsageDisplayData, UsageDisplayRequest};
+    let (_directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    let query = request(GroupDimension::Models);
+    let mut page = read(&db, &query);
+    let token = "a".repeat(151);
+    page.next_cursor = Some(token.clone());
+    let input = UsageDisplayRequest::Groups {
+        request: query.clone(),
+    };
+    db.remember_usage_display(
+        &input,
+        UsageDisplayData::Groups { value: page },
+        db.display_cache_stamp().unwrap(),
+    )
+    .unwrap();
+    let restored = db.restore_usage_display(&input).unwrap();
+    assert!(restored.has_more);
+    let Some(UsageDisplayData::Groups { value }) = restored.data else {
+        panic!("missing group display")
+    };
+    assert!(value.next_cursor.is_none());
+    let mut continuing = query;
+    continuing.cursor = Some(token);
+    assert_eq!(
+        UsageDisplayRequest::Groups {
+            request: continuing
+        }
+        .validate()
+        .unwrap_err(),
+        ErrorCode::InvalidQuery
+    );
+}
 fn read(db: &Database, request: &GroupedUsageRequest) -> GroupedUsageBundle {
     db.grouped_usage_bundle(request, EpochMs::new(10_000).unwrap(), "synthetic-groups")
         .unwrap()
