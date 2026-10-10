@@ -235,6 +235,7 @@ async function editor(page: Page) {
   await page.getByLabel('展开小窗').click(); await page.setViewportSize({ width: 360, height: 380 });
   await page.getByLabel('选择小窗会话与起点').click();
   await expect(page.getByRole('dialog', { name: '小窗统计范围' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '重新查询会话', exact: true })).toHaveCount(0);
 }
 test('session picker uses stable pages and explicit millisecond start, saving no main filter or quota', async ({ page }) => {
   await editor(page);

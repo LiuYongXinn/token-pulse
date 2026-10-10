@@ -8,11 +8,10 @@ const MAX_OPTIONS = 1000;
 
 /** Serializes search/close/page requests and cleans up late responses too. */
 export function useMiniSessionOptions(query: MiniSessionsQuery | null) {
-  const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const current = useRef<Controller | null>(null);
-  const key = JSON.stringify([query, revision]);
+  const key = JSON.stringify(query);
   const enqueue = (work: () => Promise<void>) => { tail.current = tail.current.catch(() => {}).then(work); };
   const release = async (controller: Controller) => {
     const cursor = controller.cursor; controller.cursor = null;
@@ -56,5 +55,5 @@ export function useMiniSessionOptions(query: MiniSessionsQuery | null) {
     enqueue(() => read(controller, key));
   };
   const visible = result?.key === key ? result : null;
-  return { options: visible?.options ?? [], meta: visible?.meta ?? null, more: visible?.more ?? false, limited: visible?.limited ?? false, loading: query !== null && (visible?.loading ?? true), error: visible?.error ?? null, loadMore, reload: () => setRevision(value => value + 1) };
+  return { options: visible?.options ?? [], meta: visible?.meta ?? null, more: visible?.more ?? false, limited: visible?.limited ?? false, loading: query !== null && (visible?.loading ?? true), error: visible?.error ?? null, loadMore };
 }

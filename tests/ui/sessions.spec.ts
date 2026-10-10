@@ -112,6 +112,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toHaveCount(0);
 });
 
 test('sessions show exact consumption and independent context, stable pages and an accessible drawer', async ({ page }) => {
@@ -145,11 +146,16 @@ test('sessions show exact consumption and independent context, stable pages and 
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0); await expect(trigger).toBeFocused();
   expect(await page.locator('.workspace').evaluate(element => (element as HTMLElement).inert)).toBe(false);
-  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.locator('.session-table tbody tr')).toHaveCount(5);
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await expect(page.locator('.session-pagination')).toContainText('第 2 页 / 2 页');
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
+  await expect(page.getByLabel('会话分页')).toContainText('第 1 页');
+  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await expect(page.locator('.session-table tbody tr')).toHaveCount(5);
   await page.getByRole('button', { name: '上一页', exact: true }).click();
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await page.setViewportSize({ width: 960, height: 680 });
@@ -163,16 +169,16 @@ test('sessions show exact consumption and independent context, stable pages and 
   await expect(page.locator('.session-table tbody tr')).toContainText('Synthetic 会话 1');
 });
 
-test('expired pages preserve the frozen page and explicit requery replaces it without mixing results', async ({ page }) => {
+test('expired pages preserve the frozen page and toolbar refresh replaces it without mixing results', async ({ page }) => {
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
-  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
   await page.evaluate(() => (window as unknown as { __expireSyntheticSessions: () => void }).__expireSyntheticSessions());
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('请重新查询');
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.evaluate(() => (window as unknown as { __resetSyntheticSessions: () => void }).__resetSyntheticSessions());
-  await page.getByRole('button', { name: '重新查询', exact: true }).click();
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
@@ -195,7 +201,7 @@ test('sort and scope changes serialize release, clear obsolete values and releas
   await page.evaluate(() => (window as unknown as Bridge).__deferSyntheticSessions());
   await page.getByLabel('来源', { exact: true }).selectOption('');
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
-  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticSessions());
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls())).filter(c => c.command === 'close_query_snapshot').length).toBeGreaterThanOrEqual(3);
@@ -206,7 +212,7 @@ test('returning to sessions preserves sort and cached rows and automatically ren
   type Bridge = { __syntheticSessionCalls: () => { command: string }[]; __deferSyntheticSessions: () => void; __releaseSyntheticSessions: () => void };
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
   await page.getByLabel('会话排序').selectOption('total_desc');
-  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
   const before = await page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls().filter(call => call.command === 'close_query_snapshot').length);
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__syntheticSessionCalls().filter(call => call.command === 'close_query_snapshot').length)).toBe(before + 1);
@@ -214,12 +220,10 @@ test('returning to sessions preserves sort and cached rows and automatically ren
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '会话', exact: true }).click();
   await expect(page.getByLabel('会话排序')).toHaveValue('total_desc');
   await expect(page.locator('.session-table tbody tr')).toHaveCount(50);
-  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await expect(page.getByRole('heading', { name: '正在读取会话快照' })).toHaveCount(0);
-  await expect(page.getByRole('status').filter({ hasText: '重新查询' })).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: '页面顶部' })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__releaseSyntheticSessions());
-  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeEnabled();
 });
 
@@ -267,6 +271,7 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   type Bridge = { __syntheticSessionCalls: () => { command: string; args: { request?: { kind?: string } } }[]; __expireSyntheticTurns: () => void; __resetSyntheticTurns: () => void };
   await page.getByRole('button', { name: 'Synthetic 会话 0', exact: true }).click();
   const drawer = page.getByRole('dialog');
+  await expect(drawer.getByRole('button', { name: '重新读取回合' })).toHaveCount(0);
   const trigger = drawer.getByRole('button', { name: '查看回合' });
   await trigger.click();
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
@@ -276,20 +281,21 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   await expect(drawer.locator('.session-turn-cards [title="18,446,744,073,709,551,614"]')).toBeVisible();
   await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/session-turns-1280.png' });
-  await drawer.getByRole('button', { name: '重新读取回合' }).click(); await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeEnabled();
+  await drawer.getByRole('button', { name: '刷新详情' }).click(); await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeEnabled();
   await drawer.getByRole('button', { name: '下一页回合' }).click();
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(3);
   await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeDisabled();
   await drawer.getByRole('button', { name: '上一页回合' }).click();
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
-  await drawer.getByRole('button', { name: '重新读取回合' }).click();
+  await drawer.getByRole('button', { name: '刷新详情' }).click();
+  await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeEnabled();
   await page.evaluate(() => (window as unknown as Bridge).__expireSyntheticTurns());
   await drawer.getByRole('button', { name: '下一页回合' }).click();
   await expect(drawer.locator('.session-turn-list').getByRole('alert')).toContainText('请重新查询');
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
   await expect(drawer.getByRole('button', { name: '下一页回合' })).toBeDisabled();
   await page.evaluate(() => (window as unknown as Bridge).__resetSyntheticTurns());
-  await drawer.getByRole('button', { name: '重新读取回合' }).click();
+  await drawer.getByRole('button', { name: '刷新详情' }).click();
   await expect(drawer.locator('.session-turn-list').getByRole('alert')).toHaveCount(0);
   await page.setViewportSize({ width: 960, height: 680 });
   await drawer.locator('.session-turn-list').scrollIntoViewIfNeeded();

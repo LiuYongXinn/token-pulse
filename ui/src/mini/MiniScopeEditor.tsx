@@ -57,12 +57,12 @@ export function MiniScopeEditor({ usage, onSaved, onClose }: { usage: MiniUsageS
       <label className="mini-search-label">固定会话<input aria-label="搜索小窗会话" value={search} disabled={busy} autoComplete="off" placeholder="搜索已登记会话" onChange={e => setSearch(e.target.value)} /></label>
       {session !== null && <p className="mini-selected">当前选择：{name}</p>}
       {!validSearch ? <p className="mini-editor-error" role="alert">搜索最多 256 个字符，不能含控制字符。</p> : !ready ? <p className="mini-editor-note">正在准备搜索…</p> : <>
-        {candidates.error && <p className="mini-editor-error" role="alert">{candidates.error}</p>}
+        {candidates.error && <p className="mini-editor-error" role="alert">{candidates.error} 关闭后重新打开范围选择可重试。</p>}
         <div className="mini-options" role="listbox" aria-label="小窗会话候选">{candidates.options.map(option => <button key={option.session_key} role="option" className={session === option.session_key ? 'mini-option selected' : 'mini-option'} aria-selected={session === option.session_key} disabled={busy} onClick={() => { setSession(option.session_key); setName(option.display_name); }}><span>{option.display_name}</span><small>{option.session_key.slice(0, 12)}</small></button>)}</div>
         {candidates.loading && <p className="mini-editor-note" role="status">正在读取会话…</p>}
         {!candidates.loading && !candidates.error && candidates.options.length === 0 && <p className="mini-editor-note">没有匹配的已登记会话。</p>}
         {candidates.limited && <p className="mini-editor-note">已显示 1,000 项，请缩小搜索。</p>}
-        <div className="mini-picker-actions">{candidates.more && <button disabled={busy || candidates.loading} onClick={candidates.loadMore}>加载更多会话</button>}<button disabled={busy || candidates.loading} onClick={candidates.reload}>重新查询会话</button></div>
+        {candidates.more && <div className="mini-picker-actions"><button disabled={busy || candidates.loading} onClick={candidates.loadMore}>加载更多会话</button></div>}
       </>}
       {session !== null && <div className="mini-start-editor"><label>消耗起点<select aria-label="小窗消耗起点" value={startMode} disabled={busy} onChange={e => setStartMode(e.target.value as 'today' | 'fixed')}><option value="today">今日 00:00（统计时区）</option><option value="fixed">自选固定起点（UTC）</option></select></label>{startMode === 'fixed' && <label>固定起点（UTC）<input type="datetime-local" step="0.001" aria-label="小窗固定起点（UTC）" value={start} disabled={busy} onChange={e => setStart(e.target.value)} /></label>}<p className="mini-editor-note">{startMode === 'today' ? `每天按 ${base.range.timezone} 零点更新。` : '固定起点跨午夜保留。'}</p></div>}
       <p className="mini-editor-note">当前范围起点 {whenFull(base.range.start_ms, base.range.timezone)}</p>

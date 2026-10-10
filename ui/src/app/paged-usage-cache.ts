@@ -16,7 +16,7 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
   private readAt = 0;
   private openedAt = 0;
   private invalidation = 0;
-  private pendingReplacement = false;
+  private pendingReplacement: 'first_page' | 'all_pages' | null = null;
   private restorationTried = false;
   refreshRevision: number | null = null;
   used = Date.now();
@@ -46,10 +46,12 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
     }
   }
   dispose() { this.disposed = true; this.publish({ pages: [], index: 0, error: null }); this.enqueue(() => this.release()); }
-  invalidate() {
+  invalidate(replacePages = false) {
     ++this.invalidation;
-    if (this.value.pages.length > 1 || this.value.firstNumber > 1) this.publish({ updateAvailable: true });
-    else if (this.value.loading) this.pendingReplacement = true;
+    if (!replacePages && (this.value.pages.length > 1 || this.value.firstNumber > 1)) this.publish({ updateAvailable: true });
+    else if (this.value.loading) {
+      if (replacePages || this.pendingReplacement !== 'all_pages') this.pendingReplacement = replacePages ? 'all_pages' : 'first_page';
+    }
     else if (this.owners.size && !document.hidden) this.reload();
     else this.publish({ updateAvailable: true });
   }
@@ -95,7 +97,7 @@ export class PagedUsage<Query extends { page_size: number }, Page extends Snapsh
       finally {
         if (!this.disposed) {
           this.publish({ loading: false });
-          if (this.pendingReplacement && this.value.pages.length <= 1) { this.pendingReplacement = false; this.reload(); }
+          if (this.pendingReplacement === 'all_pages' || (this.pendingReplacement === 'first_page' && this.value.pages.length <= 1)) { this.pendingReplacement = null; this.reload(); }
         }
       }
     }, () => this.foreground, () => !this.disposed, 'lease');

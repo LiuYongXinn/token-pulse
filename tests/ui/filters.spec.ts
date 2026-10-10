@@ -108,15 +108,17 @@ test('switching and dismissing candidates releases the exact old capability befo
   expect(commands).toEqual(['get_filter_options','close_query_snapshot','get_filter_options','close_query_snapshot']);
 });
 
-test('expired continuation never appends a new snapshot and requery replaces old candidates', async ({ page }) => {
+test('expired continuation preserves candidates and reopening automatically queries a fresh snapshot', async ({ page }) => {
   await page.getByRole('combobox', { name: '模型', exact: true }).click();
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await page.evaluate(() => (window as unknown as { __expireFacet: () => void }).__expireFacet());
   await page.getByRole('button', { name: '加载下一页' }).click();
-  await expect(page.getByRole('alert')).toHaveText('请重新查询以继续查看记录。');
+  await expect(page.getByRole('alert')).toContainText('关闭后重新打开筛选可重试');
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
   await expect(page.getByRole('option', { name: /Synthetic Beta/ })).toHaveCount(0);
-  await page.getByRole('button', { name: '重新查询', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('combobox', { name: '模型', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(2);
 });

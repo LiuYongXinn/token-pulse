@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { DashboardRequest, MatchedPrice, RawUsageVector, RequestInputEvidence, UsageEventRow, UsageEventSort, UsageEventsPage, UsageEventsQuery } from '../shared/generated/contracts';
 import { compactTokens, fullTokens, money, rawTokens } from '../shared/format';
 import { closeQuerySnapshot, queryUsageEvents } from '../shared/runtime';
@@ -60,12 +60,6 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
   const [sort, setSort] = useState<UsageEventSort>('time_desc');
   const [size, setSize] = useState(50);
   const pager = usePagedUsage({ filter: request.filter, price_basis: request.price_basis, sort, page_size: size }, refreshRevision, adapter, !active);
-  const lastRefresh = useRef(refreshRevision);
-  useEffect(() => {
-    // An explicit toolbar refresh also replaces a snapshot with multiple pages.
-    if (lastRefresh.current !== refreshRevision) pager.reload();
-    lastRefresh.current = refreshRevision;
-  }, [refreshRevision, pager.reload]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const page = pager.page;
   const scope = JSON.stringify([page?.meta.snapshot_id, pager.pageNumber]);
