@@ -108,20 +108,20 @@ fn authoritative_empty_map_legacy_fallback_and_malformed_bucket_identity_are_dis
     );
 }
 #[test]
-fn account_detection_does_not_turn_api_key_or_an_unknown_provider_into_quota() {
+fn account_detection_allows_capability_probe_for_any_authentication_type() {
     assert_eq!(
         account_availability(&json!({"requiresOpenaiAuth":true,"account":null})).unwrap(),
         AccountAvailability::AuthorizationRequired
     );
     assert_eq!(
         account_availability(&json!({"requiresOpenaiAuth":false,"account":null})).unwrap(),
-        AccountAvailability::Unsupported
+        AccountAvailability::QuotaEligible
     );
     for kind in ["apiKey", "amazonBedrock", "futureAuth"] {
         assert_eq!(
             account_availability(&json!({"requiresOpenaiAuth":true,"account":{"type":kind}}))
                 .unwrap(),
-            AccountAvailability::Unsupported
+            AccountAvailability::QuotaEligible
         );
     }
     assert_eq!(account_availability(&json!({"requiresOpenaiAuth":true,"account":{"type":"chatgpt","planType":"pro","email":"synthetic@example.test"}})).unwrap(),AccountAvailability::QuotaEligible);

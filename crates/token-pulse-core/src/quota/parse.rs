@@ -37,11 +37,12 @@ pub fn account_availability(result: &Value) -> Result<AccountAvailability, Error
         None | Some(Value::Null) => Ok(if requires {
             AccountAvailability::AuthorizationRequired
         } else {
-            AccountAvailability::Unsupported
+            AccountAvailability::QuotaEligible
         }),
         Some(Value::Object(account)) => match account.get("type").and_then(Value::as_str) {
-            Some("chatgpt") => Ok(AccountAvailability::QuotaEligible),
-            Some(_) => Ok(AccountAvailability::Unsupported),
+            // Authentication labels may evolve. The rate-limits RPC determines support.
+            Some(kind) if !kind.is_empty() => Ok(AccountAvailability::QuotaEligible),
+            Some(_) => Err(ErrorCode::QuotaProtocolError),
             None => Err(ErrorCode::QuotaProtocolError),
         },
         _ => Err(ErrorCode::QuotaProtocolError),

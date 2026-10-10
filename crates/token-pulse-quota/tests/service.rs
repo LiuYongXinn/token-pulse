@@ -148,7 +148,7 @@ fn owner_drives_handshake_account_query_and_independent_bucket_selection() {
     assert!(changes.load(Ordering::Relaxed) >= 5);
 }
 #[test]
-fn unauthorized_and_api_key_modes_never_fake_quota_or_issue_a_quota_query() {
+fn authorization_and_actual_quota_capability_errors_never_fake_quota() {
     for (mode, state, code) in [
         (
             "auth-required",
@@ -180,6 +180,16 @@ fn unauthorized_and_api_key_modes_never_fake_quota_or_issue_a_quota_query() {
         assert_eq!(snapshot.error_code, Some(code.to_string()));
         assert_eq!(service.refresh().err(), Some(code));
     }
+}
+#[test]
+fn future_account_type_uses_actual_rate_limits_capability() {
+    let (_home, native) = spec("future-account");
+    let (service, _) = start();
+    let initial = service.snapshot().unwrap();
+    service.connect(native, &initial.connection_epoch).unwrap();
+    let snapshot = wait(&service, |s| matches!(s.state, QuotaState::Ready));
+    assert!(!snapshot.windows.is_empty());
+    assert!(snapshot.fetched_at_ms.is_some());
 }
 #[test]
 fn account_changed_drops_old_values_and_unproven_new_notifications() {

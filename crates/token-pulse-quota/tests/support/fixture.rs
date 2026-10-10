@@ -96,6 +96,10 @@ fn main() {
                     send(
                         json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":{"type":"apiKey", "secret":"SECRET"}}}),
                     );
+                } else if mode == "future-account" {
+                    send(
+                        json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":{"type":"futureAuth"}}}),
+                    );
                 } else if mode != "silent" {
                     send(
                         json!({"id":request["id"],"result":{"requiresOpenaiAuth":true,"account":{"type":"chatgpt", "email":"SECRET", "token":"SECRET"}}}),
@@ -104,12 +108,18 @@ fn main() {
             }
             "account/rateLimits/read" => {
                 assert!(
-                    mode != "auth-required" && mode != "unsupported-account",
+                    mode != "auth-required",
                     "must not query quota without an eligible account"
                 );
                 assert!(request.get("params").is_none());
                 limits_reads += 1;
                 match mode.as_str() {
+                    "unsupported-account" => {
+                        send(
+                            json!({"id":request["id"],"error":{"code":-32601,"message":"Unsupported method"}}),
+                        );
+                        continue;
+                    }
                     "silent" => continue,
                     "malformed" => {
                         io::stdout().write_all(b"not JSON SECRET\n").unwrap();
