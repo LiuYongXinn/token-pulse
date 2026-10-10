@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { DashboardRequest, MatchedPrice, RawUsageVector, RequestInputEvidence, UsageEventRow, UsageEventSort, UsageEventsPage, UsageEventsQuery } from '../shared/generated/contracts';
 import { compactTokens, fullTokens, money, rawTokens } from '../shared/format';
 import { closeQuerySnapshot, queryUsageEvents } from '../shared/runtime';
@@ -60,6 +60,12 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
   const [sort, setSort] = useState<UsageEventSort>('time_desc');
   const [size, setSize] = useState(50);
   const pager = usePagedUsage({ filter: request.filter, price_basis: request.price_basis, sort, page_size: size }, refreshRevision, adapter, !active);
+  const lastRefresh = useRef(refreshRevision);
+  useEffect(() => {
+    // An explicit toolbar refresh also replaces a snapshot with multiple pages.
+    if (lastRefresh.current !== refreshRevision) pager.reload();
+    lastRefresh.current = refreshRevision;
+  }, [refreshRevision, pager.reload]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const page = pager.page;
   const scope = JSON.stringify([page?.meta.snapshot_id, pager.pageNumber]);
@@ -67,9 +73,9 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
   const pages = page ? (BigInt(page.summary.usage_event_count) + BigInt(size) - 1n) / BigInt(size) : 0n;
   if (!active) return null;
   return <>
-    <div className="session-toolbar"><div><label>排序 <select aria-label="明细排序" value={sort} onChange={e => setSort(e.target.value as UsageEventSort)}><option value="time_desc">最近发生</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="明细每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div><button disabled={pager.loading} onClick={pager.reload}>重新查询</button></div>
+    <div className="session-toolbar"><div><label>排序 <select aria-label="明细排序" value={sort} onChange={e => setSort(e.target.value as UsageEventSort)}><option value="time_desc">最近发生</option><option value="total_desc">消耗最多</option></select></label><label>每页 <select aria-label="明细每页数量" value={size} onChange={e => setSize(Number(e.target.value))}>{[50,100,200].map(n => <option key={n} value={n}>{n} 条</option>)}</select></label></div></div>
     {pager.error && <div className="notice" role="alert">{pager.error}{page && <span>保留上次读取的明细。</span>}</div>}
-    {!pager.loading && (pager.renewal || pager.updateAvailable) && page && <p className="notice" role="status">{pager.updateAvailable ? '有新记录，点击“重新查询”更新列表。' : '点击“重新查询”后可继续查看记录。'}</p>}
+    {!pager.loading && (pager.renewal || pager.updateAvailable) && page && <p className="notice" role="status">{pager.updateAvailable ? '有新记录，点击页面顶部“刷新”更新列表。' : '点击页面顶部“刷新”后可继续查看记录。'}</p>}
     {!page ? <PendingStatistics label="明细" columns={['记录时间 / 会话', '项目 / 模型', '输入 / 缓存', '输出 / 推理', '总量', '估算', '依据']} /> : <>
       <section className="group-stat-strip" aria-label="明细统计汇总"><div><p className="metric-label">范围内 Token</p><strong className="group-total" aria-label={`${fullTokens(page.summary.total_tokens)} Token`} title={fullTokens(page.summary.total_tokens)}>{compactTokens(page.summary.total_tokens)}</strong></div><div><p className="metric-label">估算费用</p><Cost pricing={page.pricing} /></div><div><p className="metric-label">用量记录</p><strong className="group-total">{fullTokens(page.summary.usage_event_count)}</strong></div></section>
       {page.events.length === 0 ? <section className="panel group-empty"><h2>当前筛选暂无用量事件</h2></section> : <div className="event-table-wrap"><table className="event-table" aria-label="用量明细"><thead><tr><th>记录时间 / 会话</th><th>项目 / 模型</th><th>输入 / 缓存</th><th>输出 / 推理</th><th>总量</th><th>估算</th><th>依据</th></tr></thead><tbody>{page.events.map(row => {
@@ -77,7 +83,7 @@ export function EventsPage({ request, refreshRevision, onSession, active = true 
         return <Fragment key={row.event_id}><tr><td><time dateTime={new Date(row.occurred_at_ms).toISOString()} title={new Date(row.occurred_at_ms).toISOString()}>{whenExact(row.occurred_at_ms, timezone)}</time><button className="text-button" onClick={() => onSession(row.session_key, row.session_display_name)}>{row.session_display_name}</button></td><td><strong>{row.project_display_name ?? '未知项目'}</strong><small>{row.model ?? '未知模型'}{row.provider ? ` · ${row.provider}` : ''}</small></td><td className="numeric">{rawTokens(row.usage.input_total)}<small>缓存 {rawTokens(row.usage.cached_input)}</small><small>写入 {rawTokens(row.usage.cache_write_input)}</small></td><td className="numeric">{rawTokens(row.usage.output_total)}<small>推理 {rawTokens(row.usage.reasoning_output)}</small></td><td className="numeric" title={fullTokens(row.total_tokens)}>{compactTokens(row.total_tokens)}</td><td><EventCost row={row} /></td><td><button className="text-button" aria-expanded={open} aria-label={`查看 ${row.event_id} 核算依据`} onClick={() => setExpanded(open ? null : expandedKey)}>{open ? '收起' : '查看依据'}</button></td></tr>{open && <tr className="event-evidence-row"><td colSpan={7}><Evidence row={row} /></td></tr>}</Fragment>;
       })}</tbody></table></div>}
       <div className="session-pagination" aria-label="明细分页"><span>第 {pager.pageNumber} 页{pages === 0n ? '' : ` / ${fullTokens(pages.toString())} 页`} · 本页 {page.events.length} 条{pager.loading ? ' · 正在读取…' : ''}</span><div><button disabled={!pager.hasPrevious || pager.loading} onClick={pager.previous}>上一页</button><button disabled={!pager.hasNext || pager.loading} onClick={pager.next}>下一页</button></div></div>
-      {pager.trimmed && <p className="group-footnote">查看更早页面请重新查询。</p>}
+      {pager.trimmed && <p className="group-footnote">查看更早页面请点击页面顶部“刷新”。</p>}
     </>}
   </>;
 }

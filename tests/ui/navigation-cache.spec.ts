@@ -135,14 +135,14 @@ test('delayed and failed same-scope refreshes retain content while a new date cl
   for (const name of ['会话', '明细']) {
     await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name, exact: true }).click();
     await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());
-    await page.getByRole('button', { name: '重新查询', exact: true }).click();
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
     await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: /正在读取/ })).toHaveCount(0);
     await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.release());
-    await expect(page.getByRole('button', { name: '重新查询', exact: true })).toBeEnabled();
+    await expect.poll(async () => page.evaluate(() => (window as unknown as QA).__navigationCacheQA.inFlight())).toBe(0);
   }
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.fail());
-  await page.getByRole('button', { name: '重新查询', exact: true }).click();
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Synthetic background read failed');
   await expect(page.getByLabel('777 Token', { exact: true })).toBeVisible();
   await page.evaluate(() => (window as unknown as QA).__navigationCacheQA.hold());

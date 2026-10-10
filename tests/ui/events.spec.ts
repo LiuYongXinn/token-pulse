@@ -62,26 +62,32 @@ test.beforeEach(async ({ page }) => {
 test('slow refresh and foreground return do not keep asking to requery', async ({ page }) => {
   type Bridge = { __holdEventReads: () => void; __releaseEventReads: () => void; __eventCalls: () => { command: string; request: { kind?: string } }[] };
   const rows = page.locator('.event-table>tbody>tr');
-  const reload = page.getByRole('button', { name: '重新查询', exact: true });
-  const notice = page.getByRole('status').filter({ hasText: '重新查询' });
-  await expect(rows).toHaveCount(50); await expect(reload).toBeEnabled();
+  const reload = page.getByRole('button', { name: '刷新', exact: true });
+  const notice = page.getByRole('status').filter({ hasText: '页面顶部' });
+  const next = page.getByRole('button', { name: '下一页', exact: true });
+  await expect(page.getByRole('button', { name: '重新查询', exact: true })).toHaveCount(0);
+  await expect(rows).toHaveCount(50); await expect(next).toBeEnabled();
   await page.evaluate(() => (window as unknown as Bridge).__holdEventReads());
   await reload.click();
-  await expect(reload).toBeDisabled();
+  await expect(next).toBeDisabled();
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length)).toBeGreaterThan(0);
   await expect(notice).toHaveCount(0); await expect(rows).toHaveCount(50);
   await page.evaluate(() => (window as unknown as Bridge).__releaseEventReads());
-  await expect(reload).toBeEnabled(); await expect(notice).toHaveCount(0);
+  await expect(next).toBeEnabled(); await expect(notice).toHaveCount(0);
   const closed = await page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length);
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '模型', exact: true }).click();
   await expect.poll(async () => page.evaluate(() => (window as unknown as Bridge).__eventCalls().filter(call => call.command === 'close_query_snapshot' && call.request.kind === 'usage_events').length)).toBeGreaterThan(closed);
   await page.evaluate(() => (window as unknown as Bridge).__holdEventReads());
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '明细', exact: true }).click();
-  await expect(reload).toBeDisabled(); await expect(rows).toHaveCount(50); await expect(notice).toHaveCount(0);
+  await expect(next).toBeDisabled(); await expect(rows).toHaveCount(50); await expect(notice).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__releaseEventReads());
-  await expect(reload).toBeEnabled(); await expect(notice).toHaveCount(0);
+  await expect(next).toBeEnabled(); await expect(notice).toHaveCount(0);
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(rows).toHaveCount(3);
+  await reload.click();
+  await expect(rows).toHaveCount(50);
+  await expect(next).toBeEnabled();
+  await expect(page.getByLabel('明细分页')).toContainText('第 1 页');
 });
 
 test('events retain precise vectors, unknown values, true zero price and stable pagination', async ({ page }) => {
@@ -98,7 +104,7 @@ test('events retain precise vectors, unknown values, true zero price and stable 
   await expect(evidence).toContainText('USD 9.007199254740993');
   await expect(evidence).toContainText('synthetic-rule'); await expect(evidence).toContainText('最后用量（累计基线已核对）');
   await page.screenshot({ path: 'test-results/event-evidence-1280.png' });
-  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(3); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '上一页', exact: true }).click();
@@ -142,12 +148,12 @@ test('request input stays distinct from consumption, shows true zero and unknown
 test('expired or mismatched continuations never append fresh data to a frozen event page', async ({ page }) => {
   type Bridge = { __badEventPage: (value: 'expired' | 'mismatch' | null) => void };
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
-  await page.getByRole('button', { name: '重新查询', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); await expect(page.getByRole('status').filter({ hasText: '续页租约' })).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage('mismatch'));
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('明细列表已变化');
   await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50); await expect(page.getByRole('button', { name: '下一页', exact: true })).toBeDisabled();
-  await page.evaluate(() => (window as unknown as Bridge).__badEventPage(null)); await page.getByRole('button', { name: '重新查询', exact: true }).click();
+  await page.evaluate(() => (window as unknown as Bridge).__badEventPage(null)); await page.getByRole('button', { name: '刷新', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await page.evaluate(() => (window as unknown as Bridge).__badEventPage('expired')); await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('请重新查询'); await expect(page.locator('.event-table>tbody>tr')).toHaveCount(50);
