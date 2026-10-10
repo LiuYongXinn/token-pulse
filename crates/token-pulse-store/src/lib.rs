@@ -26,10 +26,10 @@ pub mod revalue_service;
 pub mod rollup;
 pub mod rollup_service;
 pub mod session_titles;
-pub mod turn_timings;
 pub mod settings;
 pub mod source_management;
 pub mod source_scan;
+pub mod turn_timings;
 #[cfg(test)]
 mod usage_revision_tests;
 pub mod valuation;
