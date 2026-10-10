@@ -1,5 +1,9 @@
 # 文档索引
 
+首次使用从[使用指南](development/user-guide.md)开始；遇到问题看[常见问题](development/faq.md)；参与开发看[贡献指南](development/contributing.md)。项目介绍与下载入口见[仓库首页](../README.md)。
+
+本文按需求、设计、开发与维护三个类别收录现有文档。设计原型和历史验收记录可能描述此前版本，当前功能与发布状态以实际应用及发布记录为准。
+
 ## 需求
 
 - [默认参考费用估算](requirements/reference-estimates.md)：实际模式未知时继续估算，说明默认价格与缺失条件的假设。
@@ -27,6 +31,10 @@
 - [Windows 任务栏显示模式](design/taskbar-display.md)：类似 TrafficMonitor 的常驻读数、悬停详情、原生宿主、系统适配与失败回退。
 
 ## 开发与维护
+
+- [使用指南](development/user-guide.md)：安装、来源配置、统计、小窗、任务栏、账户额度、费用和更新。
+- [常见问题](development/faq.md)：没有数据、分项口径、未计价、额度、隐私、数据位置与问题反馈。
+- [贡献与开发指南](development/contributing.md)：新检出环境、项目工具缓存、运行构建、验证、提交与文档约定。
 
 - [发布与更新包](development/releases.md)：版本与源码标签、Windows 构建、版本绑定签名、Release 附件和匿名下载核验。
 
