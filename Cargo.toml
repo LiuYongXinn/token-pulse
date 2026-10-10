@@ -3,7 +3,7 @@ members = ["src-tauri", "crates/token-pulse-core", "crates/token-pulse-store", "
 resolver = "2"
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 license = "MIT"
 rust-version = "1.85"

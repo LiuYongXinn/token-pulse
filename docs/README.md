@@ -28,6 +28,8 @@
 
 ## 开发与维护
 
+- [发布与更新包](development/releases.md)：版本与源码标签、Windows 构建、版本绑定签名、Release 附件和匿名下载核验。
+
 - [项目限制审查](development/restriction-audit.md)：版本与盘符拦截、来源和列表容量、解析兼容性、必要边界及整改顺序。
 
 - [项目目录内的数据与工具缓存](development/project-local-storage.md)：数据、WebView、临时文件、工具缓存和现有数据迁移的路径约定。

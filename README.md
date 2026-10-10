@@ -2,7 +2,7 @@
 
 TokenPulse 是独立运行的 Codex 本地用量统计桌面工具，包含桌面悬浮小窗、Windows 任务栏显示模式、完整统计窗口和常驻后台采集器。
 
-当前发布版本为 [1.0.0](https://github.com/LiuYongXinn/token-pulse/releases/tag/v1.0.0)，提供 Windows x64 安装包和版本绑定的更新签名，包含当前统计查询优化、银雾 UI、悬浮窗显示切换与 Windows 任务栏显示改进。
+当前发布版本为 [1.0.1](https://github.com/LiuYongXinn/token-pulse/releases/tag/v1.0.1)，提供 Windows x64 安装包和版本绑定的更新签名，包含本地盘符兼容、完整分组分页、大标题索引增量读取、来源轮次时间、悬浮窗透明度与账户检测改进。发布流程见[发布与更新包](docs/development/releases.md)。
 
 此前 0.1.10 已在本机 Windows 10 完成签名安装、真实双屏 / 四档 DPI 检查点与混合 DPI 拖动、任务栏透明读数和真实输入验收。匿名下载 / 版本绑定验签、正式应用 0.1.9→0.1.10 线上升级、正常退出 / 自动启动、15,977 条既有消费事件及核对旧行保留、最新版本检查已通过；普通卸载沿用已完成的独立验收。这些历史验收不等于 1.0.0 的本机安装与 UI 复测。物理拔线、实际账户身份变化 / 到期重置、缺失 WebView2 安装等外部场景仍明确未验。开发与运行命令见[本地开发](docs/development/local-development.md)，具体已验 / 未验范围见[交付记录](docs/development/delivery-status.md)。
 
