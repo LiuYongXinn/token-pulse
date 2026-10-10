@@ -121,7 +121,6 @@ pub struct UsageEventRow {
     pub provider: Option<String>,
     pub project_id: Option<String>,
     pub project_display_name: Option<String>,
-    #[schemars(length(max = 32))]
     pub source_ids: Vec<String>,
     pub turn_id: Option<String>,
     pub total_tokens: DecimalInt,

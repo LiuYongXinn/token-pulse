@@ -68,9 +68,6 @@ impl Database {
         // Resolve filesystem identity before entering the Writer or acquiring a database transaction.
         let additions = match &mutation {
             SourceMutation::Add(candidates) => {
-                if candidates.len() > 32 {
-                    return Err(ErrorCode::InvalidQuery.into());
-                }
                 let mut result = vec![];
                 for candidate in candidates {
                     validate_root(&candidate.root, candidate.origin)?;
@@ -98,7 +95,6 @@ impl Database {
                     for (root,directory_identity,origin) in additions {
                         let existing:Option<(String,bool)>=tx.query_row("SELECT source_id,enabled FROM sources WHERE provider='codex' AND directory_identity=?1",[&directory_identity],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
                         if existing.is_some() {continue;}
-                        let count:i64=tx.query_row("SELECT COUNT(*) FROM sources",[],|r|r.get(0))?;if count>=32 {return Err(ErrorCode::InvalidQuery.into());}
                         let source_id=format!("source-{:x}",Sha256::digest(directory_identity.as_bytes()));
                         let config=encoded(origin,false,SourceCapabilities::default())?;
                         let kind=if origin==SourceOrigin::Wsl {"wsl"} else {"local"};

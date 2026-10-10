@@ -1,5 +1,54 @@
 use token_pulse_core::sources::*;
 use token_pulse_store::{Database, ErrorCode, source_management::SourceMutation};
+
+#[test]
+fn active_and_removed_source_history_does_not_exhaust_addition_capacity() {
+    let data = tempfile::tempdir().unwrap();
+    let logs = tempfile::tempdir().unwrap();
+    let db = Database::open(data.path()).unwrap();
+    let candidates = (0..40)
+        .map(|index| {
+            let root = logs.path().join(format!("home-{index}"));
+            std::fs::create_dir(&root).unwrap();
+            SourceCandidate {
+                root,
+                origin: SourceOrigin::Custom,
+            }
+        })
+        .collect();
+    let revision = db.sources_snapshot().unwrap().settings_revision.value() as i64;
+    db.mutate_sources(SourceMutation::Add(candidates), revision, 1)
+        .unwrap();
+    let active = db.sources_snapshot().unwrap();
+    assert_eq!(active.sources.len(), 40);
+    for source in active.sources {
+        let revision = db.sources_snapshot().unwrap().settings_revision.value() as i64;
+        db.mutate_sources(SourceMutation::RetainRemove(source.source_id), revision, 2)
+            .unwrap();
+    }
+    let root = logs.path().join("new-home");
+    std::fs::create_dir(&root).unwrap();
+    let revision = db.sources_snapshot().unwrap().settings_revision.value() as i64;
+    db.mutate_sources(
+        SourceMutation::Add(vec![SourceCandidate {
+            root,
+            origin: SourceOrigin::Custom,
+        }]),
+        revision,
+        3,
+    )
+    .unwrap();
+    let after = db.sources_snapshot().unwrap();
+    assert_eq!(after.sources.len(), 41);
+    assert_eq!(
+        after.sources.iter().filter(|source| source.removed).count(),
+        40
+    );
+    assert_eq!(
+        after.sources.iter().filter(|source| source.enabled).count(),
+        1
+    );
+}
 #[test]
 fn source_configuration_revisions_capabilities_and_retained_history_are_independent() {
     let data = tempfile::tempdir().unwrap();

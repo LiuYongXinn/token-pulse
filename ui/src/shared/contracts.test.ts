@@ -133,7 +133,7 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '-1', binding: 'full_request' } }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '272001', binding: 'guessed_from_window' } }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, request_input: { input_tokens: '272001', binding: 'full_request', response_id: 'private' } }] })).toBe(false);
-  expect(validateEvents({ ...eventPage, events: [{ ...event, source_ids: Array(33).fill('synthetic') }] })).toBe(false);
+  expect(validateEvents({ ...eventPage, events: [{ ...event, source_ids: Array.from({ length: 40 }, (_, index) => `source-${index}`) }] })).toBe(true);
   expect(validateEvents({ ...eventPage, events: [{ ...event, quality_flags: Array(17).fill('synthetic') }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: [{ ...event, normalized_json: '{}' }] })).toBe(false);
   expect(validateEvents({ ...eventPage, events: Array(201).fill(event) })).toBe(false);

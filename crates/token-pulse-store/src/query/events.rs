@@ -78,7 +78,7 @@ fn rows(
         String::new()
     };
     values.push(Value::Integer(i64::from(query.page_size) + 1));
-    let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY LIMIT 33))";
+    let sources = "(SELECT json_group_array(source_id) FROM (SELECT DISTINCT sf.source_id AS source_id FROM event_provenance ep JOIN observations po ON po.observation_id=ep.observation_id JOIN file_generations fg ON fg.file_generation_id=po.file_generation_id JOIN source_files sf ON sf.file_id=fg.file_id WHERE ep.event_id=e.event_id ORDER BY sf.source_id COLLATE BINARY))";
     // Extract only normalized token vectors. Never return normalized JSON,
     // prompts, cwd, authentication or arbitrary fields to the renderer.
     let sql = format!(
@@ -121,9 +121,6 @@ fn rows(
         }
         let source_ids: Vec<String> =
             serde_json::from_str(&row.get::<_, String>(19)?).map_err(|_| ErrorCode::DbCorrupt)?;
-        if source_ids.len() > 32 {
-            return Err(ErrorCode::DbCorrupt.into());
-        }
         for source in &source_ids {
             key(source)?;
         }

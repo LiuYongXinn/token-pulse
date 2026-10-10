@@ -17703,7 +17703,6 @@
               "items": {
                 "type": "string"
               },
-              "maxItems": 32,
               "type": "array"
             },
             "total_tokens": {
@@ -19501,7 +19500,6 @@
               "items": {
                 "type": "string"
               },
-              "maxItems": 32,
               "type": "array"
             },
             "total_tokens": {
@@ -20115,7 +20113,6 @@
           "items": {
             "type": "string"
           },
-          "maxItems": 32,
           "type": "array"
         },
         "total_tokens": {
@@ -21007,7 +21004,6 @@
               "items": {
                 "type": "string"
               },
-              "maxItems": 32,
               "type": "array"
             },
             "total_tokens": {
