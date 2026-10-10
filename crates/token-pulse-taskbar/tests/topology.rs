@@ -34,11 +34,10 @@ fn reservation_uses_measured_pixels_and_preserves_disjoint_system_regions_at_fou
     }
 }
 #[test]
-fn unknown_build_vertical_invalid_dpi_overlap_and_extra_gap_do_not_get_a_plan() {
-    for kind in 0..7 {
+fn vertical_invalid_dpi_overlap_and_extra_gap_do_not_get_a_plan() {
+    for kind in 1..7 {
         let mut topology = topology(96);
         match kind {
-            0 => topology.build = 26100,
             1 => topology.dpi = 0,
             2 => topology.taskbar.right = topology.taskbar.left + 20,
             3 => topology.notification.left -= 1,
@@ -47,6 +46,41 @@ fn unknown_build_vertical_invalid_dpi_overlap_and_extra_gap_do_not_get_a_plan() 
             _ => topology.task_switch.left = i32::MIN,
         }
         assert!(topology.plan(360, 320).is_err());
+    }
+}
+#[test]
+fn compatible_geometry_can_reserve_both_positions_on_any_build() {
+    use token_pulse_taskbar::windows::buttons::ButtonCoverage;
+    // These are compatible-layout fixtures, not native OS acceptance results.
+    for build in [17763, 19044, 19045, 22000, 22631, 26100, 99999] {
+        for dpi in [96, 120, 144, 192] {
+            let mut topology = topology(dpi);
+            topology.build = build;
+            let scale = |value: i32| value * dpi as i32 / 96;
+            let coverage = ButtonCoverage {
+                list: topology.task_list,
+                occupied: vec![ScreenRect {
+                    right: topology.task_list.left + scale(420),
+                    ..topology.task_list
+                }],
+            };
+            for plan in [
+                topology.plan(scale(360), scale(320)),
+                topology.plan_application_right(scale(360), scale(320), &coverage),
+            ] {
+                let plan =
+                    plan.unwrap_or_else(|error| panic!("build {build}, dpi {dpi}: {error:?}"));
+                assert_eq!(plan.host.width(), scale(360));
+                assert!(plan.remaining_task_switch.width() >= scale(320));
+                assert_eq!(plan.remaining_task_switch.right, plan.host.left);
+                assert!(plan.host.right <= topology.notification.left);
+            }
+            topology.notification.left -= 1;
+            assert_eq!(
+                topology.plan(scale(360), scale(320)),
+                Err(ProbeError::UnsafeGeometry)
+            );
+        }
     }
 }
 #[test]

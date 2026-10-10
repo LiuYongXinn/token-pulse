@@ -156,7 +156,6 @@ fn notification_resize_restoration(
         || !record.original.valid()
         || !record.expected.valid()
         || actual.build != reference.build
-        || reference.build != 19045
         || actual.dpi != record.dpi
         || reference.dpi != record.dpi
         || current != record.expected
@@ -953,6 +952,31 @@ mod tests {
             })
         );
         assert_eq!(actual.notification.left, 2311);
+    }
+
+    #[test]
+    fn notification_resize_restores_matching_geometry_on_any_build() {
+        // Synthetic compatible geometry: this verifies build-independent recovery,
+        // not the Explorer structure of an operating system we have not run.
+        for build in [17763, 19044, 19045, 22000, 22631, 26100, 99999] {
+            let (record, mut reference, mut actual, parent) = notification_resize_fixture();
+            reference.build = build;
+            actual.build = build;
+            assert_eq!(
+                notification_resize_restoration(
+                    record,
+                    &reference,
+                    record.expected,
+                    parent,
+                    &actual
+                ),
+                Some(ScreenRect {
+                    right: parent.right,
+                    ..record.original
+                }),
+                "build {build}"
+            );
+        }
     }
 
     #[test]

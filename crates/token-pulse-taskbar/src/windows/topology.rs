@@ -137,9 +137,6 @@ impl TaskbarTopology {
         })
     }
     pub fn validate(&self) -> Result<(), ProbeError> {
-        if self.build != 19045 {
-            return Err(ProbeError::UnsupportedVersion);
-        }
         if !(96..=768).contains(&self.dpi)
             || ![
                 self.taskbar,
@@ -395,6 +392,7 @@ fn hidden_root_for_inspection(root: HWND) -> Result<bool, ProbeError> {
     }
 }
 pub(crate) struct TaskbarWindows {
+    build: u32,
     pub(crate) root: HWND,
     pub(crate) rebar: HWND,
     pub(crate) switch: HWND,
@@ -471,7 +469,7 @@ impl TaskbarWindows {
     pub(crate) fn topology(&self) -> Result<TaskbarTopology, ProbeError> {
         self.verify()?;
         Ok(TaskbarTopology {
-            build: 19045,
+            build: self.build,
             dpi: unsafe { GetDpiForWindow(self.root) },
             taskbar: rect(self.root)?,
             rebar: rect(self.rebar)?,
@@ -481,8 +479,8 @@ impl TaskbarWindows {
         })
     }
 }
-/// Inspect only the primary taskbar on the currently supported Win10 build.
-/// Unsupported versions are an explicit capability failure, never embedded success.
+/// Inspect the primary taskbar by its actual Explorer structure on any Windows build.
+/// The build is diagnostic metadata, not an adapter allowlist.
 pub fn inspect_primary_taskbar() -> Result<TaskbarTopology, ProbeError> {
     let _dpi = DpiGuard::enter()?;
     let windows = discover_primary_taskbar()?;
@@ -496,10 +494,6 @@ pub(crate) fn discover_primary_taskbar() -> Result<TaskbarWindows, ProbeError> {
     version.dwOSVersionInfoSize = mem::size_of_val(&version) as u32;
     if unsafe { RtlGetVersion(&mut version) } != 0 {
         return Err(ProbeError::Os);
-    }
-    if version.dwMajorVersion != 10 || version.dwMinorVersion != 0 || version.dwBuildNumber != 19045
-    {
-        return Err(ProbeError::UnsupportedVersion);
     }
     let root = unsafe { FindWindowW(wide("Shell_TrayWnd").as_ptr(), ptr::null()) };
     if root.is_null() {
@@ -539,6 +533,7 @@ pub(crate) fn discover_primary_taskbar() -> Result<TaskbarWindows, ProbeError> {
         return Err(ProbeError::UnexpectedStructure);
     }
     let windows = TaskbarWindows {
+        build: version.dwBuildNumber,
         root,
         rebar,
         switch,
