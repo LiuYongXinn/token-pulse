@@ -61,6 +61,17 @@ test('native opacity keeps exact revision and explicit drafts across conflict an
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('full opacity range can be saved and restored from main settings', async ({ page }) => {
+  await page.goto('/'); await openSettings(page);
+  const panel = page.getByRole('region', { name: '小窗透明度设置' });
+  const slider = panel.getByRole('slider', { name: '悬浮窗透明度' });
+  for (const percent of [0, 50, 100]) {
+    await slider.fill(String(percent)); await panel.getByRole('button', { name: '保存小窗透明度' }).click();
+    await expect(panel.getByRole('status')).toContainText(`已保存 ${percent}%`);
+    expect(await page.evaluate(() => (window as unknown as OpacityQA).__opacityQA.read())).toBe(percent);
+  }
+});
+
 test('unsupported opacity exposes real saved value and disables mutation', async ({ page }) => {
   await page.goto('/'); await page.evaluate(() => (window as unknown as OpacityQA).__opacityQA.unsupported());
   await page.getByRole('button', { name: '设置', exact: true }).click(); await page.getByRole('tab', { name: '显示与窗口' }).click();
@@ -118,7 +129,7 @@ test.beforeEach(async ({ page }) => {
           const r = args.request as { opacity_percent: number; expected_settings_revision: string };
           if (r.expected_settings_revision !== revision) throw { code: 'REVISION_CONFLICT' };
           if (rejectOpacity) throw { code: 'DB_WRITE_FAILED' };
-          if (!opacitySupported || !Number.isInteger(r.opacity_percent) || r.opacity_percent < 70 || r.opacity_percent > 100) throw { code: 'INVALID_QUERY' };
+          if (!opacitySupported || !Number.isInteger(r.opacity_percent) || r.opacity_percent < 0 || r.opacity_percent > 100) throw { code: 'INVALID_QUERY' };
           if (opacity !== r.opacity_percent) { opacity = r.opacity_percent; revision = String(BigInt(revision) + 1n); notify(); }
           return response({ opacity_percent: opacity, supported: opacitySupported, settings_revision: revision });
         }

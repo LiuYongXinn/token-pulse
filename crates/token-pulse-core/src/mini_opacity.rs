@@ -8,7 +8,7 @@ pub const fn default_opacity() -> u8 {
     100
 }
 pub fn validate_opacity(percent: u8) -> Result<(), ErrorCode> {
-    if (70..=100).contains(&percent) {
+    if percent <= 100 {
         Ok(())
     } else {
         Err(ErrorCode::InvalidQuery)
@@ -21,7 +21,7 @@ pub fn native_alpha(percent: u8) -> Result<u8, ErrorCode> {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct MiniOpacitySnapshot {
-    #[schemars(range(min = 70, max = 100))]
+    #[schemars(range(min = 0, max = 100))]
     pub opacity_percent: u8,
     pub supported: bool,
     pub settings_revision: DecimalInt,
@@ -29,7 +29,7 @@ pub struct MiniOpacitySnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(deny_unknown_fields)]
 pub struct MiniOpacityMutation {
-    #[schemars(range(min = 70, max = 100))]
+    #[schemars(range(min = 0, max = 100))]
     pub opacity_percent: u8,
     pub expected_settings_revision: DecimalInt,
 }
@@ -45,8 +45,11 @@ impl MiniOpacityMutation {
 mod tests {
     use super::*;
     #[test]
-    fn opacity_has_a_readable_floor_and_literal_independent_native_alpha_expectations() {
+    fn full_opacity_range_has_literal_independent_native_alpha_expectations() {
         for (percent, alpha) in [
+            (0, 0),
+            (1, 3),
+            (50, 128),
             (70, 179),
             (75, 191),
             (80, 204),
@@ -56,7 +59,7 @@ mod tests {
         ] {
             assert_eq!(native_alpha(percent).unwrap(), alpha);
         }
-        for percent in [0, 1, 69, 101, 255] {
+        for percent in [101, 255] {
             assert_eq!(native_alpha(percent), Err(ErrorCode::InvalidQuery));
         }
         assert!(

@@ -5317,7 +5317,7 @@
         "opacity_percent": {
           "format": "uint8",
           "maximum": 100,
-          "minimum": 70,
+          "minimum": 0,
           "type": "integer"
         }
       },
@@ -5342,7 +5342,7 @@
         "opacity_percent": {
           "format": "uint8",
           "maximum": 100,
-          "minimum": 70,
+          "minimum": 0,
           "type": "integer"
         },
         "settings_revision": {

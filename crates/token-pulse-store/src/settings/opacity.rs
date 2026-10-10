@@ -114,7 +114,7 @@ mod tests {
             "1"
         );
         assert_eq!(db.mini_opacity(true).unwrap().opacity_percent, 100);
-        db.write(|conn|{conn.execute_batch("DROP TRIGGER fail_opacity; UPDATE settings SET payload_json=json_set(payload_json,'$.mini_window.opacity_percent',69);")?;Ok(())}).unwrap();
+        db.write(|conn|{conn.execute_batch("DROP TRIGGER fail_opacity; UPDATE settings SET payload_json=json_set(payload_json,'$.mini_window.opacity_percent',101);")?;Ok(())}).unwrap();
         assert_eq!(
             db.mini_opacity(true).unwrap_err().code,
             ErrorCode::DbCorrupt
