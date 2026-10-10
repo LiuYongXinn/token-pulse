@@ -1,11 +1,57 @@
 use super::*;
 
 #[test]
+fn schema_nineteen_timings_upgrade_is_additive_and_rolls_back_on_failure() {
+    for fail in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("token-pulse.db");
+        let mut conn = Connection::open(&path).unwrap();
+        migrate(&mut conn, &path).unwrap();
+        conn.execute_batch("DROP TRIGGER usage_view_turn_timings_insert; DROP TABLE turn_timing_records; DROP TABLE turn_timing_scans; DELETE FROM schema_migrations WHERE version=20; UPDATE app_state SET schema_version=19,data_revision=42,price_revision=7; PRAGMA user_version=19;").unwrap();
+        let before: i64 = conn
+            .query_row("SELECT usage_view_revision FROM app_state", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let result = migrate_with_hook(&mut conn, &path, |stage| {
+            if fail && matches!(stage, Stage::BeforeCommit) {
+                Err(ErrorCode::MigrationFailed.into())
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(result.is_err(), fail);
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, if fail { 19 } else { SCHEMA_VERSION });
+        assert_eq!(
+            conn.query_row(
+                "SELECT data_revision,price_revision,usage_view_revision FROM app_state",
+                [],
+                |r| Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?
+                ))
+            )
+            .unwrap(),
+            (42, 7, before)
+        );
+        assert_eq!(
+            conn.prepare("SELECT * FROM turn_timing_records").is_ok(),
+            !fail
+        );
+    }
+}
+
+#[test]
 fn schema_eighteen_title_upgrade_preserves_ids_revisions_and_backs_up_old_schema() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("token-pulse.db");
     let mut conn = Connection::open(&path).unwrap();
     migrate(&mut conn, &path).unwrap();
+    conn.execute_batch("DROP TRIGGER usage_view_turn_timings_insert; DROP TABLE turn_timing_records; DROP TABLE turn_timing_scans; DELETE FROM schema_migrations WHERE version=20;").unwrap();
     conn.execute_batch("DROP VIEW session_labels; DROP TABLE session_titles; DELETE FROM schema_migrations WHERE version=19; UPDATE app_state SET schema_version=18,data_revision=19,price_revision=7,settings_revision=77; PRAGMA user_version=18; INSERT INTO sessions(session_key,provider,provider_session_id,identity_status) VALUES('old-session','codex','old-provider','confirmed');").unwrap();
     let before: i64 = conn
         .query_row("SELECT usage_view_revision FROM app_state", [], |r| {
@@ -16,7 +62,7 @@ fn schema_eighteen_title_upgrade_preserves_ids_revisions_and_backs_up_old_schema
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        19
+        SCHEMA_VERSION
     );
     assert_eq!(
         conn.query_row(

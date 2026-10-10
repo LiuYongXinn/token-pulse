@@ -7,6 +7,18 @@ function integer(value: DecimalInt): bigint {
 export function fullTokens(value: DecimalInt | null): string {
   return value === null ? '—' : integer(value).toLocaleString('zh-CN');
 }
+/** Source durations stay exact integers until rounding for display. */
+export function formatDuration(value: DecimalInt | null): string {
+  if (value === null) return '未知';
+  const ms = integer(value);
+  if (ms < 1000n) return `${ms} ms`;
+  const hundredths = (ms + 5n) / 10n;
+  const hours = hundredths / 360000n, minutes = hundredths / 6000n % 60n;
+  const seconds = hundredths % 6000n;
+  const fraction = (seconds % 100n).toString().padStart(2, '0').replace(/0+$/, '');
+  const secondText = `${seconds / 100n}${fraction ? `.${fraction}` : ''} 秒`;
+  return `${hours ? `${hours} 小时 ` : ''}${hours || minutes ? `${minutes} 分 ` : ''}${secondText}`;
+}
 /** Original diagnostic vectors can retain invalid negative i64 counters. */
 export function rawTokens(value: string | null): string {
   if (value === null) return '—';

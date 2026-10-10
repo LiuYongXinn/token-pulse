@@ -4,6 +4,7 @@ pub mod replacement;
 pub mod replay;
 pub mod service;
 mod session_titles;
+mod turn_timings;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use token_pulse_core::{
@@ -42,7 +43,11 @@ pub fn collect_file(
     path: &Path,
     observed_at_ms: i64,
 ) -> StoreResult<CollectionReceipt> {
-    collect_file_with_hook(database, source_id, path, observed_at_ms, || {})
+    let mut receipt = collect_file_with_hook(database, source_id, path, observed_at_ms, || {})?;
+    let (timings_changed, timings_more) = turn_timings::collect(database, source_id, path)?;
+    receipt.commit.usage_changed |= timings_changed;
+    receipt.has_more |= timings_more;
+    Ok(receipt)
 }
 fn collect_file_with_hook(
     database: &Database,

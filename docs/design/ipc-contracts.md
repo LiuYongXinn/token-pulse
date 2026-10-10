@@ -1,5 +1,7 @@
 # IPC 与前端契约
 
+2026-10-10 回合时间：`TurnRow` 增加 required-nullable `duration_ms` 和 `time_to_first_token_ms`，采用精确非负毫秒十进制字符串。Rust / TypeScript / protocol-v1 schema 同步，既有缓存反序列化缺字段时默认 null。字段仅通过原 `query_turns` 返回，不增加新命令；表示完整回合完成事件的时间，不随用量筛选截断，也不表示单笔请求 TPS。会话详情的回合卡片分别展示“回合耗时”和“首 Token 等待”，缺失或冲突显示“未知”，真实零显示 `0 ms`。分页保持既有快照一致性。
+
 2026-10-06 M09h3b2c3：`UsageEventRow` 新增 required-nullable `matched_price: MatchedPrice | null`，Rust / TypeScript / protocol-v1 schema 同步。依据取自相同查询快照、价格租约与所选不可变规则；有匹配但用量不足仍可解释，没有匹配不制造身份。普通 Standard 参考不含实际模式字段，原始响应标识 / 物理位置不公开；隐私序列化清除该字段。此前“公开匹配依据待接”保留历史含义，当前公开明细已接，正式包尚未更新。详见[计价专题第 18 节](price-accounting.md)。
 
 2026-10-06 M16z2 当前本机正式候选 0.1.4 已包含下方内部核心 / schema v14 / cache v4 增量，不新增公开实际模式字段或任意覆盖入口。正式 WebView / 原 IPC 在真实非空用量中保留 incomplete_pricing_conditions，价格编辑器仍只显示 37 条普通参考规则；完整目录浏览仍为 51 模型 / 172 条事实。内部条件身份 / 核心合成金额、正式安装未计价状态和真实模式采集是不同证据；公开仍原 0.1.3，详见[交付记录](../development/delivery-status.md)。

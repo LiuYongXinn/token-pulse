@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_initial.sql")),
     (
@@ -62,6 +62,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("../migrations/0018_pending_ledger_index.sql"),
     ),
     (19, include_str!("../migrations/0019_session_titles.sql")),
+    (20, include_str!("../migrations/0020_turn_timings.sql")),
 ];
 static BACKUP_SERIAL: AtomicU64 = AtomicU64::new(0);
 fn checksum(value: &str) -> String {
@@ -263,6 +264,7 @@ fn migrate_with_hook(
 
 #[cfg(test)]
 pub(crate) fn remove_usage_revision_fixture(conn: &Connection) -> StoreResult<()> {
+    conn.execute_batch("DROP TRIGGER IF EXISTS usage_view_turn_timings_insert; DROP TABLE IF EXISTS turn_timing_records; DROP TABLE IF EXISTS turn_timing_scans; DELETE FROM schema_migrations WHERE version=20;")?;
     conn.execute_batch("DROP VIEW IF EXISTS session_labels; DROP TABLE IF EXISTS session_titles; DELETE FROM schema_migrations WHERE version=19;")?;
     conn.execute_batch("DROP INDEX IF EXISTS pending_ledger_lookup; DELETE FROM schema_migrations WHERE version=18;")?;
     conn.execute_batch("DROP INDEX IF EXISTS observation_usage_time; DROP INDEX IF EXISTS pending_observation_lookup; DROP INDEX IF EXISTS session_active_ledger_read; DELETE FROM schema_migrations WHERE version=17;")?;

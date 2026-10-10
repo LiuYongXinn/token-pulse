@@ -19,6 +19,51 @@ fn fetch(db: &Database, req: &TurnsRequest) -> TurnsPage {
     db.query_turns("main", req, EpochMs::new(1000).unwrap())
         .unwrap()
 }
+#[test]
+fn completion_times_are_whole_turn_metadata_and_keep_the_pinned_snapshot() {
+    let (_dir, db) = setup();
+    db.commit(fixture()).unwrap();
+    turn_event(&db, "a", 3000, 100, Some("a"));
+    turn_event(&db, "b", 2000, 50, Some("b"));
+    let mut req = request(1);
+    let first = fetch(&db, &req);
+    assert!(first.turns[0].duration_ms.is_none());
+    req.cursor = first.next_cursor;
+    let before = db.usage_revision().unwrap();
+    db.write(|conn| {
+        conn.execute_batch("INSERT INTO turn_timing_records VALUES('generation',80,90,'provider-session','b',60000,1500); INSERT INTO turn_timing_records VALUES('generation',90,100,'provider-session','a',120000,NULL);")?;
+        Ok(())
+    }).unwrap();
+    let pinned = fetch(&db, &req);
+    assert_eq!(pinned.turns[0].turn_id, "b");
+    assert!(pinned.turns[0].duration_ms.is_none());
+    let fresh = fetch(&db, &request(20));
+    assert_eq!(
+        fresh.turns[1].duration_ms.as_ref().unwrap().as_str(),
+        "60000"
+    );
+    assert_eq!(
+        fresh.turns[1]
+            .time_to_first_token_ms
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "1500"
+    );
+    let mut partial = request(20);
+    partial.query.filter.range.start_ms = EpochMs::new(3000).unwrap();
+    let scoped = fetch(&db, &partial);
+    assert_eq!(scoped.turns.len(), 1);
+    assert_eq!(
+        scoped.turns[0].duration_ms.as_ref().unwrap().as_str(),
+        "120000"
+    );
+    assert!(scoped.turns[0].time_to_first_token_ms.is_none());
+    let after = db.usage_revision().unwrap();
+    assert_eq!(after.data_revision, before.data_revision);
+    assert_eq!(after.price_revision, before.price_revision);
+    assert!(after.usage_view_revision.value() > before.usage_view_revision.value());
+}
 fn turn_event(db: &Database, id: &str, time: i64, total: i64, turn: Option<&str>) {
     crate::query::tests::extra(db, id, time, total, (Some("M"), Some("P")), turn, None);
     let id = id.to_owned();

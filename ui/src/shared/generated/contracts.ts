@@ -222,6 +222,14 @@ summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, unidentified_
 
 export type TurnRow = { turn_id: string, first_at_ms: EpochMs, last_at_ms: EpochMs,
 /**
+ * Whole completed turn, including model calls and tool execution; never inferred from usage times.
+ */
+duration_ms: DecimalInt | null,
+/**
+ * Turn-level first-token wait reported by the source, not per-request latency.
+ */
+time_to_first_token_ms: DecimalInt | null,
+/**
  * Only selected events in this turn, not its lifetime consumption.
  */
 summary: TokenTotals, pricing: PricingSummary, };

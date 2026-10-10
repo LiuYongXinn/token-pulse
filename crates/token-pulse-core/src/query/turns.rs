@@ -60,6 +60,12 @@ pub struct TurnRow {
     pub turn_id: String,
     pub first_at_ms: EpochMs,
     pub last_at_ms: EpochMs,
+    /// Whole completed turn, including model calls and tool execution; never inferred from usage times.
+    #[serde(default)]
+    pub duration_ms: Option<DecimalInt>,
+    /// Turn-level first-token wait reported by the source, not per-request latency.
+    #[serde(default)]
+    pub time_to_first_token_ms: Option<DecimalInt>,
     /// Only selected events in this turn, not its lifetime consumption.
     pub summary: TokenTotals,
     pub pricing: PricingSummary,

@@ -68,7 +68,7 @@ test.beforeEach(async ({ page }) => {
         const offset = stored?.offset ?? 0, snapshot = stored?.snapshot ?? `synthetic-turn-snapshot-${++id}`;
         const turns = Array.from({ length: 23 }, (_, index) => {
           const total = index === 0 ? '18446744073709551614' : String(100 - index);
-          return { turn_id: `synthetic-turn-${index}`, first_at_ms: query.filter.range.start_ms + (23 - index) * 1000, last_at_ms: query.filter.range.start_ms + (23 - index) * 1000 + 500, summary: { ...tokens(total), usage_event_count: '2', reliable_turns_complete: true }, pricing: price(total, query.price_basis) };
+          return { turn_id: `synthetic-turn-${index}`, duration_ms: index === 0 ? '370887' : index === 1 ? '0' : null, time_to_first_token_ms: index === 0 ? '1583' : null, first_at_ms: query.filter.range.start_ms + (23 - index) * 1000, last_at_ms: query.filter.range.start_ms + (23 - index) * 1000 + 500, summary: { ...tokens(total), usage_event_count: '2', reliable_turns_complete: true }, pricing: price(total, query.price_basis) };
         });
         const total = (turns.reduce((sum, t) => sum + BigInt(t.summary.total_tokens), 0n) + 7n).toString();
         const next = offset + query.page_size < turns.length ? `${++id}`.padStart(151, 't') : null;
@@ -311,6 +311,15 @@ test('reliable turns use their own stable pages, retain unknown event counts and
   const trigger = drawer.getByRole('button', { name: '查看回合' });
   await trigger.click();
   await expect(drawer.getByRole('list', { name: '已识别回合列表' }).locator('li')).toHaveCount(20);
+  const cards = drawer.getByRole('list', { name: '已识别回合列表' }).locator('li');
+  await expect(cards.nth(0).getByLabel('回合时间')).toContainText('回合耗时6 分 10.89 秒');
+  await expect(cards.nth(0).getByLabel('回合时间')).toContainText('首 Token 等待1.58 秒');
+  await expect(cards.nth(1).getByLabel('回合时间')).toContainText('回合耗时0 ms');
+  await expect(cards.nth(1).getByLabel('回合时间')).toContainText('首 Token 等待未知');
+  await expect(cards.nth(2).getByLabel('回合时间')).toHaveText('回合耗时未知首 Token 等待未知');
+  await expect(drawer.locator('.session-turn-list')).toContainText('包含模型调用与工具执行');
+  await cards.nth(0).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/session-turn-timing.png' });
   await expect(drawer.locator('.session-turn-list')).toContainText('23 个回合');
   await expect(drawer.locator('.session-turn-list')).not.toContainText('未识别回合的用量事件');
   await expect(drawer.locator('.session-turn-list')).not.toContainText('回合识别不完整');

@@ -54,10 +54,13 @@ fn page(
         }
         .validate()
         .map_err(|_| ErrorCode::DbCorrupt)?;
+        let (duration_ms, time_to_first_token_ms) = crate::turn_timings::read(tx, &session_key, &turn_id)?;
         turns.push(TurnRow {
             turn_id,
             first_at_ms: EpochMs::new(row.get(1)?)?,
             last_at_ms: EpochMs::new(row.get(2)?)?,
+            duration_ms,
+            time_to_first_token_ms,
             summary: read_totals(row, 3)?,
             pricing: PricingAccumulator::new(query.price_basis.clone()).summary(false)?,
         });

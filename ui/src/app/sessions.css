@@ -14,3 +14,5 @@
 .session-name{max-width:100%}
 .session-table .numeric{white-space:normal}
 .pin-mini-scope{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}.pin-mini-scope>div{display:flex;gap:8px;flex-wrap:wrap}
+
+.session-turn-timing{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:14px 0}.session-turn-timing>div{min-width:0}.session-turn-timing dt{color:var(--muted);font-size:10px}.session-turn-timing dd{margin:6px 0 0;font-size:15px;font-variant-numeric:tabular-nums;line-height:1.6;overflow-wrap:anywhere}

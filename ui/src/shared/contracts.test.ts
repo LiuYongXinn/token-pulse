@@ -103,10 +103,12 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validateDetail({ ...detail, children: Array(101).fill(identity) })).toBe(false);
   expect(validateDetail({ ...detail, classifications: Array(65).fill(detail.classifications[0]) })).toBe(false);
   expect(validateDetail({ ...detail, classifications: [{ ...detail.classifications[0], evidence_json: '{}' }] })).toBe(false);
-  const turn = { turn_id: 'synthetic-turn', first_at_ms: 0, last_at_ms: 1000, summary: totals, pricing: fixture.pricing };
+  const turn = { turn_id: 'synthetic-turn', first_at_ms: 0, last_at_ms: 1000, duration_ms: null, time_to_first_token_ms: null, summary: totals, pricing: fixture.pricing };
   const turnPage = { meta: fixture.meta, session_key: 'synthetic', summary: totals, pricing: fixture.pricing, coverage, unidentified_usage_event_count: '9007199254740993', turns: [turn], next_cursor: null };
   const validateTurns = ajv.compile(protocol.schemas.TurnsPage);
   expect(validateTurns(turnPage)).toBe(true);
+  expect(validateTurns({ ...turnPage, turns: [{ ...turn, duration_ms: '37534', time_to_first_token_ms: '4801' }] })).toBe(true);
+  expect(validateTurns({ ...turnPage, turns: [{ ...turn, duration_ms: '-1' }] })).toBe(false);
   expect(validateTurns({ ...turnPage, unidentified_usage_event_count: undefined })).toBe(false);
   expect(validateTurns({ ...turnPage, turns: Array(201).fill(turn) })).toBe(false);
   expect(validateTurns({ ...turnPage, turns: [{ ...turn, messages: ['private'] }] })).toBe(false);
