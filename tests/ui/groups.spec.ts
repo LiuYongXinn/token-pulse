@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
       if (command === 'get_price_rules') return response({ price_revision: '3', rules: [], aliases: [] });
       if (command === 'get_dashboard_bundle') throw new Error('Synthetic bridge does not supply overview data');
       if (command === 'get_grouped_usage') {
-        const r = args.request as { filter: { range: { start_ms: number; timezone: string }; sources: { ids?: string[] } }; dimension: string; sort: string; limit: number };
+        const r = args.request as { filter: { range: { start_ms: number; timezone: string }; sources: { ids?: string[] } }; dimension: string; sort: string; limit: number; cursor?: string | null };
         const empty = r.filter.sources.ids?.includes('synthetic-b') ?? false;
         const project = r.dimension === 'projects';
         const base = [
@@ -30,10 +30,11 @@ test.beforeEach(async ({ page }) => {
           { key: null, display_name: project ? '未知项目' : '未知模型', totals: tokens('17'), pricing: price('17', null), coverage },
         ];
         if (many) for (let i=0;i<198;i++) base.push({ key: `synthetic-extra-${i}`, display_name: `Synthetic additional ${i}`, totals: tokens('1'), pricing: price('1', null), coverage });
-        const groups = empty ? [] : base.sort((a,b) => r.sort === 'name_asc' ? (a.display_name < b.display_name ? -1 : a.display_name > b.display_name ? 1 : 0) : BigInt(a.totals.total_tokens) > BigInt(b.totals.total_tokens) ? -1 : BigInt(a.totals.total_tokens) < BigInt(b.totals.total_tokens) ? 1 : (a.key ?? '').localeCompare(b.key ?? '')).slice(0, r.limit);
+        const offset = Number(r.cursor?.replace(/^a+/, '') ?? 0);
+        const groups = empty ? [] : base.sort((a,b) => r.sort === 'name_asc' ? (a.display_name < b.display_name ? -1 : a.display_name > b.display_name ? 1 : 0) : BigInt(a.totals.total_tokens) > BigInt(b.totals.total_tokens) ? -1 : BigInt(a.totals.total_tokens) < BigInt(b.totals.total_tokens) ? 1 : (a.key ?? '').localeCompare(b.key ?? '')).slice(offset, offset + r.limit);
         const total = empty ? '0' : String(BigInt(huge)+40n+(many ? 198n : 0n));
         const pricing = empty ? price('0', null) : { ...price(total, null), currencies: [...price(huge,'USD','9.007199254740993').currencies,...price('23','EUR').currencies], priced_total_tokens: String(BigInt(huge)+23n), unpriced_total_tokens: String(17+(many ? 198 : 0)), reasons: [{ code: 'unknown_model', total_tokens: String(17+(many ? 198 : 0)), event_count: String(1+(many ? 198 : 0)) }] };
-        return response({ meta: { snapshot_id: args.requestId, data_revision: many ? '8' : '7', price_revision: '3', generated_at_ms: r.filter.range.start_ms+1000, parser_versions: empty ? [] : ['synthetic'], accounting_versions: empty ? [] : ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(total), pricing, coverage, total_group_count: empty ? '0' : String(base.length), truncated: !empty && base.length>groups.length, groups });
+        return response({ meta: { snapshot_id: 'synthetic-groups', data_revision: many ? '8' : '7', price_revision: '3', generated_at_ms: r.filter.range.start_ms+1000, parser_versions: empty ? [] : ['synthetic'], accounting_versions: empty ? [] : ['synthetic'], display_timezone: r.filter.range.timezone }, summary: tokens(total), pricing, coverage, total_group_count: empty ? '0' : String(base.length), truncated: !empty && base.length>offset+groups.length, groups, next_cursor: !empty && base.length>offset+groups.length ? String(offset+groups.length).padStart(151, 'a') : null });
       }
       throw new Error(`Unexpected synthetic command ${command}`);
     } }, __setSyntheticGroups: (more: boolean, hide: boolean) => { many = more; redacted = hide; } });
@@ -111,14 +112,23 @@ test('model table keeps precise large tokens, mixed currencies, true zero, unkno
   await expect(page.getByRole('tabpanel', { name: '价格规则设置' })).toBeVisible();
 });
 
-test('group limits report undisplayed categories and redacted summaries hide every amount', async ({ page }) => {
+test('group pages reach all categories and redacted summaries hide every amount', async ({ page }) => {
   await expect(page.getByRole('table')).toBeVisible();
   await page.evaluate(() => (window as unknown as { __setSyntheticGroups: (more: boolean, hide: boolean) => void }).__setSyntheticGroups(true, false));
   await page.getByLabel('模型显示数量').selectOption('50');
   await expect(page.locator('.group-table tbody tr')).toHaveCount(50);
   await expect(page.getByText('201 个模型分类 · 已显示 50 个')).toBeVisible();
-  await expect(page.getByText('还有未显示的模型，请缩小筛选范围。')).toBeVisible();
+  const pager = page.getByLabel('模型分页');
+  await expect(pager.getByRole('button', { name: '下一页' })).toBeEnabled();
   await expect(page.getByLabel('9,007,199,254,741,231 Token', { exact: true })).toBeVisible();
+  for (let n = 0; n < 4; n++) {
+    await pager.getByRole('button', { name: '下一页' }).click();
+    await expect(pager).toContainText(`第 ${n+2} 页`);
+  }
+  await expect(page.locator('.group-table tbody tr')).toHaveCount(1);
+  await expect(pager.getByRole('button', { name: '下一页' })).toBeDisabled();
+  await pager.getByRole('button', { name: '上一页' }).click();
+  await expect(page.locator('.group-table tbody tr')).toHaveCount(50);
   await page.evaluate(() => (window as unknown as { __setSyntheticGroups: (more: boolean, hide: boolean) => void }).__setSyntheticGroups(false, true));
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await expect(page.locator('.group-table tbody tr')).toHaveCount(3);

@@ -1077,6 +1077,59 @@
             "page_size": {
               "format": "uint16",
               "maximum": 100,
+        "GroupDimension": {
+          "enum": [
+            "models",
+            "projects"
+          ],
+          "type": "string"
+        },
+        "GroupSort": {
+          "enum": [
+            "total_desc",
+            "name_asc"
+          ],
+          "type": "string"
+        },
+        "GroupedUsageRequest": {
+          "additionalProperties": false,
+          "properties": {
+            "cursor": {
+              "maxLength": 151,
+              "minLength": 151,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dimension": {
+              "$ref": "#/$defs/GroupDimension"
+            },
+            "filter": {
+              "$ref": "#/$defs/UsageFilter"
+            },
+            "limit": {
+              "format": "uint16",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "price_basis": {
+              "$ref": "#/$defs/PriceBasis"
+            },
+            "sort": {
+              "$ref": "#/$defs/GroupSort"
+            }
+          },
+          "required": [
+            "filter",
+            "price_basis",
+            "dimension",
+            "sort",
+            "limit"
+          ],
+          "type": "object"
+        },
               "minimum": 1,
               "type": "integer"
             },
@@ -1343,6 +1396,23 @@
             "kind": {
               "const": "mini_sessions",
               "type": "string"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "groups",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/GroupedUsageRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "request"
+          ],
+          "type": "object"
+        },
             },
             "request": {
               "$ref": "#/$defs/MiniSessionsRequest"
@@ -4054,6 +4124,13 @@
         "truncated": {
           "type": "boolean"
         }
+        "next_cursor": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
       },
       "required": [
         "meta",
@@ -4062,7 +4139,8 @@
         "coverage",
         "total_group_count",
         "truncated",
-        "groups"
+        "groups",
+        "next_cursor"
       ],
       "title": "GroupedUsageBundle",
       "type": "object"
@@ -4227,6 +4305,14 @@
           "maximum": 200,
           "minimum": 1,
           "type": "integer"
+        },
+        "cursor": {
+          "maxLength": 151,
+          "minLength": 151,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "price_basis": {
           "$ref": "#/$defs/PriceBasis"
@@ -16837,10 +16923,18 @@
             "coverage",
             "total_group_count",
             "truncated",
-            "groups"
+            "groups",
+            "next_cursor"
           ],
           "type": "object"
         },
+            "next_cursor": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
         "MatchedPrice": {
           "additionalProperties": false,
           "properties": {
@@ -18085,6 +18179,14 @@
             "price_basis",
             "dimension",
             "sort",
+            "cursor": {
+              "maxLength": 151,
+              "minLength": 151,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "limit"
           ],
           "type": "object"
@@ -18562,10 +18664,18 @@
             "coverage",
             "total_group_count",
             "truncated",
-            "groups"
+            "groups",
+            "next_cursor"
           ],
           "type": "object"
         },
+            "next_cursor": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
         "MatchedPrice": {
           "additionalProperties": false,
           "properties": {

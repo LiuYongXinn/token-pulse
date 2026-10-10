@@ -38,7 +38,7 @@ export type { AppStatus } from './generated/contracts';
 
 const plainCommands = new Set(['get_usage_revision', 'get_taskbar_preferences', 'set_taskbar_preferences', 'get_taskbar_status', 'retry_taskbar_embed', 'cancel_account_service_selection', 'get_mini_passthrough', 'set_mini_passthrough', 'get_mini_opacity', 'set_mini_opacity', 'get_recovery_shortcut', 'set_recovery_shortcut', 'resolve_calendar_selection', 'perform_window_action', 'get_mini_visibility', 'mini_window_action', 'open_mini_stats', 'get_mini_stats_request', 'get_main_navigation']);
 const controlCommands = new Set(['get_display_settings', 'set_display_timezone', 'set_display_theme', 'set_display_privacy', 'close_query_snapshot']);
-const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
+const pageKinds: Record<string, CloseQuerySnapshotRequest['kind']> = { get_grouped_usage: 'groups', query_mini_sessions: 'mini_sessions', get_filter_options: 'filter_options', query_sessions: 'sessions', query_usage_events: 'usage_events', query_turns: 'turns' };
 async function releaseRejectedPage(command: string, args: Record<string, unknown>, data: unknown) {
   if (command === 'prepare_notify_integration' && typeof data === 'object' && data !== null && 'plan_id' in data && typeof data.plan_id === 'string') {
     await invoke('release_notify_preview', { requestId: crypto.randomUUID(), planId: data.plan_id }).catch(() => {});
@@ -152,6 +152,12 @@ export function cancelJob(jobId: string): Promise<CancelJobResult> { return requ
 export function getContextSnapshot(sessionKey: string): Promise<ContextSnapshot> { return request('get_context_snapshot', { sessionKey }); }
 export function getDashboardBundle(query: DashboardRequest): Promise<DashboardBundle> { return request('get_dashboard_bundle', { request: query }); }
 export function getGroupedUsage(query: GroupedUsageRequest): Promise<GroupedUsageBundle> { return request('get_grouped_usage', { request: query }); }
+export type GroupedPageQuery = Omit<GroupedUsageRequest, 'limit' | 'cursor'> & { page_size: number };
+export async function queryGroupedUsage(input: { query: GroupedPageQuery; cursor: string | null }): Promise<GroupedUsageBundle> {
+  const { page_size, ...query } = input.query;
+  const page = await getGroupedUsage({ ...query, limit: page_size, cursor: input.cursor });
+  return { ...page, next_cursor: page.next_cursor ?? null };
+}
 export function getFilterOptions(query: FilterOptionsRequest): Promise<FilterOptionsPage> { return request('get_filter_options', { request: query }); }
 export function querySessions(query: SessionsRequest): Promise<SessionsPage> { return request('query_sessions', { request: query }); }
 export function getSessionBundle(query: SessionBundleRequest): Promise<SessionBundle> { return request('get_session_bundle', { request: query }); }
@@ -281,6 +287,10 @@ export async function restoreUsageSnapshot<Query, Bundle>(read: (query: Query) =
   const identity: unknown = read;
   if (identity === getDashboardBundle) input = { kind: 'dashboard', request: query as unknown as DashboardRequest };
   else if (identity === getGroupedUsage) input = { kind: 'groups', request: query as unknown as GroupedUsageRequest };
+  else if (identity === queryGroupedUsage) {
+    const { page_size, ...request } = (query as unknown as { query: GroupedPageQuery }).query;
+    input = { kind: 'groups', request: { ...request, limit: page_size } };
+  }
   else if (identity === querySessions) input = { kind: 'sessions', request: (query as unknown as SessionsRequest).query };
   else if (identity === queryUsageEvents) input = { kind: 'events', request: (query as unknown as UsageEventsRequest).query };
   else return null;

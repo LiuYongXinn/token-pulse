@@ -1,7 +1,9 @@
-//! Bounded model/project groups, priced inside the same SQLite snapshot.
+//! Paged model/project groups, priced inside the same SQLite snapshot.
 use super::{coverage, fact_from, grouped, predicate};
+use crate::leases::cursor::QueryBinding;
 use crate::{Database, ErrorCode, Revision, StoreResult};
 use rusqlite::{Transaction, params_from_iter};
+use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use token_pulse_core::query::model_key;
 use token_pulse_core::{
@@ -30,8 +32,9 @@ pub fn bundle(
 ) -> StoreResult<GroupedUsageBundle> {
     let common =
         super::summary_cache::compute(tx, revision, &request.filter, &request.price_basis)?;
-    assemble(tx, revision, request, at, snapshot_id, &common)
+    assemble(tx, revision, request, at, snapshot_id, &common, 0)
 }
+#[allow(clippy::too_many_arguments)]
 fn assemble(
     tx: &Transaction<'_>,
     revision: Revision,
@@ -39,6 +42,7 @@ fn assemble(
     at: EpochMs,
     snapshot_id: &str,
     common: &super::summary_cache::ScopeSummary,
+    offset: u64,
 ) -> StoreResult<GroupedUsageBundle> {
     request.validate()?;
     validate_request_id(snapshot_id)?;
@@ -67,13 +71,24 @@ fn assemble(
             |row| row.get(0),
         )?
     };
-    let mut groups = grouped(
-        tx,
-        filter,
-        request.dimension,
-        request.sort,
-        usize::from(request.limit),
-    )?;
+    let mut groups = if offset == 0 {
+        grouped(
+            tx,
+            filter,
+            request.dimension,
+            request.sort,
+            usize::from(request.limit),
+        )?
+    } else {
+        super::raw_grouped_page(
+            tx,
+            filter,
+            request.dimension,
+            request.sort,
+            usize::from(request.limit),
+            offset,
+        )?
+    };
     let pricing = common.pricing.clone();
     check_pricing(&summary, &pricing)?;
     let grouped_coverage =
@@ -113,8 +128,9 @@ fn assemble(
         pricing,
         coverage,
         total_group_count: DecimalInt::from_nonnegative(total_group_count.into())?,
-        truncated: total_group_count > output.len() as i64,
+        truncated: i128::from(total_group_count) > i128::from(offset) + output.len() as i128,
         groups: output,
+        next_cursor: None,
     })
 }
 impl Database {
@@ -126,8 +142,102 @@ impl Database {
     ) -> StoreResult<GroupedUsageBundle> {
         self.usage_snapshot(|tx, revision| {
             let common = self.scope_summary(tx, revision, &request.filter, &request.price_basis)?;
-            assemble(tx, revision, request, at, snapshot_id, &common)
+            assemble(tx, revision, request, at, snapshot_id, &common, 0)
         })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Position {
+    offset: u64,
+    generated_at_ms: EpochMs,
+}
+impl Database {
+    pub fn grouped_usage_page(
+        &self,
+        owner: &str,
+        request: &GroupedUsageRequest,
+        at: EpochMs,
+    ) -> StoreResult<GroupedUsageBundle> {
+        request.validate()?;
+        let mut query = request.clone();
+        query.cursor = None;
+        let binding = QueryBinding::new(owner, &("groups", &query))?;
+        let (handle, position) = match &request.cursor {
+            Some(cursor) => self.leases().resolve_cursor::<Position>(cursor, &binding)?,
+            None => (
+                self.leases().open(&binding)?,
+                Position {
+                    offset: 0,
+                    generated_at_ms: at,
+                },
+            ),
+        };
+        let offset = position.offset;
+        let captured_at = position.generated_at_ms;
+        let id = format!(
+            "query-{}",
+            handle
+                .snapshot_id
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        );
+        let result = self.leases().read_summary(
+            &handle,
+            &binding,
+            self.clone(),
+            query.filter.clone(),
+            query.price_basis.clone(),
+            move |tx, revision, common| {
+                assemble(tx, revision, &query, captured_at, &id, common, offset)
+            },
+        );
+        let mut page = match result {
+            Ok(page) => page,
+            Err(error) => {
+                let _ = self.leases().release(&handle, &binding);
+                return Err(error);
+            }
+        };
+        if page.truncated {
+            let next = Position {
+                offset: offset
+                    .checked_add(page.groups.len() as u64)
+                    .ok_or(ErrorCode::NumericOverflow)?,
+                generated_at_ms: captured_at,
+            };
+            match self.leases().issue_cursor(&handle, &binding, &next) {
+                Ok(cursor) => page.next_cursor = Some(cursor),
+                Err(error) => {
+                    let _ = self.leases().release(&handle, &binding);
+                    return Err(error);
+                }
+            }
+        } else {
+            let _ = self.leases().release(&handle, &binding);
+        }
+        Ok(page)
+    }
+    pub fn close_grouped_usage(
+        &self,
+        owner: &str,
+        request: &GroupedUsageRequest,
+    ) -> StoreResult<()> {
+        request.validate()?;
+        let cursor = request.cursor.as_ref().ok_or(ErrorCode::InvalidQuery)?;
+        let mut query = request.clone();
+        query.cursor = None;
+        let binding = QueryBinding::new(owner, &("groups", &query))?;
+        match self
+            .leases()
+            .resolve_cursor::<Position>(cursor, &binding)
+            .and_then(|(handle, _)| self.leases().release(&handle, &binding))
+        {
+            Ok(()) => Ok(()),
+            Err(error) if error.code == ErrorCode::SnapshotExpired => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 }
 

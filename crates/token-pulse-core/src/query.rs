@@ -74,12 +74,25 @@ pub struct GroupedUsageRequest {
     pub sort: GroupSort,
     #[schemars(range(min = 1, max = 200))]
     pub limit: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    #[schemars(length(min = 151, max = 151))]
+    pub cursor: Option<String>,
 }
 impl GroupedUsageRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         self.filter.validate()?;
         if !(1..=200).contains(&self.limit) {
             return Err(crate::error::ErrorCode::InvalidQuery);
+        }
+        if let Some(cursor) = &self.cursor {
+            if cursor.len() != 151
+                || !cursor
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            {
+                return Err(crate::error::ErrorCode::CursorInvalid);
+            }
         }
         Ok(())
     }
@@ -104,6 +117,8 @@ pub struct GroupedUsageBundle {
     pub truncated: bool,
     #[schemars(length(max = 200))]
     pub groups: Vec<PricedUsageGroup>,
+    #[serde(default)]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TS)]
@@ -192,6 +207,9 @@ pub struct FilterOptionsPage {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CloseQuerySnapshotRequest {
+    Groups {
+        request: GroupedUsageRequest,
+    },
     MiniSessions {
         request: crate::mini::MiniSessionsRequest,
     },
@@ -211,6 +229,13 @@ pub enum CloseQuerySnapshotRequest {
 impl CloseQuerySnapshotRequest {
     pub fn validate(&self) -> Result<(), crate::error::ErrorCode> {
         match self {
+            Self::Groups { request } => {
+                request.validate()?;
+                if request.cursor.is_none() {
+                    return Err(crate::error::ErrorCode::InvalidQuery);
+                }
+                Ok(())
+            }
             Self::MiniSessions { request } => {
                 request.validate()?;
                 if request.cursor.is_none() {

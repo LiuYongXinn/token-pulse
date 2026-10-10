@@ -346,6 +346,16 @@ pub(crate) fn raw_grouped(
     sort: GroupSort,
     limit: usize,
 ) -> StoreResult<Vec<GroupedUsage>> {
+    raw_grouped_page(tx, filter, dimension, sort, limit, 0)
+}
+pub(crate) fn raw_grouped_page(
+    tx: &Transaction<'_>,
+    filter: &UsageFilter,
+    dimension: GroupDimension,
+    sort: GroupSort,
+    limit: usize,
+    offset: u64,
+) -> StoreResult<Vec<GroupedUsage>> {
     if !(1..=200).contains(&limit) {
         return Err(ErrorCode::InvalidQuery.into());
     }
@@ -371,13 +381,16 @@ pub(crate) fn raw_grouped(
         GroupSort::NameAsc => "label COLLATE BINARY ASC, dimension_key ASC",
     };
     let sql = format!(
-        "SELECT {key} AS dimension_key,MIN({label}) AS label,json_extract({VECTOR_SUM},'$.total') AS amount,{} FROM {}{join} WHERE {} GROUP BY {group_by} ORDER BY {order} LIMIT ?",
+        "SELECT {key} AS dimension_key,MIN({label}) AS label,json_extract({VECTOR_SUM},'$.total') AS amount,{} FROM {}{join} WHERE {} GROUP BY {group_by} ORDER BY {order} LIMIT ? OFFSET ?",
         aggregate_sql(),
         fact_from(filter, matches!(dimension, GroupDimension::Models)),
         p.sql
     );
     let mut values = p.values;
     values.push(Value::Integer(limit as i64));
+    values.push(Value::Integer(
+        i64::try_from(offset).map_err(|_| ErrorCode::InvalidQuery)?,
+    ));
     let mut statement = tx.prepare(&sql)?;
     let mut rows = statement.query(params_from_iter(values))?;
     let mut result = Vec::new();

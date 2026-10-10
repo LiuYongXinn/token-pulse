@@ -222,6 +222,7 @@ fn benchmark(
             dimension,
             sort: GroupSort::TotalDesc,
             limit: 200,
+            cursor: None,
         };
         let started = std::time::Instant::now();
         let raw = db

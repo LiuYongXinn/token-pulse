@@ -17,7 +17,58 @@ fn request(dimension: GroupDimension) -> GroupedUsageRequest {
         dimension,
         sort: GroupSort::TotalDesc,
         limit: 200,
+        cursor: None,
     }
+}
+#[test]
+fn pages_cross_two_hundred_groups_and_keep_snapshot_and_binding() {
+    let (_directory, db) = setup();
+    db.commit(fixture()).unwrap();
+    for n in 0..205 {
+        let id = format!("model-{n:03}");
+        extra(&db, &id, 2000, 1, (Some(&id), None), None, None);
+    }
+    let mut query = request(GroupDimension::Models);
+    query.sort = GroupSort::NameAsc;
+    let first = db
+        .grouped_usage_page("main", &query, EpochMs::new(10_000).unwrap())
+        .unwrap();
+    assert_eq!(first.groups.len(), 200);
+    assert_eq!(first.total_group_count.as_str(), "206");
+    query.cursor = first.next_cursor.clone();
+    assert_eq!(
+        db.grouped_usage_page("other", &query, EpochMs::new(20_000).unwrap())
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    let mut changed = query.clone();
+    changed.sort = GroupSort::TotalDesc;
+    assert_eq!(
+        db.grouped_usage_page("main", &changed, EpochMs::new(20_000).unwrap())
+            .unwrap_err()
+            .code,
+        ErrorCode::CursorInvalid
+    );
+    extra(&db, "later", 2000, 1, (Some("later"), None), None, None);
+    let second = db
+        .grouped_usage_page("main", &query, EpochMs::new(20_000).unwrap())
+        .unwrap();
+    assert_eq!(second.groups.len(), 6);
+    assert!(second.next_cursor.is_none());
+    assert_eq!(
+        serde_json::to_value(&first.meta).unwrap(),
+        serde_json::to_value(&second.meta).unwrap()
+    );
+    assert_eq!(first.summary.total_tokens, second.summary.total_tokens);
+    assert_eq!(second.total_group_count.as_str(), "206");
+    let keys: std::collections::BTreeSet<_> = first
+        .groups
+        .iter()
+        .chain(&second.groups)
+        .map(|g| &g.key)
+        .collect();
+    assert_eq!(keys.len(), 206);
 }
 fn read(db: &Database, request: &GroupedUsageRequest) -> GroupedUsageBundle {
     db.grouped_usage_bundle(request, EpochMs::new(10_000).unwrap(), "synthetic-groups")

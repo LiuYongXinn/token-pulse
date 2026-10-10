@@ -168,11 +168,11 @@ export type GroupSort = "total_desc" | "name_asc";
 
 export type GroupedUsage = { key: string | null, display_name: string, totals: TokenTotals, };
 
-export type GroupedUsageRequest = { filter: UsageFilter, price_basis: PriceBasis, dimension: GroupDimension, sort: GroupSort, limit: number, };
+export type GroupedUsageRequest = { filter: UsageFilter, price_basis: PriceBasis, dimension: GroupDimension, sort: GroupSort, limit: number, cursor?: string | null, };
 
 export type PricedUsageGroup = { key: string | null, display_name: string, totals: TokenTotals, pricing: PricingSummary, coverage: Coverage, };
 
-export type GroupedUsageBundle = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, total_group_count: DecimalInt, truncated: boolean, groups: Array<PricedUsageGroup>, };
+export type GroupedUsageBundle = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, total_group_count: DecimalInt, truncated: boolean, groups: Array<PricedUsageGroup>, next_cursor: string | null, };
 
 export type FacetDimension = "sources" | "models" | "projects" | "sessions";
 
@@ -272,7 +272,7 @@ usage: RawUsageVector, raw_last: RawUsageVector | null, raw_cumulative: RawUsage
 
 export type UsageEventsPage = { meta: SnapshotMeta, summary: TokenTotals, pricing: PricingSummary, coverage: Coverage, events: Array<UsageEventRow>, next_cursor: string | null, };
 
-export type CloseQuerySnapshotRequest = { "kind": "mini_sessions", request: MiniSessionsRequest, } | { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, } | { "kind": "turns", request: TurnsRequest, };
+export type CloseQuerySnapshotRequest = { "kind": "groups", request: GroupedUsageRequest, } | { "kind": "mini_sessions", request: MiniSessionsRequest, } | { "kind": "filter_options", request: FilterOptionsRequest, } | { "kind": "sessions", request: SessionsRequest, } | { "kind": "usage_events", request: UsageEventsRequest, } | { "kind": "turns", request: TurnsRequest, };
 
 export type DashboardRequest = { filter: UsageFilter, price_basis: PriceBasis, grain: Grain, heatmap_range: DateRange, };
 

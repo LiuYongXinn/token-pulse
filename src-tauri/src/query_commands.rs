@@ -362,6 +362,9 @@ pub async fn close_query_snapshot(
             database.close_mini_sessions(&owner, &request)
         }
         CloseQuerySnapshotRequest::Turns { request } => database.close_turns(&owner, &request),
+        CloseQuerySnapshotRequest::Groups { request } => {
+            database.close_grouped_usage(&owner, &request)
+        }
         CloseQuerySnapshotRequest::FilterOptions { request } => {
             database.close_filter_options(&owner, &request)
         }
@@ -401,15 +404,15 @@ pub async fn get_grouped_usage(
         .as_ref()
         .cloned()
         .map_err(|e| Box::new(AppError::new(e.code, request_id.clone())))?;
-    let snapshot_id = request_id.clone();
     let dimension = request.dimension;
+    let owner = window.label().to_owned();
     let data = tauri::async_runtime::spawn_blocking(move || {
         let at = token_pulse_core::numeric::EpochMs::new(token_pulse_collector::jobs::now_ms()?)?;
         #[cfg(all(debug_assertions, windows))]
         super::navigation_smoke::wait_if_blocked();
         let stamp = database.display_cache_stamp().ok();
-        let data = database.grouped_usage_bundle(&request, at, &snapshot_id)?;
-        if let Some(stamp) = stamp {
+        let data = database.grouped_usage_page(&owner, &request, at)?;
+        if let Some(stamp) = stamp.filter(|_| request.cursor.is_none()) {
             let _ = database.remember_usage_display(
                 &token_pulse_core::display_cache::UsageDisplayRequest::Groups {
                     request: request.clone(),

@@ -42,6 +42,7 @@ impl UsageDisplayData {
     pub fn strip_cursor(&mut self) -> bool {
         match self {
             Self::Sessions { value } => value.next_cursor.take().is_some(),
+            Self::Groups { value } => value.next_cursor.take().is_some(),
             Self::Events { value } => value.next_cursor.take().is_some(),
             _ => false,
         }

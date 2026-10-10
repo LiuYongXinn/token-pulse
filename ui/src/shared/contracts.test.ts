@@ -81,7 +81,7 @@ test('dashboard contract requires one complete bundle with null metrics and real
   expect(validate({ ...fixture, series: [{ ...fixture.series[0], coverage: undefined }] })).toBe(false);
   expect(validate({ ...fixture, series: Array(2001).fill(fixture.series[0]) })).toBe(false);
   const group = { key: null, display_name: '未知模型', totals, pricing: fixture.pricing, coverage };
-  const grouped = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, total_group_count: '1', truncated: false, groups: [group] };
+  const grouped = { meta: fixture.meta, summary: totals, pricing: fixture.pricing, coverage, total_group_count: '1', truncated: false, groups: [group], next_cursor: null };
   const validateGroups = ajv.compile(protocol.schemas.GroupedUsageBundle);
   expect(validateGroups(grouped)).toBe(true);
   expect(validateGroups({ ...grouped, total_group_count: undefined })).toBe(false);
