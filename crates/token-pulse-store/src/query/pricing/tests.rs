@@ -309,7 +309,7 @@ fn specified_time_has_explicit_half_open_rules_and_wholly_unpriced_is_not_zero()
 }
 
 #[test]
-fn sqlite_price_reads_keep_large_integers_and_reject_unbounded_source_evidence() {
+fn sqlite_price_reads_keep_large_integers_and_all_source_evidence() {
     let (_dir, db) = setup();
     db.commit(fixture()).unwrap();
     known_origin(&db);
@@ -326,7 +326,7 @@ fn sqlite_price_reads_keep_large_integers_and_reject_unbounded_source_evidence()
         s.currencies[0].estimated_cost.as_ref().unwrap().as_str(),
         "9.007199254740993"
     );
-    for i in 1..=32 {
+    for i in 1..=40 {
         db.add_source(SourceRecord {
             source_id: format!("s-{i}"),
             root_path: format!("synthetic-{i}"),
@@ -338,19 +338,49 @@ fn sqlite_price_reads_keep_large_integers_and_reject_unbounded_source_evidence()
         .unwrap();
     }
     db.write(|conn|{
-        for i in 1..=32 {
+        for i in 1..=40 {
             conn.execute("INSERT INTO source_files(file_id,source_id,canonical_path,status) VALUES(?1,?2,?3,'known')",params![format!("f-{i}"),format!("s-{i}"),format!("synthetic-{i}.jsonl")])?;
             conn.execute("INSERT INTO file_generations SELECT ?1,?2,state,identity_json,observed_size,committed_offset,checkpoint_revision,anchor_json,reader_context_json,parser_version,created_at_ms FROM file_generations WHERE file_generation_id='generation'",params![format!("g-{i}"),format!("f-{i}")])?;
             conn.execute("INSERT INTO observations SELECT ?1,?2,byte_offset,byte_end,session_key,kind,observed_at_ms,stable_record_id,turn_id,stream_hint,model,project_id,normalized_json,payload_fingerprint,format_version FROM observations WHERE observation_id='observation'",params![format!("o-{i}"),format!("g-{i}")])?;
             conn.execute("INSERT INTO event_provenance VALUES('event',?1,'mirror')",[format!("o-{i}")])?;
         } Ok(())
     }).unwrap();
-    // Production source configuration permits at most 32; this fixture writes
-    // directly through the test-only helper to verify no truncation at 33.
+    let many = db
+        .pricing_summary(&filter(), &PriceBasis::EventTime {})
+        .unwrap();
     assert_eq!(
-        db.pricing_summary(&filter(), &PriceBasis::EventTime {})
-            .unwrap_err()
-            .code,
-        ErrorCode::DbCorrupt
+        serde_json::to_value(&many).unwrap(),
+        serde_json::to_value(&s).unwrap()
+    );
+    let events = db
+        .query_usage_events(
+            "main",
+            &token_pulse_core::query::UsageEventsRequest {
+                query: token_pulse_core::query::UsageEventsQuery {
+                    filter: filter(),
+                    price_basis: PriceBasis::EventTime {},
+                    sort: token_pulse_core::query::UsageEventSort::TimeDesc,
+                    page_size: 200,
+                },
+                cursor: None,
+            },
+            EpochMs::new(10000).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(events.events.len(), 1);
+    assert_eq!(events.events[0].source_ids.len(), 41);
+    assert!(events.events[0].source_ids.iter().any(|id| id == "s-40"));
+    // This source sorts beyond the former 33-row SQL boundary. Its custom rule
+    // must still take precedence, without counting mirror usage multiple times.
+    let mut last_source = draft("synthetic-model", "USD", 2, None, 0);
+    last_source.source_id = Some("s-40".into());
+    install(&db, last_source, 1);
+    let many = db
+        .pricing_summary(&filter(), &PriceBasis::EventTime {})
+        .unwrap();
+    assert_eq!(many.priced_total_tokens.as_str(), "9007199254740993");
+    assert_eq!(
+        many.currencies[0].estimated_cost.as_ref().unwrap().as_str(),
+        "18.014398509481986"
     );
 }
