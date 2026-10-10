@@ -33,9 +33,15 @@ fn discover(
             return Err(ErrorCode::QuotaServiceUnavailable);
         }
     }
-    for directory in paths.into_iter().take(256) {
+    let mut visited = std::collections::BTreeSet::new();
+    for directory in paths {
         // Empty or relative PATH entries would search cwd; remote/device roots are never probed.
         if local(&directory).is_err() {
+            continue;
+        }
+        let key = directory.to_string_lossy().into_owned();
+        let key = if cfg!(windows) { key.to_lowercase() } else { key };
+        if !visited.insert(key) {
             continue;
         }
         #[cfg(windows)]
@@ -142,6 +148,16 @@ mod tests {
             discover([first], Some(&temp.path().join("missing"))),
             Err(ErrorCode::QuotaServiceUnavailable)
         );
+    }
+    #[test]
+    fn discovers_program_after_long_and_duplicate_path_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join(native_name()), b"abc").unwrap();
+        let mut paths: Vec<_> = (0..300).map(|n| temp.path().join(format!("missing-{n}"))).collect();
+        paths.extend(paths.clone());
+        paths.push(temp.path().to_path_buf());
+        assert_eq!(discover(paths, None).unwrap().executable_path,
+            temp.path().join(native_name()).canonicalize().unwrap().to_str().unwrap());
     }
     #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "aarch64")))]
     #[test]
